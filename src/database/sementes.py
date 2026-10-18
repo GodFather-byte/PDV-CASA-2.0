@@ -84,6 +84,8 @@ CONFIG_PADRAO = {
     "usar_delivery": "N", "usar_caderneta": "N", "usar_contas": "N",
     # Módulo de operação Cozinha/Bar: impressoras nomeadas por setor e status de preparo por item.
     "usar_cozinha_bar": "N",
+    # Módulo de operação Rodízio: cobrança fixa por pessoa, por mesa/comanda (opt-in por mesa).
+    "usar_rodizio": "N", "valor_rodizio_pessoa": "0",
     "api_url": "", "api_token": "", "sync_intervalo_seg": "60",
     "programa_comunicacao": "", "pasta_backup": "", "pasta_backup_extra": "", "backup_erro": "", "backup_extra_erro": "",
     "email_loja": "", "email_destino": "", "smtp_servidor": "",

@@ -344,11 +344,13 @@ class JanelaCaixa(tk.Toplevel):
         diarias = [("Pré-Conta (F8)", self.pre_conta), ("Transfere (F10)", self.transferir_mesa), ("Repique (F9)", self.repique),
                    ("Comissões", self.comissoes), ("Sangria (F7)", self.sangria), ("Gaveta (F11)", self.gaveta),
                    ("Consulta Comanda", self.consultar_comanda), ("Cancelar", self.menu_cancelar)]
-        venda = [("Nomear comanda", self.nomear_comanda), ("Delivery (F6)", self.entrega), ("Caderneta (F5)", self.caderneta)]
+        venda = [("Nomear comanda", self.nomear_comanda), ("Delivery (F6)", self.entrega), ("Caderneta (F5)", self.caderneta),
+                 ("Rodízio", self.rodizio)]
         caixa = [("Impressora", self.impressora), ("Balança (F2)", self.balanca), ("Leitor (F3)", self.alternar_leitor),
                  ("Fecha Turno", self.fechar_turno)]
         sair = [("Sair", self.sair)]                       # fica no canto do cabeçalho, longe dos botões de uso diário
-        desligados = {self.entrega: "usar_delivery", self.caderneta: "usar_caderneta"}   # módulos que a casa não usa
+        desligados = {self.entrega: "usar_delivery", self.caderneta: "usar_caderneta",
+                      self.rodizio: "usar_rodizio"}         # módulos que a casa não usa
         venda = [(r, f) for r, f in venda if f not in desligados or self.ctx.banco.cfg_bool(desligados[f], False)]
         # Os 11 primeiros ficam sempre à vista, na coluna da direita; o resto fica em "Mais opções" (janela à parte).
         self.tarefas = principais + diarias + venda + caixa + sair
@@ -516,6 +518,8 @@ class JanelaCaixa(tk.Toplevel):
         """Sob o total: de onde vem o acréscimo (serviço, taxa, desconto), para o cliente não estranhar o valor."""
         partes = []
         if v:
+            if v.get("rodizio"):
+                partes.append(f"Rodízio: {v['pessoas']} pessoa(s)")
             if v["desconto_cent"]:
                 partes.append(f"Desconto: - {fmt.fmt_brl(v['desconto_cent'])}")
             if v["servico_cent"]:
@@ -1622,6 +1626,27 @@ class JanelaCaixa(tk.Toplevel):
         self.ent_qtd.configure(state="normal")
         self.var_qtd.set(fmt.fmt_qtd(peso, 3).replace(".", ""))
         self.ent_qtd.focus_set()
+
+    def rodizio(self) -> None:
+        """Liga (ou desliga) o rodízio desta mesa/comanda: pergunta quantas pessoas; os produtos do
+        subgrupo "incluso no rodízio" passam a entrar na conta pelo preço fixo por pessoa, não por item."""
+        v = self.venda()
+        if not self.venda_id or not v or v["modalidade"] != "mesa":
+            tema.aviso(self, "Chame uma mesa ou comanda antes de ligar o rodízio.")
+            return
+        ligado = bool(v.get("rodizio"))
+        rotulo = "Quantas pessoas estão no rodízio? (0 desliga o rodízio)" if ligado else \
+            "Quantas pessoas estão no rodízio desta mesa?"
+        pessoas = tema.pedir_numero(self, "Rodízio", rotulo, v["pessoas"] or 1, 0 if ligado else 1, 999)
+        if pessoas is None:
+            return
+        if pessoas == 0:
+            ok, _ = tema.tratar(self, self.ctx.caixa.desativar_rodizio, self.venda_id)
+        else:
+            ok, _ = tema.tratar(self, self.ctx.caixa.ativar_rodizio, self.venda_id, pessoas)
+        if ok:
+            self.recarregar()
+            self.avisar("Rodízio desligado." if pessoas == 0 else f"Rodízio: {pessoas} pessoa(s).", tema.COR["ok"])
 
     def alternar_leitor(self) -> None:
         self.leitor = not self.leitor

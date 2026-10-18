@@ -115,6 +115,8 @@ class ImpressaoController:
 
     def _totais(self, v: dict, w: int) -> list[str]:
         out = [_lr("Subtotal", M(v["subtotal_cent"]), w)]
+        if v.get("rodizio"):
+            out.append(_lr(f"Rodízio ({v['pessoas']} pessoa(s))", M(v["rodizio_total_cent"]), w))
         if v["desconto_cent"]:
             out.append(_lr("Desconto (-)", M(v["desconto_cent"]), w))
         if v["servico_cent"]:

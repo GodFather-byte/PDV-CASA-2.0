@@ -173,8 +173,8 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
   `banco.cfg_bool("usar_<modulo>", False)` direto. Primeiro módulo pelo padrão: **Cozinha/Bar**
   (`usar_cozinha_bar`) — impressoras remotas nomeadas por setor (`setores_impressao`, em vez de uma única por
   terminal) e status de preparo por item (pendente/em preparo/entregue, `itens_venda.status_preparo`), painel em
-  Utilitários > Painel da Cozinha/Bar (`preparo_controller.py`, `cozinha_ui.py`). Próximo módulo planejado com a
-  mesma convenção (ver `.ai/HANDOFF.md`): rodízio por pessoa.
+  Utilitários > Painel da Cozinha/Bar (`preparo_controller.py`, `cozinha_ui.py`). Com isso, os quatro módulos de
+  operação pensados para o ecossistema estão entregues (ver `.ai/HANDOFF.md` para possíveis evoluções futuras).
   **Split de conta** e **venda por peso** não precisaram de flag em `CONFIG_PADRAO`: cada um já tem o seu próprio
   liga/desliga natural (um botão que não muda nada em quem nunca clica; um campo "Balança" por produto que já era
   cadastrado e simplesmente não fazia nada), então não há necessidade de um `usar_<modulo>` a mais.
@@ -183,6 +183,13 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
   já aciona a pesagem automaticamente (`JanelaCaixa._capturar_peso`, antes só acessível pelo F2 manual) — lê a
   balança configurada ou pede o peso digitado, preenche a quantidade, e o preço por quilo (`preco_cent` do
   produto) já multiplica certo (exige `aceita_decimal = S` no cadastro, como qualquer produto fracionado).
+  **Rodízio** (`usar_rodizio`, esquema v20) é opt-in por mesa/comanda, não geral: `vendas.rodizio` liga a
+  cobrança fixa por pessoa (`vendas.pessoas × valor_rodizio_pessoa`) só naquela mesa — a casa pode ter mesa à la
+  carte e mesa em rodízio ao mesmo tempo. Só os produtos de subgrupo marcado `rodizio_incluso` ficam de fora da
+  conta por item (bebida e extras continuam cobrados normalmente); isso muda `CaixaController.calcular()`, usado
+  por toda venda, mas só quando `rodizio = 0` (padrão) o cálculo é bit-a-bit igual ao de antes. `rodizio_total_cent`
+  é persistido (como desconto/serviço já são) para uma venda fechada não mudar de total se o preço configurado
+  mudar depois. Ação "Rodízio" na barra de tarefas do caixa (`caixa_ui.py`), ao lado de Delivery/Caderneta.
 - **Senhas** são guardadas com PBKDF2 e comparadas sem diferenciar maiúsculas, como pede o manual.
 - **Busca por nome** (produtos, clientes, contas, cadastros) ignora acento e caixa: "cafe" acha "Café" (função SQL `norm()`).
 - **Quantidade por item** tem teto (configuração `qtd_maxima_item`, padrão 99.999; 0 desliga), para um código de

@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 19
+VERSAO_ESQUEMA = 20
 
 PRODUTOS_HISTORICO_DDL = """CREATE TABLE IF NOT EXISTS produtos_historico (
     id INTEGER PRIMARY KEY,
@@ -97,6 +97,7 @@ TABELAS = [
         grupo_id INTEGER NOT NULL REFERENCES grupos(id),
         impressora_remota INTEGER NOT NULL DEFAULT 0,
         setor_impressao_id INTEGER REFERENCES setores_impressao(id),
+        rodizio_incluso INTEGER NOT NULL DEFAULT 0,
         figura TEXT,
         UNIQUE (grupo_id, nome)
     )""",
@@ -331,6 +332,8 @@ TABELAS = [
         desconto_pct REAL NOT NULL DEFAULT 0,
         servico_cent INTEGER NOT NULL DEFAULT 0,
         servico_manual INTEGER NOT NULL DEFAULT 0,
+        rodizio INTEGER NOT NULL DEFAULT 0,
+        rodizio_total_cent INTEGER NOT NULL DEFAULT 0,
         taxa_cent INTEGER NOT NULL DEFAULT 0,
         acrescimo_cent INTEGER NOT NULL DEFAULT 0,
         total_cent INTEGER NOT NULL DEFAULT 0,
@@ -813,5 +816,12 @@ MIGRACOES = {
         ("coluna", "itens_venda", "preparo_atualizado_em", "TEXT"),
         ("coluna", "itens_venda", "preparo_operador_id", "INTEGER REFERENCES operadores(id)"),
         ("coluna", "fila_impressao", "setor_id", "INTEGER REFERENCES setores_impressao(id)"),
+    ],
+    # v20: módulo de operação Rodízio (usar_rodizio). Cobrança fixa por pessoa, por mesa/comanda;
+    # produtos de subgrupo "incluso no rodízio" não entram na conta por item nessas vendas.
+    20: [
+        ("coluna", "subgrupos", "rodizio_incluso", "INTEGER NOT NULL DEFAULT 0"),
+        ("coluna", "vendas", "rodizio", "INTEGER NOT NULL DEFAULT 0"),
+        ("coluna", "vendas", "rodizio_total_cent", "INTEGER NOT NULL DEFAULT 0"),
     ],
 }

@@ -585,6 +585,38 @@ class TesteFluxosCaixa(BaseUI):
         self.assertEqual(self.cx.lbl_troco.cget("text"), "4,00")
         self.sem_travar()
 
+    def test_rodizio_cobra_fixo_por_pessoa_e_bebida_separada(self):
+        self.banco.cfg_set("usar_rodizio", "S")
+        self.banco.cfg_set("valor_rodizio_pessoa", "89,90")
+        grupo_id = self.banco.valor("SELECT id FROM grupos LIMIT 1")
+        sub_rodizio = self.banco.inserir("subgrupos", {"nome": "Carnes", "grupo_id": grupo_id, "rodizio_incluso": 1})
+        un = self.banco.valor("SELECT id FROM unidades WHERE abreviatura = 'UN'")
+        CadastroController(self.banco).salvar("produtos", {
+            "codigo": "9", "nome": "PICANHA", "subgrupo_id": sub_rodizio, "unidade_id": un, "preco_cent": "45,00"})
+        self.cx.var_pos.set("1"); self.cx.chamar_mesa(); self.cx.update()
+        self.lancar("9", 1)                      # picanha: incluso no rodízio, não entra no total por item
+        self.lancar("2", 1)                      # água: fica fora, continua cobrada por item
+
+        def responder_pessoas(w):
+            e = entradas(w)[0]
+            e.delete(0, "end"); e.insert(0, "2")
+            clicar(w, "OK")
+        self.robo.quando("Dialogo", responder_pessoas)
+        self.cx.rodizio(); self.cx.update()
+        self.sem_travar()
+        # 2 x 89,90 (rodízio) + 3,50 (água) = 183,30; serviço 10% = 18,33; total 201,63
+        self.assertEqual(self.cx.lbl_total.cget("text"), "201,63")
+        self.assertIn("Rodízio: 2 pessoa(s)", self.cx.lbl_detalhe_total.cget("text"))
+
+        def responder_desligar(w):
+            e = entradas(w)[0]
+            e.delete(0, "end"); e.insert(0, "0")
+            clicar(w, "OK")
+        self.robo.quando("Dialogo", responder_desligar)
+        self.cx.rodizio(); self.cx.update()                # 0 desliga: volta a cobrar picanha + água por item
+        self.sem_travar()
+        self.assertEqual(self.cx.lbl_total.cget("text"), "53,35")   # (45,00 + 3,50) x 1,10
+
     def _produto_balanca(self, codigo: str, nome: str, preco_cent: int) -> int:
         sub = self.banco.valor("SELECT id FROM subgrupos")
         un = self.banco.valor("SELECT id FROM unidades WHERE abreviatura = 'UN'")

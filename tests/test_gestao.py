@@ -319,6 +319,22 @@ class TesteImpressao(BaseCaixa):
         for esperado in ("BOATE X", "CUPOM NÃO FISCAL", "Mesa 5", "SKOL", "Serviço (+)", "TOTAL", "Troco"):
             self.assertIn(esperado, texto)
 
+    def test_cupom_mostra_a_linha_do_rodizio(self):
+        self.banco.cfg_set("usar_rodizio", "S")
+        self.banco.cfg_set("valor_rodizio_pessoa", "89,90")
+        grupo_id = self.banco.valor("SELECT id FROM grupos LIMIT 1")
+        sub_rodizio = self.banco.inserir("subgrupos", {"nome": "Carnes", "grupo_id": grupo_id, "rodizio_incluso": 1})
+        carne = self.novo_produto("PICANHA", 4500, subgrupo_id=sub_rodizio)
+        vid = self.vender((carne, 1), mesa=6)
+        self.caixa.ativar_rodizio(vid, 2)                   # 2 x 89,90 = 179,80
+        self.pagar(vid, "Dinheiro", 20000)
+        self.caixa.fechar(vid)
+        texto = self.imp.cupom(vid)
+        self.assertIn("Rodízio (2 pessoa(s))", texto)
+        self.assertIn("179,80", texto)
+        self.assertIn("45,00", texto)     # a picanha aparece com o preço de cardápio na lista de itens (não zerado);
+                                           # o rodízio só muda o TOTAL, não o preço gravado do item (CMV/histórico)
+
     def test_pedido_remoto_so_para_subgrupo_marcado_e_com_observacao(self):
         cozinha = self.banco.inserir("subgrupos", {"nome": "COZINHA", "grupo_id": self.banco.valor("SELECT id FROM grupos LIMIT 1"),
                                                    "impressora_remota": 1})

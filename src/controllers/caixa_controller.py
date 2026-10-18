@@ -49,9 +49,10 @@ class CaixaController:
         return dict(r)
 
     def itens(self, venda_id: int, cancelados: bool = False) -> list[dict]:
-        sql = """SELECT i.*, p.codigo, p.nome, u.abreviatura AS unidade
+        sql = """SELECT i.*, p.codigo, p.nome, u.abreviatura AS unidade, s.rodizio_incluso
                  FROM itens_venda i JOIN produtos_historico p ON p.id = i.produto_id
-                 JOIN unidades u ON u.id = p.unidade_id WHERE i.venda_id = ?"""
+                 JOIN unidades u ON u.id = p.unidade_id JOIN subgrupos s ON s.id = p.subgrupo_id
+                 WHERE i.venda_id = ?"""
         if not cancelados:
             sql += " AND i.cancelado = 0"
         linhas = [dict(r) for r in self.banco.todos(sql + " ORDER BY i.id", (venda_id,))]
@@ -346,7 +347,15 @@ class CaixaController:
     # ============================================================== totais
     def calcular(self, v: dict, itens: list[dict] | None = None) -> dict:
         itens = itens if itens is not None else self.itens(v["id"])
-        subtotal = sum(i["total_cent"] for i in itens)
+        rodizio_total = 0
+        itens_cobrados = itens
+        if v.get("rodizio"):
+            # Rodízio: produtos do subgrupo "incluso" não entram na conta por item (preço fixo cobre eles);
+            # bebida e extras (subgrupo não marcado) continuam cobrados normalmente, por item.
+            itens_cobrados = [i for i in itens if not i["rodizio_incluso"]]
+            valor_pessoa = fmt.para_centavos(self.banco.cfg("valor_rodizio_pessoa", "0") or 0)
+            rodizio_total = valor_pessoa * (v["pessoas"] or 0)
+        subtotal = sum(i["total_cent"] for i in itens_cobrados) + rodizio_total
         if v["desconto_pct"] > 0:
             desconto = fmt.pct_de(subtotal, v["desconto_pct"])
         else:
@@ -358,13 +367,14 @@ class CaixaController:
             if v["servico_manual"]:
                 servico = v["servico_cent"]
             else:
-                base = sum(i["total_cent"] for i in itens if i["cobra_servico"])
+                base = sum(i["total_cent"] for i in itens_cobrados if i["cobra_servico"]) + rodizio_total
                 servico = fmt.pct_de(base, float(self.banco.cfg("servico_pct", "10") or 0))
         taxa = v["taxa_cent"]
-        if v["modalidade"] == "mesa" and v.get("comanda"):
+        if v["modalidade"] == "mesa" and v.get("comanda") and not v.get("rodizio"):
             taxa = self.complemento_consumacao(v["posicao"], subtotal - desconto)      # comanda não tem taxa de entrega
         acrescimo = self.acrescimo_pagamento(v)
         return {"subtotal": subtotal, "desconto": desconto, "servico": servico, "taxa": taxa, "acrescimo": acrescimo,
+                "rodizio_total": rodizio_total,
                 "total": subtotal - desconto + servico + taxa + acrescimo}
 
     def acrescimo_pagamento(self, v: dict) -> int:
@@ -402,8 +412,9 @@ class CaixaController:
         c = self.calcular(v)
         self.banco.executar(
             "UPDATE vendas SET subtotal_cent = ?, desconto_cent = ?, servico_cent = ?, taxa_cent = ?, acrescimo_cent = ?, "
-            "total_cent = ? WHERE id = ?",
-            (c["subtotal"], c["desconto"], c["servico"], c["taxa"], c["acrescimo"], c["total"], venda_id))
+            "rodizio_total_cent = ?, total_cent = ? WHERE id = ?",
+            (c["subtotal"], c["desconto"], c["servico"], c["taxa"], c["acrescimo"], c["rodizio_total"], c["total"],
+             venda_id))
         return c
 
     def definir_desconto(self, venda_id: int, pct: float | None = None, valor_cent: int | None = None) -> dict:
@@ -442,6 +453,25 @@ class CaixaController:
             if valor_cent < 0:
                 raise ErroNegocio("O serviço não pode ser negativo.")
             self.banco.executar("UPDATE vendas SET servico_manual = 1, servico_cent = ? WHERE id = ?", (valor_cent, venda_id))
+        return self.recalcular(venda_id)
+
+    def ativar_rodizio(self, venda_id: int, pessoas: int) -> dict:
+        """Liga o rodízio nesta mesa/comanda: os produtos de subgrupo "incluso" passam a entrar na conta
+        pelo preço fixo por pessoa (valor_rodizio_pessoa), não pelo preço do item. Opt-in por mesa: a casa
+        pode ter mesa à la carte e mesa em rodízio ao mesmo tempo."""
+        if not self.banco.cfg_bool("usar_rodizio", False):
+            raise ErroNegocio("O rodízio está desligado (Configurações > Módulos).")
+        v = self._aberta(venda_id)
+        if v["modalidade"] != "mesa":
+            raise ErroNegocio("Rodízio só vale para mesa ou comanda.")
+        if pessoas < 1:
+            raise ErroNegocio("Informe quantas pessoas estão no rodízio.")
+        self.banco.executar("UPDATE vendas SET rodizio = 1, pessoas = ? WHERE id = ?", (pessoas, venda_id))
+        return self.recalcular(venda_id)
+
+    def desativar_rodizio(self, venda_id: int) -> dict:
+        self._aberta(venda_id)
+        self.banco.executar("UPDATE vendas SET rodizio = 0 WHERE id = ?", (venda_id,))
         return self.recalcular(venda_id)
 
     # ========================================================== pagamentos

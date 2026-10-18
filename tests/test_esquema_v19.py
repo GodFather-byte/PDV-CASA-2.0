@@ -8,7 +8,6 @@ import tempfile
 import unittest
 
 from src.database.conexao import BancoDados
-from src.database.esquema import VERSAO_ESQUEMA
 
 
 class TesteMigracaoV19(unittest.TestCase):
@@ -31,7 +30,6 @@ class TesteMigracaoV19(unittest.TestCase):
         self.addCleanup(b.fechar)
 
         self.assertGreaterEqual(b.valor("PRAGMA user_version"), 19)
-        self.assertEqual(VERSAO_ESQUEMA, 19)
         self.assertEqual(b.valor("SELECT COUNT(*) FROM setores_impressao"), 0)   # nasce vazia
         self.assertEqual(b.valor("SELECT id FROM subgrupos WHERE id = ?", (sub_id,)), sub_id)   # nada se perdeu
         self.assertEqual(b.valor("SELECT nome FROM operadores WHERE nome = 'ADM'"), "ADM")

@@ -1,44 +1,62 @@
 # HANDOFF
 
 ## Último trabalho
-- **Venda por peso** (terceira peça do ecossistema de operação, depois de Cozinha/Bar e Split de
-  conta). Descoberta ao investigar: o caixa **já tinha** o fluxo de pesagem pronto — F2
-  (`JanelaCaixa.balanca`, `src/ui/caixa_ui.py`) já lê a balança configurada (ou pede o peso
-  digitado, se não houver) e o cálculo preço-por-quilo × peso já funcionava e já tinha teste
-  (`test_quantidade_fracionada_so_se_o_produto_aceita`). O que faltava era só uma coisa: o campo
-  `produtos.balanca` (cadastro, "Balança") **não acionava nada** — o operador tinha que lembrar
-  de apertar F2 na mão, e nada impedia confirmar "1" por engano num produto vendido a quilo.
-  - Corrigido: `selecionar_produto()` (`caixa_ui.py`) agora chama a pesagem direto quando
-    `p["balanca"]` está marcado, em vez de sugerir quantidade "1". Extraí a lógica de pesagem de
-    `balanca()` (F2) para `_capturar_peso()`, reaproveitada pelos dois caminhos — o F2 continua
-    funcionando igual, manual, em qualquer produto (não só os marcados "Balança").
-  - Sem flag em `CONFIG_PADRAO`: é opt-in por produto (`balanca = 1` no cadastro), então uma casa
-    que nunca marca nenhum produto não vê nenhuma mudança — mesmo raciocínio do Split de conta
-    (ver abaixo), nenhum dos dois precisou de `usar_<modulo>`.
-  - **Achado à parte, documentado mas não mudado**: `src/hardware/dispositivos.py` já tem a
-    leitura serial real da Toledo/Filizola implementada (`Balanca.ler_peso`), mas a documentação
-    antiga (docstring do arquivo e `docs/ESPECIFICACAO.md`) dizia que só existia o modo manual —
-    corrigido o texto; o código em si não mudou. **Nunca foi homologado com equipamento real**
-    (mesma pendência de sempre, só reforçada abaixo).
-  - Testes novos em `tests/test_ui.py` (`TesteFluxosCaixa`): selecionar produto de balança pesa
-    direto e calcula o total certo; F2 continua funcionando manualmente num produto comum (não
-    havia nenhum teste do fluxo de balança antes disso).
+- **Rodízio por pessoa** (quarto e último módulo planejado do ecossistema de operação, depois de
+  Cozinha/Bar, Split de conta e Venda por peso — todos em `main`). Decisões fechadas com o
+  titular (AskUserQuestion): (1) só os produtos de subgrupo marcado "incluso no rodízio" entram
+  no preço fixo — bebida e extras continuam cobrados por item, normalmente; (2) é **opt-in por
+  mesa/comanda**, não geral — o módulo liga a funcionalidade, cada mesa decide se é rodízio (a
+  casa pode ter mesa à la carte e mesa rodízio ao mesmo tempo).
+  - Esquema v20: `subgrupos.rodizio_incluso` (flag, igual padrão de `impressora_remota`),
+    `vendas.rodizio` (opt-in da mesa) e `vendas.rodizio_total_cent` (**persistido**, mesmo
+    motivo de `desconto_cent`/`servico_cent` já serem: preço mudar no mês seguinte não pode
+    alterar o total de uma venda já fechada).
+  - `CaixaController.calcular()` (o ponto mais arriscado da fatia, usado por **toda** venda):
+    quando `rodizio=0` (padrão, toda venda hoje) o resultado é bit-a-bit igual a antes — testado
+    explicitamente (`TesteRodizio.test_calcular_sem_rodizio_e_identico_a_hoje`). Com `rodizio=1`:
+    subtotal = itens NÃO inclusos + (pessoas × `valor_rodizio_pessoa`); serviço incide sobre os
+    dois; consumação mínima (`complemento_consumacao`) não se aplica a mesa em rodízio.
+    `itens()` ganhou a coluna `s.rodizio_incluso` (join com `subgrupos`) para `calcular()` saber
+    o que filtrar — item mantém o preço normal do cardápio gravado (não zera nada: preserva CMV
+    e histórico), a diferença é só no total.
+  - `CaixaController.ativar_rodizio(venda_id, pessoas)` / `desativar_rodizio(venda_id)`: exige
+    `usar_rodizio` ligado e modalidade mesa; `pessoas >= 1`.
+  - Ação "Rodízio" na barra de tarefas do caixa (`caixa_ui.py`, ao lado de Delivery/Caderneta,
+    mesmo padrão `desligados` de módulo); pergunta quantas pessoas (0 desliga o rodízio daquela
+    mesa). `_detalhe_total` (tela) e `_totais` (cupom/pré-conta, `impressao_controller.py`)
+    ganharam a linha "Rodízio: N pessoa(s)".
+  - Sem entrada em `MODULOS_OPCIONAIS`: não há item de menu novo (reaproveita o Cadastro de
+    Subgrupos existente + um botão na barra do caixa).
+  - Testes: `tests/test_esquema_v20.py`, `TesteRodizio` em `tests/test_caixa.py` (7 casos,
+    incluindo o de regressão do `calcular()` sem rodízio e o do total congelado após fechar),
+    caso em `TesteFluxosCaixa` (`test_ui.py`) ponta a ponta com a barra de tarefas, casos em
+    `TesteModulosNaTela` (`test_modulos.py`) e em `TesteImpressao` (`test_gestao.py`, linha do
+    cupom).
+  - **Qt (`src/ui_qt/caixa.py`) não recebeu nada disto** — mesmo padrão já registrado para os
+    três módulos anteriores.
+  - De passagem, corrigido um teste antigo (`test_esquema_v19.py`) que comparava
+    `VERSAO_ESQUEMA` com um número fixo (`19`) — quebrava a cada nova migração. Removido dos
+    dois arquivos de migração (v19 e v20); só `PRAGMA user_version` é conferido.
 
 ## Pendências
+- Os quatro módulos de operação planejados com o titular estão feitos. Possíveis evoluções,
+  nenhuma pedida ainda:
+  - **Split por item consumido**: cada pessoa paga o que pediu, não uma fração igual — exige
+    marcar os itens de cada pessoa (mudança de esquema).
+  - **Rodízio com preço por faixa** (adulto/criança, dia da semana): hoje é um valor único global
+    (`valor_rodizio_pessoa`); se precisar, decidir o desenho com o titular antes de mudar o
+    esquema (não é só trocar um número — `vendas.pessoas` teria que virar mais de um campo).
+  - **Venda por peso com etiqueta de balança** (código de barras com peso/preço embutido, para
+    casa com estação de pesagem separada do caixa — padaria/açougue/mercado maiores): hoje o
+    caixa só pesa na hora (F2 ou automático no produto "Balança"); não há leitura de código de
+    barras de peso variável (prefixo 2, formato EAN de peso embutido). Maior esforço; só vale a
+    pena se o titular tiver esse tipo de equipamento/operação.
 - **Homologar a balança com equipamento real** (Toledo ou Filizola, porta serial): o protocolo em
-  `Balanca.ler_peso` nunca foi testado fora do código. Mesma observação já valia (genérica,
-  "escala") desde o HANDOFF anterior ao módulo de operação — agora é específica.
+  `Balanca.ler_peso` (`src/hardware/dispositivos.py`) nunca foi testado fora do código.
 - **Qt dos módulos de operação**: alinhar `src/ui_qt/caixa.py` com o Tk — roteamento de impressão
-  por setor (Cozinha/Bar), "Dividir conta" (Split) e o acionamento automático da balança não foram
-  portados. Mesma observação de sempre sobre o acerto da garota no Qt (ver linha abaixo).
-- **Próximo módulo de operação** (mesma convenção documentada em `config_controller.py` e
-  `docs/ESPECIFICACAO.md`): **Rodízio por pessoa** — cobrança fixa por pessoa no fechamento da
-  conta (não em `itens_venda`); `usar_rodizio` + valor configurável; decidir como interage com
-  desconto/serviço em `CaixaController.fechar`. Este sim precisa de flag (é um jeito de cobrar
-  diferente, não um opt-in silencioso por produto/venda como os dois anteriores).
-- **Split por item consumido** (evolução do split, só se o titular quiser depois): cada pessoa
-  paga o que pediu, não uma fração igual — exige marcar os itens de cada pessoa (mudança de
-  esquema); por ora o split cobre só divisão em partes (iguais ou ajustadas à mão).
+  por setor (Cozinha/Bar), "Dividir conta" (Split), acionamento automático da balança e "Rodízio"
+  não foram portados. Mesma observação de sempre sobre o acerto da garota no Qt (ver linha
+  abaixo).
 - Qt (`src/ui_qt/`, opt-in) ainda tem a regra antiga do acerto da garota (`_acerto_so_de_shows`,
   `comissao.py`) e o recibo/comprovante com o tipo antigo (letra normal); o texto do recibo já
   vem sem os lançamentos. Alinhar com o Tk se o Qt for substituir o Tk. O painel Qt do

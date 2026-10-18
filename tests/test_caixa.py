@@ -233,6 +233,70 @@ class TesteDividirConta(BaseCaixa):
         self.assertEqual((v["status"], v["pago_cent"], v["troco_cent"]), ("fechada", 10000, 0))
 
 
+class TesteRodizio(BaseCaixa):
+    def setUp(self):
+        super().setUp()
+        self.banco.cfg_set("usar_rodizio", "S")
+        self.banco.cfg_set("valor_rodizio_pessoa", "89,90")
+        grupo_id = self.banco.valor("SELECT id FROM grupos LIMIT 1")
+        self.sub_rodizio = self.banco.inserir("subgrupos", {"nome": "Carnes", "grupo_id": grupo_id, "rodizio_incluso": 1})
+        self.carne = self.novo_produto("PICANHA", 4500, subgrupo_id=self.sub_rodizio)   # incluso no rodízio
+
+    def test_calcular_sem_rodizio_e_identico_a_hoje(self):
+        vid = self.vender((self.skol, 5), mesa=10)                              # 40,00 + 10% serviço
+        v = self.caixa.obter(vid)
+        self.assertEqual((v["subtotal_cent"], v["servico_cent"], v["total_cent"], v["rodizio_total_cent"]),
+                          (4000, 400, 4400, 0))
+
+    def test_ativar_recusa_fora_de_mesa(self):
+        vid = self.caixa.abrir_balcao()
+        with self.assertRaises(ErroNegocio):
+            self.caixa.ativar_rodizio(vid, 4)
+
+    def test_ativar_recusa_com_modulo_desligado(self):
+        self.banco.cfg_set("usar_rodizio", "N")
+        vid, _ = self.caixa.abrir_mesa(1)
+        with self.assertRaises(ErroNegocio):
+            self.caixa.ativar_rodizio(vid, 4)
+
+    def test_ativar_recusa_pessoas_menor_que_1(self):
+        vid, _ = self.caixa.abrir_mesa(1)
+        with self.assertRaises(ErroNegocio):
+            self.caixa.ativar_rodizio(vid, 0)
+
+    def test_item_incluso_nao_entra_no_subtotal_mas_extra_continua_cobrado(self):
+        vid, _ = self.caixa.abrir_mesa(1)
+        self.caixa.adicionar_item(vid, self.carne, 1)     # 45,00, incluso no rodízio
+        self.caixa.adicionar_item(vid, self.agua, 1)      # 3,50, extra (bebida, fora do rodízio)
+        self.caixa.ativar_rodizio(vid, 4)                 # 4 x 89,90
+        v = self.caixa.obter(vid)
+        rodizio_total = 8990 * 4
+        subtotal = 350 + rodizio_total                    # a carne (4500) não entra: está incluso no rodízio
+        servico = round(subtotal * 0.10)
+        self.assertEqual(v["rodizio_total_cent"], rodizio_total)
+        self.assertEqual((v["subtotal_cent"], v["servico_cent"], v["total_cent"]),
+                          (subtotal, servico, subtotal + servico))
+
+    def test_desativar_volta_ao_calculo_por_item(self):
+        vid, _ = self.caixa.abrir_mesa(1)
+        self.caixa.adicionar_item(vid, self.carne, 1)      # 45,00
+        self.caixa.ativar_rodizio(vid, 2)
+        self.caixa.desativar_rodizio(vid)
+        v = self.caixa.obter(vid)
+        self.assertEqual((v["rodizio"], v["rodizio_total_cent"], v["subtotal_cent"]), (0, 0, 4500))
+
+    def test_fecha_com_troco_e_rodizio_total_fica_congelado_depois_de_fechar(self):
+        vid, _ = self.caixa.abrir_mesa(1)
+        self.caixa.adicionar_item(vid, self.carne, 1)      # incluso: não soma no total, mas a mesa não fica vazia
+        self.caixa.ativar_rodizio(vid, 2)                  # 2 x 89,90 = 179,80; serviço 10% = 17,98; total 197,78
+        self.pagar(vid, "Dinheiro", 20000)
+        v = self.caixa.fechar(vid)
+        self.assertEqual((v["status"], v["total_cent"], v["troco_cent"]), ("fechada", 19778, 222))
+        congelado = self.caixa.obter(vid)["rodizio_total_cent"]
+        self.banco.cfg_set("valor_rodizio_pessoa", "120,00")   # preço muda no mês seguinte
+        self.assertEqual(self.caixa.obter(vid)["rodizio_total_cent"], congelado)   # venda fechada não recalcula
+
+
 class TesteDescontoServico(BaseCaixa):
     def setUp(self):
         super().setUp()

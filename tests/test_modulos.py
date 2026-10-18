@@ -76,6 +76,7 @@ class TesteModulosNaTela(BaseUI):
         nomes = [t[0] for t in self.abrir_caixa().tarefas]
         self.assertNotIn("Delivery (F6)", nomes)
         self.assertNotIn("Caderneta (F5)", nomes)
+        self.assertNotIn("Rodízio", nomes)             # usar_rodizio também nasce desligado
         self.assertIn("Pagar (F12)", nomes)
 
     def test_f5_e_f6_nao_abrem_nada(self):
@@ -90,9 +91,11 @@ class TesteModulosNaTela(BaseUI):
     def test_ligados_voltam_para_a_barra(self):
         self.banco.cfg_set("usar_delivery", "S")
         self.banco.cfg_set("usar_caderneta", "S")
+        self.banco.cfg_set("usar_rodizio", "S")
         nomes = [t[0] for t in self.abrir_caixa().tarefas]
         self.assertIn("Delivery (F6)", nomes)
         self.assertIn("Caderneta (F5)", nomes)
+        self.assertIn("Rodízio", nomes)
 
 
 if __name__ == "__main__":

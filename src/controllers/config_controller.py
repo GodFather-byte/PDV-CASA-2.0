@@ -98,6 +98,9 @@ CAMPOS_CONFIG = [
     ("usar_contas", "Contas a pagar/receber, plano de contas e relatórios financeiros", "sn", "Módulos"),
     ("usar_cozinha_bar", "Cozinha/Bar: imprimir por setor (impressoras nomeadas) e acompanhar o preparo dos itens "
      "(pendente/em preparo/entregue)", "sn", "Módulos"),
+    ("usar_rodizio", "Rodízio: cobrança fixa por pessoa nas mesas/comandas marcadas (produtos do rodízio não "
+     "entram na conta por item; cada mesa decide se é rodízio)", "sn", "Módulos"),
+    ("valor_rodizio_pessoa", "Valor do rodízio por pessoa (R$)", "texto", "Módulos"),
     ("programa_comunicacao", "Programa de comunicação (caminho do executável)", "texto", "Utilitários"),
     ("pasta_backup", "Pasta do backup (vazio = pasta Backup do sistema)", "texto", "Utilitários"),
     ("pasta_backup_extra", "Cópia extra do backup: pendrive, outro disco ou pasta de rede (vazio = sem cópia extra)", "texto", "Utilitários"),

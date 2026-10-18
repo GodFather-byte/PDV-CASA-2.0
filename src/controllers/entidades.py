@@ -221,6 +221,7 @@ _ENTIDADES = [
         Campo("grupo_id", "Grupo", "lookup", obrigatorio=True, lookup="grupos", largura=24),
         _sn("impressora_remota", "Imprimir em outra impressora (cozinha/bar)", na_grade=True),
         Campo("setor_impressao_id", "Setor de impressão (cozinha/bar)", "lookup", lookup="setores_impressao", na_grade=False),
+        _sn("rodizio_incluso", "Incluso no rodízio (preço fixo por pessoa)", na_grade=True),
         Campo("figura", "Figura (bmp 180x121)", na_grade=False, largura=40),
     ], ordem="nome", busca=("nome",)),
 
