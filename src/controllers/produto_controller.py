@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from src.controllers.config_controller import CODIGOS_ESPECIAIS, codigo_especial
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
 from src.database.conexao import BancoDados
@@ -160,3 +161,72 @@ class ProdutoController:
             return atual["ult_preco_cent"] if atual else self.banco.valor(
                 "SELECT custo_cent FROM produtos_historico WHERE id = ?", (produto_id,), 0)
         return sum(fmt.mult_cent(self.custo(c["insumo_id"]), c["quantidade"]) for c in comps)
+
+    # ------------------------------------------------- cadastro rápido e embalagens (adega)
+    def proximo_codigo(self) -> str:
+        """O próximo código livre: o maior código numérico + 1 (até 999.999, para não contar um código de barras usado como
+        código), pulando os códigos especiais do caixa em uso (comissão, saída)."""
+        reservados = {codigo_especial(self.banco, c) for c in CODIGOS_ESPECIAIS}
+        maior = max((int(c) for (c,) in self.banco.todos("SELECT codigo FROM produtos") if c.isdigit() and int(c) < 1_000_000),
+                    default=0)
+        n = maior + 1
+        while str(n) in reservados:
+            n += 1
+        return str(n)
+
+    def _codigo_de_barras_livre(self, cbarra: str) -> None:
+        existente = self.buscar_codigo(cbarra, apenas_venda=False)
+        if existente:
+            raise ErroNegocio(f"O código {cbarra} já é do produto '{existente['nome']}'.")
+
+    def cadastrar_rapido(self, cbarra: str, nome: str, preco_cent: int, subgrupo_id: int, estoque: float | None = None,
+                         operador_id: int | None = None) -> dict:
+        """Produto novo direto do caixa, pelo código de barras que o leitor passou: só nome, preço e categoria e, se
+        informada, a quantidade em estoque (aí ele já passa a controlar estoque). O código interno é o próximo livre."""
+        from src.controllers.cadastro_controller import CadastroController     # import tardio: evita ciclo de importação
+        from src.controllers.estoque_controller import EstoqueController
+        cbarra = (cbarra or "").strip()
+        if cbarra:
+            self._codigo_de_barras_livre(cbarra)
+        if preco_cent <= 0:
+            raise ErroNegocio("Informe o preço de venda.")
+        unidade = (self.banco.valor("SELECT id FROM unidades WHERE abreviatura = 'UN'")
+                   or self.banco.valor("SELECT MIN(id) FROM unidades"))
+        with self.banco.transacao():
+            pid = CadastroController(self.banco).salvar("produtos", {
+                "codigo": self.proximo_codigo(), "nome": nome, "subgrupo_id": subgrupo_id, "unidade_id": unidade,
+                "preco_cent": fmt.fmt_num(preco_cent), "cbarra": cbarra or None, "cobrar_servico": "N"})
+            if estoque is not None:
+                EstoqueController(self.banco, operador_id).registrar_rapido(pid, "contagem", estoque)
+            self.banco.log("produto_cadastro_rapido", f"{nome} {cbarra}".strip(), operador_id)
+        return self.por_id(pid)
+
+    def criar_embalagem(self, unitario_id: int, quantidade: float, nome: str, preco_cent: int, cbarra: str | None = None,
+                        operador_id: int | None = None) -> int:
+        """Fardo ou caixa fechada de um produto (12 latas, 24 long necks): um produto novo, com preço e código de barras
+        próprios, cuja venda baixa `quantidade` unidades do produto no estoque (pela composição). O produto unitário passa a
+        controlar estoque, se ainda não controlava."""
+        from src.controllers.cadastro_controller import CadastroController     # import tardio: evita ciclo de importação
+        u = self.por_id(unitario_id)
+        if u is None:
+            raise ErroNegocio("Produto não encontrado.")
+        if quantidade != int(quantidade) or not 2 <= quantidade <= 999:
+            raise ErroNegocio("Informe quantas unidades vêm no fardo ou na caixa (de 2 a 999).")
+        if preco_cent <= 0:
+            raise ErroNegocio("Informe o preço do fardo ou da caixa.")
+        cbarra = (cbarra or "").strip() or None
+        if cbarra:
+            self._codigo_de_barras_livre(cbarra)
+        unidade = self.banco.valor(
+            "SELECT id FROM unidades WHERE abreviatura IN ('FD', 'CX', 'PCT') "
+            "ORDER BY CASE abreviatura WHEN 'FD' THEN 0 WHEN 'CX' THEN 1 ELSE 2 END LIMIT 1") or u["unidade_id"]
+        with self.banco.transacao():
+            if not u["controla_estoque"]:
+                self.banco.executar("UPDATE produtos SET controla_estoque = 1 WHERE id = ?", (unitario_id,))
+                self.banco.log("estoque_controle_ligado", u["nome"], operador_id)
+            pid = CadastroController(self.banco).salvar("produtos", {
+                "codigo": self.proximo_codigo(), "nome": nome, "subgrupo_id": u["subgrupo_id"], "unidade_id": unidade,
+                "preco_cent": fmt.fmt_num(preco_cent), "cbarra": cbarra, "cobrar_servico": "N"})
+            self.incluir_composicao(pid, unitario_id, int(quantidade))
+            self.banco.log("produto_embalagem", f"{nome}: {int(quantidade)} x {u['nome']}", operador_id)
+        return pid

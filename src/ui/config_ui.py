@@ -69,16 +69,19 @@ def escolher_perfil(janela, ctx) -> None:
         return
     nome = PERFIS[escolha][0]
     mudancas = perfil.mudancas(escolha)
-    if mudancas:
-        lista = "\n".join(f"• {m['item']}: {m['de']} → {m['para']}" for m in mudancas)
-        if not tema.confirmar(janela, f"Aplicar o perfil {nome}? Muda:\n\n{lista}\n\nCódigos, preços, percentuais e números de "
-                                      "mesas e comandas ficam como estão. Cada item continua ajustável nesta janela.",
-                              "Perfil do estabelecimento"):
+    categorias = [s for subs in perfil.categorias_faltando(escolha).values() for s in subs]
+    if mudancas or categorias:
+        linhas = [f"• {m['item']}: {m['de']} → {m['para']}" for m in mudancas]
+        if categorias:
+            linhas.append(f"• Cria as categorias: {', '.join(categorias)}")
+        if not tema.confirmar(janela, f"Aplicar o perfil {nome}? Muda:\n\n" + "\n".join(linhas) + "\n\nCódigos, preços, "
+                                      "percentuais e números de mesas e comandas ficam como estão. Cada item continua ajustável "
+                                      "nesta janela.", "Perfil do estabelecimento"):
             return
     ok, _ = tema.tratar(janela, perfil.aplicar, escolha)
     if ok:
         janela.recarregar()
-        tema.mensagem(janela, f"Perfil {nome} aplicado." if mudancas
+        tema.mensagem(janela, f"Perfil {nome} aplicado." if mudancas or categorias
                       else f"Perfil {nome}: as configurações já estavam assim, nada mudou.", "Perfil do estabelecimento")
 
 

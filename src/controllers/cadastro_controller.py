@@ -130,11 +130,8 @@ class CadastroController:
         return brutos
 
     def proximo_codigo_produto(self) -> str:
-        maior = 0
-        for (cod,) in self.banco.todos("SELECT codigo FROM produtos"):
-            if cod.isdigit():
-                maior = max(maior, int(cod))
-        return str(maior + 1).zfill(13)
+        from src.controllers.produto_controller import ProdutoController      # import tardio: evita ciclo de importação
+        return ProdutoController(self.banco).proximo_codigo().zfill(13)
 
     def proximo_numero_cliente(self) -> str:
         """Maior número de consulta numérico + 1 (contar os clientes repetiria um número depois de uma exclusão)."""

@@ -191,7 +191,7 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
   é persistido (como desconto/serviço já são) para uma venda fechada não mudar de total se o preço configurado
   mudar depois. Ação "Rodízio" na barra de tarefas do caixa (`caixa_ui.py`), ao lado de Delivery/Caderneta.
 - **Perfil do estabelecimento** (o "modo de operação": Boate / casa noturna, Bar, Restaurante, Churrascaria / rodízio,
-  Comércio pequeno; `perfil_controller.py`). É um atalho de configuração: liga e desliga de uma vez os módulos
+  Comércio pequeno, Adega / depósito de bebidas; `perfil_controller.py`). É um atalho de configuração: liga e desliga de uma vez os módulos
   (`usar_*`) e as regras de sim/não que definem o tipo de negócio (posição padrão, serviço na mesa e na comanda, perguntar
   pessoas, desconto). Nunca mexe no que o dono digitou (códigos, preços, percentuais, número de mesas e comandas). Antes
   de aplicar, mostra o que muda; aplica tudo ou nada, pelas mesmas validações de Configurações; depois cada chave segue
@@ -217,6 +217,21 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
   na saída continua recusado. Comanda pré-paga juntada numa comum leva o crédito como adiantamento (a comum não trava).
   Tela: crédito e saldo sob o total, selo "Pré-pago"/"Sem crédito", saldo no cartão do painel (em vez de "Falta"/
   "Concluir acerto"), "Devolver:" na tela de pagamento; a pré-conta mostra crédito e saldo e o cupom, a devolução.
+- **Adega / depósito de bebidas** (perfil `adega`): venda só no balcão, delivery, caderneta (fiado), desconto liberado e
+  sem serviço; ao aplicar, cria as categorias de bebidas que faltam (grupos BEBIDAS e CONVENIÊNCIA, `CATEGORIAS` em
+  `perfil_controller.py`; nunca apaga nem renomeia as da casa). Três peças valem para qualquer negócio:
+  **Mesas e comandas** (`usar_mesas`, nasce "S"; o Comércio pequeno e a Adega desligam): desligado, o caixa vende só no
+  balcão: sem painel de comandas, campo da posição, setas de troca, indicadores de posições abertas nem as ações de mesa
+  (F4, Pré-conta, Transfere, Repique, Consulta comanda, Nomear, Rodízio, Recarga); Esc só limpa a linha de entrada,
+  "M5" no código não vira mesa, `CaixaController.abrir_mesa` recusa e os relatórios de comandas e garçons saem do menu.
+  **Cadastro na hora pelo código de barras**: um código só de números com 8 dígitos ou mais que não existe faz o caixa
+  oferecer o cadastro (nome, preço, categoria e, se informada, a quantidade em estoque) e já lança o produto
+  (`ProdutoController.cadastrar_rapido`, UI `cadastro_rapido_ui.py`); quem não tem `cad_produtos` precisa da senha de
+  supervisor. **Fardo / caixa fechada**: botão no Cadastro de Produtos cria, a partir do produto unitário, um produto com
+  preço e código de barras próprios cuja composição baixa N unidades do estoque a cada venda
+  (`ProdutoController.criar_embalagem`; o unitário passa a controlar estoque). O próximo código livre
+  (`ProdutoController.proximo_codigo`, usado também pelo cadastro) pula os códigos especiais em uso e ignora código de
+  barras usado como código.
 - **Senhas** são guardadas com PBKDF2 e comparadas sem diferenciar maiúsculas, como pede o manual.
 - **Busca por nome** (produtos, clientes, contas, cadastros) ignora acento e caixa: "cafe" acha "Café" (função SQL `norm()`).
 - **Quantidade por item** tem teto (configuração `qtd_maxima_item`, padrão 99.999; 0 desliga), para um código de

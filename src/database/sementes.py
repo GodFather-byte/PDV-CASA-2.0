@@ -91,6 +91,8 @@ CONFIG_PADRAO = {
     # Recursos da casa noturna: nascem ligados porque o sistema nasceu boate; o perfil do estabelecimento os desliga nos
     # outros tipos de negócio (perfil_controller.py).
     "usar_garotas": "S", "usar_portaria": "S", "perfil_operacao": "boate",
+    # Mesas e comandas no caixa: desligado, o caixa vende só no balcão (adega, comércio). Nasce ligado, como sempre foi.
+    "usar_mesas": "S",
     "api_url": "", "api_token": "", "sync_intervalo_seg": "60",
     "programa_comunicacao": "", "pasta_backup": "", "pasta_backup_extra": "", "backup_erro": "", "backup_extra_erro": "",
     "email_loja": "", "email_destino": "", "smtp_servidor": "",
@@ -105,7 +107,7 @@ CONFIG_PADRAO = {
 CARGOS = ["Administrador", "Gerente", "Caixa", "Garçom", "Entregador", "Vendedor"]
 
 UNIDADES = [("Unidade", "UN"), ("Quilo", "KG"), ("Litro", "LT"), ("Dose", "DS"),
-            ("Pacote", "PCT"), ("Metro", "MT")]
+            ("Pacote", "PCT"), ("Metro", "MT"), ("Fardo", "FD"), ("Caixa", "CX")]
 
 ALIQUOTAS = [("ISENTO", 0, "II"), ("SUBSTITUIÇÃO TRIBUTÁRIA", 0, "FF"),
              ("7%", 7, "0700"), ("12%", 12, "1200"), ("18%", 18, "1800")]

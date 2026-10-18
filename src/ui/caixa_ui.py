@@ -26,7 +26,7 @@ from src.core.posicao import nome as nome_posicao
 from src.core.posicao import exemplos, parece_posicao, rotulo_do_campo
 from src.hardware.dispositivos import DispositivoIndisponivel
 from src.hardware.impressora_termica import ErroImpressao
-from src.ui import caixa_dialogos, caixa_tema, comissao_ui, tema
+from src.ui import cadastro_rapido_ui, caixa_dialogos, caixa_tema, comissao_ui, tema
 from src.ui.caixa_pagamento import JanelaPagamento
 from src.ui.caixa_tema import CX, FONTE
 from src.ui.clientes_ui import JanelaClientes, JanelaEntregas
@@ -71,7 +71,9 @@ class JanelaCaixa(tk.Toplevel):
         self.produto: dict | None = None
         self.modo_cancelar = False
         self.mesas_visiveis = False
-        self.painel_fixo = ctx.banco.cfg_bool("painel_mesas_fixo", True)
+        self.com_mesas = ctx.banco.cfg_bool("usar_mesas", True)        # desligado: só balcão (adega, comércio)
+        self.painel_fixo = self.com_mesas and ctx.banco.cfg_bool("painel_mesas_fixo", True)
+        self._subgrupo_rapido: int | None = None                       # a categoria do último produto cadastrado na hora
         self.indice_barra: int | None = None
         self.comissao_marcada: list[dict] = []     # comissões marcadas na comanda da tela (só se for comanda de garota)
         self._itens_na_grade = 0                   # quantas linhas da lista são itens da venda (o resto é comissão)
@@ -143,8 +145,9 @@ class JanelaCaixa(tk.Toplevel):
         self.btn_anterior.pack(side="right", padx=(0, 3))
         self.lbl_situacao = ttk.Label(quem, text="Balcão", font=(FONTE, 22, "bold"), style="Cx.TLabel", foreground=CX["azul"])
         self.lbl_situacao.pack(anchor="w")
-        self.lbl_situacao.bind("<Button-1>", self.nomear_comanda)           # clicar no título dá nome à comanda
-        self.lbl_situacao.configure(cursor="hand2")
+        if self.com_mesas:
+            self.lbl_situacao.bind("<Button-1>", self.nomear_comanda)       # clicar no título dá nome à comanda
+            self.lbl_situacao.configure(cursor="hand2")
         bloco = tk.Frame(linha, bg=CX["fundo"])
         bloco.pack(side="right", padx=(12, 0))
         ttk.Label(bloco, text=rotulo_do_campo(self.ctx.caixa.padrao_posicao()), style="Cx.Rotulo.TLabel").pack(anchor="e")
@@ -156,6 +159,10 @@ class JanelaCaixa(tk.Toplevel):
         self.lbl_status_venda.pack(side="right")
         self.lbl_leitor = ttk.Label(linha, text="", style="Cx.TLabel", foreground=tema.COR["aviso"], font=(FONTE, 10, "bold"))
         self.lbl_leitor.pack(side="right", anchor="s", padx=(0, 14), pady=(0, 4))
+        if not self.com_mesas:          # só balcão: sem o campo da posição nem a troca de comanda
+            bloco.pack_forget()
+            self.btn_proxima.pack_forget()
+            self.btn_anterior.pack_forget()
 
         self.faixa = tk.Label(esq, text="", font=tema.FONTE_B, fg="white", anchor="w", justify="left", padx=14, pady=6)
         self.faixa.bind("<Configure>", lambda e: self.faixa.configure(wraplength=max(e.width - 30, 200)))
@@ -197,8 +204,10 @@ class JanelaCaixa(tk.Toplevel):
         # --- itens da venda (o código e a unidade ficam guardados, mas fora da vista: a lista é Produto, Preço, Qtd e Total)
         quadro = tk.Frame(esq, bg=CX["fundo"])
         quadro.pack(fill="both", expand=True, pady=(12, 0))
-        self.lbl_dica = ttk.Label(esq, text="Código + Enter lança  ·  Enter na linha: ações  ·  Delete cancela  ·  O observação  ·  T transfere  ·  PgUp/PgDn troca de comanda  ·  F12 paga",
-                                  font=(FONTE, 9), style="Cx.Rotulo.TLabel")
+        dica = ("Código + Enter lança  ·  Enter na linha: ações  ·  Delete cancela  ·  O observação  ·  T transfere  ·  PgUp/PgDn troca de comanda  ·  F12 paga"
+                if self.com_mesas else
+                "Leitor ou código + Enter lança  ·  F1 consulta preço  ·  Enter na linha: ações  ·  Delete cancela  ·  F12 paga")
+        self.lbl_dica = ttk.Label(esq, text=dica, font=(FONTE, 9), style="Cx.Rotulo.TLabel")
         self.lbl_dica.pack(side="bottom", anchor="w", pady=(8, 0), before=quadro)
         self.grade = tema.Grade(quadro, [("cod", "Código", 150, "w"), ("prod", "Produto", 300, "w"), ("un", "Un", 50, "w"),
                                          ("preco", "Preço", 90, "e"), ("qtd", "Qtd", 90, "e"), ("tot", "Total", 100, "e"),
@@ -298,6 +307,9 @@ class JanelaCaixa(tk.Toplevel):
         self.lbl_aberto_casa = self._indicador(topo, "EM ABERTO NA CASA", CX["verde"])[1]
         self.lbl_acertos = self._indicador(topo, "AGUARD. ACERTO", CX["ambar"])[1]
         self.lbl_abertas = self._indicador(topo, "ABERTAS", CX["texto"])[1]
+        if not self.com_mesas:          # balcão: não há mesas nem comandas abertas para contar
+            for lbl in (self.lbl_aberto_casa, self.lbl_acertos, self.lbl_abertas):
+                lbl.master.pack_forget()
         self.lbl_fila = tk.Label(topo, bg=CX["cabecalho"], fg=CX["verde"], font=tema.FONTE_B, cursor="hand2")
         self.lbl_fila.pack(side="right", padx=(0, 6))
         self.lbl_fila.bind("<Button-1>", lambda e: self.abrir_fila())
@@ -351,6 +363,10 @@ class JanelaCaixa(tk.Toplevel):
         caixa = [("Impressora", self.impressora), ("Balança (F2)", self.balanca), ("Leitor (F3)", self.alternar_leitor),
                  ("Fecha Turno", self.fechar_turno)]
         sair = [("Sair", self.sair)]                       # fica no canto do cabeçalho, longe dos botões de uso diário
+        if not self.com_mesas:          # só balcão: sem as ações de mesa e comanda
+            so_mesa = {self.foco_mesa, self.pre_conta, self.transferir_mesa, self.repique, self.consultar_comanda,
+                       self.nomear_comanda, self.rodizio, self.recarga}
+            principais, diarias, venda = ([t for t in lista if t[1] not in so_mesa] for lista in (principais, diarias, venda))
         desligados = {self.entrega: "usar_delivery", self.caderneta: "usar_caderneta",
                       self.rodizio: "usar_rodizio", self.recarga: "usar_prepago"}         # módulos que a casa não usa
         venda = [(r, f) for r, f in venda if f not in desligados or self.ctx.banco.cfg_bool(desligados[f], False)]
@@ -674,7 +690,7 @@ class JanelaCaixa(tk.Toplevel):
             self.liberar_saida()
             return
         p = self.ctx.produtos.buscar_codigo(texto)
-        if p is None and parece_posicao(texto):      # "C2" ou "M5" no campo do código troca de posição (produto de mesmo código vence)
+        if p is None and self.com_mesas and parece_posicao(texto):   # "C2"/"M5" troca de posição (produto de mesmo código vence)
             self.var_cod.set("")
             self.var_pos.set(texto.strip())
             self.chamar_mesa()
@@ -687,12 +703,31 @@ class JanelaCaixa(tk.Toplevel):
                 p = self._escolher_produto(achados, texto)
                 if p is None:
                     return
+        if p is None and texto.isdigit() and len(texto) >= 8:    # código de barras ainda não cadastrado: cadastra na hora
+            self.var_cod.set("")
+            p = self._cadastro_rapido(texto)
+            if p is None:
+                self.ent_codigo.focus_set()
+                return
         if p is None:
             self.bell()
             self.avisar(f"Produto '{texto}' não encontrado.", tema.COR["perigo"])
             self.var_cod.set("")
             return
         self.selecionar_produto(p)
+
+    def _cadastro_rapido(self, cbarra: str) -> dict | None:
+        """O leitor passou um código de barras que não está cadastrado: oferece cadastrar o produto ali mesmo (nome, preço e
+        categoria) para já lançá-lo. Quem não pode cadastrar produtos precisa da senha de quem pode."""
+        if not tema.confirmar(self, f"O código {cbarra} não está cadastrado.\nCadastrar o produto agora?", "Produto novo"):
+            return None
+        if not self.ctx.acesso.pode(self.ctx.operador, "cad_produtos") and tema.pedir_senha_supervisor(
+                self, self.ctx, "cad_produtos", "Cadastrar produto exige autorização:") is None:
+            return None
+        p = cadastro_rapido_ui.pedir_produto(self, self.ctx, cbarra, self._subgrupo_rapido)
+        if p is not None:
+            self._subgrupo_rapido = p["subgrupo_id"]
+        return p
 
     def consultar(self) -> None:
         achados = self.ctx.produtos.pesquisar(self.var_cod.get().strip(), limite=500)
@@ -1017,6 +1052,8 @@ class JanelaCaixa(tk.Toplevel):
     def navegar_comanda(self, passo: int) -> None:
         """PgDn/PgUp (ou ▶ e ◀): vai para a comanda, mesa ou garota seguinte (ou anterior) da lista do painel, que respeita a
         aba e a busca escolhidas. É o jeito de passar pelas contas, dos clientes e das garotas, sem voltar ao campo da posição."""
+        if not self.com_mesas:
+            return
         self.carregar_mesas()
         atual = self._chave_atual()
         destino = self.painel_mesas.vizinha(atual, passo)
@@ -1029,6 +1066,9 @@ class JanelaCaixa(tk.Toplevel):
 
     def foco_mesa(self) -> None:
         """Esc ou F4: volta ao 'marcar comanda'. Os ícones aparecem e o campo da posição fica pronto para digitar."""
+        if not self.com_mesas:          # só balcão: o Esc só limpa a linha de entrada
+            self.cancelar_item_pendente()
+            return
         self._mostrar_painel()
         self.carregar_mesas()
         self.ent_pos.focus_set()
@@ -1121,7 +1161,8 @@ class JanelaCaixa(tk.Toplevel):
         if v["modalidade"] == "entrega":
             return self.emitir_pedido_entrega()
         if v["modalidade"] != "mesa":
-            tema.aviso(self, "A pré-conta é enviada às mesas e comandas. Escolha uma delas (F4).")
+            tema.aviso(self, "A pré-conta é enviada às mesas e comandas. Escolha uma delas (F4)." if self.com_mesas
+                       else "No balcão não há pré-conta: tecle F12 para pagar.")
             return
         ok, _ = tema.tratar(self, self.ctx.caixa.enviar_conta, v["id"])
         if ok:
@@ -1140,6 +1181,8 @@ class JanelaCaixa(tk.Toplevel):
         return exemplos(self.ctx.caixa.padrao_posicao())
 
     def transferir_mesa(self) -> None:
+        if not self.com_mesas:
+            return
         v = self.venda()
         if v is None or v["modalidade"] != "mesa":
             tema.aviso(self, "Chame a mesa ou comanda que será transferida (F4) e tecle F10.")
@@ -1578,6 +1621,8 @@ class JanelaCaixa(tk.Toplevel):
         self.ent_codigo.focus_set()
 
     def repique(self) -> None:
+        if not self.com_mesas:          # a caixinha é deixada na mesa ou comanda: no balcão não existe
+            return
         v = self.venda()
         if v and v["modalidade"] == "mesa":
             comanda, pos = bool(v["comanda"]), v["posicao"]

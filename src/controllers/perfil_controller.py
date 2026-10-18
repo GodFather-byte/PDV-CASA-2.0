@@ -11,6 +11,7 @@ from src.database.sementes import CONFIG_PADRAO
 
 # O que o perfil controla, na ordem em que aparece na confirmação, com o nome curto de cada item.
 ITENS = {
+    "usar_mesas": "Mesas e comandas no caixa",
     "usar_garotas": "Garotas (comissão e shows)", "usar_portaria": "Portaria (ticket de saída)",
     "usar_cozinha_bar": "Cozinha/Bar (pedido por setor)", "usar_rodizio": "Rodízio por pessoa", "usar_delivery": "Delivery",
     "usar_caderneta": "Caderneta (fiado)", "posicao_padrao": "Número digitado no caixa é",
@@ -18,9 +19,9 @@ ITENS = {
     "pergunta_pessoas": "Perguntar o nº de pessoas ao abrir a mesa", "usar_desconto": "Desconto no fechamento da conta",
 }
 
-_BOATE = {"usar_garotas": "S", "usar_portaria": "S", "usar_cozinha_bar": "N", "usar_rodizio": "N", "usar_delivery": "N",
-          "usar_caderneta": "N", "posicao_padrao": "comanda", "cobra_servico_mesa": "S", "cobra_servico_comanda": "S",
-          "pergunta_pessoas": "N", "usar_desconto": "N"}
+_BOATE = {"usar_mesas": "S", "usar_garotas": "S", "usar_portaria": "S", "usar_cozinha_bar": "N", "usar_rodizio": "N",
+          "usar_delivery": "N", "usar_caderneta": "N", "posicao_padrao": "comanda", "cobra_servico_mesa": "S",
+          "cobra_servico_comanda": "S", "pergunta_pessoas": "N", "usar_desconto": "N"}
 _SEM_BOATE = {**_BOATE, "usar_garotas": "N", "usar_portaria": "N", "usar_desconto": "S"}
 _RESTAURANTE = {**_SEM_BOATE, "usar_cozinha_bar": "S", "usar_delivery": "S", "posicao_padrao": "mesa", "pergunta_pessoas": "S"}
 
@@ -34,11 +35,22 @@ PERFIS = {
                     "liberado", _RESTAURANTE),
     "churrascaria": ("Churrascaria / rodízio", "como o restaurante, com o rodízio por pessoa e sem delivery",
                      {**_RESTAURANTE, "usar_rodizio": "S", "usar_delivery": "N"}),
-    "comercio": ("Comércio pequeno", "venda no balcão sem serviço, caderneta (fiado) e desconto liberado: mercearia, "
+    "comercio": ("Comércio pequeno", "venda só no balcão, sem serviço, caderneta (fiado) e desconto liberado: mercearia, "
                  "padaria, loja, lanchonete",
-                 {**_SEM_BOATE, "usar_caderneta": "S", "cobra_servico_mesa": "N", "cobra_servico_comanda": "N"}),
+                 {**_SEM_BOATE, "usar_mesas": "N", "usar_caderneta": "S", "cobra_servico_mesa": "N",
+                  "cobra_servico_comanda": "N"}),
+    "adega": ("Adega / depósito de bebidas", "venda só no balcão pelo leitor de código de barras, fardo e caixa fechada, "
+              "delivery, caderneta (fiado) e desconto liberado",
+              {**_SEM_BOATE, "usar_mesas": "N", "usar_delivery": "S", "usar_caderneta": "S", "cobra_servico_mesa": "N",
+               "cobra_servico_comanda": "N"}),
 }
 PADRAO = "boate"
+
+# Categorias (grupo: subgrupos) que o perfil cria se ainda não existirem: nunca apaga nem renomeia as da casa.
+CATEGORIAS = {
+    "adega": {"BEBIDAS": ["CERVEJAS", "DESTILADOS", "VINHOS E ESPUMANTES", "REFRIGERANTES", "ÁGUAS E SUCOS", "ENERGÉTICOS"],
+              "CONVENIÊNCIA": ["GELO E CARVÃO", "TABACARIA", "PETISCOS", "DESCARTÁVEIS"]},
+}
 _OPCOES = {c[0]: dict(c[4]) for c in CAMPOS_CONFIG if c[0] in ITENS and len(c) > 4}
 
 
@@ -74,10 +86,27 @@ class PerfilController:
         with self.banco.transacao():
             if mudancas:
                 ConfigController(self.banco).salvar_config({m["chave"]: m["valor"] for m in mudancas})
+            for grupo, subgrupos in self.categorias_faltando(perfil).items():
+                self.banco.executar("INSERT OR IGNORE INTO grupos(nome) VALUES (?)", (grupo,))
+                grupo_id = self.banco.valor("SELECT id FROM grupos WHERE nome = ?", (grupo,))
+                for nome in subgrupos:
+                    self.banco.executar("INSERT OR IGNORE INTO subgrupos(nome, grupo_id) VALUES (?, ?)", (nome, grupo_id))
             self.banco.cfg_set("perfil_operacao", perfil)
             self.banco.log("perfil_operacao", f"{PERFIS[perfil][0]}: "
                            + (", ".join(f"{m['item']} {m['para']}" for m in mudancas) or "nada mudou"), self.operador_id)
         return mudancas
+
+    def categorias_faltando(self, perfil: str) -> dict[str, list[str]]:
+        """As categorias do perfil (grupo: subgrupos) que a casa ainda não tem."""
+        self._valores(perfil)
+        faltando = {}
+        for grupo, subgrupos in CATEGORIAS.get(perfil, {}).items():
+            existentes = {r[0] for r in self.banco.todos(
+                "SELECT s.nome FROM subgrupos s JOIN grupos g ON g.id = s.grupo_id WHERE g.nome = ?", (grupo,))}
+            novos = [s for s in subgrupos if s not in existentes]
+            if novos:
+                faltando[grupo] = novos
+        return faltando
 
     @staticmethod
     def _valores(perfil: str) -> dict:

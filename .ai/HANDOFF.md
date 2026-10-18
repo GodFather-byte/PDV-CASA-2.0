@@ -1,52 +1,58 @@
 # HANDOFF
 
 ## Último trabalho
-- **Pré-pago / cartão consumação** (`usar_prepago`, esquema v21), depois do Perfil do estabelecimento (em `main`). Regras
-  fechadas com o titular (AskUserQuestion): (1) a sobra do crédito **volta ao cliente** na saída, em dinheiro; (2) sem
-  saldo, **bloqueia até recarregar**; (3) vira pré-paga **a comanda que recebe carga** (as outras, e as das garotas,
-  seguem normais).
-  - Esquema v21: `vendas.prepago` e `pagamentos_venda.recarga` (a recarga é um pagamento adiantado marcado).
-  - `CaixaController`: `recarregar` (exige o módulo e mesa/comanda), `saldo_prepago` (crédito, consumo e saldo; o
-    complemento da consumação mínima fica fora do consumo e é acertado na saída) e `_conferir_credito`, chamado dentro da
-    transação de `adicionar_item`, `transferir_item`, `transferir_mesa` e `transferir_varias` quando o destino é pré-pago
-    (o que passa do crédito é desfeito). `_conferir_limite_comanda` não vale para pré-paga. Comanda pré-paga juntada
-    numa comum leva o crédito como adiantamento (a comum não trava).
-  - Devolução da sobra (`liquidar`/`fechar`): troco das recargas em dinheiro **do turno atual**; o resto da sobra de
-    recarga (Pix/cartão, ou dinheiro de turno já fechado) vira `devolucao`, gravada em `fechar` como **saída do caixa**
-    no turno atual ("Devolução do crédito pré-pago da comanda N"), para a gaveta e a maquininha baterem sem mexer em
-    turno conferido (mesmo princípio de `_devolver_adiantamentos`). Só recarga vira devolução: Pix pago a mais na saída
-    continua recusado (a tela de pagamento depende desse erro). Sem recarga, `liquidar` dá exatamente o resultado de
-    antes. `vendas.troco_cent` continua só o troco em dinheiro; a devolução é a diferença `pago - total - troco - vale`.
-  - `fechar` aceita pré-paga sem consumo (devolve tudo); comanda comum continua exigindo item.
-  - Tela: botão "Recarga" (barra, gated por `usar_prepago`), crédito e saldo sob o total, selo "Pré-pago"/"Sem
-    crédito", saldo no cartão do painel em vez de "Falta"/"Concluir acerto", "Devolver:" e aviso na tela de pagamento, e
-    o "Troco" depois de fechar passou a mostrar tudo o que volta ao cliente. Pré-conta mostra crédito e saldo; cupom, a
-    "Devolução do crédito".
-  - Testes: `tests/test_prepago.py` (22 casos: recarga, trava do crédito, transferências, devolução em dinheiro/Pix/turno
-    anterior, impressão, painel e tela), `tests/test_esquema_v21.py`, casos em `tests/test_modulos.py` (botão Recarga).
-  - **Qt não recebeu o pré-pago** (botão Recarga, saldo, "Devolver:"); o controlador já vale para o Qt (trava e
-    devolução), mas a tela de pagamento Qt mostra só o troco.
+- **Módulo Adega / depósito de bebidas**, pedido com urgência pelo titular (instalação num cliente de adega no dia
+  seguinte: "cadastro de bebidas, não por mesa nem comanda, sistema de adega completo"). Vem depois do Pré-pago e do
+  Perfil do estabelecimento (todos em `main`).
+  - Perfil `adega` em `perfil_controller.py`: venda só no balcão, delivery, caderneta (fiado), desconto liberado, sem
+    serviço, garotas e portaria. Ao aplicar, cria as categorias que faltam (`CATEGORIAS`: BEBIDAS com Cervejas,
+    Destilados, Vinhos e espumantes, Refrigerantes, Águas e sucos, Energéticos; CONVENIÊNCIA com Gelo e carvão,
+    Tabacaria, Petiscos, Descartáveis). A confirmação nas Configurações lista as categorias que serão criadas.
+  - Módulo **Mesas e comandas** (`usar_mesas`, nasce "S"; Comércio pequeno e Adega desligam; esconde `rel_comandas` e
+    `rel_garcons`): o caixa Tk vira só balcão (`JanelaCaixa.com_mesas`): sem painel, campo da posição, setas ◀▶,
+    indicadores de posições do topo e ações de mesa; F4/Esc só limpam a entrada, F9/F10/PgUp/PgDn não fazem nada, F8
+    avisa que no balcão não há pré-conta (mas segue imprimindo o pedido de entrega), "M5" no código não vira mesa.
+    `CaixaController.abrir_mesa` recusa quando desligado.
+  - **Cadastro na hora pelo código de barras** (vale para qualquer negócio): código só de números com 8+ dígitos que não
+    existe → confirma "Cadastrar o produto agora?" → senha de supervisor se o operador não tem `cad_produtos` →
+    `cadastro_rapido_ui.pedir_produto` (nome, preço, categoria, estoque opcional) → lança. Códigos curtos continuam com
+    "Produto não encontrado" (os testes antigos dependem disso).
+  - **Fardo / caixa fechada**: botão no Cadastro de Produtos (`cadastros_tk._criar_embalagem` →
+    `cadastro_rapido_ui.pedir_embalagem` → `ProdutoController.criar_embalagem`): produto novo com preço e código de barras
+    próprios, unidade FD/CX/PCT, composição N × unitário (a venda baixa as unidades pelo mecanismo de composição que já
+    existia); o unitário passa a controlar estoque. Unidades "Fardo" (FD) e "Caixa" (CX) entraram nas sementes (só banco
+    novo).
+  - `ProdutoController.proximo_codigo` virou a regra única do próximo código (o `CadastroController.proximo_codigo_produto`
+    delega): pula os códigos especiais em uso (antes sugeria 50 e o cadastro recusava por ser o da comissão) e ignora
+    código de barras usado como código.
+  - Testes: `tests/test_adega.py` (18 casos: perfil, categorias, próximo código, cadastro rápido, fardo, caixa só de
+    balcão, cadastro pela tela com e sem permissão, botão do fardo e primeiro acesso como adega).
+  - **Qt não recebeu nada disto** (o caixa Qt continua com mesas; o controlador já recusa abrir mesa com `usar_mesas`
+    desligado).
 
 ## Pendências
-- **Risco a confirmar com o titular**: a sobra de recarga feita por **cartão de crédito** volta em dinheiro (foi o que
-  ele escolheu). Isso permite "saque" no cartão (carrega R$ 500 no crédito, consome R$ 10, leva R$ 490 em dinheiro).
-  Se ele quiser, limitar a devolução em dinheiro ao que entrou em dinheiro/Pix e mandar o resto para estorno na
-  maquininha.
-- Possíveis evoluções do pré-pago: comprovante impresso da recarga; pulseira RFID com número próprio (mapear o código
-  da pulseira para uma comanda); relatório de recargas e devoluções do turno.
-- Outras evoluções do ecossistema, nenhuma pedida ainda: **split por item consumido** (cada pessoa paga o que pediu;
-  mudança de esquema); **rodízio com preço por faixa** (adulto/criança; `vendas.pessoas` viraria mais de um campo);
-  **etiqueta de balança no leitor** (EAN de peso/preço embutido); **consumação mínima por tipo de entrada** e cobrança
-  da comanda sem consumo (anotados em `docs/ESPECIFICACAO.md` seção 3).
-- **Valores de cada perfil** (`PERFIS` em `perfil_controller.py`) foram decididos por mim; titular pode querer ajustar.
-- **Homologar a balança com equipamento real** (Toledo ou Filizola, porta serial): `Balanca.ler_peso`
-  (`src/hardware/dispositivos.py`) nunca foi testado fora do código.
-- **Qt dos módulos de operação**: alinhar `src/ui_qt/caixa.py` com o Tk: impressão por setor (Cozinha/Bar), "Dividir
-  conta", balança automática, "Rodízio", perfil do estabelecimento, corte das garotas (botão Comissões e aba do painel)
-  e agora o pré-pago.
+- **Adega, possíveis próximos passos** (nenhum pedido ainda): casco/vasilhame retornável (perguntar se o cliente
+  trabalha com retornável: o simples hoje é cadastrar "CASCO 600ML" como produto e lançar quando o cliente não traz);
+  quantidade antes do bipe (ex.: "12*" + código); agrupar o mesmo produto bipado várias vezes numa linha só; preço de
+  atacado por quantidade (hoje o fardo resolve); etiqueta de gôndola.
+- **NFC-e**: o sistema não emite documento fiscal (cupom "NÃO FISCAL"). Para adega/comércio isso pode ser exigido pela
+  SEFAZ do estado; não dá para resolver sem certificado digital e integração (provável API de terceiros). Avisar o
+  titular antes de cada instalação nesse ramo.
+- **Pré-pago, risco a confirmar com o titular**: a sobra de recarga feita no cartão de crédito volta em dinheiro
+  ("saque" no cartão). Se ele quiser, limitar a devolução em dinheiro ao que entrou em dinheiro/Pix.
+- Pré-pago, evoluções: comprovante impresso da recarga; pulseira RFID com número próprio; relatório de recargas.
+- Outras evoluções do ecossistema: split por item consumido; rodízio com preço por faixa (adulto/criança); etiqueta de
+  balança no leitor (EAN de peso/preço embutido); consumação mínima por tipo de entrada e cobrança da comanda sem
+  consumo (`docs/ESPECIFICACAO.md` seção 3).
+- **Valores de cada perfil** (`PERFIS`) foram decididos por mim; titular pode querer ajustar.
+- **Homologar a balança com equipamento real** (Toledo ou Filizola, porta serial): `Balanca.ler_peso` nunca foi testado
+  fora do código.
+- **Qt dos módulos de operação**: alinhar `src/ui_qt/caixa.py` com o Tk: impressão por setor, "Dividir conta", balança
+  automática, "Rodízio", perfil do estabelecimento, corte das garotas, pré-pago e agora o caixa só de balcão, o cadastro
+  na hora e o fardo/caixa.
 - Qt (`src/ui_qt/`, opt-in) ainda tem a regra antiga do acerto da garota (`_acerto_so_de_shows`, `comissao.py`) e o
-  recibo/comprovante com o tipo antigo (letra normal); o texto do recibo já vem sem os lançamentos. Alinhar com o Tk se o
-  Qt for substituir o Tk. O painel Qt do balcão/comandas também não foi redimensionado.
+  recibo/comprovante com o tipo antigo (letra normal). Alinhar com o Tk se o Qt for substituir o Tk. O painel Qt do
+  balcão/comandas também não foi redimensionado.
 - Titular: conferir na prática o tamanho dos cartões (184x126) e da faixa (`ALTURA_FAIXA = 52`), e a letra do recibo na
   impressora real; ajustar as constantes se precisar.
 - Titular: instalar o Google Drive para computador, escolher a pasta na aba Backup do WillPDV Licenças e anotar a senha

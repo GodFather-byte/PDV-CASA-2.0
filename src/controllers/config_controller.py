@@ -93,6 +93,8 @@ CAMPOS_CONFIG = [
     ("limite_gaveta", "Avisar para fazer sangria quando o dinheiro da gaveta passar de (R$, 0 = não avisar)", "int", "Caixa"),
     ("sangria_horarios", "Horários de sangria: lembra o caixa de fazer a sangria nestes horários (ex.: 02:00, 04:30; vazio = sem lembrete)", "texto", "Caixa"),
     ("imprimir_cupom", "Imprimir cupom ao fechar a venda", "sn", "Caixa"),
+    ("usar_mesas", "Mesas e comandas no caixa (desligado: o caixa vende só no balcão, como numa adega ou loja)", "sn",
+     "Módulos"),
     ("usar_garotas", "Garotas (casa noturna): comissão pelo código no caixa, shows, cadastro e relatório das garotas",
      "sn", "Módulos"),
     ("usar_portaria", "Portaria (casa noturna): ticket de saída junto com o cupom e código de saída da comanda sem consumo",
@@ -137,9 +139,10 @@ _OPCOES_CONFIG = {c[0]: [o[0] for o in c[4]] for c in CAMPOS_CONFIG if len(c) > 
 # Convenção para módulos de operação por tipo de negócio: toda flag nasce em CONFIG_PADRAO como "usar_<modulo>" = "N";
 # entra em CAMPOS_CONFIG na seção "Módulos" (acima), para aparecer em Configurações sem UI extra; se esconder item de
 # menu, entra aqui. Se o módulo decide algo fora do menu (botão no caixa, aba no painel), o código daquele ponto chama
-# banco.cfg_bool("usar_<modulo>", False) direto. Exceção: os recursos da casa noturna (usar_garotas, usar_portaria)
-# nascem "S", porque o sistema nasceu boate; quem os desliga é o perfil do estabelecimento (perfil_controller.py).
+# banco.cfg_bool("usar_<modulo>", False) direto. Exceção: os recursos da casa noturna (usar_garotas, usar_portaria) e as
+# mesas/comandas (usar_mesas) nascem "S", porque o sistema nasceu boate; quem os desliga é o perfil do estabelecimento.
 MODULOS_OPCIONAIS = {
+    "usar_mesas": {"rel_comandas", "rel_garcons"},
     "usar_contas": {"lanc_contas", "rel_financeiro", "cad_plano_contas", "cad_subplanos"},
     "usar_delivery": {"cad_bairros"},
     "usar_cozinha_bar": {"cad_setores_impressao", "util_cozinha"},

@@ -323,7 +323,7 @@ class JanelaCadastro(tk.Toplevel):
         ch = self.chave
         if ch == "produtos":
             return [("Importar planilha", self._importar_planilha), ("Ajustar estoque", self._ajustar_estoque),
-                    ("Observações", self._abrir_observacoes),
+                    ("Fardo / caixa", self._criar_embalagem), ("Observações", self._abrir_observacoes),
                     ("Composição", self._abrir_composicao), ("Imprimir Tabela", self._tabela_precos)]
         if ch == "clientes":
             return [("Gerar arquivos", self._gerar_clientes)]
@@ -362,6 +362,17 @@ class JanelaCadastro(tk.Toplevel):
             for nome in ("controla_estoque", "qt_atual", "qt_inicial"):          # só os campos de estoque: não perde o que está sendo digitado
                 self.campos[nome].set(textos[nome], linha)
             self.status.configure(text=f"Estoque ajustado para {fmt.fmt_qtd(q)}.")
+
+    def _criar_embalagem(self) -> None:
+        """Fardo ou caixa fechada do produto da tela (a lata, a long neck): vender 1 baixa as unidades dele do estoque."""
+        if self.id_atual is None:
+            tema.aviso(self, "Escolha (ou grave) o produto unitário antes de criar o fardo ou a caixa.")
+            return
+        from src.ui import cadastro_rapido_ui
+        pid = cadastro_rapido_ui.pedir_embalagem(self, self.ctx, self.id_atual)
+        if pid:
+            self.carregar()
+            self.status.configure(text="Fardo/caixa criado: vender 1 baixa as unidades do produto no estoque.")
 
     def _abrir_observacoes(self) -> None:
         JanelaCadastro(self, self.ctx, "observacoes")

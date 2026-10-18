@@ -140,6 +140,8 @@ class CaixaController:
 
     def abrir_mesa(self, posicao: int, pessoas: int = 0, comanda: bool = False) -> tuple[int, bool]:
         """Chama a mesa (ou comanda) se já estiver aberta; senão abre. Retorna (venda_id, criada)."""
+        if not self.banco.cfg_bool("usar_mesas", True):
+            raise ErroNegocio("Este caixa vende só no balcão: mesas e comandas estão desligadas (Configurações > Módulos).")
         self.validar_mesa(posicao, comanda)
         r = self.banco.valor(
             "SELECT id FROM vendas WHERE modalidade = 'mesa' AND comanda = ? AND posicao = ? "
