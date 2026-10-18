@@ -1,6 +1,7 @@
 """Tela do Caixa (manual do Caixa). Operação por teclado:
 
   código + Enter -> quantidade + Enter     Enter com código vazio -> barra de tarefas (setas + Enter)
+  6*código + Enter (ou 6* e o leitor) -> lança 6 de uma vez, sem perguntar a quantidade
   Esc -> lista de mesas e comandas         Delete na grade -> cancela item        O -> observação do item
   F2 balança  F3 leitor  F4 mesa/comanda  F5 caderneta  F6 entrega  F7 sangria  F8 pré-conta  F9 repique
   F10 transferir  F11 gaveta  F12 pagar      (F5 e F6 só com a Caderneta e o Delivery ligados em Configurações > Módulos)
@@ -17,6 +18,7 @@ pela comanda anterior/seguinte da lista do painel; Enter ou duplo clique numa li
 """
 from __future__ import annotations
 
+import re
 import tkinter as tk
 from tkinter import ttk
 
@@ -38,6 +40,7 @@ from src.ui.visualizador import Visualizador, enviar_ou_mostrar
 
 LARGURAS_LADO = {3: 372, 2: 350, 1: 310}     # coluna da direita (total e ações), pelo nº de colunas de cartões do painel
 LARGURA_MINIMA_CENTRO = {3: 560, 2: 540, 1: 380}   # o que a venda atual precisa para os campos não ficarem espremidos
+QTD_ANTES_DO_CODIGO = re.compile(r"(\d+(?:[.,]\d+)?)\s*\*\s*(\S.*)")   # "6*7891234567890": a quantidade vem antes do código
 
 
 class _RotuloComDica(ttk.Label):
@@ -206,7 +209,7 @@ class JanelaCaixa(tk.Toplevel):
         quadro.pack(fill="both", expand=True, pady=(12, 0))
         dica = ("Código + Enter lança  ·  Enter na linha: ações  ·  Delete cancela  ·  O observação  ·  T transfere  ·  PgUp/PgDn troca de comanda  ·  F12 paga"
                 if self.com_mesas else
-                "Leitor ou código + Enter lança  ·  F1 consulta preço  ·  Enter na linha: ações  ·  Delete cancela  ·  F12 paga")
+                "Leitor ou código + Enter lança  ·  6* antes do código lança 6  ·  F1 consulta preço  ·  Enter na linha: ações  ·  Delete cancela  ·  F12 paga")
         self.lbl_dica = ttk.Label(esq, text=dica, font=(FONTE, 9), style="Cx.Rotulo.TLabel")
         self.lbl_dica.pack(side="bottom", anchor="w", pady=(8, 0), before=quadro)
         self.grade = tema.Grade(quadro, [("cod", "Código", 150, "w"), ("prod", "Produto", 300, "w"), ("un", "Un", 50, "w"),
@@ -681,16 +684,20 @@ class JanelaCaixa(tk.Toplevel):
         return "break"
 
     def resolver_codigo(self, texto: str) -> None:
-        if self.ctx.comissoes.eh_codigo(texto):          # o código da comissão (50) não é produto: lança a comissão da garota
+        qtd = None
+        m = QTD_ANTES_DO_CODIGO.fullmatch(texto)
+        if m:                                            # "6*" + código: só produto (nem comissão, nem saída, nem mesa)
+            qtd, texto = m.group(1), m.group(2).strip()
+        elif self.ctx.comissoes.eh_codigo(texto):        # o código da comissão (50) não é produto: lança a comissão da garota
             self.var_cod.set("")
             self.lancar_comissao()
             return
-        if self.ctx.caixa.eh_codigo_saida(texto):        # 1002: comanda sem consumo, libera a saída e imprime o papel
+        elif self.ctx.caixa.eh_codigo_saida(texto):      # 1002: comanda sem consumo, libera a saída e imprime o papel
             self.var_cod.set("")
             self.liberar_saida()
             return
         p = self.ctx.produtos.buscar_codigo(texto)
-        if p is None and self.com_mesas and parece_posicao(texto):   # "C2"/"M5" troca de posição (produto de mesmo código vence)
+        if p is None and qtd is None and self.com_mesas and parece_posicao(texto):   # "C2"/"M5" troca de posição (produto de mesmo código vence)
             self.var_cod.set("")
             self.var_pos.set(texto.strip())
             self.chamar_mesa()
@@ -714,7 +721,7 @@ class JanelaCaixa(tk.Toplevel):
             self.avisar(f"Produto '{texto}' não encontrado.", tema.COR["perigo"])
             self.var_cod.set("")
             return
-        self.selecionar_produto(p)
+        self.selecionar_produto(p, qtd)
 
     def _cadastro_rapido(self, cbarra: str) -> dict | None:
         """O leitor passou um código de barras que não está cadastrado: oferece cadastrar o produto ali mesmo (nome, preço e
@@ -744,7 +751,8 @@ class JanelaCaixa(tk.Toplevel):
         pid = tema.escolher(self, "Consulta de produtos", itens, "Digite parte do nome para filtrar:", colunas=cols, altura=14)
         return self.ctx.produtos.por_id(pid) if pid else None
 
-    def selecionar_produto(self, p: dict) -> None:
+    def selecionar_produto(self, p: dict, qtd: str | None = None) -> None:
+        """`qtd` é a quantidade digitada antes do código ("6*"): o item entra direto com ela."""
         if self.venda_id and self.venda() and self.venda()["modalidade"] == "caderneta" and not self.venda()["cliente_id"]:
             tema.aviso(self, "Escolha o cliente da caderneta (F5).")
             return
@@ -757,6 +765,11 @@ class JanelaCaixa(tk.Toplevel):
         self.lbl_un.configure(text=un)
         self.lbl_preco.configure(text=fmt.fmt_num(preco))
         self.var_cod.set(p["codigo"])
+        if qtd is not None:
+            self.ent_qtd.configure(state="normal")       # se a quantidade for recusada, o operador corrige no campo
+            self.var_qtd.set(qtd)
+            self.confirmar_item()
+            return
         if self.leitor and not p["aceita_decimal"] and p["partes"] <= 1:
             self.var_qtd.set("1")
             self.confirmar_item()

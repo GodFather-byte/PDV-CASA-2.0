@@ -38,5 +38,17 @@ estoque inicial, pedido e descarte de produtos acabados). Agora cada tipo aparec
 que ele faz, e uma linha de explicação mostra o efeito no estoque antes de lançar. No campo do produto, a lista suspensa
 filtra enquanto você digita, e "150 skol" continua lançando 150 unidades de uma vez.
 
+## Fardo e caixa fechada (adega, depósito)
+
+O fardo (ou a caixa fechada) é criado no Cadastro de Produtos pelo botão **Fardo / caixa**, a partir do produto unitário
+(ex.: "SKOL LATA - FARDO" com 12 "SKOL LATA"). Ele **não tem estoque próprio**: o estoque fica sempre na unidade.
+
+* **Venda:** vender 1 fardo baixa 12 latas.
+* **Compra, entrada, saída e perda de fardos** (na janela de lançamento ou no painel): pode lançar no fardo, em fardos. O
+  sistema grava nas unidades: 10 fardos de 12 entram como 120 latas, pelo mesmo valor da nota, e o último preço de compra
+  fica por lata. O painel mostra a prévia já em latas.
+* **Contagem e estoque inicial:** conte as latas no produto unitário. No fardo eles são recusados, porque as latas soltas
+  da prateleira também fazem parte do estoque.
+
 Permissões: o painel e o lançamento usam o módulo **Lançamento de estoque**; quem só tem o relatório de estoque continua
 abrindo o relatório pelos cartões.

@@ -22,19 +22,30 @@
     próprios, unidade FD/CX/PCT, composição N × unitário (a venda baixa as unidades pelo mecanismo de composição que já
     existia); o unitário passa a controlar estoque. Unidades "Fardo" (FD) e "Caixa" (CX) entraram nas sementes (só banco
     novo).
+  - **Fardo no estoque** (segundo commit): o fardo não tem estoque próprio. `ProdutoController.embalagem` reconhece o
+    fardo (não controla estoque; composição de um único produto que controla, N inteiro ≥ 2) e
+    `EstoqueController.adicionar_item`/`registrar_rapido` gravam compra, entrada, saída e perda de fardos nas unidades
+    (10 fardos de 12 = 120 latas, mesmo valor da nota, último preço por lata); contagem e inicial de fardo são recusados
+    com mensagem apontando a unidade. Antes, comprar o fardo ligava o controle de estoque do próprio fardo e a venda
+    contava em dobro. Telas: `lancamentos_ui` não pergunta mais "ligar controle?" para fardo e mostra "entra como
+    unidades"; `estoque_ui` (painel) explica o fardo, desliga "Contei e ajustar" e a prévia mostra as unidades.
+  - **Quantidade antes do código** no caixa Tk: "6*" + código (ou "6*" e o leitor) lança 6 direto
+    (`QTD_ANTES_DO_CODIGO`, `resolver_codigo` → `selecionar_produto(p, qtd)`); com "*" é só produto (não vira comissão
+    50, saída 1002 nem mesa "M5"). Só "*" (o "x" ficou de fora para não confundir com nome de produto).
   - `ProdutoController.proximo_codigo` virou a regra única do próximo código (o `CadastroController.proximo_codigo_produto`
     delega): pula os códigos especiais em uso (antes sugeria 50 e o cadastro recusava por ser o da comissão) e ignora
     código de barras usado como código.
-  - Testes: `tests/test_adega.py` (18 casos: perfil, categorias, próximo código, cadastro rápido, fardo, caixa só de
-    balcão, cadastro pela tela com e sem permissão, botão do fardo e primeiro acesso como adega).
-  - **Qt não recebeu nada disto** (o caixa Qt continua com mesas; o controlador já recusa abrir mesa com `usar_mesas`
-    desligado).
+  - Testes: `tests/test_adega.py` (27 casos: perfil, categorias, próximo código, cadastro rápido, fardo na venda e no
+    estoque, telas de compra e painel com fardo, "6*", caixa só de balcão, cadastro pela tela com e sem permissão, botão
+    do fardo e primeiro acesso como adega).
+  - **Qt não recebeu a parte de tela** (o caixa Qt continua com mesas e sem "6*"; o controlador já recusa abrir mesa com
+    `usar_mesas` desligado e a regra do fardo no estoque vale para o Qt, que chama o mesmo `registrar_rapido`).
 
 ## Pendências
 - **Adega, possíveis próximos passos** (nenhum pedido ainda): casco/vasilhame retornável (perguntar se o cliente
   trabalha com retornável: o simples hoje é cadastrar "CASCO 600ML" como produto e lançar quando o cliente não traz);
-  quantidade antes do bipe (ex.: "12*" + código); agrupar o mesmo produto bipado várias vezes numa linha só; preço de
-  atacado por quantidade (hoje o fardo resolve); etiqueta de gôndola.
+  agrupar o mesmo produto bipado várias vezes numa linha só (o "6*" já evita a maior parte); preço de atacado por
+  quantidade (hoje o fardo resolve); preço gelada x natural (hoje: dois produtos); etiqueta de gôndola.
 - **NFC-e**: o sistema não emite documento fiscal (cupom "NÃO FISCAL"). Para adega/comércio isso pode ser exigido pela
   SEFAZ do estado; não dá para resolver sem certificado digital e integração (provável API de terceiros). Avisar o
   titular antes de cada instalação nesse ramo.

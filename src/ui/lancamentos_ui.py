@@ -480,7 +480,13 @@ class JanelaEstoque(tk.Toplevel):
             return
         self.produto = p
         self.v_cod.set(p["codigo"]); self.v_prod.set(p["nome"])
-        self.lbl_atual.configure(text=f"Qt. atual: {fmt.fmt_qtd(p['qt_atual'])}    Último preço: {fmt.fmt_brl(p['ult_preco_cent'])}")
+        emb = self.est.produtos.embalagem(p["id"])
+        if emb:
+            u = self.est.produtos.por_id(emb["unitario_id"])
+            self.lbl_atual.configure(text=f"Fardo/caixa de {emb['quantidade']} '{u['nome']}': entra no estoque como unidades    "
+                                          f"Qt. atual: {fmt.fmt_qtd(u['qt_atual'])} {emb['unidade']}")
+        else:
+            self.lbl_atual.configure(text=f"Qt. atual: {fmt.fmt_qtd(p['qt_atual'])}    Último preço: {fmt.fmt_brl(p['ult_preco_cent'])}")
         if self.v_tipo.get() == "inicial":
             self.v_min.set(fmt.fmt_qtd(p["estoque_minimo"]))
         self.e_qtd.focus_set()
@@ -548,7 +554,8 @@ class JanelaEstoque(tk.Toplevel):
             tema.aviso(self, "Quantidade ou valor inválido.")
             return
         ligar = False
-        if (not self.produto["controla_estoque"] and self.v_tipo.get() in ("compra", "entrada", "contagem")):
+        if (not self.produto["controla_estoque"] and self.v_tipo.get() in ("compra", "entrada", "contagem")
+                and not self.est.produtos.embalagem(self.produto["id"])):     # fardo entra nas unidades, que já controlam
             if not tema.confirmar(self, f"'{self.produto['nome']}' ainda não controla estoque.\n"
                                         f"Ligar o controle de estoque deste produto e lançar {fmt.fmt_qtd(qtd)}?",
                                   "Controlar estoque", padrao_sim=True):

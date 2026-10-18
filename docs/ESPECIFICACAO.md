@@ -219,7 +219,7 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
   "Concluir acerto"), "Devolver:" na tela de pagamento; a pré-conta mostra crédito e saldo e o cupom, a devolução.
 - **Adega / depósito de bebidas** (perfil `adega`): venda só no balcão, delivery, caderneta (fiado), desconto liberado e
   sem serviço; ao aplicar, cria as categorias de bebidas que faltam (grupos BEBIDAS e CONVENIÊNCIA, `CATEGORIAS` em
-  `perfil_controller.py`; nunca apaga nem renomeia as da casa). Três peças valem para qualquer negócio:
+  `perfil_controller.py`; nunca apaga nem renomeia as da casa). Quatro peças valem para qualquer negócio:
   **Mesas e comandas** (`usar_mesas`, nasce "S"; o Comércio pequeno e a Adega desligam): desligado, o caixa vende só no
   balcão: sem painel de comandas, campo da posição, setas de troca, indicadores de posições abertas nem as ações de mesa
   (F4, Pré-conta, Transfere, Repique, Consulta comanda, Nomear, Rodízio, Recarga); Esc só limpa a linha de entrada,
@@ -229,7 +229,11 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
   (`ProdutoController.cadastrar_rapido`, UI `cadastro_rapido_ui.py`); quem não tem `cad_produtos` precisa da senha de
   supervisor. **Fardo / caixa fechada**: botão no Cadastro de Produtos cria, a partir do produto unitário, um produto com
   preço e código de barras próprios cuja composição baixa N unidades do estoque a cada venda
-  (`ProdutoController.criar_embalagem`; o unitário passa a controlar estoque). O próximo código livre
+  (`ProdutoController.criar_embalagem`; o unitário passa a controlar estoque). O fardo não tem estoque próprio
+  (`ProdutoController.embalagem`): compra, entrada, saída e perda de fardos são gravadas nas unidades (10 fardos de 12
+  viram 120 latas, pelo mesmo valor da nota) e contagem/inventário inicial de fardo são recusados (conta-se a unidade).
+  **Quantidade antes do código**: "6*" + código (digitado ou pelo leitor) lança 6 de uma vez, sem perguntar a quantidade;
+  com o "*" o texto é só produto (não vira comissão, saída nem mesa). O próximo código livre
   (`ProdutoController.proximo_codigo`, usado também pelo cadastro) pula os códigos especiais em uso e ignora código de
   barras usado como código.
 - **Senhas** são guardadas com PBKDF2 e comparadas sem diferenciar maiúsculas, como pede o manual.

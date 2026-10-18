@@ -156,12 +156,22 @@ class EstoqueController:
         """Lança um item e já atualiza o estoque (como o sistema original).
 
         `valor_cent` é o total do item na nota (não o unitário). Com `ligar_controle`, uma compra/entrada/contagem de produto
-        que ainda não controla estoque liga o controle (o saldo parte de 0); sem ele, o produto é recusado."""
+        que ainda não controla estoque liga o controle (o saldo parte de 0); sem ele, o produto é recusado.
+
+        Fardo/caixa fechada (`ProdutoController.embalagem`) não tem estoque próprio: o item é gravado nas unidades (10 fardos
+        de 12 viram 120 latas, pelo mesmo valor da nota). Contagem e inventário inicial de fardo são recusados."""
         lanc = self.lancamento(lanc_id)
         tipo = lanc["tipo"]
         p = self.produtos.por_id(produto_id)
         if p is None:
             raise ErroNegocio("Produto não encontrado.")
+        emb = self.produtos.embalagem(produto_id) if tipo != "desc_acabados" else None
+        if emb:
+            if tipo in ("inicial", "contagem"):
+                raise ErroNegocio(f"'{p['nome']}' é um fardo/caixa de {emb['quantidade']} '{emb['unitario']}' e não tem estoque "
+                                  f"próprio: conte as unidades no produto '{emb['unitario']}'.")
+            produto_id, p = emb["unitario_id"], self.produtos.por_id(emb["unitario_id"])
+            quantidade *= emb["quantidade"]
         quantidade = fmt.arred_qtd(quantidade)
         if quantidade < 0 or (quantidade == 0 and tipo not in ("inicial", "contagem")):
             raise ErroNegocio("Informe uma quantidade maior que zero.")
@@ -361,6 +371,10 @@ class EstoqueController:
         p = self.produtos.por_id(produto_id)
         if p is None:
             raise ErroNegocio("Produto não encontrado.")
+        emb = self.produtos.embalagem(produto_id)
+        if emb and tipo != "contagem":               # fardo/caixa: o movimento é das unidades (a contagem o adicionar_item recusa)
+            produto_id, quantidade = emb["unitario_id"], quantidade * emb["quantidade"]
+            p = self.produtos.por_id(produto_id)
         if tipo in ("saida", "descarte") and fmt.arred_qtd(quantidade) > max(p["qt_atual"], 0) and p["controla_estoque"]:
             raise ErroNegocio(f"Só há {fmt.fmt_qtd(p['qt_atual'])} de '{p['nome']}' em estoque; não dá para tirar {fmt.fmt_qtd(quantidade)}.")
         with self.banco.transacao():

@@ -230,3 +230,21 @@ class ProdutoController:
             self.incluir_composicao(pid, unitario_id, int(quantidade))
             self.banco.log("produto_embalagem", f"{nome}: {int(quantidade)} x {u['nome']}", operador_id)
         return pid
+
+    def embalagem(self, produto_id: int) -> dict | None:
+        """{"unitario_id", "unitario", "unidade", "quantidade"} quando o produto é um fardo/caixa fechada: não controla estoque e
+        é feito de N (inteiro, 2 ou mais) unidades de um único produto que controla. O estoque de um fardo fica nas unidades."""
+        p = self.por_id(produto_id)
+        if p is None or p["controla_estoque"]:
+            return None
+        comps = self.banco.todos(
+            """SELECT c.insumo_id, c.quantidade, p.nome, p.controla_estoque, u.abreviatura
+               FROM composicoes c JOIN produtos p ON p.id = c.insumo_id JOIN unidades u ON u.id = p.unidade_id
+               WHERE c.produto_id = ?""", (produto_id,))
+        if len(comps) != 1:
+            return None
+        c = comps[0]
+        if not c["controla_estoque"] or c["quantidade"] < 2 or c["quantidade"] != int(c["quantidade"]):
+            return None
+        return {"unitario_id": c["insumo_id"], "unitario": c["nome"], "unidade": c["abreviatura"],
+                "quantidade": int(c["quantidade"])}

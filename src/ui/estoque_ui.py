@@ -328,6 +328,18 @@ class PainelEstoque(tk.Toplevel):
         self.d_situ.configure(text=f"● {rotulo.upper()}", fg=cor)
         self.d_qtd.configure(text="—" if livre else f"{curta(p['qt_atual'])} {p['unidade']}",
                              fg=cor if p["situacao"] != "normal" else PAL["texto"])
+        emb = self.est.produtos.embalagem(p["id"]) if livre else None
+        if emb:                                            # fardo/caixa: entrada, saída e perda vão para as unidades
+            for tipo in ("saida", "descarte"):
+                self.botoes[tipo].habilitar(True)
+            self.botoes["contagem"].habilitar(False)
+            self.d_situ.configure(text="● FARDO / CAIXA", fg=PAL["suave"])
+            self.d_info.configure(text=f"Fardo/caixa de {emb['quantidade']} '{emb['unitario']}': não tem estoque próprio. "
+                                       f"Vender 1 baixa {emb['quantidade']} unidades; a entrada de fardos aqui vai para as unidades. "
+                                       f"A contagem se faz no '{emb['unitario']}'.")
+            self._desenhar_barra()
+            self.hist.insert("", "end", values=["", "Nenhum", "", ""])
+            return
         if livre:
             self.d_info.configure(text="Este produto ainda não controla estoque. Toque em 'Contei e ajustar' (ou em Entrada) e "
                                        "informe quanto tem agora: o controle liga sozinho e ele passa a aparecer na lista.")
@@ -385,6 +397,13 @@ class PainelEstoque(tk.Toplevel):
         dlg = tema.Dialogo(self, titulo)
         ttk.Label(dlg.corpo, text=p["nome"], font=tema.FONTE_G, foreground=tema.COR["titulo"]).pack(anchor="w")
         hoje = "Ainda não controla estoque (vai passar a controlar)" if p["situacao"] == "livre" else f"Hoje há {curta(p['qt_atual'])} {p['unidade']}"
+        emb = self.est.produtos.embalagem(p["id"])
+        if emb:                                  # a quantidade é de fardos; a prévia mostra as unidades, que é onde o estoque fica
+            u = self.est.produtos.por_id(emb["unitario_id"])
+            p = {**p, "qt_atual": u["qt_atual"], "unidade": emb["unidade"], "fator": emb["quantidade"]}
+            hoje = f"Em fardos/caixas de {emb['quantidade']}. Hoje há {curta(u['qt_atual'])} {emb['unidade']} de '{u['nome']}'"
+            pergunta = {"entrada": "Quantos fardos/caixas entraram?", "saida": "Quantos fardos/caixas saíram (sem ser venda)?",
+                        "descarte": "Quantos fardos/caixas foram perdidos?"}.get(tipo, pergunta)
         ttk.Label(dlg.corpo, text=hoje, foreground=tema.COR["suave"]).pack(anchor="w", pady=(0, 10))
         ttk.Label(dlg.corpo, text=pergunta, style="Rotulo.TLabel").pack(anchor="w")
         v = tk.StringVar()
@@ -409,6 +428,7 @@ class PainelEstoque(tk.Toplevel):
             if q is None:
                 previa.configure(text="")
                 return
+            q *= p.get("fator", 1)
             depois = p["qt_atual"] + q if tipo == "entrada" else q if tipo == "contagem" else p["qt_atual"] - q
             previa.configure(text=f"Vai ficar com {curta(depois)} {p['unidade']}")
 

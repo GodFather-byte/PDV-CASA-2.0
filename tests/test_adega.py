@@ -1,21 +1,34 @@
 """Adega / depósito de bebidas: o perfil (venda só no balcão, delivery, fiado e as categorias de bebidas), o caixa sem mesas
-nem comandas, o cadastro do produto na hora pelo código de barras e o fardo/caixa fechada que baixa as unidades do estoque."""
+nem comandas, o cadastro do produto na hora pelo código de barras, a quantidade antes do código ("6*") e o fardo/caixa fechada
+que baixa as unidades na venda e entra como unidades na compra."""
 from __future__ import annotations
 
 import unittest
 from tkinter import ttk
+from unittest import mock
 
 from src.controllers.cadastro_controller import CadastroController
 from src.controllers.config_controller import modulos_desligados
+from src.controllers.estoque_controller import EstoqueController
 from src.controllers.perfil_controller import PerfilController
 from src.controllers.produto_controller import ProdutoController
 from src.core.erros import ErroNegocio, ErroValidacao
+from src.ui import tema
 from tests.test_caixa import BaseCaixa
 from tests.test_comissao_na_tela import BaseNaTela
 from tests.test_ui import BaseUI
 from tests.ui_robo import Robo, botoes, clicar, entradas
 
 EAN = "7891234567895"
+
+
+def rotulos(w) -> list[str]:
+    achados = []
+    for f in w.winfo_children():
+        if isinstance(f, ttk.Label):
+            achados.append(str(f.cget("text")))
+        achados += rotulos(f)
+    return achados
 
 
 class BaseAdega(BaseCaixa):
@@ -122,6 +135,116 @@ class TesteFardo(BaseAdega):
         self.assertEqual(self.prod.composicao(lata), [])
 
 
+class TesteFardoNoEstoque(BaseAdega):
+    """O fardo não tem estoque próprio: compra, entrada, saída e perda de fardos vão para as unidades."""
+
+    def setUp(self):
+        super().setUp()
+        self.est = EstoqueController(self.banco, self.adm)
+        self.lata = self.novo_produto("SKOL LATA", 400, estoque=True, qt=30)
+        self.fardo = self.prod.criar_embalagem(self.lata, 12, "SKOL LATA - FARDO", 4200)
+
+    def qt(self, pid):
+        return self.prod.por_id(pid)["qt_atual"]
+
+    def test_reconhece_o_fardo(self):
+        self.assertEqual(self.prod.embalagem(self.fardo),
+                         {"unitario_id": self.lata, "unitario": "SKOL LATA", "unidade": "UN", "quantidade": 12})
+        self.assertIsNone(self.prod.embalagem(self.lata))
+        whisky = self.novo_produto("WHISKY GARRAFA", 9000, estoque=True)
+        dose = self.novo_produto("DOSE WHISKY", 1500)
+        self.prod.incluir_composicao(dose, whisky, 0.05)
+        self.assertIsNone(self.prod.embalagem(dose))                          # dose não é fardo: segue a regra de sempre
+
+    def test_compra_de_fardos_entra_nas_unidades(self):
+        forn = self.banco.inserir("fornecedores", {"nome": "AMBEV"})
+        lanc = self.est.criar_lancamento("compra", fornecedor_id=forn, valor_cent=36000)
+        self.est.adicionar_item(lanc, self.fardo, 10, 36000, ligar_controle=True)
+        self.assertEqual((self.qt(self.lata), self.prod.por_id(self.lata)["ult_preco_cent"]), (150, 300))   # R$ 360 / 120 latas
+        self.assertEqual((self.prod.por_id(self.fardo)["controla_estoque"], self.qt(self.fardo)), (0, 0))
+        itens = self.est.itens(lanc)
+        self.assertEqual([(i["nome"], i["quantidade"], i["valor_cent"]) for i in itens], [("SKOL LATA", 120, 36000)])
+        self.est.remover_item(itens[0]["id"])
+        self.assertEqual(self.qt(self.lata), 30)
+
+    def test_entrada_perda_e_saida_rapidas_de_fardo(self):
+        self.est.registrar_rapido(self.fardo, "entrada", 2)
+        self.assertEqual(self.qt(self.lata), 54)
+        self.est.registrar_rapido(self.fardo, "descarte", 1)
+        self.assertEqual(self.qt(self.lata), 42)
+        with self.assertRaisesRegex(ErroNegocio, "Só há 42,000 de 'SKOL LATA'.*48,000"):
+            self.est.registrar_rapido(self.fardo, "saida", 4)
+        self.assertEqual(self.prod.por_id(self.fardo)["controla_estoque"], 0)
+
+    def test_contagem_e_inicial_de_fardo_sao_recusadas(self):
+        with self.assertRaisesRegex(ErroNegocio, "conte as unidades no produto 'SKOL LATA'"):
+            self.est.registrar_rapido(self.fardo, "contagem", 5)
+        lanc = self.est.criar_lancamento("inicial")
+        with self.assertRaisesRegex(ErroNegocio, "não tem estoque próprio"):
+            self.est.adicionar_item(lanc, self.fardo, 5)
+        self.assertEqual((self.qt(self.lata), self.prod.por_id(self.fardo)["controla_estoque"]), (30, 0))
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM lancamentos_estoque WHERE tipo = 'contagem'"), 0)
+
+
+class TesteFardoNoEstoqueNaTela(BaseUI):
+    def setUp(self):
+        super().setUp()
+        self.fardo = self.ctx.produtos.criar_embalagem(self.skol, 12, "SKOL - FARDO", 4200)
+
+    def qt_skol(self):
+        return self.banco.valor("SELECT qt_atual FROM produtos WHERE id = ?", (self.skol,))
+
+    def test_compra_de_fardo_pela_tela_nao_pergunta_do_controle(self):
+        from src.ui.lancamentos_ui import JanelaEstoque
+        self.banco.inserir("fornecedores", {"nome": "AMBEV"})
+        j = JanelaEstoque(self.root, self.ctx); j.update()
+        j.v_tipo.set("compra"); j._tipo_mudou()
+        j.v_forn.set("AMBEV"); j.v_valor.set("360,00")
+        j.iniciar(); j.update()
+        j.v_prod.set("SKOL - FARDO"); j._achar_nome()
+        self.assertIn("Fardo/caixa de 12 'SKOL'", j.lbl_atual.cget("text"))
+        j.v_qtd.set("10"); j.v_val_item.set("360,00")
+        with mock.patch.object(tema, "confirmar") as conf:
+            j.adicionar_item(); j.update()
+        conf.assert_not_called()                                              # o fardo não passa a controlar estoque
+        self.assertEqual(self.qt_skol(), 50 + 120)
+        self.assertEqual([(i["nome"], i["quantidade"]) for i in self.ctx.estoque.itens(j.lanc_id)], [("SKOL", 120)])
+        j.destroy()
+
+    def test_painel_explica_o_fardo_e_da_entrada_nas_unidades(self):
+        from src.ui.estoque_ui import PainelEstoque
+        j = PainelEstoque(self.root, self.ctx); j.update()
+        j.v_busca.set("fardo"); j.update()
+        j.tree.selection_set(str(self.fardo)); j.update()
+        self.assertIn("não tem estoque próprio", j.d_info.cget("text"))
+        self.assertFalse(j.botoes["contagem"].ativo)
+        previas = []
+
+        def responder(w):
+            entradas(w)[0].insert(0, "2")
+            w.update()
+            previas.extend(rotulos(w))
+            clicar(w, "Confirmar")
+        self.robo.quando("Dialogo", responder)
+        j.registrar_dialogo("entrada"); j.update()
+        self.assertIn("Quantos fardos/caixas entraram?", previas)
+        self.assertIn("Vai ficar com 74 UN", previas)                        # 50 + 2 x 12, na unidade da lata
+        self.assertEqual(self.qt_skol(), 74)
+        self.assertEqual(self.ctx.produtos.por_id(self.fardo)["controla_estoque"], 0)
+        self.sem_travar()
+        j.destroy()
+
+
+class TesteQuantidadeAntesDoCodigo(BaseNaTela):
+    def test_nao_vira_comissao_nem_mesa(self):
+        self.digitar_codigo("2*50")                                          # 50 é a comissão das garotas
+        self.assertFalse(self.cx.modo_comissao)
+        self.assertIn("'50' não encontrado", self.status())
+        self.digitar_codigo("3*M5")
+        self.assertIn("'M5' não encontrado", self.status())
+        self.assertIsNone(self.cx.venda_id)
+
+
 class TesteCaixaDaAdega(BaseNaTela):
     def setUp(self):
         super().setUp()
@@ -169,6 +292,30 @@ class TesteCaixaDaAdega(BaseNaTela):
         self.assertEqual((p["nome"], p["preco_cent"], p["qt_atual"]), ("CERVEJA NOVA LATA", 450, 24))
         itens = self.ctx.caixa.itens(self.cx.venda_id)
         self.assertEqual([(i["nome"], i["quantidade"]) for i in itens], [("CERVEJA NOVA LATA", 1)])
+        self.sem_travar()
+
+    def test_quantidade_antes_do_codigo_lanca_de_uma_vez(self):
+        for leitor in (False, True):                                          # com ou sem leitor, não pergunta a quantidade
+            self.cx.leitor = leitor
+            self.digitar_codigo("6*1")
+            self.assertIn("x SKOL lançado", self.status())
+        itens = self.ctx.caixa.itens(self.cx.venda_id)
+        self.assertEqual([(i["nome"], i["quantidade"], i["total_cent"]) for i in itens], [("SKOL", 6, 4800), ("SKOL", 6, 4800)])
+        self.assertEqual((self.cx.var_cod.get(), str(self.cx.ent_qtd.cget("state"))), ("", "disabled"))
+
+    def test_quantidade_antes_de_codigo_de_barras_novo(self):
+        def responder(w):
+            if any(str(b.cget("text")).startswith("Sim") for b in botoes(w)):
+                clicar(w, "Sim")
+            else:
+                campos = entradas(w)
+                campos[0].insert(0, "CERVEJA NOVA LATA")
+                campos[1].insert(0, "4,50")
+                clicar(w, "Gravar")
+        self.robo.quando("Dialogo", responder, vezes=2)
+        self.digitar_codigo(f"12*{EAN}")
+        itens = self.ctx.caixa.itens(self.cx.venda_id)
+        self.assertEqual([(i["nome"], i["quantidade"], i["total_cent"]) for i in itens], [("CERVEJA NOVA LATA", 12, 5400)])
         self.sem_travar()
 
     def test_recusar_o_cadastro_nao_cria_nada(self):
