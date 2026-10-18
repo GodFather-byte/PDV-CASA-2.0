@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from src.controllers.config_controller import CAMPOS_CONFIG, CAMPOS_LOJA, CAMPOS_MAQUINA
+from src.controllers.perfil_controller import PERFIS
 from src.core.erros import ErroNegocio
 from src.ui import paleta, tema
 from src.ui.escolher_impressora_ui import JanelaEscolherImpressora
@@ -47,7 +48,38 @@ def abrir(master, ctx, chave: str):
                                               "impressora_remota_endereco": ("Escolher da lista...", lambda j: escolher_impressora(j, ctx, "remota"))})
     return JanelaFormulario(master, ctx, "Configurações", [(c[0], c[1], c[2], c[3], c[4] if len(c) > 4 else None) for c in CAMPOS_CONFIG],
                             ctx.config.todas, ctx.config.salvar_config,
+                            acoes=[("Perfil do estabelecimento...", lambda j: escolher_perfil(j, ctx))],
                             depois_de_gravar=lambda janela: aplicar_visual(janela, ctx))
+
+
+def escolher_perfil(janela, ctx) -> None:
+    """Escolhe o tipo de negócio, mostra o que muda e aplica. Grava antes o que está na tela (como o teste da impressora em
+    Máquinas): o perfil parte do que o operador vê, e recarregar a janela depois não perde nada."""
+    ok, _ = tema.tratar(janela, ctx.config.salvar_config, janela._coletar())
+    if not ok:
+        return
+    perfil = ctx.perfil
+    atual = perfil.atual()
+    marca = "  (atual, com ajustes)" if perfil.ajustado() else "  (atual)"
+    itens = [(chave, (nome + (marca if chave == atual else ""), descricao[:1].upper() + descricao[1:] + "."))
+             for chave, (nome, descricao, _) in PERFIS.items()]
+    escolha = tema.escolher(janela, "Perfil do estabelecimento", itens, "Que tipo de negócio é a casa? Escolha e tecle Enter:",
+                            altura=len(itens), colunas=[("nome", "Perfil", 230, "w"), ("desc", "O que fica ligado", 640, "w")])
+    if escolha is None:
+        return
+    nome = PERFIS[escolha][0]
+    mudancas = perfil.mudancas(escolha)
+    if mudancas:
+        lista = "\n".join(f"• {m['item']}: {m['de']} → {m['para']}" for m in mudancas)
+        if not tema.confirmar(janela, f"Aplicar o perfil {nome}? Muda:\n\n{lista}\n\nCódigos, preços, percentuais e números de "
+                                      "mesas e comandas ficam como estão. Cada item continua ajustável nesta janela.",
+                              "Perfil do estabelecimento"):
+            return
+    ok, _ = tema.tratar(janela, perfil.aplicar, escolha)
+    if ok:
+        janela.recarregar()
+        tema.mensagem(janela, f"Perfil {nome} aplicado." if mudancas
+                      else f"Perfil {nome}: as configurações já estavam assim, nada mudou.", "Perfil do estabelecimento")
 
 
 def aplicar_visual(janela, ctx) -> None:

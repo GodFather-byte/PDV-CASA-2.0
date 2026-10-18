@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable
 
+from src.controllers.config_controller import CODIGOS_ESPECIAIS, codigo_especial
 from src.core import seguranca
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroValidacao
@@ -105,9 +106,8 @@ def _mesmo_codigo(a, b) -> bool:
 
 
 def _antes_produto(banco, d, id_):
-    for chave, padrao, uso in (("codigo_comissao", "50", "lançar a comissão das garotas"),
-                               ("codigo_saida", "1002", "liberar a saída da comanda sem consumo")):
-        reservado = (banco.cfg(chave, padrao) or "").strip()
+    for chave, (_, _, uso) in CODIGOS_ESPECIAIS.items():
+        reservado = codigo_especial(banco, chave)
         if reservado and any(_mesmo_codigo(d.get(c), reservado) for c in ("codigo", "cbarra", "atalho")):
             raise ErroValidacao(f"O código {reservado} é reservado para {uso} no caixa "
                                 "(Configurações). Use outro código, atalho ou código de barras para este produto.",

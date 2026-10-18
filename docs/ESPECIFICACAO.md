@@ -190,6 +190,21 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
   por toda venda, mas só quando `rodizio = 0` (padrão) o cálculo é bit-a-bit igual ao de antes. `rodizio_total_cent`
   é persistido (como desconto/serviço já são) para uma venda fechada não mudar de total se o preço configurado
   mudar depois. Ação "Rodízio" na barra de tarefas do caixa (`caixa_ui.py`), ao lado de Delivery/Caderneta.
+- **Perfil do estabelecimento** (o "modo de operação": Boate / casa noturna, Bar, Restaurante, Churrascaria / rodízio,
+  Comércio pequeno; `perfil_controller.py`). É um atalho de configuração: liga e desliga de uma vez os módulos
+  (`usar_*`) e as regras de sim/não que definem o tipo de negócio (posição padrão, serviço na mesa e na comanda, perguntar
+  pessoas, desconto). Nunca mexe no que o dono digitou (códigos, preços, percentuais, número de mesas e comandas). Antes
+  de aplicar, mostra o que muda; aplica tudo ou nada, pelas mesmas validações de Configurações; depois cada chave segue
+  ajustável à mão (o perfil gravado em `perfil_operacao` é só referência, e a escolha aparece como "com ajustes" se algo
+  mudou). Escolhido no primeiro acesso (junto com o nome da casa, para quem tem `cfg_configuracoes`) ou pelo botão
+  "Perfil do estabelecimento..." da janela de Configurações. A Boate é o padrão de fábrica e tem exatamente os valores de
+  `CONFIG_PADRAO`: banco existente não muda nada. Para os outros negócios não verem nada de boate, os recursos da casa
+  noturna viraram dois módulos que, ao contrário da convenção, **nascem ligados**: `usar_garotas` (código 50, botão
+  Comissões, cartões e aba Comissões do painel, acerto da garota pelo F12 na comanda vazia, cadastro e relatório das
+  garotas, linhas do fechamento) e `usar_portaria` (ticket de saída junto com o cupom e código 1002). Desligado, o código
+  especial deixa de existir em todo lugar ao mesmo tempo (`codigo_especial` em `config_controller.py`): não lança nada no
+  caixa e fica livre para um produto (padaria com pão de código 50). Religar o módulo confere se nenhum produto ficou com
+  o código dele.
 - **Senhas** são guardadas com PBKDF2 e comparadas sem diferenciar maiúsculas, como pede o manual.
 - **Busca por nome** (produtos, clientes, contas, cadastros) ignora acento e caixa: "cafe" acha "Café" (função SQL `norm()`).
 - **Quantidade por item** tem teto (configuração `qtd_maxima_item`, padrão 99.999; 0 desliga), para um código de

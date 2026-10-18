@@ -21,6 +21,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from src.controllers.cadastro_controller import CadastroController
+from src.controllers.config_controller import CODIGOS_ESPECIAIS, codigo_especial
 from src.controllers.estoque_controller import EstoqueController
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroValidacao
@@ -207,8 +208,8 @@ class ImportacaoProdutos:
     def reservados(self) -> set[str]:
         """Códigos que o caixa usa para outra coisa (comissão das garotas, saída da comanda): nenhum produto pode ficar com eles."""
         usados = set()
-        for chave, padrao in (("codigo_comissao", "50"), ("codigo_saida", "1002")):
-            v = (self.banco.cfg(chave, padrao) or "").strip()
+        for chave in CODIGOS_ESPECIAIS:
+            v = codigo_especial(self.banco, chave)
             if v.isdigit():
                 usados.add(_cod13(v))
         return usados

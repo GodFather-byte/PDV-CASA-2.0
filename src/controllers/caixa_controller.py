@@ -14,6 +14,7 @@ import math
 from uuid import uuid4
 
 from src.controllers import notificacoes
+from src.controllers.config_controller import codigo_especial
 from src.controllers.estoque_controller import EstoqueController
 from src.controllers.produto_controller import ProdutoController
 from src.controllers.turno_controller import TurnoController, proximo_cupom
@@ -182,8 +183,9 @@ class CaixaController:
 
     # ------------------------------------------------- saída sem consumo (1002)
     def codigo_saida(self) -> str:
-        """O código que, digitado na comanda, libera a saída de quem não consumiu (configuração `codigo_saida`, 1002)."""
-        return (self.banco.cfg("codigo_saida", "1002") or "").strip()
+        """O código que, digitado na comanda, libera a saída de quem não consumiu (configuração `codigo_saida`, 1002; vazio ou
+        portaria desligada: nenhum)."""
+        return codigo_especial(self.banco, "codigo_saida")
 
     def eh_codigo_saida(self, texto) -> bool:
         cod, t = self.codigo_saida(), ("" if texto is None else str(texto)).strip()

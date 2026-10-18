@@ -53,6 +53,8 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Caderneta (venda a prazo) e contas | `caderneta_controller.py`, `contas_controller.py` |
 | Entrega | `entrega_controller.py` |
 | Módulos de operação configuráveis (Configurações > Módulos: liga/desliga por tipo de negócio) | convenção em `config_controller.py` (`MODULOS_OPCIONAIS`); ver `docs/ESPECIFICACAO.md` |
+| Perfil do estabelecimento (boate, bar, restaurante, churrascaria, comércio: liga os módulos de uma vez) | `perfil_controller.py` (`PERFIS`) · UI `config_ui.escolher_perfil`, `cadastro_loja_ui.py` (primeiro acesso) |
+| Códigos especiais do caixa (comissão 50, saída 1002) e o módulo de cada um | `config_controller.py` (`CODIGOS_ESPECIAIS`, `codigo_especial`) |
 | Cozinha/Bar (setores de impressão, status de preparo por item) | `preparo_controller.py`, `impressao_controller.py` (`setor_do_subgrupo`) · UI `cozinha_ui.py` |
 | Impressão e fila | `impressao_controller.py`, `fila_impressao_controller.py`, `impressao_assistente.py` |
 | Relatórios | `relatorio_controller.py`, `relatorio_vendas.py`, `relatorio_gestao.py` |

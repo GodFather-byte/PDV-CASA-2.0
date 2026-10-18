@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 
+from src.controllers.config_controller import codigo_especial
 from src.controllers.turno_controller import TurnoController
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
@@ -27,9 +28,13 @@ class ComissaoController:
         self.banco = banco
 
     # --------------------------------------------------------------- o código do caixa
+    def ligada(self) -> bool:
+        """A casa usa a comissão das garotas (módulo `usar_garotas`, desligado pelo perfil dos outros tipos de negócio)."""
+        return self.banco.cfg_bool("usar_garotas", True)
+
     def codigo(self) -> str:
-        """O código que, digitado no caixa, lança a comissão (configuração `codigo_comissao`; vazio desliga)."""
-        return (self.banco.cfg("codigo_comissao", "50") or "").strip()
+        """O código que, digitado no caixa, lança a comissão (configuração `codigo_comissao`; vazio ou módulo desligado: nenhum)."""
+        return codigo_especial(self.banco, "codigo_comissao")
 
     def eh_codigo(self, texto) -> bool:
         """True se o que foi digitado no campo do código é o da comissão: 50, 050 e 0000000000050 são o mesmo."""

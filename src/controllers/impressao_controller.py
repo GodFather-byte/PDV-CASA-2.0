@@ -370,8 +370,8 @@ class ImpressaoController:
     def saida_da_venda(self, venda_id: int) -> str | None:
         """Ticket de saída da comanda (ou mesa) que acabou de ser paga: sai junto com o cupom para o cliente entregar na
         portaria, sem precisar do código 1002. None se não for comanda/mesa paga ou se a casa desligou
-        (imprimir_saida_ao_pagar)."""
-        if not self.banco.cfg_bool("imprimir_saida_ao_pagar", True):
+        (imprimir_saida_ao_pagar, ou a portaria inteira em usar_portaria)."""
+        if not self.banco.cfg_bool("usar_portaria", True) or not self.banco.cfg_bool("imprimir_saida_ao_pagar", True):
             return None
         v = self.caixa.obter(venda_id)
         if v["modalidade"] != "mesa" or v["status"] != "fechada":

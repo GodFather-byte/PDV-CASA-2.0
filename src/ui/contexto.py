@@ -12,6 +12,7 @@ from src.controllers.contas_controller import ContasController
 from src.controllers.entrega_controller import EntregaController
 from src.controllers.estoque_controller import EstoqueController
 from src.controllers.impressao_controller import ImpressaoController
+from src.controllers.perfil_controller import PerfilController
 from src.controllers.preparo_controller import PreparoController
 from src.controllers.produto_controller import ProdutoController
 from src.controllers.relatorio_controller import RelatorioController
@@ -79,6 +80,10 @@ class Contexto:
     @property
     def preparo(self) -> PreparoController:
         return PreparoController(self.banco, self.operador_id)
+
+    @property
+    def perfil(self) -> PerfilController:
+        return PerfilController(self.banco, self.operador_id)
 
     def balanca(self) -> Balanca:
         m = self.config.maquina()

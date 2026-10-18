@@ -141,8 +141,10 @@ class PainelMesas(ttk.Frame):
     RESERVA = RESERVA_BARRA + 4           # e o que sobra para a barra de rolagem e a margem
 
     def __init__(self, master, ao_escolher: Callable[[str], None], ao_transferir: Callable[[str], None],
-                 ao_voltar: Callable[[], None], ao_digitar: Callable[[str], None], colunas: int = COLUNAS_PADRAO):
+                 ao_voltar: Callable[[], None], ao_digitar: Callable[[str], None], colunas: int = COLUNAS_PADRAO,
+                 com_comissoes: bool = True):
         super().__init__(master, style="Cx.TFrame")
+        self._lista_abas = tuple(a for a in ABAS if com_comissoes or a[0] != "Comissões")   # casa sem garotas: sem a aba
         self._ao_escolher, self._ao_transferir = ao_escolher, ao_transferir
         self._ao_voltar, self._ao_digitar = ao_voltar, ao_digitar
         self.colunas = colunas
@@ -179,7 +181,7 @@ class PainelMesas(ttk.Frame):
         self.faixa = tk.Frame(self, bg=CX["fundo"])
         self.faixa.pack(fill="x", pady=(10, 8))
         self._abas: dict[str, tk.Label] = {}
-        for valor, curto in ABAS:
+        for valor, curto in self._lista_abas:
             aba = tk.Label(self.faixa, text=valor, bg=CX["cartao"], fg=CX["texto"], font=(FONTE, 10, "bold"), padx=12, pady=6,
                            cursor="hand2")
             aba.bind("<Button-1>", lambda e, v=valor: self.var_estado.set(v))
@@ -243,7 +245,7 @@ class PainelMesas(ttk.Frame):
             self.busca.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         longas = largura >= 600
         x, linha, coluna = 0, 0, 0
-        for valor, curto in ABAS:
+        for valor, curto in self._lista_abas:
             aba = self._abas[valor]
             aba.grid_forget()
             aba.configure(text=valor if longas else curto, padx=12 if longas else 8, font=(FONTE, 10 if longas else 9, "bold"))

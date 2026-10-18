@@ -7,6 +7,7 @@ import re
 
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroValidacao
+from src.database.sementes import CONFIG_PADRAO
 
 # (chave, rótulo, tipo[texto|int|decimal|sn|escolha], seção, opções)
 CAMPOS_LOJA = [
@@ -92,6 +93,10 @@ CAMPOS_CONFIG = [
     ("limite_gaveta", "Avisar para fazer sangria quando o dinheiro da gaveta passar de (R$, 0 = não avisar)", "int", "Caixa"),
     ("sangria_horarios", "Horários de sangria: lembra o caixa de fazer a sangria nestes horários (ex.: 02:00, 04:30; vazio = sem lembrete)", "texto", "Caixa"),
     ("imprimir_cupom", "Imprimir cupom ao fechar a venda", "sn", "Caixa"),
+    ("usar_garotas", "Garotas (casa noturna): comissão pelo código no caixa, shows, cadastro e relatório das garotas",
+     "sn", "Módulos"),
+    ("usar_portaria", "Portaria (casa noturna): ticket de saída junto com o cupom e código de saída da comanda sem consumo",
+     "sn", "Módulos"),
     ("usar_delivery", "Delivery: pedidos de entrega (F6), bairros e taxas de entrega", "sn", "Módulos"),
     ("taxa_entrega_padrao", "Taxa de entrega padrão do delivery (R$)", "texto", "Módulos"),
     ("usar_caderneta", "Caderneta: venda a prazo para clientes (F5) e cadastro de clientes", "sn", "Módulos"),
@@ -125,25 +130,39 @@ _TIPO_CONFIG = {c[0]: c[2] for c in CAMPOS_CONFIG}
 _OPCOES_CONFIG = {c[0]: [o[0] for o in c[4]] for c in CAMPOS_CONFIG if len(c) > 4}
 
 
-# Módulos opcionais (a boate não usa): o que cada chave "usar_*" desligada esconde dos menus (códigos de módulo de acesso).
+# Módulos opcionais: o que cada chave "usar_*" desligada esconde dos menus (códigos de módulo de acesso).
 #
-# Convenção para módulos de operação por tipo de negócio (cozinha/bar, e no futuro rodízio, venda por peso,
-# split de conta): toda flag nasce em CONFIG_PADRAO como "usar_<modulo>" = "N"; entra em CAMPOS_CONFIG na seção
-# "Módulos" (acima), para aparecer em Configurações sem UI extra; se esconder item de menu, entra aqui. Se o
-# módulo decide algo fora do menu (botão no caixa, aba no painel), o código daquele ponto chama
-# banco.cfg_bool("usar_<modulo>", False) direto, sem precisar de nenhum registro central novo.
+# Convenção para módulos de operação por tipo de negócio: toda flag nasce em CONFIG_PADRAO como "usar_<modulo>" = "N";
+# entra em CAMPOS_CONFIG na seção "Módulos" (acima), para aparecer em Configurações sem UI extra; se esconder item de
+# menu, entra aqui. Se o módulo decide algo fora do menu (botão no caixa, aba no painel), o código daquele ponto chama
+# banco.cfg_bool("usar_<modulo>", False) direto. Exceção: os recursos da casa noturna (usar_garotas, usar_portaria)
+# nascem "S", porque o sistema nasceu boate; quem os desliga é o perfil do estabelecimento (perfil_controller.py).
 MODULOS_OPCIONAIS = {
     "usar_contas": {"lanc_contas", "rel_financeiro", "cad_plano_contas", "cad_subplanos"},
     "usar_delivery": {"cad_bairros"},
     "usar_cozinha_bar": {"cad_setores_impressao", "util_cozinha"},
+    "usar_garotas": {"cad_garotas", "caixa_comissao", "caixa_pagar_comissao", "rel_comissao_garotas"},
 }
+
+# Códigos especiais do caixa: (módulo que o usa, valor de fábrica, para que serve). Com o módulo desligado o código deixa de
+# existir: não lança nada no caixa e fica livre para um produto.
+CODIGOS_ESPECIAIS = {"codigo_comissao": ("usar_garotas", "50", "lançar a comissão das garotas"),
+                     "codigo_saida": ("usar_portaria", "1002", "liberar a saída da comanda sem consumo")}
+
+
+def codigo_especial(banco, chave: str) -> str:
+    """O código especial em uso (`codigo_comissao` ou `codigo_saida`); vazio se foi apagado ou se o módulo dele está desligado."""
+    modulo, padrao, _ = CODIGOS_ESPECIAIS[chave]
+    if not banco.cfg_bool(modulo, True):
+        return ""
+    return (banco.cfg(chave, padrao) or "").strip()
 
 
 def modulos_desligados(banco) -> set[str]:
     """Códigos de módulo escondidos porque a casa não usa o recurso (Configurações > Módulos)."""
     fora: set[str] = set()
     for chave, mods in MODULOS_OPCIONAIS.items():
-        if not banco.cfg_bool(chave, False):
+        if not banco.cfg_bool(chave, CONFIG_PADRAO.get(chave) == "S"):
             fora |= mods
     if not banco.cfg_bool("usar_delivery", False) and not banco.cfg_bool("usar_caderneta", False):
         fora |= {"cad_clientes", "rel_clientes"}      # clientes só existem para a caderneta e o delivery
@@ -215,27 +234,37 @@ class ConfigController:
         self.banco.atualizar("maquinas", atual["id"], limpos)
 
     # --------------------------------------------------------------- config
-    def _validar_codigo_comissao(self, v: str, chave: str = "codigo_comissao", uso: str = "a comissão") -> str:
-        """Os códigos especiais do caixa (comissão, saída) são reservados: não podem ser de um produto, senão o produto
-        nunca seria vendido."""
+    _USO_CODIGO = {"codigo_comissao": "a comissão", "codigo_saida": "a saída"}
+
+    def _formatar_codigo_especial(self, v: str, chave: str) -> str:
+        """Até 13 letras ou números, sem espaços; 050 e 50 são o mesmo código."""
         v = v.strip()
         if not v:
             return ""
         if not re.fullmatch(r"[A-Za-z0-9]{1,13}", v):
+            uso = self._USO_CODIGO[chave]
             raise ErroValidacao(f"O código d{uso[0]} {uso[2:]} deve ter até 13 letras ou números, sem espaços.",
                                 {chave: "inválido"})
-        if v.isdigit():
-            v = str(int(v))                                  # 050 e 50 são o mesmo código
-        achado = self.banco.um("SELECT nome FROM produtos WHERE codigo = ? OR cbarra = ? OR atalho = ? COLLATE NOCASE",
-                               (v.zfill(13) if v.isdigit() else v, v, v))
-        if achado:
-            raise ErroValidacao(f"O produto '{achado['nome']}' já usa o código {v}. Troque o código dele ou escolha "
-                                f"outro para {uso}.", {chave: "em uso"})
-        outro = {"codigo_comissao": "codigo_saida", "codigo_saida": "codigo_comissao"}[chave]
-        atual = (self.banco.cfg(outro) or "").strip()
-        if atual and (str(int(atual)) if atual.isdigit() else atual.lower()) == (v if v.isdigit() else v.lower()):
-            raise ErroValidacao("A comissão e a saída não podem usar o mesmo código.", {chave: "em uso"})
-        return v
+        return str(int(v)) if v.isdigit() else v
+
+    def _conferir_codigos_especiais(self, valores: dict) -> None:
+        """Os códigos especiais em uso são reservados: não podem ser de um produto (que nunca seria vendido) nem iguais entre
+        si. Conferido depois de gravar, com os módulos já no estado novo: ligar a comissão ou a portaria também confere o código
+        dela. O código de um módulo desligado não disputa nada."""
+        ativos = {}
+        for chave in CODIGOS_ESPECIAIS:
+            v = codigo_especial(self.banco, chave)
+            if not v:
+                continue
+            achado = self.banco.um("SELECT nome FROM produtos WHERE codigo = ? OR cbarra = ? OR atalho = ? COLLATE NOCASE",
+                                   (v.zfill(13) if v.isdigit() else v, v, v))
+            if achado:
+                raise ErroValidacao(f"O produto '{achado['nome']}' já usa o código {v}. Troque o código dele ou escolha "
+                                    f"outro para {self._USO_CODIGO[chave]}.", {chave: "em uso"})
+            ativos[chave] = str(int(v)) if v.isdigit() else v.lower()
+        if len(ativos) == 2 and ativos["codigo_comissao"] == ativos["codigo_saida"]:
+            campo = "codigo_saida" if "codigo_saida" in valores else "codigo_comissao"
+            raise ErroValidacao("A comissão e a saída não podem usar o mesmo código.", {campo: "em uso"})
 
     @staticmethod
     def _validar_show_valores(v: str) -> str:
@@ -279,10 +308,8 @@ class ConfigController:
                         raise ErroValidacao(f"Número inválido em '{chave}'.", {chave: "inválido"}) from None
                     if float(v) < 0 or float(v) > 100:
                         raise ErroValidacao(f"'{chave}' deve estar entre 0 e 100.", {chave: "inválido"})
-                if chave == "codigo_comissao":
-                    v = self._validar_codigo_comissao(v)
-                if chave == "codigo_saida":
-                    v = self._validar_codigo_comissao(v, "codigo_saida", "a saída")
+                if chave in CODIGOS_ESPECIAIS:
+                    v = self._formatar_codigo_especial(v, chave)
                 if chave == "show_valores":
                     v = self._validar_show_valores(v)
                 if chave == "telegram_resumo_hora":
@@ -303,3 +330,5 @@ class ConfigController:
                 if chave == "limite_gaveta" and int(v) > 1_000_000:
                     raise ErroValidacao("O limite da gaveta deve ficar abaixo de R$ 1.000.000.", {chave: "inválido"})
                 self.banco.cfg_set(chave, v)
+            if valores.keys() & (set(CODIGOS_ESPECIAIS) | {m for m, _, _ in CODIGOS_ESPECIAIS.values()}):
+                self._conferir_codigos_especiais(valores)

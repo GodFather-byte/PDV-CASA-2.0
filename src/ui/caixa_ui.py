@@ -124,7 +124,7 @@ class JanelaCaixa(tk.Toplevel):
         # as comandas ficam numa coluna à esquerda (mostrada por _mostrar_painel); a venda atual, no meio
         self.painel_mesas = PainelMesas(corpo, ao_escolher=self._tile_escolhido, ao_transferir=self.transferir_varias,
                                         ao_voltar=self._painel_voltar, ao_digitar=self._digitar_posicao,
-                                        colunas=self.colunas_painel)
+                                        colunas=self.colunas_painel, com_comissoes=self.ctx.comissoes.ligada())
 
         # --- comanda/mesa e situação da venda: o título, o selo da situação e o campo do número
         linha = tk.Frame(esq, bg=CX["fundo"])
@@ -344,6 +344,8 @@ class JanelaCaixa(tk.Toplevel):
         diarias = [("Pré-Conta (F8)", self.pre_conta), ("Transfere (F10)", self.transferir_mesa), ("Repique (F9)", self.repique),
                    ("Comissões", self.comissoes), ("Sangria (F7)", self.sangria), ("Gaveta (F11)", self.gaveta),
                    ("Consulta Comanda", self.consultar_comanda), ("Cancelar", self.menu_cancelar)]
+        if not self.ctx.comissoes.ligada():                 # casa sem garotas (perfil do estabelecimento)
+            diarias = [d for d in diarias if d[1] != self.comissoes]
         venda = [("Nomear comanda", self.nomear_comanda), ("Delivery (F6)", self.entrega), ("Caderneta (F5)", self.caderneta),
                  ("Rodízio", self.rodizio)]
         caixa = [("Impressora", self.impressora), ("Balança (F2)", self.balanca), ("Leitor (F3)", self.alternar_leitor),
@@ -553,7 +555,7 @@ class JanelaCaixa(tk.Toplevel):
     def _linhas_comissao(self, v: dict, turno: dict | None) -> None:
         """Comanda de garota: o que está marcado nela (comissão a pagar e a paga neste turno) aparece na lista, em cor própria e
         só para leitura. Comissão não é venda: o total da comanda continua sendo só o dos itens."""
-        if v["modalidade"] != "mesa" or not v["comanda"]:
+        if v["modalidade"] != "mesa" or not v["comanda"] or not self.ctx.comissoes.ligada():
             return
         self.comissao_marcada = self.ctx.comissoes.marcadas(v["posicao"], turno["id"] if turno else None)
         codigo = self.ctx.comissoes.codigo() or "COM"
@@ -582,7 +584,7 @@ class JanelaCaixa(tk.Toplevel):
             return
         mod = v["modalidade"]
         if mod == "mesa":
-            garota = self.ctx.comissoes.garota(v["posicao"]) if v["comanda"] else None
+            garota = self.ctx.comissoes.garota(v["posicao"]) if v["comanda"] and self.ctx.comissoes.ligada() else None
             self.lbl_situacao.configure(text=nome_posicao(v["comanda"], v["posicao"])
                                         + (f" - {garota['nome']}" if garota and garota["ativo"] else "")
                                         + (f" · {v['apelido']}" if v["apelido"] else "")
@@ -965,7 +967,7 @@ class JanelaCaixa(tk.Toplevel):
 
     def carregar_mesas(self) -> None:
         garotas = []
-        if self.ctx.banco.cfg_bool("painel_mostra_garotas", True):          # as garotas com comissão a pagar viram cartões também
+        if self.ctx.comissoes.ligada() and self.ctx.banco.cfg_bool("painel_mostra_garotas", True):   # garotas a pagar viram cartões
             garotas = [{"rotulo": self.ctx.caixa.rotular_posicao(True, p["garota"]), "total_cent": p["total_cent"],
                         "nome": p["nome"], "marcacoes": p["lancamentos"]}
                        for p in self.ctx.comissoes.pendentes_por_garota()]
@@ -1473,7 +1475,7 @@ class JanelaCaixa(tk.Toplevel):
         """Comanda vazia e sem comissão marcada: dá para acertar a conta da garota só com os shows dela, ou fechá-la sem valor,
         usando o número da própria comanda. Garota cadastrada e ativa abre direto; inativa ou fora do cadastro pergunta antes
         (a comanda de um cliente também chega aqui, e a resposta Não mantém o aviso de sempre)."""
-        if not v["comanda"]:
+        if not v["comanda"] or not self.ctx.comissoes.ligada():
             return False
         g = self.ctx.comissoes.garota(v["posicao"])
         if g is not None and g["ativo"]:

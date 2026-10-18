@@ -76,7 +76,7 @@ def trocar_turno(master, ctx) -> bool:
         nomes = ", ".join(p["nome"] for p in abertas[:6]) + (", ..." if len(abertas) > 6 else "")
         aviso = (f"\n\nATENÇÃO: {len(abertas)} mesa(s)/comanda(s) aberta(s), {fmt.fmt_brl(sum(p['total_cent'] for p in abertas))}:"
                  f"\n{nomes}.\nElas continuam abertas no próximo turno.")
-    a_pagar = ctx.comissoes.pendentes_por_garota()
+    a_pagar = ctx.comissoes.pendentes_por_garota() if ctx.comissoes.ligada() else []
     if a_pagar:                 # comissão paga com dinheiro da gaveta muda a contagem: melhor pagar antes de contar
         aviso += (f"\n\nComissão das garotas a pagar: {fmt.fmt_brl(sum(p['total_cent'] for p in a_pagar))} "
                   f"({len(a_pagar)} garota(s)).\nSe vai pagar com dinheiro da gaveta, responda Não, pague "
@@ -147,6 +147,10 @@ class PainelFechamento(tk.Toplevel):
                  ("Produtos vendidos", f"{len(res.get('produtos_vendidos') or ())} (lista na conferência)")]
         if not res["entregas"] and not ctx.banco.cfg_bool("usar_delivery", False):    # casa sem delivery: linhas zeradas somem
             dados = [d for d in dados if d[0] not in ("Entregas", "Perc. entrega")]
+        if not com.get("quantidade") and not (res.get("shows") or {}).get("quantidade") and not ctx.comissoes.ligada():
+            dados = [d for d in dados if d[0] not in ("Comissões das garotas", "Shows pagos às garotas")]
+        if not res.get("saidas_liberadas") and not ctx.banco.cfg_bool("usar_portaria", True):
+            dados = [d for d in dados if d[0] != "Saídas sem consumo (1002)"]
         for i, (r, v) in enumerate(dados):
             ttk.Label(esq, text=r).grid(row=i, column=0, sticky="w")
             ttk.Label(esq, text=str(v), font=tema.FONTE_B).grid(row=i, column=1, sticky="e", padx=(20, 0))
