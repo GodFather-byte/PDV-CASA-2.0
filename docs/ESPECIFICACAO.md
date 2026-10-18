@@ -205,6 +205,18 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
   especial deixa de existir em todo lugar ao mesmo tempo (`codigo_especial` em `config_controller.py`): não lança nada no
   caixa e fica livre para um produto (padaria com pão de código 50). Religar o módulo confere se nenhum produto ficou com
   o código dele.
+- **Pré-pago** (`usar_prepago`, esquema v21): botão "Recarga" no caixa carrega crédito na comanda (ou mesa) do cliente. A
+  recarga é um pagamento adiantado marcado (`pagamentos_venda.recarga`), e a comanda que recebe uma vira pré-paga
+  (`vendas.prepago`); as outras, inclusive as das garotas, seguem normais. Regras fechadas com o titular: (1) a comanda
+  pré-paga só consome até o crédito: o lançamento ou a transferência que passar dele é desfeito até uma nova recarga
+  (serviço e taxa do crédito contam; o complemento da consumação mínima não trava, é acertado na saída); o limite geral
+  de comanda (`limite_comanda`) não vale para ela; (2) na saída (F12, também sem consumo nenhum) a sobra volta ao cliente
+  em dinheiro: como troco, se a recarga foi em dinheiro neste turno; senão (Pix/cartão, ou dinheiro de um turno já
+  fechado) como uma saída registrada no turno atual, para a gaveta e a maquininha baterem e um turno conferido não mudar
+  (mesmo princípio de `_devolver_adiantamentos` no cancelamento). Só a sobra de recarga vira devolução: Pix pago a mais
+  na saída continua recusado. Comanda pré-paga juntada numa comum leva o crédito como adiantamento (a comum não trava).
+  Tela: crédito e saldo sob o total, selo "Pré-pago"/"Sem crédito", saldo no cartão do painel (em vez de "Falta"/
+  "Concluir acerto"), "Devolver:" na tela de pagamento; a pré-conta mostra crédito e saldo e o cupom, a devolução.
 - **Senhas** são guardadas com PBKDF2 e comparadas sem diferenciar maiúsculas, como pede o manual.
 - **Busca por nome** (produtos, clientes, contas, cadastros) ignora acento e caixa: "cafe" acha "Café" (função SQL `norm()`).
 - **Quantidade por item** tem teto (configuração `qtd_maxima_item`, padrão 99.999; 0 desliga), para um código de
@@ -229,4 +241,4 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
 | Colunas "Turno 1 a 3" e "Figura" do tipo de pagamento | O manual não explica o uso; omitidas. |
 | Acesso "Transportadoras" da versão web | Citado sem descrição; omitido. |
 | Campos de nota fiscal de compra (BC ICMS, chave de acesso...) | Fora de escopo (dependem de consultor fiscal, segundo o próprio manual). |
-| Controles de boate pesquisados e ainda não feitos | **Consumação mínima** já existe por comanda (valor único, faixa de números); falta o mínimo por tipo de entrada e a cobrança da comanda sem nenhum consumo. **Pré-pago/pulseira** (crédito carregado na entrada e debitado no consumo). **Taxa de comanda perdida** e **consumação na entrada** já funcionam cadastrando um produto e lançando-o na comanda. |
+| Controles de boate pesquisados e ainda não feitos | **Consumação mínima** já existe por comanda (valor único, faixa de números); falta o mínimo por tipo de entrada e a cobrança da comanda sem nenhum consumo. **Pré-pago** já existe por comanda numerada (seção 2); falta a pulseira com número próprio (RFID fora da faixa das comandas). **Taxa de comanda perdida** e **consumação na entrada** já funcionam cadastrando um produto e lançando-o na comanda. |

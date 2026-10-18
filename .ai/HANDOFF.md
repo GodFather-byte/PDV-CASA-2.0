@@ -1,52 +1,49 @@
 # HANDOFF
 
 ## Último trabalho
-- **Perfil do estabelecimento** (o "modo de operação" que o titular escolheu no início do ecossistema; vem depois dos
-  quatro módulos Cozinha/Bar, Split de conta, Venda por peso e Rodízio, todos em `main`). Antes disto o sistema vinha
-  configurado como boate para qualquer cliente: código 50 de comissão, ticket da portaria, "Cadastro de Garotas" e
-  relatório de comissão apareciam para restaurante e padaria, sem como esconder.
-  - `src/controllers/perfil_controller.py` (novo): `PERFIS` com Boate / casa noturna, Bar, Restaurante, Churrascaria /
-    rodízio e Comércio pequeno. Cada perfil define 11 chaves de liga/desliga (`ITENS`): os módulos `usar_*` e as regras
-    posição padrão, serviço na mesa e na comanda, perguntar pessoas e desconto. **Nunca toca em código, preço,
-    percentual ou número digitado pelo dono.** `mudancas(perfil)` lista o que muda, em palavras; `aplicar(perfil)` grava
-    tudo ou nada por `ConfigController.salvar_config` (mesmas validações) e registra no `log_eventos`. A Boate é igual a
-    `CONFIG_PADRAO` (há teste): banco existente não muda nada.
-  - Dois módulos novos que **nascem "S"** (exceção documentada à convenção `usar_* = N`, porque o sistema nasceu boate):
-    `usar_garotas` (esconde `cad_garotas`, `caixa_comissao`, `caixa_pagar_comissao` e `rel_comissao_garotas` via
-    `MODULOS_OPCIONAIS`; no caixa Tk tira o botão Comissões, a aba Comissões do painel, os cartões das garotas, o nome
-    da garota na situação, o acerto pelo F12 em comanda vazia, as linhas de comissão e as linhas zeradas do painel de
-    fechamento) e `usar_portaria` (ticket de saída ao pagar e o código 1002).
-  - Códigos especiais centralizados em `config_controller.py` (`CODIGOS_ESPECIAIS`, `codigo_especial`): os quatro pontos
-    que liam `codigo_comissao`/`codigo_saida` direto (comissão, caixa, cadastro de produto, importação por planilha)
-    passaram a usar a mesma função. Com o módulo desligado o código deixa de existir e fica livre para produto. A
-    conferência de conflito (produto com o código, comissão = saída) saiu do laço de `salvar_config` e foi para o fim
-    (`_conferir_codigos_especiais`), com os módulos já no estado novo: religar garotas/portaria com um produto no código
-    é recusado, e gravar a tela inteira com o módulo desligado não acusa conflito falso.
-  - UI: botão "Perfil do estabelecimento..." na janela de Configurações (`config_ui.escolher_perfil`: grava a tela,
-    lista os perfis, confirma mostrando o que muda, aplica e recarrega) e escolha do tipo de negócio no primeiro acesso
-    (`cadastro_loja_ui.py`, só para quem tem `cfg_configuracoes`; o texto da janela deixou de citar a "via da garota").
-  - Testes: `tests/test_perfil.py` (24 casos: perfis, módulos da casa noturna, caixa sem garotas, painel do fechamento,
-    primeiro acesso e botão das Configurações).
-  - **Qt não recebeu a tela do perfil nem o corte do botão Comissões/aba no caixa Qt.** Os menus Qt já escondem (usam
-    `modulos_desligados`) e o código 50/1002 já some no Qt também (vem do controlador).
+- **Pré-pago / cartão consumação** (`usar_prepago`, esquema v21), depois do Perfil do estabelecimento (em `main`). Regras
+  fechadas com o titular (AskUserQuestion): (1) a sobra do crédito **volta ao cliente** na saída, em dinheiro; (2) sem
+  saldo, **bloqueia até recarregar**; (3) vira pré-paga **a comanda que recebe carga** (as outras, e as das garotas,
+  seguem normais).
+  - Esquema v21: `vendas.prepago` e `pagamentos_venda.recarga` (a recarga é um pagamento adiantado marcado).
+  - `CaixaController`: `recarregar` (exige o módulo e mesa/comanda), `saldo_prepago` (crédito, consumo e saldo; o
+    complemento da consumação mínima fica fora do consumo e é acertado na saída) e `_conferir_credito`, chamado dentro da
+    transação de `adicionar_item`, `transferir_item`, `transferir_mesa` e `transferir_varias` quando o destino é pré-pago
+    (o que passa do crédito é desfeito). `_conferir_limite_comanda` não vale para pré-paga. Comanda pré-paga juntada
+    numa comum leva o crédito como adiantamento (a comum não trava).
+  - Devolução da sobra (`liquidar`/`fechar`): troco das recargas em dinheiro **do turno atual**; o resto da sobra de
+    recarga (Pix/cartão, ou dinheiro de turno já fechado) vira `devolucao`, gravada em `fechar` como **saída do caixa**
+    no turno atual ("Devolução do crédito pré-pago da comanda N"), para a gaveta e a maquininha baterem sem mexer em
+    turno conferido (mesmo princípio de `_devolver_adiantamentos`). Só recarga vira devolução: Pix pago a mais na saída
+    continua recusado (a tela de pagamento depende desse erro). Sem recarga, `liquidar` dá exatamente o resultado de
+    antes. `vendas.troco_cent` continua só o troco em dinheiro; a devolução é a diferença `pago - total - troco - vale`.
+  - `fechar` aceita pré-paga sem consumo (devolve tudo); comanda comum continua exigindo item.
+  - Tela: botão "Recarga" (barra, gated por `usar_prepago`), crédito e saldo sob o total, selo "Pré-pago"/"Sem
+    crédito", saldo no cartão do painel em vez de "Falta"/"Concluir acerto", "Devolver:" e aviso na tela de pagamento, e
+    o "Troco" depois de fechar passou a mostrar tudo o que volta ao cliente. Pré-conta mostra crédito e saldo; cupom, a
+    "Devolução do crédito".
+  - Testes: `tests/test_prepago.py` (22 casos: recarga, trava do crédito, transferências, devolução em dinheiro/Pix/turno
+    anterior, impressão, painel e tela), `tests/test_esquema_v21.py`, casos em `tests/test_modulos.py` (botão Recarga).
+  - **Qt não recebeu o pré-pago** (botão Recarga, saldo, "Devolver:"); o controlador já vale para o Qt (trava e
+    devolução), mas a tela de pagamento Qt mostra só o troco.
 
 ## Pendências
-- Possíveis evoluções do ecossistema, nenhuma pedida ainda:
-  - **Pré-pago / cartão consumação** (boate e eventos): crédito carregado na entrada, debitado no consumo, devolução da
-    sobra na saída. Anotado também em `docs/ESPECIFICACAO.md` seção 3.
-  - **Split por item consumido**: cada pessoa paga o que pediu, não uma fração igual (mudança de esquema).
-  - **Rodízio com preço por faixa** (adulto/criança, dia da semana): hoje é um valor único (`valor_rodizio_pessoa`);
-    `vendas.pessoas` teria que virar mais de um campo. Decidir o desenho com o titular antes.
-  - **Etiqueta de balança no leitor** (EAN de peso/preço embutido, prefixo 2): para padaria/açougue com balança que
-    imprime etiqueta. Só vale se o titular tiver esse equipamento.
-- **Valores de cada perfil**: foram decididos por mim (ex.: Bar com Cozinha/Bar ligado e sem portaria; Restaurante com
-  delivery). Titular pode querer ajustar; é só mudar `PERFIS` em `perfil_controller.py` (os testes de valores válidos
-  pegam erro de digitação).
+- **Risco a confirmar com o titular**: a sobra de recarga feita por **cartão de crédito** volta em dinheiro (foi o que
+  ele escolheu). Isso permite "saque" no cartão (carrega R$ 500 no crédito, consome R$ 10, leva R$ 490 em dinheiro).
+  Se ele quiser, limitar a devolução em dinheiro ao que entrou em dinheiro/Pix e mandar o resto para estorno na
+  maquininha.
+- Possíveis evoluções do pré-pago: comprovante impresso da recarga; pulseira RFID com número próprio (mapear o código
+  da pulseira para uma comanda); relatório de recargas e devoluções do turno.
+- Outras evoluções do ecossistema, nenhuma pedida ainda: **split por item consumido** (cada pessoa paga o que pediu;
+  mudança de esquema); **rodízio com preço por faixa** (adulto/criança; `vendas.pessoas` viraria mais de um campo);
+  **etiqueta de balança no leitor** (EAN de peso/preço embutido); **consumação mínima por tipo de entrada** e cobrança
+  da comanda sem consumo (anotados em `docs/ESPECIFICACAO.md` seção 3).
+- **Valores de cada perfil** (`PERFIS` em `perfil_controller.py`) foram decididos por mim; titular pode querer ajustar.
 - **Homologar a balança com equipamento real** (Toledo ou Filizola, porta serial): `Balanca.ler_peso`
   (`src/hardware/dispositivos.py`) nunca foi testado fora do código.
-- **Qt dos módulos de operação**: alinhar `src/ui_qt/caixa.py` com o Tk: roteamento de impressão por setor
-  (Cozinha/Bar), "Dividir conta", acionamento automático da balança, "Rodízio", e agora o perfil do estabelecimento e o
-  corte das garotas (botão Comissões e aba do painel Qt).
+- **Qt dos módulos de operação**: alinhar `src/ui_qt/caixa.py` com o Tk: impressão por setor (Cozinha/Bar), "Dividir
+  conta", balança automática, "Rodízio", perfil do estabelecimento, corte das garotas (botão Comissões e aba do painel)
+  e agora o pré-pago.
 - Qt (`src/ui_qt/`, opt-in) ainda tem a regra antiga do acerto da garota (`_acerto_so_de_shows`, `comissao.py`) e o
   recibo/comprovante com o tipo antigo (letra normal); o texto do recibo já vem sem os lançamentos. Alinhar com o Tk se o
   Qt for substituir o Tk. O painel Qt do balcão/comandas também não foi redimensionado.

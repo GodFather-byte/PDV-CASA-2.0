@@ -234,8 +234,12 @@ class JanelaPagamento(tk.Toplevel):
                 self._aviso(f"Dividir conta: parte {self._parte_atual + 1} de {len(self._divisao)} — "
                             f"{fmt.fmt_brl(self._divisao[self._parte_atual])}", CX["azul"])
         else:
-            self.lbl_troco_rotulo.configure(text="Troco:")
-            self.lbl_troco.configure(text=fmt.fmt_num(liq["troco"]), fg=CX["azul"])
+            devolver = liq["troco"] + liq["devolucao"]
+            self.lbl_troco_rotulo.configure(text="Devolver:" if liq["devolucao"] else "Troco:")
+            self.lbl_troco.configure(text=fmt.fmt_num(devolver), fg=CX["azul"])
+            if liq["devolucao"]:
+                self.lbl_msg.configure(text=f"Sobra do crédito pré-pago: devolva {fmt.fmt_brl(devolver)} em dinheiro ao cliente.",
+                                       foreground=CX["ambar"])
             if liq["vale"]:
                 self.lbl_msg.configure(text=f"Será emitido contra-vale de {fmt.fmt_brl(liq['vale'])}.",
                                        foreground=CX["ambar"])

@@ -86,6 +86,8 @@ CONFIG_PADRAO = {
     "usar_cozinha_bar": "N",
     # Módulo de operação Rodízio: cobrança fixa por pessoa, por mesa/comanda (opt-in por mesa).
     "usar_rodizio": "N", "valor_rodizio_pessoa": "0",
+    # Módulo de operação Pré-pago: crédito carregado na comanda, consumo até o saldo e a sobra devolvida na saída.
+    "usar_prepago": "N",
     # Recursos da casa noturna: nascem ligados porque o sistema nasceu boate; o perfil do estabelecimento os desliga nos
     # outros tipos de negócio (perfil_controller.py).
     "usar_garotas": "S", "usar_portaria": "S", "perfil_operacao": "boate",

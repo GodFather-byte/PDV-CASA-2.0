@@ -52,7 +52,9 @@ def montar_tiles(mesas: list[dict], balcao: dict | None = None, garotas=()) -> l
     a_pagar = {g["rotulo"]: g for g in garotas}
     for m in mesas:
         recebido = m.get("recebido_cent", 0)
-        if recebido > 0 and recebido < m["total_cent"]:
+        if m.get("prepago"):                 # pré-pago: o cliente ainda consome; o cartão mostra o saldo, não o "falta"
+            estado = "conta" if m["status"] == "conta_enviada" else "parada" if m["inativa"] else "consumindo"
+        elif recebido > 0 and recebido < m["total_cent"]:
             estado = "parcial"
         elif recebido > 0 and recebido >= m["total_cent"]:
             estado = "acerto"
@@ -64,7 +66,9 @@ def montar_tiles(mesas: list[dict], balcao: dict | None = None, garotas=()) -> l
             estado = "consumindo"
         tile = {"chave": m["rotulo"], "rotulo": m["rotulo"], "tipo": "comanda" if m["comanda"] else "mesa",
                 "estado": estado, "total": fmt.fmt_num(m["total_cent"]), "minutos": m["minutos_parada"]}
-        if recebido > 0:
+        if m.get("prepago"):
+            tile["saldo"] = fmt.fmt_num(recebido - m["total_cent"] + m.get("taxa_cent", 0))
+        elif recebido > 0:
             tile["falta"] = fmt.fmt_num(max(0, m["total_cent"] - recebido))
         g = a_pagar.pop(m["rotulo"], None) if m["comanda"] else None
         if g is not None and m.get("n_itens", 1) == 0:
@@ -276,7 +280,7 @@ class PainelMesas(ttk.Frame):
     # -------------------------------------------------------------- dados
     def atualizar(self, mesas: list[dict], balcao: dict | None = None, atual: str | None = None, garotas=()) -> None:
         tiles = montar_tiles(mesas, balcao, garotas)
-        assinatura = ([(t["chave"], t["tipo"], t["estado"], t["total"], t.get("garota"), t.get("falta"),
+        assinatura = ([(t["chave"], t["tipo"], t["estado"], t["total"], t.get("garota"), t.get("falta"), t.get("saldo"),
                         t["minutos"], t.get("nome"), t.get("pessoas"), t.get("itens"), t.get("marcacoes")) for t in tiles], atual)
         if assinatura == self._assinatura:
             return
@@ -416,6 +420,9 @@ class PainelMesas(ttk.Frame):
             ident = f"{t['itens']} itens" if t["itens"] != 1 else "1 item"
         else:
             ident = ""
+        if t.get("saldo") is not None:
+            sem_credito = t["saldo"].startswith("-") or t["saldo"] == fmt.fmt_num(0)
+            return ident, CX["suave"], f"Saldo R$ {t['saldo']}", CX["vermelho"] if sem_credito else CX["verde"]
         if t.get("falta"):
             return ident, CX["suave"], f"Falta R$ {t['falta']}", CX["ambar"]
         if t["estado"] == "parada":

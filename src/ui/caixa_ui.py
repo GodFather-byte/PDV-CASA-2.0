@@ -347,12 +347,12 @@ class JanelaCaixa(tk.Toplevel):
         if not self.ctx.comissoes.ligada():                 # casa sem garotas (perfil do estabelecimento)
             diarias = [d for d in diarias if d[1] != self.comissoes]
         venda = [("Nomear comanda", self.nomear_comanda), ("Delivery (F6)", self.entrega), ("Caderneta (F5)", self.caderneta),
-                 ("Rodízio", self.rodizio)]
+                 ("Rodízio", self.rodizio), ("Recarga", self.recarga)]
         caixa = [("Impressora", self.impressora), ("Balança (F2)", self.balanca), ("Leitor (F3)", self.alternar_leitor),
                  ("Fecha Turno", self.fechar_turno)]
         sair = [("Sair", self.sair)]                       # fica no canto do cabeçalho, longe dos botões de uso diário
         desligados = {self.entrega: "usar_delivery", self.caderneta: "usar_caderneta",
-                      self.rodizio: "usar_rodizio"}         # módulos que a casa não usa
+                      self.rodizio: "usar_rodizio", self.recarga: "usar_prepago"}         # módulos que a casa não usa
         venda = [(r, f) for r, f in venda if f not in desligados or self.ctx.banco.cfg_bool(desligados[f], False)]
         # Os 11 primeiros ficam sempre à vista, na coluna da direita; o resto fica em "Mais opções" (janela à parte).
         self.tarefas = principais + diarias + venda + caixa + sair
@@ -506,7 +506,11 @@ class JanelaCaixa(tk.Toplevel):
         self.lbl_troco.configure(text="0,00")
         self._detalhe_total(v)
         recebido = sum(p["valor_cent"] for p in self.ctx.caixa.pagamentos(v["id"])) if v else 0
-        if recebido:
+        if v and v["prepago"]:
+            s = self.ctx.caixa.saldo_prepago(v["id"])
+            self.lbl_recebido.configure(text=f"Crédito: {fmt.fmt_brl(s['credito'])}\nSaldo: {fmt.fmt_brl(s['saldo'])}")
+            self.lbl_recebido.pack(fill="x", pady=(8, 0))
+        elif recebido:
             self.lbl_recebido.configure(text=f"Recebido: {fmt.fmt_brl(recebido)}\nFalta receber: {fmt.fmt_brl(max(0, total - recebido))}")
             self.lbl_recebido.pack(fill="x", pady=(8, 0))
         else:
@@ -541,6 +545,9 @@ class JanelaCaixa(tk.Toplevel):
             texto, cor = "Caderneta", CX["vermelho"]
         elif v["modalidade"] == "entrega":
             texto, cor = "Entrega", CX["azul"]
+        elif v["prepago"]:                                  # o cliente ainda consome: o que importa é o saldo
+            texto, cor = ("Pré-pago", CX["violeta"]) if self.ctx.caixa.saldo_prepago(v["id"])["saldo"] > 0 \
+                else ("Sem crédito", CX["vermelho"])
         elif recebido and recebido >= total > 0:
             texto, cor = "Concluir acerto", CX["ambar"]
         elif recebido:
@@ -1196,7 +1203,7 @@ class JanelaCaixa(tk.Toplevel):
     # ============================================================== pagar
     def pagar(self) -> None:
         v = self.venda()
-        if v is None or (not self.ctx.caixa.itens(v["id"]) and v["modalidade"] != "caderneta"):
+        if v is None or (not self.ctx.caixa.itens(v["id"]) and v["modalidade"] != "caderneta" and not v["prepago"]):
             so_comissao = v is not None and self._a_pagar_na_comanda()
             if so_comissao and self._comissao_na_linha():
                 self._pagar_comissao(v)                  # comanda da garota só com comissão: F12 paga a ela
@@ -1240,12 +1247,13 @@ class JanelaCaixa(tk.Toplevel):
             enviar_ou_mostrar(self, self.ctx, f"Cupom {venda['cupom']}", self.ctx.impressao.cupom(venda["id"]),
                               f"cupom_{venda['cupom']}", tipo="cupom", abrir_gaveta=op["abrir_gaveta"], copias=op["copias"],
                               venda_id=venda["id"])
-        self.lbl_troco.configure(text=fmt.fmt_num(venda["troco_cent"]))
+        volta = max(venda["pago_cent"] - venda["total_cent"] - venda["vale_cent"], 0)   # troco + a sobra devolvida do pré-pago
+        self.lbl_troco.configure(text=fmt.fmt_num(volta))
         self.venda_id = None
         self._limpar_entrada()
         self.recarregar()
-        self.lbl_troco.configure(text=fmt.fmt_num(venda["troco_cent"]))
-        texto = f"Venda {venda['cupom']} fechada. Troco {fmt.fmt_brl(venda['troco_cent'])}."
+        self.lbl_troco.configure(text=fmt.fmt_num(volta))
+        texto = f"Venda {venda['cupom']} fechada. Troco {fmt.fmt_brl(volta)}."
         alerta = self._alerta_gaveta()
         self.avisar(f"{texto}   {alerta}" if alerta else texto, tema.COR["aviso"] if alerta else tema.COR["ok"])
         self.ent_codigo.focus_set()
@@ -1649,6 +1657,28 @@ class JanelaCaixa(tk.Toplevel):
         if ok:
             self.recarregar()
             self.avisar("Rodízio desligado." if pessoas == 0 else f"Rodízio: {pessoas} pessoa(s).", tema.COR["ok"])
+
+    def recarga(self) -> None:
+        """Pré-pago: carrega crédito na comanda (ou mesa) que está na tela. Daí em diante ela só consome até o saldo, e na
+        saída (F12) a sobra volta ao cliente."""
+        v = self.venda()
+        if not self.venda_id or not v or v["modalidade"] != "mesa":
+            tema.aviso(self, "Chame a comanda do cliente antes de carregar o crédito.")
+            return
+        onde = nome_posicao(v["comanda"], v["posicao"]).lower()
+        valor = tema.pedir_dinheiro(self, "Recarga", f"Crédito a carregar na {onde}:")
+        if valor is None:
+            return
+        formas = self.ctx.caixa.formas_pagamento()
+        forma = tema.escolher(self, "Recarga", [(f["id"], f["tipo"]) for f in formas],
+                              f"Como o cliente pagou os {fmt.fmt_brl(valor)}?", altura=max(len(formas), 1))
+        if forma is None:
+            return
+        ok, _ = tema.tratar(self, self.ctx.caixa.recarregar, self.venda_id, forma, valor)
+        if ok:
+            self.recarregar()
+            saldo = self.ctx.caixa.saldo_prepago(self.venda_id)["saldo"]
+            self.avisar(f"Crédito de {fmt.fmt_brl(valor)} carregado na {onde}. Saldo: {fmt.fmt_brl(saldo)}.", tema.COR["ok"])
 
     def alternar_leitor(self) -> None:
         self.leitor = not self.leitor

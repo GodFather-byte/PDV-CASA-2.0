@@ -106,6 +106,8 @@ CAMPOS_CONFIG = [
     ("usar_rodizio", "Rodízio: cobrança fixa por pessoa nas mesas/comandas marcadas (produtos do rodízio não "
      "entram na conta por item; cada mesa decide se é rodízio)", "sn", "Módulos"),
     ("valor_rodizio_pessoa", "Valor do rodízio por pessoa (R$)", "texto", "Módulos"),
+    ("usar_prepago", "Pré-pago: o cliente carrega crédito na comanda (botão Recarga no caixa), só consome até o saldo e "
+     "recebe a sobra de volta na saída", "sn", "Módulos"),
     ("programa_comunicacao", "Programa de comunicação (caminho do executável)", "texto", "Utilitários"),
     ("pasta_backup", "Pasta do backup (vazio = pasta Backup do sistema)", "texto", "Utilitários"),
     ("pasta_backup_extra", "Cópia extra do backup: pendrive, outro disco ou pasta de rede (vazio = sem cópia extra)", "texto", "Utilitários"),

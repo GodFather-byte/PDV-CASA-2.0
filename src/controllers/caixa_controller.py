@@ -301,15 +301,50 @@ class CaixaController:
             self.banco.executar(
                 "UPDATE vendas SET ultimo_lancamento_em = ?, status = 'aberta' WHERE id = ?", (agora, venda_id))
             self.recalcular(venda_id)
+            if v["prepago"]:
+                self._conferir_credito(venda_id, v["total_cent"] - v["taxa_cent"])
         return item_id
+
+    # ============================================================ pré-pago
+    def recarregar(self, venda_id: int, tipo_pagamento_id: int, valor_cent: int) -> int:
+        """Pré-pago: carrega crédito na comanda (ou mesa) do cliente. É um pagamento adiantado marcado como recarga; a partir da
+        primeira, a comanda só consome até o crédito, e na saída a sobra volta ao cliente."""
+        if not self.banco.cfg_bool("usar_prepago", False):
+            raise ErroNegocio("O pré-pago está desligado (Configurações > Módulos).")
+        v = self._aberta(venda_id)
+        if v["modalidade"] != "mesa":
+            raise ErroNegocio("A recarga é feita na comanda (ou mesa) do cliente.")
+        with self.banco.transacao():
+            pid = self.adicionar_pagamento(venda_id, tipo_pagamento_id, valor_cent)
+            self.banco.executar("UPDATE pagamentos_venda SET recarga = 1 WHERE id = ?", (pid,))
+            self.banco.executar("UPDATE vendas SET prepago = 1 WHERE id = ?", (venda_id,))
+            self.banco.log("recarga", f"{nome_posicao(v['comanda'], v['posicao'])} {fmt.fmt_brl(valor_cent)}", self.operador_id)
+        return pid
+
+    def saldo_prepago(self, venda_id: int) -> dict:
+        """Crédito carregado, consumo e saldo da comanda. O consumo é a conta sem o complemento da consumação mínima, que não
+        trava o lançamento: é acertado na saída, como em qualquer comanda."""
+        v = self.obter(venda_id)
+        credito = sum(p["valor_cent"] for p in self.pagamentos(venda_id))
+        consumo = v["total_cent"] - v["taxa_cent"]
+        return {"credito": credito, "consumo": consumo, "saldo": credito - consumo}
+
+    def _conferir_credito(self, venda_id: int, consumo_antes: int) -> None:
+        """Comanda pré-paga não consome além do crédito: o lançamento (ou a transferência) que passar dele é desfeito até uma
+        nova recarga. Chamado dentro da transação, depois de recalcular."""
+        s = self.saldo_prepago(venda_id)
+        if s["saldo"] < 0:
+            raise ErroNegocio(f"Crédito insuficiente: o saldo é {fmt.fmt_brl(max(s['credito'] - consumo_antes, 0))} e isto "
+                              f"custa {fmt.fmt_brl(s['consumo'] - consumo_antes)}. Faça uma recarga antes de lançar.")
 
     LIMITE_COMANDA_PADRAO = 200
 
     def _conferir_limite_comanda(self, v: dict) -> None:
         """Limite de consumo da comanda do cliente (Configurações > Mesas e serviço, padrão R$ 200,00; 0 = sem limite): quando o
         consumo chega ao limite, não deixa lançar mais nada até a comanda ser acertada. Vale só para comanda (não para mesa, balcão
-        ou caderneta) e na mesma faixa de números da consumação mínima, para deixar de fora as comandas das garotas."""
-        if v["modalidade"] != "mesa" or not v.get("comanda"):
+        ou caderneta) e na mesma faixa de números da consumação mínima, para deixar de fora as comandas das garotas. Comanda
+        pré-paga não usa este limite: quem trava é o crédito carregado."""
+        if v["modalidade"] != "mesa" or not v.get("comanda") or v.get("prepago"):
             return
         limite = self.banco.cfg_int("limite_comanda", self.LIMITE_COMANDA_PADRAO) * 100
         if limite <= 0:
@@ -513,32 +548,39 @@ class CaixaController:
         return turno_id is not None and (atual is None or turno_id != atual["id"])
 
     def liquidar(self, venda_id: int, total: int | None = None) -> dict:
-        """Confronta pagamentos x total. Devolve pago, falta, troco, vale e o rateio do troco
-        por pagamento. Levanta erro se o excesso não puder virar troco nem vale."""
+        """Confronta pagamentos x total. Devolve pago, falta, troco, vale, devolução (sobra da recarga do pré-pago) e o
+        rateio do troco por pagamento. Levanta erro se o excesso não puder virar troco, devolução nem vale."""
         pags = self.pagamentos(venda_id)
         if total is None:
             total = self.obter(venda_id)["total_cent"]
         pago = sum(p["valor_cent"] for p in pags)
-        out = {"total": total, "pago": pago, "falta": max(total - pago, 0), "troco": 0, "vale": 0, "rateio": {}}
+        out = {"total": total, "pago": pago, "falta": max(total - pago, 0), "troco": 0, "vale": 0, "devolucao": 0,
+               "rateio": {}}
         excesso = pago - total
         if excesso <= 0:
             return out
-        cap_troco = sum(p["valor_cent"] for p in pags if p["permite_troco"])
-        troco = min(excesso, cap_troco)
-        vale = min(excesso - troco, sum(p["valor_cent"] for p in pags if p["emite_vale"]))
-        if excesso - troco - vale > 0:
+        atual = self.turnos.atual()
+
+        def recarga_fora(p) -> bool:
+            # Recarga que não vira troco (veio por Pix/cartão, ou em dinheiro num turno já fechado): a sobra dela volta ao
+            # cliente da gaveta de agora como uma saída registrada (ver `fechar`). Só recarga: Pix pago a mais na saída não.
+            return bool(p["recarga"]) and (not p["permite_troco"] or self._de_outro_turno(p["turno_id"], atual))
+        dao_troco = [p for p in pags if p["permite_troco"] and not recarga_fora(p)]
+        troco = min(excesso, sum(p["valor_cent"] for p in dao_troco))
+        devolucao = min(excesso - troco, sum(p["valor_cent"] for p in pags if recarga_fora(p)))
+        vale = min(excesso - troco - devolucao, sum(p["valor_cent"] for p in pags if p["emite_vale"]))
+        if excesso - troco - devolucao - vale > 0:
             raise ErroNegocio("O valor pago excede o total e a forma de pagamento não permite troco.")
         # O troco é dado agora, da gaveta do turno aberto: sai primeiro dos pagamentos recebidos neste turno, para não
         # mexer na conferência de um turno já fechado. Só se eles não bastarem (alguém pagou a mais num turno anterior
         # e deixou a conta aberta) o resto recai sobre os pagamentos antigos.
-        atual = self.turnos.atual()
         restante = troco
-        for p in sorted(pags, key=lambda p: (self._de_outro_turno(p["turno_id"], atual), p["id"])):
-            if p["permite_troco"] and restante > 0:
+        for p in sorted(dao_troco, key=lambda p: (self._de_outro_turno(p["turno_id"], atual), p["id"])):
+            if restante > 0:
                 parte = min(restante, p["valor_cent"])
                 out["rateio"][p["id"]] = parte
                 restante -= parte
-        out.update(troco=troco, vale=vale)
+        out.update(troco=troco, vale=vale, devolucao=devolucao)
         return out
 
     def dividir_restante(self, venda_id: int, partes: int) -> list[int]:
@@ -571,7 +613,7 @@ class CaixaController:
         itens = self.itens(venda_id)
         eh_credito = v["modalidade"] == "caderneta" and not itens
         eh_debito = v["modalidade"] == "caderneta" and bool(itens)
-        if not itens and not eh_credito:
+        if not itens and not eh_credito and not v["prepago"]:       # pré-pago sem consumo fecha devolvendo a recarga
             raise ErroNegocio("A venda não tem itens.")
         if v["modalidade"] == "caderneta" and not v["cliente_id"]:
             raise ErroNegocio("Selecione o cliente da caderneta.")
@@ -583,7 +625,7 @@ class CaixaController:
                                 (turno["id"], venda_id))
             calc = self.recalcular(venda_id)
             total = calc["total"]
-            troco = vale = 0
+            troco = vale = devolucao = 0
             rateio: dict = {}
             if eh_credito:
                 info = self.info_credito(venda_id)
@@ -605,10 +647,13 @@ class CaixaController:
                 liq = self.liquidar(venda_id, total)
                 if liq["falta"] > 0:
                     raise ErroNegocio(f"Faltam {fmt.fmt_brl(liq['falta'])} para completar o pagamento.")
-                troco, vale, rateio = liq["troco"], liq["vale"], liq["rateio"]
+                troco, vale, rateio, devolucao = liq["troco"], liq["vale"], liq["rateio"], liq["devolucao"]
 
             for pag_id, parte in rateio.items():
                 self.banco.executar("UPDATE pagamentos_venda SET troco_cent = ? WHERE id = ?", (parte, pag_id))
+            if devolucao:
+                self.turnos.movimentar(turno["id"], self.operador_id, "saida", devolucao,
+                                       f"Devolução do crédito pré-pago da {nome_posicao(v['comanda'], v['posicao']).lower()}")
             pago = sum(p["valor_cent"] for p in self.pagamentos(venda_id))
             agora = fmt.agora()
             self.banco.atualizar("vendas", venda_id, {
@@ -769,8 +814,11 @@ class CaixaController:
                 destino_id = o["id"]
             else:
                 destino_id = d["id"]
+                antes = self.obter(destino_id)
                 self._mover_itens(o["id"], destino_id)
             self.recalcular(destino_id)
+            if d is not None and antes["prepago"]:
+                self._conferir_credito(destino_id, antes["total_cent"] - antes["taxa_cent"])
             registrar_transferencia(self.banco, self.operador_id, "mesa", rotulo_posicao(c_origem, n_origem),
                                     rotulo_posicao(c_destino, n_destino), o["subtotal_cent"])
         return destino_id
@@ -786,12 +834,15 @@ class CaixaController:
             for c, n in pares:
                 self._mesa_aberta(n, c)
             destino_id, _ = self.abrir_mesa(n_destino, comanda=c_destino)
+            antes = self.obter(destino_id)
             for c, n in pares:
                 o = self._mesa_aberta(n, c)
                 self._mover_itens(o["id"], destino_id)
                 registrar_transferencia(self.banco, self.operador_id, "mesa", rotulo_posicao(c, n),
                                         rotulo_posicao(c_destino, n_destino), o["subtotal_cent"])
             self.recalcular(destino_id)
+            if antes["prepago"]:
+                self._conferir_credito(destino_id, antes["total_cent"] - antes["taxa_cent"])
         return destino_id
 
     def transferir_item(self, item_id: int, destino, quantidade: float) -> None:
@@ -810,6 +861,7 @@ class CaixaController:
             raise ErroNegocio(f"Quantidade inválida (máximo {fmt.fmt_qtd(item['quantidade'], 3)}).")
         with self.banco.transacao():
             destino_id, _ = self.abrir_mesa(n_destino, comanda=c_destino)
+            antes = self.obter(destino_id)
             if quantidade == item["quantidade"]:
                 self.banco.executar("UPDATE itens_venda SET venda_id = ? WHERE id = ?", (destino_id, item_id))
                 valor_movido = item["total_cent"]
@@ -833,6 +885,8 @@ class CaixaController:
                                 (fmt.agora(), destino_id))
             self.recalcular(origem["id"])
             self.recalcular(destino_id)
+            if antes["prepago"]:
+                self._conferir_credito(destino_id, antes["total_cent"] - antes["taxa_cent"])
             registrar_transferencia(
                 self.banco, self.operador_id, "item", rotulo_posicao(origem["comanda"], origem["posicao"]),
                 rotulo_posicao(c_destino, n_destino), valor_movido, quantidade=quantidade,

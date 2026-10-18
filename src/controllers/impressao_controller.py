@@ -159,6 +159,9 @@ class ImpressaoController:
                 linhas.append(_lr("Troco", M(v["troco_cent"]), w))
             if v["vale_cent"]:
                 linhas.append(_lr("Contra-vale emitido", M(v["vale_cent"]), w))
+            devolvido = v["pago_cent"] - v["total_cent"] - v["troco_cent"] - v["vale_cent"]   # sobra da recarga do pré-pago
+            if v["status"] == "fechada" and devolvido > 0:
+                linhas.append(_lr("Devolução do crédito", M(devolvido), w))
         elif v["modalidade"] == "caderneta" and v["status"] == "fechada":
             linhas.append("Lançado na caderneta do cliente".center(w))
         if v["mensagem"]:
@@ -176,6 +179,9 @@ class ImpressaoController:
                                                              else "(não é cupom fiscal)").center(w),
                                                             _lr(self._origem(v), fmt.fmt_datahora(fmt.agora())[:16], w), "-" * w]
         linhas += self._corpo_itens(venda_id, w) + ["-" * w] + self._totais(v, w)
+        if v.get("prepago"):
+            s = self.caixa.saldo_prepago(venda_id)
+            linhas += [_lr("Crédito carregado", M(s["credito"]), w), _lr("Saldo", M(s["saldo"]), w)]
         if v["pessoas"] > 1:
             linhas.append(_lr(f"Por pessoa ({v['pessoas']})", M(fmt.dividir_cent(v["total_cent"], v["pessoas"])), w))
         return "\n".join(linhas + ["=" * w])

@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 20
+VERSAO_ESQUEMA = 21
 
 PRODUTOS_HISTORICO_DDL = """CREATE TABLE IF NOT EXISTS produtos_historico (
     id INTEGER PRIMARY KEY,
@@ -334,6 +334,7 @@ TABELAS = [
         servico_manual INTEGER NOT NULL DEFAULT 0,
         rodizio INTEGER NOT NULL DEFAULT 0,
         rodizio_total_cent INTEGER NOT NULL DEFAULT 0,
+        prepago INTEGER NOT NULL DEFAULT 0,
         taxa_cent INTEGER NOT NULL DEFAULT 0,
         acrescimo_cent INTEGER NOT NULL DEFAULT 0,
         total_cent INTEGER NOT NULL DEFAULT 0,
@@ -387,7 +388,8 @@ TABELAS = [
         valor_cent INTEGER NOT NULL,
         troco_cent INTEGER NOT NULL DEFAULT 0,
         criado_em TEXT NOT NULL,
-        turno_id INTEGER REFERENCES turnos(id)
+        turno_id INTEGER REFERENCES turnos(id),
+        recarga INTEGER NOT NULL DEFAULT 0
     )""",
     "CREATE INDEX IF NOT EXISTS ix_pagto_venda ON pagamentos_venda(venda_id)",
     """CREATE TABLE IF NOT EXISTS movimentos_caixa (
@@ -823,5 +825,11 @@ MIGRACOES = {
         ("coluna", "subgrupos", "rodizio_incluso", "INTEGER NOT NULL DEFAULT 0"),
         ("coluna", "vendas", "rodizio", "INTEGER NOT NULL DEFAULT 0"),
         ("coluna", "vendas", "rodizio_total_cent", "INTEGER NOT NULL DEFAULT 0"),
+    ],
+    # v21: módulo de operação Pré-pago (usar_prepago). A comanda que recebe recarga vira pré-paga (só consome até o crédito);
+    # o pagamento da recarga é marcado para a sobra poder voltar ao cliente na saída.
+    21: [
+        ("coluna", "vendas", "prepago", "INTEGER NOT NULL DEFAULT 0"),
+        ("coluna", "pagamentos_venda", "recarga", "INTEGER NOT NULL DEFAULT 0"),
     ],
 }
