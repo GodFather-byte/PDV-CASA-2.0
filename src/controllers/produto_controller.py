@@ -116,6 +116,12 @@ class ProdutoController:
         insumo = self.por_id(insumo_id)
         if insumo is None:
             raise ErroNegocio("Produto de composição não encontrado.")
+        produto = self.por_id(produto_id)
+        if produto is None:
+            raise ErroNegocio("Produto não encontrado.")
+        if produto["casco_produto_id"] or insumo["casco_produto_id"]:
+            raise ErroNegocio("Produto com casco vinculado não pode participar de composição ou fardo. "
+                              "Desvincule o casco no cadastro antes de continuar.")
         if not insumo["controla_estoque"] and not self.composicao(insumo_id):
             raise ErroNegocio(f"'{insumo['nome']}' não está habilitado no estoque. "
                               "Marque 'Controla estoque' no cadastro do produto antes de usá-lo na composição.")
@@ -210,6 +216,9 @@ class ProdutoController:
         u = self.por_id(unitario_id)
         if u is None:
             raise ErroNegocio("Produto não encontrado.")
+        if u["casco_produto_id"]:
+            raise ErroNegocio("Produto com casco vinculado não pode participar de fardo. "
+                              "Desvincule o casco no cadastro antes de continuar.")
         if quantidade != int(quantidade) or not 2 <= quantidade <= 999:
             raise ErroNegocio("Informe quantas unidades vêm no fardo ou na caixa (de 2 a 999).")
         if preco_cent <= 0:

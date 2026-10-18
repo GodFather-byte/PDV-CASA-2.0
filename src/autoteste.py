@@ -38,7 +38,7 @@ MODULOS = [
     "src.hardware.dispositivos", "src.hardware.imagem_escpos", "src.hardware.impressora_termica",
     "src.hardware.impressoras_so",
     "src.sync.atualizacoes", "src.sync.licenca_nuvem", "src.sync.sincronizador", "src.sync.telegram_api",
-    "src.ui.app", "src.ui.assistente_impressora_ui", "src.ui.atualizacao_ui", "src.ui.auditoria_ui", "src.ui.cadastro_loja_ui", "src.ui.cadastro_rapido_ui", "src.ui.cadastros_tk", "src.ui.caixa_dialogos",
+    "src.ui.adega_dialogos", "src.ui.app", "src.ui.assistente_impressora_ui", "src.ui.atualizacao_ui", "src.ui.auditoria_ui", "src.ui.cadastro_loja_ui", "src.ui.cadastro_rapido_ui", "src.ui.cadastros_tk", "src.ui.caixa_dialogos",
     "src.ui.caixa_pagamento", "src.ui.caixa_tema", "src.ui.caixa_ui", "src.ui.clientes_ui", "src.ui.comissao_ui", "src.ui.composicao_ui",
     "src.ui.config_ui", "src.ui.contexto", "src.ui.cozinha_ui", "src.ui.escolher_impressora_ui", "src.ui.fila_impressao_ui", "src.ui.icone",
     "src.ui.estoque_ui", "src.ui.importar_produtos_ui", "src.ui.inicializacao", "src.ui.lancamentos_ui", "src.ui.login", "src.ui.menu_widgets", "src.ui.paleta", "src.ui.painel_mesas",

@@ -1,77 +1,89 @@
 # HANDOFF
 
 ## Último trabalho
-- **Módulo Adega / depósito de bebidas**, pedido com urgência pelo titular (instalação num cliente de adega no dia
-  seguinte: "cadastro de bebidas, não por mesa nem comanda, sistema de adega completo"). Vem depois do Pré-pago e do
-  Perfil do estabelecimento (todos em `main`).
-  - Perfil `adega` em `perfil_controller.py`: venda só no balcão, delivery, caderneta (fiado), desconto liberado, sem
-    serviço, garotas e portaria. Ao aplicar, cria as categorias que faltam (`CATEGORIAS`: BEBIDAS com Cervejas,
-    Destilados, Vinhos e espumantes, Refrigerantes, Águas e sucos, Energéticos; CONVENIÊNCIA com Gelo e carvão,
-    Tabacaria, Petiscos, Descartáveis). A confirmação nas Configurações lista as categorias que serão criadas.
-  - Módulo **Mesas e comandas** (`usar_mesas`, nasce "S"; Comércio pequeno e Adega desligam; esconde `rel_comandas` e
-    `rel_garcons`): o caixa Tk vira só balcão (`JanelaCaixa.com_mesas`): sem painel, campo da posição, setas ◀▶,
-    indicadores de posições do topo e ações de mesa; F4/Esc só limpam a entrada, F9/F10/PgUp/PgDn não fazem nada, F8
-    avisa que no balcão não há pré-conta (mas segue imprimindo o pedido de entrega), "M5" no código não vira mesa.
-    `CaixaController.abrir_mesa` recusa quando desligado.
-  - **Cadastro na hora pelo código de barras** (vale para qualquer negócio): código só de números com 8+ dígitos que não
-    existe → confirma "Cadastrar o produto agora?" → senha de supervisor se o operador não tem `cad_produtos` →
-    `cadastro_rapido_ui.pedir_produto` (nome, preço, categoria, estoque opcional) → lança. Códigos curtos continuam com
-    "Produto não encontrado" (os testes antigos dependem disso).
-  - **Fardo / caixa fechada**: botão no Cadastro de Produtos (`cadastros_tk._criar_embalagem` →
-    `cadastro_rapido_ui.pedir_embalagem` → `ProdutoController.criar_embalagem`): produto novo com preço e código de barras
-    próprios, unidade FD/CX/PCT, composição N × unitário (a venda baixa as unidades pelo mecanismo de composição que já
-    existia); o unitário passa a controlar estoque. Unidades "Fardo" (FD) e "Caixa" (CX) entraram nas sementes (só banco
-    novo).
-  - **Fardo no estoque** (segundo commit): o fardo não tem estoque próprio. `ProdutoController.embalagem` reconhece o
-    fardo (não controla estoque; composição de um único produto que controla, N inteiro ≥ 2) e
-    `EstoqueController.adicionar_item`/`registrar_rapido` gravam compra, entrada, saída e perda de fardos nas unidades
-    (10 fardos de 12 = 120 latas, mesmo valor da nota, último preço por lata); contagem e inicial de fardo são recusados
-    com mensagem apontando a unidade. Antes, comprar o fardo ligava o controle de estoque do próprio fardo e a venda
-    contava em dobro. Telas: `lancamentos_ui` não pergunta mais "ligar controle?" para fardo e mostra "entra como
-    unidades"; `estoque_ui` (painel) explica o fardo, desliga "Contei e ajustar" e a prévia mostra as unidades.
-  - **Quantidade antes do código** no caixa Tk: "6*" + código (ou "6*" e o leitor) lança 6 direto
-    (`QTD_ANTES_DO_CODIGO`, `resolver_codigo` → `selecionar_produto(p, qtd)`); com "*" é só produto (não vira comissão
-    50, saída 1002 nem mesa "M5"). Só "*" (o "x" ficou de fora para não confundir com nome de produto).
-  - `ProdutoController.proximo_codigo` virou a regra única do próximo código (o `CadastroController.proximo_codigo_produto`
-    delega): pula os códigos especiais em uso (antes sugeria 50 e o cadastro recusava por ser o da comissão) e ignora
-    código de barras usado como código.
-  - Testes: `tests/test_adega.py` (27 casos: perfil, categorias, próximo código, cadastro rápido, fardo na venda e no
-    estoque, telas de compra e painel com fardo, "6*", caixa só de balcão, cadastro pela tela com e sem permissão, botão
-    do fardo e primeiro acesso como adega).
-  - **Qt não recebeu a parte de tela** (o caixa Qt continua com mesas e sem "6*"; o controlador já recusa abrir mesa com
-    `usar_mesas` desligado e a regra do fardo no estoque vale para o Qt, que chama o mesmo `registrar_rapido`).
+
+Continuação do módulo **Adega / depósito de bebidas**, sobre os commits `7cd4090` e `2f28d41`.
+O titular confirmou as prioridades e regras por formulário. Três agentes trabalharam em arquivos
+separados (caixa Tk, caixa Qt e cadastro); o titular da sessão integrou regras, migração e testes.
+
+### Entregue
+
+- **Cadastro > Produtos > Adega** (descrição compartilhada entre Tk e Qt):
+  preço gelada opcional, mínimo/preço unitário de atacado natural, mínimo/preço unitário de
+  atacado gelada e produto de casco vinculado. Validações consideram alterações parciais.
+- **Natural e gelada** compartilham produto/estoque. Produto com preço gelado pergunta a
+  temperatura antes de lançar. A temperatura fica no item e a observação preserva "Gelada"
+  para impressão, inclusive depois de editar observações.
+- **Atacado automático somente no balcão**, por produto e temperatura. Ao atingir o mínimo,
+  reprecifica todas as linhas elegíveis da venda; cancelar abaixo do mínimo restaura a base.
+  O preço-base é preservado em cada leitura; montagens e itens antigos sem base não são
+  reprecificados. Natural compara promoção vigente com atacado; gelada compara seu próprio
+  varejo com seu próprio atacado.
+- **Cascos simples**, sem empréstimo ou saldo: cadastrar CASCO como produto e vinculá-lo à
+  bebida; ao vender, informar quantos cobrar (0 = todas as trocas). Bebida e casco são
+  lançados numa transação, mas são produtos independentes no cancelamento. Os diálogos avisam
+  que cancelar a bebida não cancela o casco. Não há entrada automática das trocas.
+  Vínculo somente em bebida por unidade, sem composição/fardo/montagem/fracionamento.
+  Também bloqueia criar composição/fardo depois do vínculo. Desativar ou excluir casco
+  referenciado orienta desvincular nas bebidas primeiro.
+- **Agrupar leituras repetidas**: configuração `agrupar_itens_balcao` em Configurações > Caixa;
+  perfil Adega liga, demais perfis mantêm desligado. Separa temperatura, observação,
+  operador, preço-base e montagem; respeita limite por linha. Não agrupa itens preparados nem
+  categorias com impressão remota, para não reenviar quantidades acumuladas à cozinha/bar.
+  Delete cancela toda a linha agrupada.
+- **Tk**: faixa de orientação de balcão, atalhos visíveis de pagamento/delivery/caderneta,
+  resumo de quantidades natural/gelada, economia no atacado e indicação das faixas.
+  Novo `src/ui/adega_dialogos.py` registrado também em `src/autoteste.py`.
+- **Qt**: adega sem painel/posição/ações de mesa, `6*código`, cadastro rápido de EAN
+  desconhecido com permissão/supervisor, temperatura e cascos. Cadastro ganhou **Criar fardo**
+  usando o controlador existente. Delivery/caderneta preservados. Continua opt-in.
+- **Esquema v22**: colunas comerciais em produtos; temperatura e preço-base em itens_venda.
+  Atualiza gatilhos de auditoria para registrar os novos campos. Migração liga agrupamento
+  para adega já existente sem sobrescrever configuração explícita; backup prévio permanece
+  no mecanismo padrão. Teste confirma integridade, FKs e preservação dos preços antigos.
+- Guia atualizado em `docs/ESTOQUE.md`; paridade de adega em `docs/INTERFACE_QT.md`; mapa atualizado.
+  Nenhum banco real foi migrado nem instalador foi gerado nesta sessão.
+
+### Validação
+
+- Novos testes: `test_adega_regras.py`, `test_adega_cadastro.py`, `test_adega_tk.py`,
+  `test_adega_qt.py` (102 casos ao todo). Ajustada a expectativa antiga de leituras repetidas
+  em `test_adega.py` para a regra de agrupamento confirmada pelo titular.
+- Suíte completa: `QT_QPA_PLATFORM=offscreen`, `python -m unittest discover -s tests`:
+  **2070 testes, 62 ignorados, uma falha** (faltava registrar o novo diálogo em MODULOS).
+  Essa falha foi corrigida em `src/autoteste.py`.
+- Após a correção: **192 testes passaram** em uma execução conjunta de
+  `tests.test_autoteste`, `tests.test_adega`, `tests.test_adega_regras`,
+  `tests.test_adega_cadastro`, `tests.test_adega_tk`, `tests.test_adega_qt`,
+  `tests.test_qt_caixa`, `tests.test_qt_caixa_operacoes`, `tests.test_qt_composicao`.
+  A suíte completa não foi repetida após a correção pontual do registro.
+- Também passaram seletores de migrações antigas, pré-pago, cozinha, estoque, histórico,
+  auditoria, importação e perfis. Pylance sem diagnósticos de erro nas telas/controladores
+  alterados; `git diff --check` limpo.
 
 ## Pendências
-- **Adega, possíveis próximos passos** (nenhum pedido ainda): casco/vasilhame retornável (perguntar se o cliente
-  trabalha com retornável: o simples hoje é cadastrar "CASCO 600ML" como produto e lançar quando o cliente não traz);
-  agrupar o mesmo produto bipado várias vezes numa linha só (o "6*" já evita a maior parte); preço de atacado por
-  quantidade (hoje o fardo resolve); preço gelada x natural (hoje: dois produtos); etiqueta de gôndola.
-- **NFC-e**: o sistema não emite documento fiscal (cupom "NÃO FISCAL"). Para adega/comércio isso pode ser exigido pela
-  SEFAZ do estado; não dá para resolver sem certificado digital e integração (provável API de terceiros). Avisar o
-  titular antes de cada instalação nesse ramo.
-- **Pré-pago, risco a confirmar com o titular**: a sobra de recarga feita no cartão de crédito volta em dinheiro
-  ("saque" no cartão). Se ele quiser, limitar a devolução em dinheiro ao que entrou em dinheiro/Pix.
-- Pré-pago, evoluções: comprovante impresso da recarga; pulseira RFID com número próprio; relatório de recargas.
-- Outras evoluções do ecossistema: split por item consumido; rodízio com preço por faixa (adulto/criança); etiqueta de
-  balança no leitor (EAN de peso/preço embutido); consumação mínima por tipo de entrada e cobrança da comanda sem
-  consumo (`docs/ESPECIFICACAO.md` seção 3).
-- **Valores de cada perfil** (`PERFIS`) foram decididos por mim; titular pode querer ajustar.
-- **Homologar a balança com equipamento real** (Toledo ou Filizola, porta serial): `Balanca.ler_peso` nunca foi testado
-  fora do código.
-- **Qt dos módulos de operação**: alinhar `src/ui_qt/caixa.py` com o Tk: impressão por setor, "Dividir conta", balança
-  automática, "Rodízio", perfil do estabelecimento, corte das garotas, pré-pago e agora o caixa só de balcão, o cadastro
-  na hora e o fardo/caixa.
-- Qt (`src/ui_qt/`, opt-in) ainda tem a regra antiga do acerto da garota (`_acerto_so_de_shows`, `comissao.py`) e o
-  recibo/comprovante com o tipo antigo (letra normal). Alinhar com o Tk se o Qt for substituir o Tk. O painel Qt do
-  balcão/comandas também não foi redimensionado.
-- Titular: conferir na prática o tamanho dos cartões (184x126) e da faixa (`ALTURA_FAIXA = 52`), e a letra do recibo na
-  impressora real; ajustar as constantes se precisar.
-- Titular: instalar o Google Drive para computador, escolher a pasta na aba Backup do WillPDV Licenças e anotar a senha
-  da chave.
-- Ideia aberta (pede OK do titular, regra de licença): renovar a partir do vencimento atual para o cliente não perder
-  dias.
-- Homologar em cópia do banco, com periféricos reais: comissão/acerto/saída, gaveta, teclado/escala. Backup do PDV:
-  escolher pasta e senha no caixa e ensaiar recuperação em outra máquina.
-- Asaas (quando houver nuvem): homologar sandbox/credenciais/webhook e hospedar API e `python -m backend.worker_asaas` sob
-  supervisão; validar custos antes de contratar.
-- Painel web e múltiplos caixas seguem fora de escopo.
+
+- **Homologar antes de instalar:** leitor, impressora, gaveta e balança reais; testar natural/
+  gelada, limiar do atacado, cancelamento das duas linhas de bebida/casco e estoque de fardos
+  em cópia do banco. Não houve validação com periféricos físicos.
+- **Promoção por temperatura:** foi mantida a promoção antiga somente no preço natural,
+  e isso está explícito no guia. A tentativa de confirmar esse detalhe ao final não recebeu
+  resposta (titular indisponível). Se ele quiser promoção também na gelada, confirmar a regra
+  e ajustar controlador/prévias/testes juntos; não usar preço natural como substituto do gelado.
+- **NFC-e:** ainda não emite documento fiscal, somente cupom NÃO FISCAL. Conferir exigências
+  da SEFAZ antes de instalar em adega/comércio. Exige certificado/integração; não foi feito.
+- Retornáveis avançados (empréstimo, depósito/reembolso, saldo por cliente), etiquetas de
+  gôndola e múltiplas faixas de atacado ficaram fora desta etapa.
+- **Qt fora da adega:** ainda alinhar com Tk os demais recursos pendentes (pré-pago,
+  rodízio/perfil na operação, impressão por setor, dividir conta, balança automática,
+  corte/acerto de garotas e tipografia dos comprovantes). Esta entrega não certifica
+  paridade integral do Qt. Não abrir Tk e Qt simultaneamente sobre o mesmo banco.
+- **Pré-pago:** confirmar com titular a devolução em dinheiro de saldo recarregado por crédito
+  (risco de "saque"); evoluções: comprovante de recarga, RFID e relatório de recargas.
+- Demais evoluções preservadas: split por item, rodízio por faixa, EAN de balança,
+  consumação mínima por entrada e cobrança de comanda sem consumo (ESPECIFICACAO seção 3).
+- Homologar backup/restauração em outra máquina; configurar pasta do Google Drive e senha
+  do cofre do licenciador; conferir cartões 184x126/faixa 52 e impressão física.
+- Regra de renovação a partir do vencimento atual ainda pede autorização do titular.
+- Asaas/nuvem: homologar credenciais/webhook e hospedar API/worker supervisionados antes
+  de contratar. Painel web e múltiplos caixas continuam fora de escopo.

@@ -93,6 +93,7 @@ CONFIG_PADRAO = {
     "usar_garotas": "S", "usar_portaria": "S", "perfil_operacao": "boate",
     # Mesas e comandas no caixa: desligado, o caixa vende só no balcão (adega, comércio). Nasce ligado, como sempre foi.
     "usar_mesas": "S",
+    "agrupar_itens_balcao": "N",
     "api_url": "", "api_token": "", "sync_intervalo_seg": "60",
     "programa_comunicacao": "", "pasta_backup": "", "pasta_backup_extra": "", "backup_erro": "", "backup_extra_erro": "",
     "email_loja": "", "email_destino": "", "smtp_servidor": "",

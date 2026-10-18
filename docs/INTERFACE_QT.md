@@ -132,6 +132,14 @@ sincronização contínua pelo painel Qt.
   pelo `CaixaController.liberar_saida`, e emite o ticket de saída. Com consumo é
   recusada sem alterar a venda.
 - **Operações do caixa** reúne os fluxos complementares, sem abrir Tk:
+  - Adega/comércio sem mesas (`usar_mesas = N`): esconde painel e posição,
+    desativa ações exclusivas de mesas e mantém delivery/caderneta conforme os módulos.
+    Aceita `6*código`, cadastro rápido de código de barras desconhecido com permissão
+    ou supervisor, escolha natural/gelada e quantidade de cascos sem troca.
+    Atacado por temperatura, estoque compartilhado e agrupamento no balcão usam
+    o mesmo controlador do Tk. Bebida e casco são itens independentes no cancelamento.
+    O Cadastro de Produtos oferece a seção Adega e **Criar fardo**, sem criar
+    estoque separado para o fardo. Regras e cuidados em [ESTOQUE.md](ESTOQUE.md).
   - Produto dividido/montagem: número de partes, escolha dos componentes e opção
     sem divisão; preço, elegibilidade, fracionamento e estoque pelo controlador.
     Desistir antes de lançar não cria uma venda vazia.

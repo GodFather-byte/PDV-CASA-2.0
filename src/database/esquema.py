@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 21
+VERSAO_ESQUEMA = 22
 
 PRODUTOS_HISTORICO_DDL = """CREATE TABLE IF NOT EXISTS produtos_historico (
     id INTEGER PRIMARY KEY,
@@ -115,6 +115,12 @@ TABELAS = [
         unidade_id INTEGER NOT NULL REFERENCES unidades(id),
         aliquota_id INTEGER REFERENCES aliquotas(id),
         preco_cent INTEGER NOT NULL DEFAULT 0,
+        preco_gelada_cent INTEGER NOT NULL DEFAULT 0,
+        atacado_qtd REAL NOT NULL DEFAULT 0,
+        preco_atacado_cent INTEGER NOT NULL DEFAULT 0,
+        atacado_gelada_qtd REAL NOT NULL DEFAULT 0,
+        preco_atacado_gelada_cent INTEGER NOT NULL DEFAULT 0,
+        casco_produto_id INTEGER REFERENCES produtos(id),
         cobrar_servico INTEGER NOT NULL DEFAULT 1,
         venda INTEGER NOT NULL DEFAULT 1,
         aceita_decimal INTEGER NOT NULL DEFAULT 0,
@@ -359,6 +365,8 @@ TABELAS = [
         produto_id INTEGER NOT NULL REFERENCES produtos(id),
         quantidade REAL NOT NULL,
         preco_unit_cent INTEGER NOT NULL,
+        preco_base_cent INTEGER,
+        temperatura TEXT NOT NULL DEFAULT 'natural' CHECK (temperatura IN ('natural', 'gelada')),
         total_cent INTEGER NOT NULL,
         cobra_servico INTEGER NOT NULL DEFAULT 1,
         observacao TEXT,
@@ -604,7 +612,9 @@ _AUDITORIA_CAMPOS = {
     "produtos": ("id codigo nome subgrupo_id unidade_id preco_cent ativo controla_estoque "
                  "estoque_minimo qt_atual qt_inicial ult_preco_cent promo_de promo_ate promo_preco_cent "
                  "sem_inicial sem_final sem_preco_cent hora_ini hora_fim hora_preco_cent "
-                 "cobrar_servico venda aceita_decimal partes maior montagem composto comissao_pct").split(),
+                 "cobrar_servico venda aceita_decimal partes maior montagem composto comissao_pct "
+                 "preco_gelada_cent atacado_qtd preco_atacado_cent atacado_gelada_qtd "
+                 "preco_atacado_gelada_cent casco_produto_id").split(),
     "produtos_historico": "id qt_atual custo_cent ativo excluido_em".split(),
     "unidades": "id nome abreviatura".split(),
     "grupos": "id nome".split(),
@@ -625,7 +635,8 @@ _AUDITORIA_CAMPOS = {
     "acessos": "modulo nivel".split(),
     "vendas": ("id uuid cupom turno_id status subtotal_cent desconto_cent desconto_pct servico_cent "
                "taxa_cent acrescimo_cent total_cent pago_cent cancelada_por").split(),
-    "itens_venda": ("id venda_id produto_id quantidade preco_unit_cent total_cent cancelado cancelado_em").split(),
+    "itens_venda": ("id venda_id produto_id quantidade preco_unit_cent total_cent cancelado cancelado_em "
+                   "temperatura preco_base_cent").split(),
     "lancamentos_estoque": ("id tipo data fornecedor_id valor_cent desconto_cent").split(),
     "itens_estoque": ("id lancamento_id produto_id quantidade preco_unit_cent desconto_cent valor_cent "
                       "qt_anterior diferenca aplicado").split(),
@@ -831,5 +842,19 @@ MIGRACOES = {
     21: [
         ("coluna", "vendas", "prepago", "INTEGER NOT NULL DEFAULT 0"),
         ("coluna", "pagamentos_venda", "recarga", "INTEGER NOT NULL DEFAULT 0"),
+    ],
+    22: [
+        ("coluna", "produtos", "preco_gelada_cent", "INTEGER NOT NULL DEFAULT 0"),
+        ("coluna", "produtos", "atacado_qtd", "REAL NOT NULL DEFAULT 0"),
+        ("coluna", "produtos", "preco_atacado_cent", "INTEGER NOT NULL DEFAULT 0"),
+        ("coluna", "produtos", "atacado_gelada_qtd", "REAL NOT NULL DEFAULT 0"),
+        ("coluna", "produtos", "preco_atacado_gelada_cent", "INTEGER NOT NULL DEFAULT 0"),
+        ("coluna", "produtos", "casco_produto_id", "INTEGER REFERENCES produtos(id)"),
+        ("coluna", "itens_venda", "preco_base_cent", "INTEGER"),
+        ("coluna", "itens_venda", "temperatura", "TEXT NOT NULL DEFAULT 'natural'"),
+        "INSERT OR IGNORE INTO config(chave, valor) SELECT 'agrupar_itens_balcao', 'S' "
+        "WHERE EXISTS (SELECT 1 FROM config WHERE chave = 'perfil_operacao' AND valor = 'adega')",
+        *[f"DROP TRIGGER IF EXISTS auditoria_{tabela}_{operacao}"
+          for tabela in ("produtos", "itens_venda") for operacao in ("insert", "update", "delete")],
     ],
 }

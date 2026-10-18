@@ -10,11 +10,15 @@ Comissão das garotas (código 50): lançada na própria linha de entrada (`comi
 (acerto com shows, vale e Pix) e cancelada como no caixa clássico; as telas ficam em `src/ui_qt/comissao.py`. A saída sem
 consumo (código 1002) libera a comanda vazia e imprime o ticket.
 
+Adega: balcão sem painel de mesas quando desligadas, quantidade antes do código (6*código), cadastro rápido do leitor,
+escolha natural/gelada e cascos. Atacado e agrupamento ficam exclusivamente no controlador.
+Cascos são itens separados: ao cancelar uma bebida, confira também o casco (e vice-versa).
 As operações complementares usam os mesmos controladores e periféricos do Tk, sem abrir janelas Tk.
 """
 from __future__ import annotations
 
 import re
+import math
 import sys
 
 from PySide6.QtCore import Qt
@@ -37,6 +41,7 @@ PAGINA_SEM_OPERADOR, PAGINA_ABERTURA, PAGINA_VENDA, PAGINA_FECHAMENTO = range(4)
 TENTATIVAS_SUPERVISOR = 3
 VERDE, AMBAR, VERMELHO = "#1f7a3d", "#a15c00", "#b32020"
 COR_COMISSAO, COR_COMISSAO_PAGA = "#fff1d6", "#e8f3ea"      # fundo das linhas de comissão marcada na comanda da garota
+QTD_ANTES_DO_CODIGO = re.compile(r"(\d+(?:[.,]\d+)?)\s*\*\s*(\S.*)")
 
 ESTILO = """
 QWidget#fundo { background: #f4f5f7; }
@@ -170,6 +175,8 @@ class JanelaCaixa(QMainWindow):
     def __init__(self, ctx, parent: QWidget | None = None):
         super().__init__(parent)
         self.ctx = ctx
+        self.com_mesas = ctx.banco.cfg_bool("usar_mesas", True)
+        self._subgrupo_rapido = None
         self.venda_id: int | None = None
         self.dialogos = Dialogos(self)
         self.documentos: list[QDialog] = []
@@ -212,7 +219,8 @@ class JanelaCaixa(QMainWindow):
         atalho.activated.connect(self.fechar_venda)
         esc = QShortcut(QKeySequence(Qt.Key_Escape), self)
         esc.activated.connect(self.cancelar_modo_comissao)
-        for tecla, acao in (("F5", self.caderneta), ("F6", self.entrega), ("F8", self.pre_conta),
+        for tecla, acao in (("F4", self.foco_posicao), ("F5", self.caderneta), ("F6", self.entrega),
+                            ("F8", self.pre_conta), ("F9", self.repique),
                             ("F10", self.transferir_mesa), ("F2", self.balanca), ("F11", self.gaveta)):
             atalho = QShortcut(QKeySequence(tecla), self)
             atalho.activated.connect(acao)
@@ -252,6 +260,7 @@ class JanelaCaixa(QMainWindow):
         grade = QHBoxLayout(pagina)
 
         esq, c_esq = _cartao()
+        self.painel_mesas = esq
         esq.setFixedWidth(230)
         c_esq.addWidget(_rotulo("Mesas e comandas", "titulo"))
         self.lbl_dica_pos = _rotulo("", "mudo")
@@ -273,6 +282,12 @@ class JanelaCaixa(QMainWindow):
         self.lista_mesas.itemActivated.connect(self._mesa_escolhida)
         c_esq.addWidget(self.lista_mesas, 1)
         grade.addWidget(esq)
+        if not self.com_mesas:
+            esq.hide()
+            self.ent_pos.hide()
+            self.btn_chamar.hide()
+            self.btn_balcao.hide()
+            self.lista_mesas.hide()
 
         centro, c_cen = _cartao()
         self.lbl_venda = _rotulo("Balcão", "titulo")
@@ -286,7 +301,7 @@ class JanelaCaixa(QMainWindow):
         self.lbl_qtd_titulo = QLabel("Quantidade:")
         entrada.addWidget(self.lbl_qtd_titulo, 0, 1)
         self.ent_codigo = QLineEdit()
-        self.ent_codigo.setPlaceholderText("Código, código de barras ou parte do nome")
+        self.ent_codigo.setPlaceholderText("Código, código de barras, nome ou 6*código")
         self.ent_codigo.returnPressed.connect(self._enter_codigo)
         self.ent_codigo.textEdited.connect(self._esconder_produtos)
         self.ent_codigo.textEdited.connect(self._comissao_nome)
@@ -355,6 +370,11 @@ class JanelaCaixa(QMainWindow):
             self.acoes[chave] = menu.addAction(titulo)
             self.acoes[chave].triggered.connect(acao)
         self.btn_operacoes.setMenu(menu)
+        if not self.com_mesas:
+            for chave in ("servico", "transferir_mesa", "transferir_varias", "transferir_item",
+                          "repique", "consultar_comanda"):
+                self.acoes[chave].setVisible(False)
+            self.acoes["pre_conta"].setText("Emitir pedido de entrega (F8)")
         c_cen.addWidget(self.btn_operacoes)
         grade.addWidget(centro, 1)
 
@@ -458,6 +478,10 @@ class JanelaCaixa(QMainWindow):
         supervisor (3 tentativas; senhas erradas demais bloqueiam pelo AcessoController)."""
         if not self.ctx.acesso.precisa_senha(self.ctx.operador, modulo, chave_config):
             return True
+        return self._pedir_supervisor(modulo, motivo)
+
+    def _pedir_supervisor(self, modulo: str, motivo: str) -> bool:
+        """Autorização obrigatória, inclusive quando as senhas opcionais do caixa estão desligadas."""
         for _ in range(TENTATIVAS_SUPERVISOR):
             senha = self.dialogos.pedir_texto("Autorização", f"{motivo}\nDigite uma senha válida:", senha=True)
             if senha is None:
@@ -557,6 +581,10 @@ class JanelaCaixa(QMainWindow):
             linha = self.tabela.rowCount()
             self.tabela.insertRow(linha)
             nome = it["nome"] + (f"  [{' / '.join(it['partes_nomes'])}]" if it["partes_nomes"] else "")
+            if self.ctx.banco.cfg("perfil_operacao") == "adega":
+                temperatura = "Gelada" if it.get("temperatura") == "gelada" else "Natural"
+                atacado = " · Atacado" if (it.get("preco_base_cent") or it["preco_unit_cent"]) > it["preco_unit_cent"] else ""
+                nome += f"  [{temperatura}{atacado}]"
             if it["observacao"]:
                 nome += f" — {it['observacao']}"
             valores = [it["codigo"], nome, it["unidade"], fmt.fmt_num(it["preco_unit_cent"]), _fmt_qtd(it["quantidade"]),
@@ -680,6 +708,8 @@ class JanelaCaixa(QMainWindow):
 
     def carregar_mesas(self) -> None:
         self.lista_mesas.clear()
+        if not self.com_mesas:
+            return
         for m in self.ctx.caixa.mesas():
             situacao = " (conta)" if m["status"] == "conta_enviada" else " (parada)" if m["inativa"] else ""
             item = QListWidgetItem(f"{m['rotulo']}  ·  {fmt.fmt_brl(m['total_cent'])}  ·  {m['n_itens']} item(ns){situacao}")
@@ -829,7 +859,7 @@ class JanelaCaixa(QMainWindow):
 
     # ========================================================= operações de mesas e comandas
     def transferir_mesa(self) -> None:
-        if not self._pode_operar():
+        if not self.com_mesas or not self._pode_operar():
             return
         v = self.venda()
         if not v or v["modalidade"] != "mesa":
@@ -890,7 +920,8 @@ class JanelaCaixa(QMainWindow):
         if v and v["modalidade"] == "entrega":
             return self.emitir_pedido_entrega()
         if not v or v["modalidade"] != "mesa":
-            self.dialogos.aviso("Pré-conta", "A pré-conta é enviada às mesas e comandas. Chame uma delas.")
+            self.dialogos.aviso("Pré-conta", "A pré-conta é enviada às mesas e comandas. Chame uma delas."
+                                if self.com_mesas else "No balcão não há pré-conta. Receba e feche a venda (F12).")
             return
         ok, _ = self._executar(self.ctx.caixa.enviar_conta, v["id"])
         if ok:
@@ -1122,7 +1153,7 @@ class JanelaCaixa(QMainWindow):
                 tipo, cent, desc, self.ctx.operador.nome), "sangria", "comprovante", abrir_gaveta=True)
 
     def repique(self) -> None:
-        if not self._pode_operar():
+        if not self.com_mesas or not self._pode_operar():
             return
         v = self.venda()
         pos = (bool(v["comanda"]), v["posicao"]) if v and v["modalidade"] == "mesa" else self._pedir_posicao(
@@ -1225,7 +1256,7 @@ class JanelaCaixa(QMainWindow):
         self.lista_produtos.setCurrentRow(0)
         self.lista_produtos.setFocus()
 
-    def _produto_digitado(self, texto: str) -> dict | None | bool:
+    def _produto_digitado(self, texto: str, somente_produto: bool = False) -> dict | None | bool:
         """O produto do campo do código: escolhido na lista, pelo código/barras/atalho ou pelo nome. Devolve False quando o
         texto foi tratado de outro jeito (posição, lista para escolher ou operação bloqueada)."""
         escolhido = self.lista_produtos.currentItem() if self.lista_produtos.isVisible() else None
@@ -1234,16 +1265,16 @@ class JanelaCaixa(QMainWindow):
         if not texto:
             self.avisar("Digite o código ou parte do nome do produto.", AMBAR)
             return False
-        if self.ctx.comissoes.eh_codigo(texto):       # o código da comissão (50) não é produto: lança a comissão da garota
+        if not somente_produto and self.ctx.comissoes.eh_codigo(texto):
             self.ent_codigo.clear()
             self.lancar_comissao()
             return False
-        if self.ctx.caixa.eh_codigo_saida(texto):     # 1002: comanda sem consumo, libera a saída e imprime o papel
+        if not somente_produto and self.ctx.caixa.eh_codigo_saida(texto):
             self.ent_codigo.clear()
             self.liberar_saida()
             return False
         p = self.ctx.produtos.buscar_codigo(texto)
-        if p is None and parece_posicao(texto):      # "C2" ou "M5" no campo do código troca de posição
+        if p is None and not somente_produto and self.com_mesas and parece_posicao(texto):
             self.ent_codigo.clear()
             self.ent_pos.setText(texto)
             self.chamar_posicao()
@@ -1256,10 +1287,49 @@ class JanelaCaixa(QMainWindow):
                 self._mostrar_produtos(achados)
                 self.avisar(f"{len(achados)} produtos com '{texto}'. Escolha na lista e tecle Enter.", AMBAR)
                 return False
+        if p is None and texto.isdigit() and len(texto) >= 8:
+            p = self._cadastro_rapido(texto)
+            if p is None:
+                self.ent_codigo.setFocus()
+                return False
         if p is None:
             self.avisar(f"Produto '{texto}' não encontrado.", VERMELHO)
             self.ent_codigo.selectAll()
             return False
+        return p
+
+    def _cadastro_rapido(self, cbarra: str) -> dict | None:
+        """Produto desconhecido no leitor: permissão de cadastro ou autorização de supervisor."""
+        if not self.dialogos.confirmar("Produto novo", f"O código {cbarra} não está cadastrado.\n"
+                                                       "Cadastrar o produto agora?"):
+            return None
+        if not self.ctx.acesso.pode(self.ctx.operador, "cad_produtos") and not self._pedir_supervisor(
+                "cad_produtos", "Cadastrar produto exige autorização:"):
+            return None
+        nome = self.dialogos.pedir_texto("Produto novo", "Nome do produto:")
+        if nome is None:
+            return None
+        preco = self._pedir_convertido("Produto novo", "Preço de venda (R$):",
+                                      lambda t: ler_dinheiro(t, permitir_zero=True))
+        if preco is None:
+            return None
+        opcoes = [(r["id"], f"{r['nome']} - {r['grupo']}") for r in self.ctx.banco.todos(
+            "SELECT s.id, s.nome, g.nome AS grupo FROM subgrupos s "
+            "JOIN grupos g ON g.id = s.grupo_id ORDER BY g.nome, s.nome")]
+        opcoes.sort(key=lambda o: o[0] != self._subgrupo_rapido)
+        subgrupo = self.dialogos.escolher("Produto novo", "Categoria:", opcoes) if opcoes else None
+        if opcoes and subgrupo is None:
+            return None
+        def estoque(texto):
+            return fmt.para_qtd(texto) if texto.strip() else ""
+        qtd = self._pedir_convertido("Produto novo", "Quantidade em estoque (opcional; vazio não controla):", estoque)
+        if qtd is None:
+            return None
+        ok, p = self._executar(self.ctx.produtos.cadastrar_rapido, cbarra, nome.strip(), preco, subgrupo,
+                              None if qtd == "" else qtd, self.ctx.operador_id)
+        if not ok:
+            return None
+        self._subgrupo_rapido = p["subgrupo_id"]
         return p
 
     def _enter_codigo(self) -> None:
@@ -1275,7 +1345,12 @@ class JanelaCaixa(QMainWindow):
         if self.modo_comissao:                        # Enter na quantidade (o valor) ou botão Lançar: grava a comissão
             self._comissao_confirmar()
             return
-        p = self._produto_digitado(self.ent_codigo.text().strip())
+        texto = self.ent_codigo.text().strip()
+        quantidade_codigo = QTD_ANTES_DO_CODIGO.fullmatch(texto)
+        if quantidade_codigo:
+            self.ent_qtd.setText(quantidade_codigo.group(1))
+            texto = quantidade_codigo.group(2).strip()
+        p = self._produto_digitado(texto, somente_produto=quantidade_codigo is not None)
         if p is False:
             return
         if p is None or not p["ativo"]:
@@ -1288,13 +1363,47 @@ class JanelaCaixa(QMainWindow):
             self.ent_qtd.setFocus()
             self.ent_qtd.selectAll()
             return
+        if not math.isfinite(qtd) or qtd <= 0:
+            self.dialogos.erro("Erro", "Informe uma quantidade maior que zero e finita.")
+            self.ent_qtd.setFocus()
+            self.ent_qtd.selectAll()
+            return
         partes = None
         if p["partes"] > 1 and (p["composto"] or self.ctx.banco.valor(
                 "SELECT COUNT(*) FROM produtos WHERE montagem = 1 AND ativo = 1")):
             partes = self._partes(p)
             if partes is None:
                 return
-        ok, _ = self._executar(self._lancar, p["id"], qtd, partes)
+        opcoes = {}
+        if p.get("preco_gelada_cent", 0) > 0:
+            temperatura = self.dialogos.escolher(
+                "Temperatura da bebida", f"{p['nome']}: como o cliente vai levar? "
+                "(preço unitário de tabela; atacado automático no balcão)",
+                [("natural", f"Natural · {fmt.fmt_brl(self.ctx.produtos.preco_vigente(p))}"),
+                 ("gelada", f"Gelada · {fmt.fmt_brl(p['preco_gelada_cent'])}")])
+            if temperatura is None:
+                return
+            opcoes["temperatura"] = temperatura
+        if p.get("casco_produto_id"):
+            casco = self.ctx.produtos.por_id(p["casco_produto_id"])
+            if casco is None:
+                self.dialogos.aviso("Cascos / vasilhames", "Casco não encontrado. Confira o cadastro do produto.")
+                return
+            maximo = max(0, math.floor(qtd))
+            def cascos(texto):
+                s = texto.strip()
+                if not s.isascii() or not s.isdecimal() or not 0 <= int(s) <= maximo:
+                    raise ValueError(f"Informe um número inteiro de 0 a {maximo}.")
+                return int(s)
+            quantidade_cascos = self._pedir_convertido(
+                "Cascos / vasilhames", f"{p['nome']} · {casco['nome']} · {fmt.fmt_brl(casco['preco_cent'])} por casco.\n"
+                f"Quantos cascos cobrar? Inteiro de 0 a {maximo} (0 = todas as garrafas são trocas).\n"
+                "O casco é um item separado: cancelar a bebida NÃO cancela o casco e vice-versa. "
+                "Confira os dois itens ao cancelar:", cascos, "0")
+            if quantidade_cascos is None:
+                return
+            opcoes["quantidade_cascos"] = quantidade_cascos
+        ok, _ = self._executar(self._lancar, p["id"], qtd, partes, **opcoes)
         if not ok:
             self.recarregar()
             self.ent_qtd.setFocus()
@@ -1307,7 +1416,7 @@ class JanelaCaixa(QMainWindow):
         self.recarregar()
         self.ent_codigo.setFocus()
 
-    def _lancar(self, produto_id: int, qtd: float, partes: list[int] | None = None) -> int:
+    def _lancar(self, produto_id: int, qtd: float, partes: list[int] | None = None, **opcoes) -> int:
         """Abre o balcão se preciso e lança o item na MESMA transação: se o item for recusado, nenhuma venda vazia fica."""
         caixa = self.ctx.caixa
         anterior = self.venda_id
@@ -1315,7 +1424,7 @@ class JanelaCaixa(QMainWindow):
             with self.ctx.banco.transacao():
                 if self.venda_id is None:
                     self.venda_id = caixa.abrir_balcao()
-                item_id = caixa.adicionar_item(self.venda_id, produto_id, qtd, partes=partes or None)
+                item_id = caixa.adicionar_item(self.venda_id, produto_id, qtd, partes=partes or None, **opcoes)
         except BaseException:
             self.venda_id = anterior
             raise
@@ -1411,7 +1520,16 @@ class JanelaCaixa(QMainWindow):
         self.ent_pos.setText("0")
         self.chamar_posicao()
 
+    def foco_posicao(self) -> None:
+        self._limpar_entrada()
+        (self.ent_pos if self.com_mesas else self.ent_codigo).setFocus()
+
     def chamar_posicao(self) -> None:
+        if not self.com_mesas:
+            self._limpar_entrada()
+            self.ent_pos.clear()
+            self.ent_codigo.setFocus()
+            return
         if not self._pronto() or self._ocupado:
             return
         if self.modo_comissao:                        # trocou de posição no meio da comissão: ela é descartada
@@ -1829,10 +1947,11 @@ class JanelaCaixa(QMainWindow):
             self._cancelamento_autorizado = None
             self.avisar("")
             self.ent_codigo.setFocus()
-        if not self.modo_comissao:
+        if not self.modo_comissao and self.com_mesas:
             return
+        era_comissao = self.modo_comissao
         self._limpar_entrada()
-        self.avisar("Comissão descartada.", AMBAR)
+        self.avisar("Comissão descartada." if era_comissao else "", AMBAR)
         self.ent_codigo.setFocus()
 
     def pagar_comissao(self, numero: int | None = None) -> None:
@@ -1886,6 +2005,8 @@ class JanelaCaixa(QMainWindow):
     # ========================================================= saída sem consumo (1002)
     def _pedir_posicao(self, titulo: str, rotulo: str) -> tuple[bool, int] | None:
         """Pergunta uma comanda ou mesa na notação da loja; devolve (comanda, número) ou None se cancelado."""
+        if not self.com_mesas:
+            return None
         while True:
             texto = self.dialogos.pedir_texto(titulo, rotulo)
             if texto is None:

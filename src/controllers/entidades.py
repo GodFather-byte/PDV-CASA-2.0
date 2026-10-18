@@ -6,8 +6,10 @@ a mesma descrição para montar formulário e grade, então uma definição serv
 """
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from typing import Callable
 
 from src.controllers.config_controller import CODIGOS_ESPECIAIS, codigo_especial
@@ -74,6 +76,8 @@ LOOKUPS = {
     "fornecedores": "SELECT id, nome FROM fornecedores WHERE ativo = 1 ORDER BY nome",
     "tipos_pagamento": "SELECT id, tipo FROM tipos_pagamento WHERE ativo = 1 ORDER BY ordem, tipo",
     "produtos": "SELECT id, nome FROM produtos WHERE ativo = 1 ORDER BY nome",
+    "cascos": ("SELECT id, nome FROM produtos WHERE ativo = 1 AND venda = 1 "
+               "AND casco_produto_id IS NULL ORDER BY nome"),
     "clientes": "SELECT id, nome FROM clientes WHERE ativo = 1 ORDER BY nome",
 }
 
@@ -120,8 +124,71 @@ def _antes_produto(banco, d, id_):
         raise ErroValidacao("'Dividir em' deve estar entre 1 e 55.", {"partes": "inválido"})
     if d.get("promo_de") and d.get("promo_ate") and d["promo_de"] > d["promo_ate"]:
         raise ErroValidacao("Promoção: a data inicial é posterior à final.", {"promo_de": "inválido"})
+    _validar_adega(banco, d, id_)
     _liberar_produtos_guardados(banco, d, id_)          # por último: só cede o número se o cadastro novo for valer
     return d
+
+
+def _validar_adega(banco, dados, id_):
+    atual = banco.um("SELECT * FROM produtos WHERE id = ?", (id_,)) if id_ is not None else None
+    produto = dict(atual) if atual else {}
+    produto.update(dados)
+
+    def recusar(campo, mensagem):
+        raise ErroValidacao(mensagem, {campo: "inválido"})
+
+    for campo in ("preco_cent", "preco_gelada_cent", "preco_atacado_cent", "preco_atacado_gelada_cent"):
+        valor = produto.get(campo, 0)
+        if type(valor) is not int or valor < 0:
+            recusar(campo, "Preços devem ser inteiros em centavos, maiores ou iguais a zero.")
+
+    for campo, preco, varejo, temperatura in (
+        ("atacado_qtd", "preco_atacado_cent", "preco_cent", "natural"),
+        ("atacado_gelada_qtd", "preco_atacado_gelada_cent", "preco_gelada_cent", "gelada"),
+    ):
+        bruto = produto.get(campo, 0)
+        texto = str(bruto if bruto not in (None, "") else 0).strip().replace(" ", "")
+        if "," in texto:
+            texto = texto.replace(".", "").replace(",", ".")
+        try:
+            quantidade = Decimal(texto)
+        except InvalidOperation:
+            recusar(campo, f"Atacado {temperatura}: quantidade inválida.")
+        if not quantidade.is_finite() or quantidade < 0 or not math.isfinite(float(quantidade)):
+            recusar(campo, f"Atacado {temperatura}: quantidade deve ser finita e não negativa.")
+        excesso = -quantidade.as_tuple().exponent - 4
+        if excesso > 0 and any(quantidade.as_tuple().digits[-excesso:]):
+            recusar(campo, f"Atacado {temperatura}: use no máximo 4 casas decimais.")
+        if not produto.get("aceita_decimal", 0) and quantidade != quantidade.to_integral_value():
+            recusar(campo, f"Atacado {temperatura}: este produto exige quantidade inteira.")
+        unitario = produto.get(preco, 0)
+        if (quantidade > 0) != (unitario > 0):
+            recusar(campo, f"Atacado {temperatura}: informe mínimo e preço unitário positivos, ou ambos zero para desligar.")
+        if unitario > produto.get(varejo, 0):
+            recusar(preco, f"Atacado {temperatura}: o preço unitário não pode superar o varejo correspondente."
+                    + (" Cadastre o preço gelada antes de ativar o atacado gelada." if temperatura == "gelada" else ""))
+        if campo in dados:
+            dados[campo] = float(quantidade)
+
+    casco_id = produto.get("casco_produto_id")
+    usado_como_casco = id_ is not None and banco.valor(
+        "SELECT 1 FROM produtos WHERE casco_produto_id = ? LIMIT 1", (id_,))
+    if usado_como_casco and (not produto.get("ativo", 1) or not produto.get("venda", 1) or casco_id is not None):
+        recusar("casco_produto_id", "Este produto é casco de outro produto: mantenha-o ativo, à venda e sem casco próprio.")
+    if casco_id is None:
+        return
+    if casco_id == id_:
+        recusar("casco_produto_id", "O casco deve ser um produto diferente da bebida.")
+    casco = banco.um("SELECT * FROM produtos WHERE id = ?", (casco_id,))
+    if casco is None or not casco["ativo"] or not casco["venda"]:
+        recusar("casco_produto_id", "Escolha um produto de casco ativo e disponível para venda.")
+    if casco["casco_produto_id"] is not None:
+        recusar("casco_produto_id", "O casco não pode ter casco próprio ou formar um ciclo.")
+    if (produto.get("aceita_decimal", 0) or produto.get("partes", 1) != 1
+            or any(produto.get(c, 0) for c in ("montagem", "para_ser_montado", "manual", "composto", "balanca"))
+            or (id_ is not None and banco.valor(
+                "SELECT 1 FROM composicoes WHERE produto_id = ? OR insumo_id = ? LIMIT 1", (id_, id_)))):
+        recusar("casco_produto_id", "Produto com casco não aceita fracionamento, montagem, composição ou fardo/caixa.")
 
 
 def _antes_operador(banco, d, id_):
@@ -183,6 +250,8 @@ def _excluir_produto(banco, id_):
     if p is None:
         raise ErroNegocio("Produto não encontrado.")
     with banco.transacao():
+        if banco.valor("SELECT 1 FROM produtos WHERE casco_produto_id = ? LIMIT 1", (id_,)):
+            raise ErroNegocio("Este produto é casco de uma bebida. Desvincule o casco no cadastro das bebidas antes de excluir.")
         aberto = banco.valor(
             """SELECT COUNT(*) FROM itens_venda i JOIN vendas v ON v.id = i.venda_id
                WHERE i.cancelado = 0 AND v.status IN ('aberta','conta_enviada')
@@ -252,6 +321,17 @@ _ENTIDADES = [
         _sn("aceita_decimal", "Aceita decimal"),
         Campo("atalho", "Atalho", tamanho=10, na_grade=False),
         Campo("cbarra", "Código de barras", tamanho=14, na_grade=False),
+        Campo("preco_gelada_cent", "Preço gelada (0 desliga; mesmo estoque)", "dinheiro",
+              padrao=0, secao="Adega", na_grade=False),
+        # Texto preserva a precisão original para validar antes de converter a quantidade.
+        Campo("atacado_qtd", "Mínimo atacado natural (0 desliga)", padrao="0", secao="Adega", na_grade=False),
+        Campo("preco_atacado_cent", "Preço unitário atacado natural", "dinheiro",
+              padrao=0, secao="Adega", na_grade=False),
+        Campo("atacado_gelada_qtd", "Mínimo atacado gelada (0 desliga)", padrao="0", secao="Adega", na_grade=False),
+        Campo("preco_atacado_gelada_cent", "Preço unitário atacado gelada", "dinheiro",
+              padrao=0, secao="Adega", na_grade=False),
+        Campo("casco_produto_id", "Casco vendido à parte (somente sem troca)", "lookup",
+              lookup="cascos", secao="Adega", na_grade=False),
         _sn("usa_observacao", "Permite observações"),
         Campo("comissao_pct", "Comissão %", "decimal", padrao=0, na_grade=False),
         Campo("texto_sugestao", "Texto para sugestão", tamanho=60, na_grade=False),

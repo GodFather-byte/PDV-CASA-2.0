@@ -300,7 +300,7 @@ class TesteCaixaDaAdega(BaseNaTela):
             self.digitar_codigo("6*1")
             self.assertIn("x SKOL lançado", self.status())
         itens = self.ctx.caixa.itens(self.cx.venda_id)
-        self.assertEqual([(i["nome"], i["quantidade"], i["total_cent"]) for i in itens], [("SKOL", 6, 4800), ("SKOL", 6, 4800)])
+        self.assertEqual([(i["nome"], i["quantidade"], i["total_cent"]) for i in itens], [("SKOL", 12, 9600)])
         self.assertEqual((self.cx.var_cod.get(), str(self.cx.ent_qtd.cget("state"))), ("", "disabled"))
 
     def test_quantidade_antes_de_codigo_de_barras_novo(self):

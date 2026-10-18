@@ -18,6 +18,7 @@ pela comanda anterior/seguinte da lista do painel; Enter ou duplo clique numa li
 """
 from __future__ import annotations
 
+import math
 import re
 import tkinter as tk
 from tkinter import ttk
@@ -28,7 +29,7 @@ from src.core.posicao import nome as nome_posicao
 from src.core.posicao import exemplos, parece_posicao, rotulo_do_campo
 from src.hardware.dispositivos import DispositivoIndisponivel
 from src.hardware.impressora_termica import ErroImpressao
-from src.ui import cadastro_rapido_ui, caixa_dialogos, caixa_tema, comissao_ui, tema
+from src.ui import adega_dialogos, cadastro_rapido_ui, caixa_dialogos, caixa_tema, comissao_ui, tema
 from src.ui.caixa_pagamento import JanelaPagamento
 from src.ui.caixa_tema import CX, FONTE
 from src.ui.clientes_ui import JanelaClientes, JanelaEntregas
@@ -75,6 +76,7 @@ class JanelaCaixa(tk.Toplevel):
         self.modo_cancelar = False
         self.mesas_visiveis = False
         self.com_mesas = ctx.banco.cfg_bool("usar_mesas", True)        # desligado: só balcão (adega, comércio)
+        self.perfil_adega = ctx.banco.cfg("perfil_operacao", "") == "adega"
         self.painel_fixo = self.com_mesas and ctx.banco.cfg_bool("painel_mesas_fixo", True)
         self._subgrupo_rapido: int | None = None                       # a categoria do último produto cadastrado na hora
         self.indice_barra: int | None = None
@@ -203,6 +205,11 @@ class JanelaCaixa(tk.Toplevel):
         self.lbl_preco.grid(row=1, column=5, sticky="w")
         ent.columnconfigure(2, weight=1)
         ent.bind("<Configure>", self._ajustar_entrada)
+        if self.perfil_adega:
+            self.lbl_oferta = ttk.Label(ent, text="", style="Cx.CartaoRotulo.TLabel", wraplength=600)
+            self.lbl_oferta.grid(row=2, column=0, columnspan=6, sticky="w", pady=(10, 0))
+            ent.bind("<Configure>", lambda e: self.lbl_oferta.configure(wraplength=max(180, e.width - 32)), add="+")
+            self._oferta_adega()
 
         # --- itens da venda (o código e a unidade ficam guardados, mas fora da vista: a lista é Produto, Preço, Qtd e Total)
         quadro = tk.Frame(esq, bg=CX["fundo"])
@@ -221,6 +228,12 @@ class JanelaCaixa(tk.Toplevel):
         self.grade.tag("comissao_paga", foreground=CX["comissao_paga"])
         self.lbl_vazio = tk.Label(self.grade.tree, text="Nenhum item lançado\nPasse o leitor ou digite o código do produto e tecle Enter",
                                   bg=CX["cartao"], fg=CX["mudo"], font=(FONTE, 13), justify="center")
+        if self.perfil_adega:
+            self.lbl_vazio.configure(text="Pronto para atender\n\nPasse o leitor ou digite 6*código para lançar 6 unidades.\n"
+                                    "Bebida com dois preços? Escolha natural ou gelada.\n"
+                                    "Retornável? Informe apenas os cascos que faltam na troca.\n"
+                                    "Bebida e casco: cancelamentos independentes; confira as duas linhas.")
+            self.grade.tree.bind("<Configure>", lambda e: self.lbl_vazio.configure(wraplength=max(180, e.width - 40)), add="+")
 
         e = self.ent_codigo
         e.bind("<Return>", self._enter_codigo)
@@ -350,6 +363,10 @@ class JanelaCaixa(tk.Toplevel):
         self.lbl_troco = tk.Label(dentro, text="0,00")            # o troco aparece na janela de pagamento; aqui só guarda o valor
         self.lbl_recebido = tk.Label(dentro, text="", bg=CX["cartao"], fg=CX["suave"], font=(FONTE, 10),
                                      wraplength=270, justify="left", anchor="w")
+        if self.perfil_adega:
+            self.lbl_resumo_adega = tk.Label(dentro, text="", bg=CX["cartao"], fg=CX["texto"],
+                                             font=(FONTE, 10), anchor="w", justify="left", wraplength=270)
+            self.lbl_resumo_adega.pack(fill="x", pady=(8, 0))
         self.barra = tk.Frame(lado, bg=CX["fundo"])
         self.barra.pack(fill="x", pady=(12, 0))
         self._barra_tarefas()
@@ -376,6 +393,8 @@ class JanelaCaixa(tk.Toplevel):
         # Os 11 primeiros ficam sempre à vista, na coluna da direita; o resto fica em "Mais opções" (janela à parte).
         self.tarefas = principais + diarias + venda + caixa + sair
         self._n_fixos = len(principais) + len(diarias)
+        if self.perfil_adega:
+            self._n_fixos += len(venda)  # delivery e fiado à mão, sem abrir "Mais opções"
         self.botoes_tarefa, self._estilos_base = [], []
         self.barra.columnconfigure((0, 1), weight=1, uniform="acoes")
         self.opcoes = tk.Toplevel(self)
@@ -418,10 +437,15 @@ class JanelaCaixa(tk.Toplevel):
         linhas = 1 + (self._n_fixos - 1 + 1) // 2
         self.btn_opcoes = ttk.Button(self.barra, text="Mais opções", style="Cx.TButton", command=self._abrir_opcoes)
         self.btn_opcoes.grid(row=linhas, column=0, columnspan=2, sticky="ew", padx=3, pady=(14, 3))
-        tk.Label(self.barra, text="Nomear comanda, delivery, caderneta, impressora,\nbalança, leitor e fechamento de turno",
+        dica_opcoes = ("F1 consulta  ·  F3 liga/desliga leitor\nF4 / Esc limpa a entrada  ·  F12 paga"
+                       if self.perfil_adega else
+                       "Nomear comanda, delivery, caderneta, impressora,\nbalança, leitor e fechamento de turno")
+        tk.Label(self.barra, text=dica_opcoes,
                  bg=CX["fundo"], fg=CX["suave"], font=(FONTE, 9), justify="center").grid(row=linhas + 1, column=0, columnspan=2, pady=6)
         linha = 0
-        for titulo, qtd, inicio in (("VENDA", len(venda), self._n_fixos), ("CAIXA", len(caixa), self._n_fixos + len(venda))):
+        inicio_venda = len(principais) + len(diarias)
+        for titulo, qtd, inicio in (("VENDA", 0 if self.perfil_adega else len(venda), inicio_venda),
+                                   ("CAIXA", len(caixa), inicio_venda + len(venda))):
             if not qtd:
                 continue
             tk.Label(extras, text=titulo, bg=CX["fundo"], fg=CX["suave"], font=(FONTE, 9, "bold"), anchor="w").grid(
@@ -508,9 +532,17 @@ class JanelaCaixa(tk.Toplevel):
         total = 0
         self.comissao_marcada = []
         self._itens_na_grade = 0
+        itens = self.ctx.caixa.itens(v["id"]) if v else []
         if v:
-            for it in self.ctx.caixa.itens(v["id"]):
+            for it in itens:
                 nome = it["nome"] + (f"  [{' / '.join(it['partes_nomes'])}]" if it["partes_nomes"] else "")
+                if self.perfil_adega:
+                    temperatura = "Gelada" if it.get("temperatura") == "gelada" else "Natural"
+                    preco_base = it.get("preco_base_cent")
+                    if preco_base is None:
+                        preco_base = it["preco_unit_cent"]
+                    atacado = " · Atacado" if preco_base > it["preco_unit_cent"] else ""
+                    nome += f"  [{temperatura}{atacado}]"
                 self.grade.adicionar([it["codigo"], nome, it["unidade"], fmt.fmt_num(it["preco_unit_cent"]),
                                       fmt.fmt_qtd(it["quantidade"]), fmt.fmt_num(it["total_cent"]), it["observacao"] or ""], iid=it["id"])
             self._itens_na_grade = self.grade.total()
@@ -524,6 +556,8 @@ class JanelaCaixa(tk.Toplevel):
         self.lbl_total.configure(text=fmt.fmt_num(total))
         self.lbl_troco.configure(text="0,00")
         self._detalhe_total(v)
+        if self.perfil_adega:
+            self._resumo_adega(itens, v)
         recebido = sum(p["valor_cent"] for p in self.ctx.caixa.pagamentos(v["id"])) if v else 0
         if v and v["prepago"]:
             s = self.ctx.caixa.saldo_prepago(v["id"])
@@ -538,6 +572,42 @@ class JanelaCaixa(tk.Toplevel):
         self._status_venda(v, total, recebido)
         self.lbl_leitor.configure(text="LEITOR ÓPTICO ATIVO" if self.leitor else "")
         self.carregar_mesas()                        # os cartões e os indicadores do cabeçalho acompanham a venda
+
+    def _resumo_adega(self, itens: list[dict], venda: dict | None) -> None:
+        naturais = sum(i["quantidade"] for i in itens if i.get("temperatura", "natural") == "natural")
+        geladas = sum(i["quantidade"] for i in itens if i.get("temperatura") == "gelada")
+        economia = 0
+        for item in itens:
+            preco_base = item.get("preco_base_cent")
+            if preco_base is None:
+                preco_base = item["preco_unit_cent"]
+            economia += max(0, fmt.mult_cent(preco_base, item["quantidade"]) - item["total_cent"])
+        texto = (f"{len(itens)} linha(s)  ·  Quantidade: {fmt.fmt_qtd(naturais + geladas)}\n"
+                 f"Natural: {fmt.fmt_qtd(naturais)}  ·  Gelada: {fmt.fmt_qtd(geladas)}")
+        if economia and venda and venda["modalidade"] == "balcao":
+            texto += f"\nEconomia no atacado: {fmt.fmt_brl(economia)}"
+        self.lbl_resumo_adega.configure(text=texto)
+
+    def _oferta_adega(self) -> None:
+        p = self.produto
+        if not p:
+            self.lbl_oferta.configure(text="QUANTIDADE × CÓDIGO: 6*789…  ·  Natural / gelada  ·  Troca de cascos")
+            return
+        partes = [f"Natural: {fmt.fmt_brl(self.ctx.produtos.preco_vigente(p))}"]
+        if p.get("preco_gelada_cent", 0) > 0:
+            partes.append(f"Gelada: {fmt.fmt_brl(p['preco_gelada_cent'])}")
+        v = self.venda()
+        if v is None or v["modalidade"] == "balcao":
+            for rotulo, chave_qtd, chave_preco in (("natural", "atacado_qtd", "preco_atacado_cent"),
+                                                   ("gelada", "atacado_gelada_qtd", "preco_atacado_gelada_cent")):
+                if p.get(chave_qtd, 0) > 0 and p.get(chave_preco, 0) > 0:
+                    qtd = fmt.fmt_qtd(p[chave_qtd], casas=4).rstrip("0").rstrip(",")
+                    partes.append(f"Atacado {rotulo}: {qtd}+ por {fmt.fmt_brl(p[chave_preco])}/un")
+        else:
+            partes.append("Atacado automático somente no balcão")
+        if p.get("casco_produto_id"):
+            partes.append("Retornável: informe os cascos sem troca ao confirmar")
+        self.lbl_oferta.configure(text="  ·  ".join(partes))
 
     def _detalhe_total(self, v: dict | None) -> None:
         """Sob o total: de onde vem o acréscimo (serviço, taxa, desconto), para o cliente não estranhar o valor."""
@@ -764,6 +834,8 @@ class JanelaCaixa(tk.Toplevel):
         self.lbl_desc.configure(text=p["nome"])
         self.lbl_un.configure(text=un)
         self.lbl_preco.configure(text=fmt.fmt_num(preco))
+        if self.perfil_adega:
+            self._oferta_adega()
         self.var_cod.set(p["codigo"])
         if qtd is not None:
             self.ent_qtd.configure(state="normal")       # se a quantidade for recusada, o operador corrige no campo
@@ -806,6 +878,8 @@ class JanelaCaixa(tk.Toplevel):
         self.ent_qtd.configure(state="disabled")
         for lbl in (self.lbl_desc, self.lbl_un, self.lbl_preco):
             lbl.configure(text="")
+        if self.perfil_adega:
+            self._oferta_adega()
 
     def confirmar_item(self) -> None:
         if self.modo_comissao:
@@ -819,12 +893,34 @@ class JanelaCaixa(tk.Toplevel):
         except ValueError:
             self.avisar("Quantidade inválida.", tema.COR["perigo"])
             return
+        if not math.isfinite(qtd) or qtd <= 0 or (not p["aceita_decimal"] and qtd != int(qtd)):
+            self.avisar("Informe uma quantidade positiva" + (" e inteira." if not p["aceita_decimal"] else "."),
+                        tema.COR["perigo"])
+            self.ent_qtd.focus_set()
+            return
         partes = None
         if p["partes"] > 1 and (p["composto"] or self.ctx.banco.valor("SELECT COUNT(*) FROM produtos WHERE montagem = 1 AND ativo = 1")):
             partes = caixa_dialogos.dialogo_partes(self, self.ctx, p)
             if partes is None:
                 return
-        ok, item_id = tema.tratar(self, self._lancar, p["id"], qtd, partes or None)
+        opcoes = {}
+        if p.get("preco_gelada_cent", 0) > 0:
+            temperatura = adega_dialogos.pedir_temperatura(self, p, self.ctx.produtos.preco_vigente(p))
+            if temperatura is None:
+                self.cancelar_item_pendente()
+                return
+            opcoes["temperatura"] = temperatura
+        if p.get("casco_produto_id"):
+            casco = self.ctx.produtos.por_id(p["casco_produto_id"])
+            if casco is None:
+                self.avisar("Casco não encontrado. Confira o cadastro da bebida.", tema.COR["perigo"])
+                return
+            quantidade_cascos = adega_dialogos.pedir_cascos(self, p, casco, qtd)
+            if quantidade_cascos is None:
+                self.cancelar_item_pendente()
+                return
+            opcoes["quantidade_cascos"] = quantidade_cascos
+        ok, item_id = tema.tratar(self, self._lancar, p["id"], qtd, partes or None, **opcoes)
         if not ok:
             self.ent_qtd.focus_set()
             return
@@ -833,11 +929,11 @@ class JanelaCaixa(tk.Toplevel):
         self.recarregar()
         self.ent_codigo.focus_set()
 
-    def _lancar(self, produto_id: int, qtd: float, partes: list[int] | None) -> int:
+    def _lancar(self, produto_id: int, qtd: float, partes: list[int] | None, **opcoes) -> int:
         caixa = self.ctx.caixa
         if self.venda_id is None:
             self.venda_id = caixa.abrir_balcao()
-        item_id = caixa.adicionar_item(self.venda_id, produto_id, qtd, partes=partes)
+        item_id = caixa.adicionar_item(self.venda_id, produto_id, qtd, partes=partes, **opcoes)
         self._enviar_remoto([item_id])
         return item_id
 

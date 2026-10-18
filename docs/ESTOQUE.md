@@ -52,3 +52,47 @@ O fardo (ou a caixa fechada) é criado no Cadastro de Produtos pelo botão **Far
 
 Permissões: o painel e o lançamento usam o módulo **Lançamento de estoque**; quem só tem o relatório de estoque continua
 abrindo o relatório pelos cartões.
+
+## Operação de adega: natural, gelada, atacado e cascos
+
+No Cadastro de Produtos, a seção **Adega** complementa o preço de venda normal:
+
+* **Natural** usa o preço normal, incluindo as promoções já cadastradas.
+* **Gelada** tem preço próprio opcional. Deixe zero para não perguntar a temperatura.
+  Natural e gelada são o **mesmo produto e o mesmo estoque**: vender duas naturais
+  e três geladas baixa cinco unidades, somente no fechamento.
+* **Atacado natural e gelada** têm, cada um, uma quantidade mínima e um preço
+  unitário. Preencha os dois campos da faixa ou deixe ambos zerados para desativar.
+  No balcão, ao atingir o mínimo, o preço vale para **todas as unidades daquele
+  produto e daquela temperatura** na venda. Temperaturas, produtos e fardos
+  diferentes não se somam. A regra funciona mesmo com várias linhas.
+  Para natural, vale o menor preço entre a promoção vigente na leitura e o atacado;
+  gelada compara seu preço próprio com seu atacado próprio.
+  Cancelar uma linha e ficar abaixo do mínimo restaura o preço-base das linhas
+  restantes. Mesas, entregas e caderneta não recebem atacado automático.
+* **Casco** aponta para outro produto vendável (ex.: CASCO 600 ML, com preço próprio).
+  O vínculo é para bebidas vendidas por unidade, sem fracionamento, montagem ou
+  composição/fardo. Cadastre o casco antes de vinculá-lo à bebida.
+  Ao lançar a bebida, informe quantos cascos devem ser cobrados: zero quando
+  o cliente trouxe todas as trocas, até a quantidade de bebidas quando não trouxe.
+  Bebida e cascos são lançados juntos, ou nenhum é lançado se houver erro/desistência.
+  O casco aparece como **produto separado** no cupom e segue o estoque de seu cadastro.
+  Não há empréstimo, depósito reembolsável, saldo por cliente ou entrada automática
+  das embalagens devolvidas. Para cancelar a compra inteira, confira **as duas linhas**:
+  cancelar somente a bebida não cancela os cascos, nem o inverso.
+
+O perfil **Adega** liga **Configurações > Caixa > Agrupar produtos iguais e da mesma
+temperatura no balcão**. Leituras compatíveis ficam em uma linha, sem misturar
+temperatura, observação, operador ou preço-base diferentes, nem produtos montados,
+itens já preparados ou categorias com impressão remota (para não reenviar quantidades
+acumuladas à cozinha/bar). Delete cancela a linha inteira, com toda a quantidade agrupada.
+O agrupamento pode ser desligado; os demais perfis mantêm o padrão anterior.
+
+O leitor continua aceitando **6*código** para lançar seis unidades diretamente.
+Código de barras numérico desconhecido com oito ou mais dígitos oferece cadastro
+rápido, com autorização de supervisor quando o operador não pode cadastrar produtos.
+
+Antes da instalação, homologue em cópia do banco: seis unidades atingindo o atacado,
+natural e gelada sem somar mínimos, cobrança com/sem troca de casco, cancelamento,
+estoque de fardo e impressão. O cupom continua **NÃO FISCAL**: este módulo não emite
+NFC-e e não substitui a verificação das exigências fiscais da loja.

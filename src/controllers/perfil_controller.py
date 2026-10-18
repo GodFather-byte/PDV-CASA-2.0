@@ -17,11 +17,12 @@ ITENS = {
     "usar_caderneta": "Caderneta (fiado)", "posicao_padrao": "Número digitado no caixa é",
     "cobra_servico_mesa": "Serviço nas mesas", "cobra_servico_comanda": "Serviço nas comandas",
     "pergunta_pessoas": "Perguntar o nº de pessoas ao abrir a mesa", "usar_desconto": "Desconto no fechamento da conta",
+    "agrupar_itens_balcao": "Agrupar produtos iguais no balcão",
 }
 
 _BOATE = {"usar_mesas": "S", "usar_garotas": "S", "usar_portaria": "S", "usar_cozinha_bar": "N", "usar_rodizio": "N",
           "usar_delivery": "N", "usar_caderneta": "N", "posicao_padrao": "comanda", "cobra_servico_mesa": "S",
-          "cobra_servico_comanda": "S", "pergunta_pessoas": "N", "usar_desconto": "N"}
+          "cobra_servico_comanda": "S", "pergunta_pessoas": "N", "usar_desconto": "N", "agrupar_itens_balcao": "N"}
 _SEM_BOATE = {**_BOATE, "usar_garotas": "N", "usar_portaria": "N", "usar_desconto": "S"}
 _RESTAURANTE = {**_SEM_BOATE, "usar_cozinha_bar": "S", "usar_delivery": "S", "posicao_padrao": "mesa", "pergunta_pessoas": "S"}
 
@@ -42,7 +43,7 @@ PERFIS = {
     "adega": ("Adega / depósito de bebidas", "venda só no balcão pelo leitor de código de barras, fardo e caixa fechada, "
               "delivery, caderneta (fiado) e desconto liberado",
               {**_SEM_BOATE, "usar_mesas": "N", "usar_delivery": "S", "usar_caderneta": "S", "cobra_servico_mesa": "N",
-               "cobra_servico_comanda": "N"}),
+               "cobra_servico_comanda": "N", "agrupar_itens_balcao": "S"}),
 }
 PADRAO = "boate"
 

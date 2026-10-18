@@ -252,13 +252,18 @@ class CaixaController:
 
     # ============================================================== itens
     def adicionar_item(self, venda_id: int, produto_id: int, quantidade: float, observacao: str | None = None,
-                       partes: list[int] | None = None) -> int:
+                       partes: list[int] | None = None, *, temperatura: str = "natural",
+                       quantidade_cascos: int = 0) -> int:
         v = self._aberta(venda_id)
         p = self.produtos.por_id(produto_id)
         if p is None or not p["ativo"]:
             raise ErroNegocio("Produto não encontrado.")
         if not p["venda"]:
             raise ErroNegocio(f"'{p['nome']}' não está liberado para venda.")
+        if temperatura not in ("natural", "gelada"):
+            raise ErroNegocio("Temperatura inválida: escolha natural ou gelada.")
+        if temperatura == "gelada" and (not p["preco_gelada_cent"] or partes):
+            raise ErroNegocio("Este produto não tem preço gelado disponível para este lançamento.")
         quantidade = fmt.arred_qtd(quantidade)
         if not math.isfinite(quantidade) or quantidade <= 0:
             raise ErroNegocio("Informe uma quantidade maior que zero.")
@@ -268,6 +273,14 @@ class CaixaController:
                               "Confira se um código de barras não foi digitado no campo Quantidade.")
         if not p["aceita_decimal"] and quantidade != int(quantidade):
             raise ErroNegocio(f"'{p['nome']}' não aceita quantidade fracionada.")
+        if (isinstance(quantidade_cascos, bool) or not isinstance(quantidade_cascos, int)
+                or not 0 <= quantidade_cascos <= quantidade):
+            raise ErroNegocio("Informe uma quantidade inteira de cascos entre zero e a quantidade de bebidas.")
+        if quantidade_cascos:
+            casco = self.produtos.por_id(p["casco_produto_id"]) if p["casco_produto_id"] else None
+            if (casco is None or not casco["ativo"] or not casco["venda"]
+                    or casco["id"] == produto_id or casco["casco_produto_id"] or partes):
+                raise ErroNegocio("Cadastre um casco válido e disponível para venda neste produto.")
         if v["modalidade"] == "caderneta" and v["cliente_id"] is None:
             raise ErroNegocio("Selecione o cliente da caderneta antes de lançar itens.")
         self._conferir_limite_comanda(v)
@@ -287,25 +300,77 @@ class CaixaController:
             preco = self.produtos.preco_partes(p, componentes)
         else:
             componentes = []
-            preco = self.produtos.preco_vigente(p)
+            preco = p["preco_gelada_cent"] if temperatura == "gelada" else self.produtos.preco_vigente(p)
+
+        observacao = self._observacao_temperatura(observacao, temperatura)
 
         total = fmt.mult_cent(preco, quantidade)
         agora = fmt.agora()
         with self.banco.transacao():
-            item_id = self.banco.inserir("itens_venda", {
-                "venda_id": venda_id, "produto_id": produto_id, "quantidade": quantidade,
-                "preco_unit_cent": preco, "total_cent": total, "cobra_servico": p["cobrar_servico"],
-                "observacao": observacao, "comissao_cent": fmt.pct_de(total, p["comissao_pct"]),
-                "partes": max(len(componentes), 1), "operador_id": self.operador_id, "criado_em": agora})
+            existente = None
+            if (v["modalidade"] == "balcao" and not partes
+                    and self.banco.cfg_bool("agrupar_itens_balcao", False)
+                    and not self.banco.valor("SELECT impressora_remota FROM subgrupos WHERE id = ?", (p["subgrupo_id"],))):
+                existente = self.banco.um(
+                    """SELECT i.* FROM itens_venda i WHERE i.venda_id = ? AND i.produto_id = ?
+                       AND i.cancelado = 0 AND i.temperatura = ? AND i.preco_base_cent = ?
+                       AND i.observacao IS ? AND i.operador_id IS ? AND i.cobra_servico = ?
+                       AND i.status_preparo = 'pendente' AND i.partes = 1
+                       AND NOT EXISTS (SELECT 1 FROM itens_venda_partes x WHERE x.item_id = i.id)
+                       ORDER BY i.id DESC LIMIT 1""",
+                    (venda_id, produto_id, temperatura, preco, observacao, self.operador_id, p["cobrar_servico"]))
+                if existente and 0 < maximo < fmt.arred_qtd(existente["quantidade"] + quantidade):
+                    existente = None
+            if existente:
+                item_id = existente["id"]
+                nova_qtd = fmt.arred_qtd(existente["quantidade"] + quantidade)
+                self.banco.executar("UPDATE itens_venda SET quantidade = ? WHERE id = ?", (nova_qtd, item_id))
+            else:
+                item_id = self.banco.inserir("itens_venda", {
+                    "venda_id": venda_id, "produto_id": produto_id, "quantidade": quantidade,
+                    "preco_unit_cent": preco, "preco_base_cent": None if partes else preco,
+                    "temperatura": temperatura, "total_cent": total, "cobra_servico": p["cobrar_servico"],
+                    "observacao": observacao, "comissao_cent": fmt.pct_de(total, p["comissao_pct"]),
+                    "partes": max(len(componentes), 1), "operador_id": self.operador_id, "criado_em": agora})
             for c in componentes:
                 self.banco.inserir("itens_venda_partes", {
                     "item_id": item_id, "produto_id": c["id"], "fracao": 1 / len(componentes)})
             self.banco.executar(
                 "UPDATE vendas SET ultimo_lancamento_em = ?, status = 'aberta' WHERE id = ?", (agora, venda_id))
+            self._reprecificar_balcao(venda_id)
+            if quantidade_cascos:
+                self.adicionar_item(venda_id, p["casco_produto_id"], quantidade_cascos)
             self.recalcular(venda_id)
             if v["prepago"]:
                 self._conferir_credito(venda_id, v["total_cent"] - v["taxa_cent"])
         return item_id
+
+    def _reprecificar_balcao(self, venda_id: int) -> None:
+        """Reavalia o mínimo por produto e temperatura sem perder o preço-base de cada leitura."""
+        if self.obter(venda_id)["modalidade"] != "balcao":
+            return
+        itens = self.banco.todos(
+            """SELECT i.*, p.atacado_qtd, p.preco_atacado_cent, p.atacado_gelada_qtd,
+                      p.preco_atacado_gelada_cent, p.comissao_pct
+               FROM itens_venda i JOIN produtos p ON p.id = i.produto_id
+               WHERE i.venda_id = ? AND i.cancelado = 0 AND i.preco_base_cent IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM itens_venda_partes x WHERE x.item_id = i.id)""", (venda_id,))
+        quantidades: dict[tuple[int, str], float] = {}
+        for i in itens:
+            chave = (i["produto_id"], i["temperatura"])
+            quantidades[chave] = fmt.arred_qtd(quantidades.get(chave, 0) + i["quantidade"])
+        for i in itens:
+            gelada = i["temperatura"] == "gelada"
+            minimo = i["atacado_gelada_qtd" if gelada else "atacado_qtd"]
+            atacado = i["preco_atacado_gelada_cent" if gelada else "preco_atacado_cent"]
+            preco = i["preco_base_cent"]
+            if minimo > 0 and atacado > 0 and quantidades[(i["produto_id"], i["temperatura"])] >= minimo:
+                preco = min(preco, atacado)
+            total = fmt.mult_cent(preco, i["quantidade"])
+            if preco != i["preco_unit_cent"] or total != i["total_cent"]:
+                self.banco.executar(
+                    "UPDATE itens_venda SET preco_unit_cent = ?, total_cent = ?, comissao_cent = ? WHERE id = ?",
+                    (preco, total, fmt.pct_de(total, i["comissao_pct"]), i["id"]))
 
     # ============================================================ pré-pago
     def recarregar(self, venda_id: int, tipo_pagamento_id: int, valor_cent: int) -> int:
@@ -371,17 +436,26 @@ class CaixaController:
         with self.banco.transacao():
             self.banco.executar("UPDATE itens_venda SET cancelado = 1, cancelado_em = ? WHERE id = ?",
                                 (fmt.agora(), item_id))
+            self._reprecificar_balcao(item["venda_id"])
             self.recalcular(item["venda_id"])
             self.banco.log("item_cancelado", f"venda {item['venda_id']} item {item_id}" + (f" motivo: {motivo}"[:200] if motivo else ""),
                            self.operador_id)
         notificacoes.avisar(self.banco, "item", "item_cancelado", item_id, motivo, self.operador_id)
 
     def definir_observacao(self, item_id: int, texto: str | None) -> None:
-        item = self.banco.um("SELECT venda_id FROM itens_venda WHERE id = ?", (item_id,))
+        item = self.banco.um("SELECT venda_id, temperatura FROM itens_venda WHERE id = ?", (item_id,))
         if item is None:
             raise ErroNegocio("Item não encontrado.")
         self._aberta(item["venda_id"])                 # cupom já emitido não muda
-        self.banco.executar("UPDATE itens_venda SET observacao = ? WHERE id = ?", ((texto or "").strip() or None, item_id))
+        self.banco.executar("UPDATE itens_venda SET observacao = ? WHERE id = ?",
+                            (self._observacao_temperatura(texto, item["temperatura"]), item_id))
+
+    @staticmethod
+    def _observacao_temperatura(texto: str | None, temperatura: str) -> str | None:
+        texto = (texto or "").strip() or None
+        if temperatura == "gelada" and texto != "Gelada" and not (texto or "").startswith("Gelada - "):
+            return "Gelada" + (f" - {texto}" if texto else "")
+        return texto
 
     # ============================================================== totais
     def calcular(self, v: dict, itens: list[dict] | None = None) -> dict:

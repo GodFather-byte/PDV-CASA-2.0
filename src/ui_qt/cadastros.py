@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.controllers.config_controller import modulos_desligados
+from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.ui_qt.tema import texto
 
@@ -110,6 +111,60 @@ class FormularioCadastro(QDialog):
         self.accept()
 
 
+class FormularioEmbalagem(QDialog):
+    def __init__(self, ctx, unitario_id, parent=None):
+        super().__init__(parent)
+        exigir_acesso(ctx, "produtos")
+        self.ctx, self.unitario_id = ctx, unitario_id
+        self.id_ = None
+        produto = ctx.produtos.por_id(unitario_id)
+        if produto is None:
+            raise ErroNegocio("Produto não encontrado.")
+        self.setWindowTitle("Criar fardo / caixa fechada")
+        self.resize(560, 320)
+        layout = QVBoxLayout(self)
+        layout.addWidget(texto(f"Embalagem de: {produto['nome']}", "titulo"))
+        layout.addWidget(texto("Vender 1 fardo ou caixa baixa do estoque as unidades deste produto."))
+        formulario = QFormLayout()
+        self.quantidade = QLineEdit("12")
+        self.nome = QLineEdit(f"{produto['nome']} - FARDO")
+        self.nome.setMaxLength(50)
+        self.preco = QLineEdit()
+        self.preco.setPlaceholderText("0,00")
+        self.cbarra = QLineEdit()
+        self.cbarra.setMaxLength(14)
+        for rotulo, editor in (
+            ("Unidades no fardo/caixa *", self.quantidade), ("Nome *", self.nome),
+            ("Preço do fardo/caixa (R$) *", self.preco), ("Código de barras da embalagem", self.cbarra),
+        ):
+            formulario.addRow(rotulo, editor)
+        layout.addLayout(formulario)
+        self.mensagem = texto("", "aviso")
+        layout.addWidget(self.mensagem)
+        botoes = QDialogButtonBox()
+        botoes.addButton("Criar fardo", QDialogButtonBox.ButtonRole.AcceptRole)
+        botoes.addButton("Cancelar", QDialogButtonBox.ButtonRole.RejectRole)
+        botoes.accepted.connect(self.salvar)
+        botoes.rejected.connect(self.reject)
+        layout.addWidget(botoes)
+
+    def salvar(self):
+        try:
+            exigir_acesso(self.ctx, "produtos")
+            quantidade = fmt.para_qtd(self.quantidade.text() or "0")
+            preco = fmt.para_centavos(self.preco.text() or "0")
+            self.id_ = self.ctx.produtos.criar_embalagem(
+                self.unitario_id, quantidade, self.nome.text().strip(), preco,
+                self.cbarra.text().strip() or None, self.ctx.operador_id)
+        except ValueError:
+            self.mensagem.setText("Quantidade ou preço inválidos.")
+            return
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return
+        self.accept()
+
+
 class JanelaCadastro(QDialog):
     def __init__(self, ctx, chave, parent=None):
         super().__init__(parent)
@@ -128,6 +183,10 @@ class JanelaCadastro(QDialog):
                              ("Editar", self.editar), ("Excluir", self.excluir)):
             botao = QPushButton(titulo)
             botao.clicked.connect(acao)
+            barra.addWidget(botao)
+        if chave == "produtos":
+            botao = QPushButton("Criar fardo")
+            botao.clicked.connect(self.criar_embalagem)
             barra.addWidget(botao)
         layout.addLayout(barra)
         self.colunas = [c for c in self.entidade.campos if c.na_grade and c.tipo != "senha"]
@@ -182,6 +241,23 @@ class JanelaCadastro(QDialog):
         id_ = self.selecionado()
         if id_ is not None:
             self._formulario(id_)
+
+    def criar_embalagem(self):
+        try:
+            exigir_acesso(self.ctx, self.chave)
+            id_ = self.selecionado()
+            if id_ is None:
+                self.mensagem.setText("Selecione o produto unitário para criar o fardo ou a caixa.")
+                return
+            dialogo = FormularioEmbalagem(self.ctx, id_, self)
+            try:
+                if dialogo.exec() == QDialog.DialogCode.Accepted:
+                    self.atualizar()
+                    self.mensagem.setText("Fardo/caixa criado: vender 1 baixa as unidades do produto no estoque.")
+            finally:
+                dialogo.deleteLater()
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
 
     def excluir(self):
         id_ = self.selecionado()
