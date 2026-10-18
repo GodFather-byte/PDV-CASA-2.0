@@ -710,7 +710,9 @@ rotina real do caixa, backup e restauração testados, hardware fiscal/periféri
 | [`LICENCIADOR.md`](docs/LICENCIADOR.md) | o programa WillPDV Licenças (gerador de licenças) |
 | [`NUVEM.md`](docs/NUVEM.md) | colocar a nuvem no ar (Render + Neon), cadastrar boates, acompanhar licenças e avisar versões |
 | [`TELEGRAM.md`](docs/TELEGRAM.md) | o bot do Telegram do dono: passo a passo, botões e perguntas frequentes |
-| [`ESTOQUE.md`](docs/ESTOQUE.md) | o painel de estoque, pedido e lista de compras |
+| [`ESTOQUE.md`](docs/ESTOQUE.md) | o painel de estoque, pedido e lista de compras; fardos e as regras da adega (gelada, atacado, cascos) |
+| [`ADEGA.md`](docs/ADEGA.md) | checklist de implantação numa adega/depósito de bebidas e o treinamento do operador |
+| [`PAINEL_DONO.md`](docs/PAINEL_DONO.md) | painel do dono no celular (app web instalável, servido pela nuvem) |
 | [`PILOTO.md`](docs/PILOTO.md) | checklist do piloto na boate (o que já foi verificado e o que falta provar em loja) |
 | [`ESPECIFICACAO.md`](docs/ESPECIFICACAO.md) | liga cada seção dos manuais Willyan ao código |
 | [`COORDENACAO.md`](docs/COORDENACAO.md) | notas de coordenação entre os agentes que escrevem o projeto |

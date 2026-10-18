@@ -23,6 +23,8 @@ preços em massa ou levar o cardápio de outro sistema. O PDV **não traz produt
 | Estoque mínimo | ponto de pedido |
 | Código de barras, Atalho | opcionais |
 | Controla estoque | `S` para controlar começando em zero (para contar depois no painel de estoque) |
+| Preço gelada | opcional (adega): preço da bebida gelada; `0` desliga; vazio não mexe no que já está cadastrado |
+| Atacado a partir de, Preço atacado | opcionais (adega): quantidade mínima e preço unitário do atacado natural, sempre os dois (ou `0` nos dois para desligar); vazio não mexe. O atacado gelada se cadastra na tela do produto |
 
 ## Regras de código
 * **Códigos reservados do caixa** (comissão das garotas, 50 por padrão, e saída da comanda, 1002) **nunca** são usados em produto: na

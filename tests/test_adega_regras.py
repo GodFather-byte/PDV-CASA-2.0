@@ -201,6 +201,18 @@ class TesteRegrasAdega(BaseCaixa):
                 self.caixa.adicionar_item(self.vid, pid, 1, temperatura=temperatura)
         self.assertEqual(self.caixa.itens(self.vid), [])
 
+    def test_tabela_de_precos_mostra_gelada_e_atacado(self):
+        from src.controllers.impressao_controller import ImpressaoController
+        texto = ImpressaoController(self.banco).tabela_precos()
+        linhas = [l.strip() for l in texto.splitlines()]
+        i = next(n for n, l in enumerate(linhas) if "SKOL" in l)
+        self.assertTrue(linhas[i].endswith("8,00"))
+        self.assertEqual(linhas[i + 1].split(), ["gelada", "10,00"])
+        self.assertEqual(linhas[i + 2].split(), ["atacado", "a", "partir", "de", "6", "6,50"])
+        self.assertEqual(linhas[i + 3].split(), ["atacado", "gelada", "a", "partir", "de", "6", "8,50"])
+        j = next(n for n, l in enumerate(linhas) if "AGUA" in l)              # sem gelada nem atacado: uma linha só
+        self.assertFalse(j + 1 < len(linhas) and "gelada" in linhas[j + 1])
+
     def test_mesas_preservam_itens_separados_sem_atacado(self):
         self.banco.cfg_set("usar_mesas", "S")
         vid, _ = self.caixa.abrir_mesa(1)

@@ -39,7 +39,7 @@ class TestAdegaQt(BaseCaixaQt):
 
     def cadastro(self, codigo="7891234567890", textos=None):
         self.j.dialogos.confirmacoes = [True]
-        self.j.dialogos.textos = textos if textos is not None else ["NOVA BEBIDA", "5,50", ""]
+        self.j.dialogos.textos = textos if textos is not None else ["NOVA BEBIDA", "5,50", "", ""]
         self.j.dialogos.escolhas = [self.subgrupo]
         self.lancar(self.j, codigo)
 
@@ -146,16 +146,26 @@ class TestAdegaQt(BaseCaixaQt):
         self.assertEqual(self.j._subgrupo_rapido, self.subgrupo)
 
     def test_cadastro_com_estoque_e_quantidade_antes_do_codigo(self):
-        self.cadastro("6*7891234567890", ["NOVA", "5,50", "20"])
+        self.cadastro("6*7891234567890", ["NOVA", "5,50", "", "20"])
         p = self.ctx.produtos.buscar_codigo("7891234567890")
         self.assertEqual((p["controla_estoque"], p["qt_atual"]), (1, 20))
         self.assertEqual(self.itens()[0]["quantidade"], 6)
         self.fechar_balcao()
         self.assertEqual(self.ctx.produtos.por_id(p["id"])["qt_atual"], 14)
 
+    def test_cadastro_com_preco_gelada_pergunta_a_temperatura_na_hora(self):
+        self.j.dialogos.confirmacoes = [True]
+        self.j.dialogos.textos = ["BRAHMA LATA", "4,50", "5,50", ""]
+        self.j.dialogos.escolhas = [self.subgrupo, "gelada"]          # categoria e, já no lançamento, a temperatura
+        self.lancar(self.j, "7891234567890")
+        p = self.ctx.produtos.buscar_codigo("7891234567890")
+        self.assertEqual((p["preco_cent"], p["preco_gelada_cent"]), (450, 550))
+        item = self.itens()[0]
+        self.assertEqual((item["temperatura"], item["preco_unit_cent"]), ("gelada", 550))
+
     def test_cadastro_exige_supervisor_sem_permissao_mesmo_senhas_desligadas(self):
         self.operador_bar()
-        self.cadastro(textos=["ADM", "NOVA", "5,00", ""])
+        self.cadastro(textos=["ADM", "NOVA", "5,00", "", ""])
         self.assertIsNotNone(self.ctx.produtos.buscar_codigo("7891234567890"))
         self.assertIn("Cadastrar produto exige autorização", self.j.dialogos.perguntas[1])
 
@@ -172,8 +182,8 @@ class TestAdegaQt(BaseCaixaQt):
         self.assertEqual(self.contar("vendas"), 0)
 
     def test_cancelamento_de_cada_etapa_cadastro_nao_grava(self):
-        for textos, escolhas in (([None], []), (["NOVA", None], []),
-                                 (["NOVA", "5"], [None]), (["NOVA", "5", None], [self.subgrupo])):
+        for textos, escolhas in (([None], []), (["NOVA", None], []), (["NOVA", "5", None], []),
+                                 (["NOVA", "5", ""], [None]), (["NOVA", "5", "", None], [self.subgrupo])):
             self.j.dialogos.confirmacoes = [True]
             self.j.dialogos.textos = textos
             self.j.dialogos.escolhas = escolhas

@@ -277,6 +277,55 @@ class TesteGravacao(BaseTeste):
         previa = self.imp.analisar(ler_tabela(caminho))
         self.assertEqual(previa.contar("recusar"), 0)
         self.assertEqual(previa.contar("criar"), 2)
+        self.imp.importar(previa)
+        p = self.produto("CERVEJA LATA")
+        self.assertEqual((p["preco_cent"], p["preco_gelada_cent"], p["atacado_qtd"], p["preco_atacado_cent"], p["cbarra"]),
+                         (450, 550, 12, 399, "7891234567895"))
+
+    # ------------------------------------------------------------- adega
+    def test_colunas_da_adega_por_varios_nomes_de_cabecalho(self):
+        texto = ("Produto;Natural;Gelada;A partir de;Atacado\r\n"
+                 "SKOL LATA;4,50;5,50;12;3,99\r\n"
+                 "GELO 5KG;12,00;;;\r\n")
+        previa = self.imp.analisar(ler_tabela(csv_temp(self, texto)))
+        self.assertEqual(previa.contar("recusar"), 0, [l.motivo for l in previa.linhas])
+        self.imp.importar(previa)
+        skol, gelo = self.produto("SKOL LATA"), self.produto("GELO 5KG")
+        self.assertEqual((skol["preco_cent"], skol["preco_gelada_cent"], skol["atacado_qtd"], skol["preco_atacado_cent"]),
+                         (450, 550, 12, 399))
+        self.assertEqual((gelo["preco_gelada_cent"], gelo["atacado_qtd"], gelo["preco_atacado_cent"]), (0, 0, 0))
+
+    def test_celula_vazia_nao_apaga_gelada_e_zero_desliga(self):
+        pid = self.novo_produto("BRAHMA", 500, codigo="1")
+        self.banco.executar("UPDATE produtos SET preco_gelada_cent = 600, atacado_qtd = 6, preco_atacado_cent = 450 WHERE id = ?", (pid,))
+        self.importar([{"codigo": "1", "nome": "BRAHMA", "preco": "5,00"}])                         # sem as colunas
+        p = self.produto("BRAHMA")
+        self.assertEqual((p["preco_gelada_cent"], p["atacado_qtd"], p["preco_atacado_cent"]), (600, 6, 450))
+        self.importar([{"codigo": "1", "nome": "BRAHMA", "preco": "5,00", "preco_gelada": "", "atacado_qtd": "", "preco_atacado": ""}])
+        self.assertEqual(self.produto("BRAHMA")["preco_gelada_cent"], 600)                            # vazio: não mexe
+        self.importar([{"codigo": "1", "nome": "BRAHMA", "preco": "5,00", "preco_gelada": "0", "atacado_qtd": "0", "preco_atacado": "0"}])
+        p = self.produto("BRAHMA")
+        self.assertEqual((p["preco_gelada_cent"], p["atacado_qtd"], p["preco_atacado_cent"]), (0, 0, 0))
+
+    def test_atacado_incompleto_ou_acima_do_preco_e_recusado(self):
+        casos = ({"atacado_qtd": "12"}, {"preco_atacado": "3,99"}, {"atacado_qtd": "12", "preco_atacado": "9,99"},
+                 {"atacado_qtd": "0", "preco_atacado": "3,99"}, {"preco_gelada": "abc"}, {"atacado_qtd": "x", "preco_atacado": "3"})
+        for extra in casos:
+            previa = self.imp.analisar([{"_linha": 2, "nome": "SKOL", "preco": "4,50", **extra}])
+            self.assertEqual(previa.linhas[0].acao, "recusar", extra)
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM produtos WHERE nome = 'SKOL'"), 0)
+
+    def test_exportar_leva_gelada_e_atacado_e_volta_igual(self):
+        self.importar([{"codigo": "1", "nome": "SKOL", "preco": "4,50", "preco_gelada": "5,50", "atacado_qtd": "12", "preco_atacado": "3,99"},
+                       {"codigo": "2", "nome": "GELO", "preco": "12,00"}])
+        texto = self.imp.exportar()
+        self.assertIn("Preço gelada;Atacado a partir de;Preço atacado", texto.splitlines()[0])
+        self.assertIn("SKOL;4,50;;DIVERSOS;UN;;;;;;5,50;12;3,99", texto)
+        self.assertTrue(texto.splitlines()[2].endswith(";;;"))                                       # o gelo sem nada
+        previa = self.imp.analisar(ler_tabela(csv_temp(self, texto)))
+        self.imp.importar(previa)
+        p = self.produto("SKOL")
+        self.assertEqual((p["preco_gelada_cent"], p["atacado_qtd"], p["preco_atacado_cent"]), (550, 12, 399))
 
 
 if __name__ == "__main__":

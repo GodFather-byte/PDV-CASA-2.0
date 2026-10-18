@@ -83,7 +83,7 @@ class TesteBalcaoAdegaTk(BaseAdegaTk):
         self.cx.update()
         item = self.ctx.caixa.itens(self.cx.venda_id)[0]
         self.assertIsNone(item["preco_base_cent"])
-        self.assertEqual(self.linhas()[0][1], "SKOL  [Natural]")
+        self.assertEqual(self.linhas()[0][1], "SKOL")                       # sem preço gelada, sem etiqueta de temperatura
         self.assertEqual(self.cx.lbl_total.cget("text"), "48,00")
         resumo = self.cx.lbl_resumo_adega.cget("text")
         self.assertIn("Quantidade: 6", resumo)
@@ -223,8 +223,22 @@ class TesteBalcaoAdegaTk(BaseAdegaTk):
         itens = self.ctx.caixa.itens(self.cx.venda_id)
         self.assertEqual([(i["quantidade"], i["preco_unit_cent"]) for i in itens], [(6, 700)])
         self.assertEqual(len(self.linhas()), 1)
-        self.assertIn("[Natural · Atacado]", self.linhas()[0][1])
+        self.assertEqual(self.linhas()[0][1], "SKOL  [Atacado]")
         self.assertIn("Economia no atacado: R$ 6,00", self.cx.lbl_resumo_adega.cget("text"))
+
+    def test_bebida_com_dois_precos_mostra_natural_e_a_observacao_nao_repete_gelada(self):
+        self.banco.atualizar("produtos", self.skol, {"preco_gelada_cent": 950})
+        vid = self.ctx.caixa.abrir_balcao()
+        self.cx.venda_id = vid
+        self.ctx.caixa.adicionar_item(vid, self.skol, 1)
+        gelada = self.ctx.caixa.adicionar_item(vid, self.skol, 1, temperatura="gelada", observacao="sem copo")
+        self.ctx.caixa.adicionar_item(vid, self.agua, 1)
+        self.cx.recarregar()
+        linhas = self.linhas()
+        self.assertEqual([l[1] for l in linhas], ["SKOL  [Natural]", "SKOL  [Gelada]", "AGUA"])
+        self.assertEqual([l[6] for l in linhas], ["", "sem copo", ""])
+        self.assertTrue(self.ctx.caixa.itens(vid)[1]["observacao"].startswith("Gelada - "))   # no cupom continua inteira
+        self.assertEqual(gelada, self.ctx.caixa.itens(vid)[1]["id"])
 
     def test_natural_e_gelada_ficam_em_linhas_distintas(self):
         self.banco.atualizar("produtos", self.skol, {"preco_gelada_cent": 950})

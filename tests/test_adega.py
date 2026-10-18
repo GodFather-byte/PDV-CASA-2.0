@@ -96,7 +96,16 @@ class TesteCadastroRapido(BaseAdega):
 
     def test_sem_estoque_informado_nao_controla_estoque(self):
         p = self.prod.cadastrar_rapido(EAN, "GELO 5KG", 1200, self.sub)
-        self.assertEqual(p["controla_estoque"], 0)
+        self.assertEqual((p["controla_estoque"], p["preco_gelada_cent"]), (0, 0))
+
+    def test_cadastro_rapido_com_preco_gelada(self):
+        p = self.prod.cadastrar_rapido(EAN, "BRAHMA LATA", 450, self.sub, preco_gelada_cent=550)
+        self.assertEqual((p["preco_cent"], p["preco_gelada_cent"]), (450, 550))
+        vid = self.caixa.abrir_balcao()
+        self.caixa.adicionar_item(vid, p["id"], 2, temperatura="gelada")
+        self.assertEqual(self.caixa.obter(vid)["total_cent"], 1100)
+        with self.assertRaisesRegex(ErroNegocio, "gelada"):
+            self.prod.cadastrar_rapido("7890000000031", "OUTRA", 450, self.sub, preco_gelada_cent=-1)
 
     def test_recusa_codigo_repetido_preco_zero_e_nome_vazio(self):
         self.prod.cadastrar_rapido(EAN, "CERVEJA X", 450, self.sub)
@@ -292,6 +301,30 @@ class TesteCaixaDaAdega(BaseNaTela):
         self.assertEqual((p["nome"], p["preco_cent"], p["qt_atual"]), ("CERVEJA NOVA LATA", 450, 24))
         itens = self.ctx.caixa.itens(self.cx.venda_id)
         self.assertEqual([(i["nome"], i["quantidade"]) for i in itens], [("CERVEJA NOVA LATA", 1)])
+        self.sem_travar()
+
+    def test_codigo_de_barras_novo_com_preco_gelada_pergunta_a_temperatura(self):
+        self.cx.leitor = True
+
+        def responder(w):
+            nomes = [str(b.cget("text")) for b in botoes(w)]
+            if any(n.startswith("Sim") for n in nomes):
+                clicar(w, "Sim")
+            elif any(n.startswith("Gelada") for n in nomes):                 # a pergunta natural/gelada já no primeiro bipe
+                clicar(w, "Gelada")
+            else:
+                campos = entradas(w)
+                campos[0].insert(0, "HEINEKEN LONG NECK")
+                campos[1].insert(0, "8,90")
+                campos[4].insert(0, "9,90")
+                clicar(w, "Gravar")
+        self.robo.quando("Dialogo", responder, vezes=3)
+        self.digitar_codigo(EAN)
+        p = self.ctx.produtos.buscar_codigo(EAN)
+        self.assertEqual((p["preco_cent"], p["preco_gelada_cent"], p["controla_estoque"]), (890, 990, 0))
+        itens = self.ctx.caixa.itens(self.cx.venda_id)
+        self.assertEqual([(i["nome"], i["temperatura"], i["preco_unit_cent"]) for i in itens],
+                         [("HEINEKEN LONG NECK", "gelada", 990)])
         self.sem_travar()
 
     def test_quantidade_antes_do_codigo_lanca_de_uma_vez(self):

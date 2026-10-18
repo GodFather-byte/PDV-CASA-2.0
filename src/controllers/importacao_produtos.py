@@ -27,15 +27,17 @@ from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroValidacao
 
 COLUNAS = ["codigo", "nome", "preco", "comissao", "grupo", "unidade", "quantidade", "estoque_minimo", "codigo_barras", "atalho",
-           "controla_estoque"]
+           "controla_estoque", "preco_gelada", "atacado_qtd", "preco_atacado"]
 TITULOS = {"codigo": "Código", "nome": "Produto", "preco": "Preço", "comissao": "Comissão (R$)", "grupo": "Grupo", "unidade": "Unidade",
            "quantidade": "Quantidade", "estoque_minimo": "Estoque mínimo", "codigo_barras": "Código de barras", "atalho": "Atalho",
-           "controla_estoque": "Controla estoque"}
+           "controla_estoque": "Controla estoque", "preco_gelada": "Preço gelada", "atacado_qtd": "Atacado a partir de",
+           "preco_atacado": "Preço atacado"}
 # Variações de cabeçalho que a planilha pode ter (comparadas sem acento, maiúsculas/minúsculas e símbolos).
 ALIAS = {
     "codigo": {"codigo", "cod", "cod produto", "codigo produto", "numero", "n"},
     "nome": {"nome", "produto", "bebida", "descricao", "item", "nome produto", "nome do produto"},
-    "preco": {"preco", "valor", "preco venda", "valor venda", "preco de venda", "valor de venda", "preco r"},
+    "preco": {"preco", "valor", "preco venda", "valor venda", "preco de venda", "valor de venda", "preco r", "preco natural",
+              "natural"},
     "comissao": {"comissao", "comissao r", "comissao reais", "comissao valor", "comissao garota"},
     "comissao_pct": {"comissao pct", "comissao percentual", "comissao porcentagem"},
     "grupo": {"grupo", "categoria", "subgrupo", "sub grupo", "tipo"},
@@ -45,6 +47,11 @@ ALIAS = {
     "codigo_barras": {"codigo barras", "codigo de barras", "barras", "cbarra", "ean", "gtin"},
     "atalho": {"atalho", "apelido", "abreviacao"},
     "controla_estoque": {"controla estoque", "controle estoque", "controla"},
+    # Adega: preço gelada e uma faixa de atacado (natural). Colunas opcionais; vazias não mexem no que já está cadastrado.
+    "preco_gelada": {"preco gelada", "gelada", "valor gelada", "preco gelado", "gelado", "preco trincando"},
+    "atacado_qtd": {"atacado a partir de", "atacado qtd", "qtd atacado", "atacado minimo", "minimo atacado", "a partir de",
+                    "atacado quantidade", "quantidade atacado"},
+    "preco_atacado": {"preco atacado", "atacado", "valor atacado", "preco de atacado", "preco no atacado", "atacado r"},
 }
 GRUPO_PADRAO, UNIDADE_PADRAO = "DIVERSOS", "UN"
 LIMITE_LINHAS = 5000
@@ -160,6 +167,9 @@ class LinhaPrevia:
     estoque_minimo: float | None = None
     codigo_barras: str = ""
     atalho: str = ""
+    preco_gelada_cent: int | None = None    # None: a planilha não trouxe (não mexe); 0 desliga a gelada
+    atacado_qtd: float | None = None
+    preco_atacado_cent: int | None = None
     produto_id: int | None = None   # produto existente (atualizar)
     liberar_id: int | None = None   # produto guardado (inativo) que ocupa o código da linha e passa para um código de arquivo
     motivo: str = ""                # por que foi recusado, ou aviso
@@ -373,6 +383,35 @@ class ImportacaoProdutos:
         if p.codigo_barras and len(p.codigo_barras) > 14:
             raise ValueError("Código de barras com mais de 14 números.")
         p.atalho = str(l.get("atalho") or "").strip()[:10]
+        self._preencher_adega(p, l)
+
+    @staticmethod
+    def _preencher_adega(p: LinhaPrevia, l: dict) -> None:
+        """Preço gelada e a faixa de atacado natural (opcionais). Célula vazia não mexe no cadastro; '0' desliga."""
+        gelada = str(l.get("preco_gelada") or "").strip()
+        if gelada:
+            try:
+                p.preco_gelada_cent = fmt.para_centavos(gelada)
+            except ValueError:
+                raise ValueError(f"Preço gelada inválido: '{gelada}'.") from None
+            if p.preco_gelada_cent < 0:
+                raise ValueError("O preço gelada não pode ser negativo.")
+        qtd, preco = str(l.get("atacado_qtd") or "").strip(), str(l.get("preco_atacado") or "").strip()
+        if not qtd and not preco:
+            return
+        if not qtd or not preco:
+            raise ValueError("Atacado: informe a quantidade mínima e o preço unitário (ou os dois em branco).")
+        p.atacado_qtd = _numero(qtd, "Atacado a partir de")
+        try:
+            p.preco_atacado_cent = fmt.para_centavos(preco)
+        except ValueError:
+            raise ValueError(f"Preço atacado inválido: '{preco}'.") from None
+        if p.preco_atacado_cent < 0:
+            raise ValueError("O preço atacado não pode ser negativo.")
+        if (p.atacado_qtd > 0) != (p.preco_atacado_cent > 0):
+            raise ValueError("Atacado: quantidade e preço devem ser os dois positivos, ou os dois zero para desligar.")
+        if p.preco_atacado_cent > p.preco_cent:
+            raise ValueError("O preço de atacado é maior que o preço normal.")
 
     # ------------------------------------------------------------ gravação
     def _subgrupo(self, grupo: str) -> int:
@@ -405,6 +444,11 @@ class ImportacaoProdutos:
                     valores["cbarra"] = p.codigo_barras
                 if p.atalho:
                     valores["atalho"] = p.atalho
+                if p.preco_gelada_cent is not None:
+                    valores["preco_gelada_cent"] = fmt.fmt_num(p.preco_gelada_cent)
+                if p.atacado_qtd is not None:
+                    valores["atacado_qtd"] = fmt.fmt_qtd(p.atacado_qtd, 4).rstrip("0").rstrip(",")
+                    valores["preco_atacado_cent"] = fmt.fmt_num(p.preco_atacado_cent or 0)
                 try:
                     if p.acao == "atualizar":
                         valores["ativo"] = "S"                  # o produto que a planilha traz volta a valer (ver excluir_todos_produtos)
@@ -449,20 +493,24 @@ class ImportacaoProdutos:
         """Planilha-modelo (CSV com ';', que o Excel brasileiro abre direto) com dois exemplos."""
         cab = [TITULOS[c] for c in COLUNAS]
         return self._csv([cab,
-                          ["1", "CERVEJA LATA", "10,00", "", "CERVEJA", "UN", "48", "12", "", "", ""],
-                          ["2", "DOSE DE VODKA", "25,00", "10,00", "DESTILADOS", "UN", "", "", "", "", ""]])
+                          ["1", "CERVEJA LATA", "4,50", "", "CERVEJA", "UN", "48", "12", "7891234567895", "", "", "5,50", "12", "3,99"],
+                          ["2", "DOSE DE VODKA", "25,00", "10,00", "DESTILADOS", "UN", "", "", "", "", "", "", "", ""]])
 
     def exportar(self) -> str:
         """Todos os produtos ativos no mesmo formato da importação: dá para editar preços na planilha e importar de volta."""
         linhas = [[TITULOS[c] for c in COLUNAS]]
         for r in self.banco.todos(
                 """SELECT p.codigo, p.nome, p.preco_cent, p.comissao_pct, g.nome AS grupo, u.abreviatura AS un, p.controla_estoque,
-                          p.qt_atual, p.estoque_minimo, p.cbarra, p.atalho
+                          p.qt_atual, p.estoque_minimo, p.cbarra, p.atalho, p.preco_gelada_cent, p.atacado_qtd, p.preco_atacado_cent
                    FROM produtos p JOIN subgrupos s ON s.id = p.subgrupo_id JOIN grupos g ON g.id = s.grupo_id
                    JOIN unidades u ON u.id = p.unidade_id WHERE p.ativo = 1 ORDER BY CAST(p.codigo AS INTEGER), p.nome"""):
             comissao = fmt.fmt_num(round(r["preco_cent"] * r["comissao_pct"] / 100)) if r["comissao_pct"] else ""
+            atacado = r["atacado_qtd"] > 0 and r["preco_atacado_cent"] > 0
             linhas.append([str(int(r["codigo"])) if r["codigo"].isdigit() else r["codigo"], r["nome"], fmt.fmt_num(r["preco_cent"]),
                            comissao, r["grupo"], r["un"], fmt.fmt_qtd(r["qt_atual"]).rstrip("0").rstrip(",") if r["controla_estoque"] else "",
                            fmt.fmt_qtd(r["estoque_minimo"]).rstrip("0").rstrip(",") if r["estoque_minimo"] else "", r["cbarra"] or "",
-                           r["atalho"] or "", "S" if r["controla_estoque"] else ""])
+                           r["atalho"] or "", "S" if r["controla_estoque"] else "",
+                           fmt.fmt_num(r["preco_gelada_cent"]) if r["preco_gelada_cent"] else "",
+                           fmt.fmt_qtd(r["atacado_qtd"], 4).rstrip("0").rstrip(",") if atacado else "",
+                           fmt.fmt_num(r["preco_atacado_cent"]) if atacado else ""])
         return self._csv(linhas)

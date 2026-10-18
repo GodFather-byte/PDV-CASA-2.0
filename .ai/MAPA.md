@@ -70,7 +70,8 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 ## Documentação (`docs/`)
 
 `ESPECIFICACAO.md` (o que o sistema deve fazer), `INSTALAR_E_TESTAR.md`, `LICENCIADOR.md`,
-`NUVEM.md`, `TELEGRAM.md`, `IMPRESSORA.md`, `ESTOQUE.md`, `IMPORTAR_PRODUTOS.md`, `PILOTO.md`,
+`NUVEM.md`, `TELEGRAM.md`, `IMPRESSORA.md`, `ESTOQUE.md` (inclui as regras da adega), `ADEGA.md` (checklist de
+implantação da adega), `IMPORTAR_PRODUTOS.md`, `PILOTO.md`,
 `COBRANCA_LICENCAS_ASAAS.md` (cobrança e renovação mensal), `PAINEL_DONO.md` (painel do dono no celular),
 `COORDENACAO.md` (histórico de pedidos entre agentes).
 `BACKUP_EXTERNO.md` (pasta sincronizada, senha e recuperação), `AUDITORIA.md`,

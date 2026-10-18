@@ -36,31 +36,36 @@ def pedir_produto(master, ctx, cbarra: str, subgrupo_id: int | None = None) -> d
     ttk.Label(dlg.corpo, text=f"Código de barras: {cbarra}", style="Rotulo.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
     opcoes = _subgrupos(ctx)
     nomes = [n for _, n in opcoes]
-    v_nome, v_preco, v_estoque = tk.StringVar(dlg), tk.StringVar(dlg), tk.StringVar(dlg)
+    v_nome, v_preco, v_estoque, v_gelada = tk.StringVar(dlg), tk.StringVar(dlg), tk.StringVar(dlg), tk.StringVar(dlg)
     v_sub = tk.StringVar(dlg, value=next((n for i, n in opcoes if i == subgrupo_id), nomes[0] if nomes else ""))
     e_nome = _campo(dlg, 1, "Nome do produto *", v_nome, 40)
     _campo(dlg, 2, "Preço de venda (R$) *", v_preco, 14)
     _campo(dlg, 3, "Categoria", v_sub,
            widget=ttk.Combobox(dlg.corpo, textvariable=v_sub, values=nomes, state="readonly", width=38))
     _campo(dlg, 4, "Quantidade em estoque (opcional)", v_estoque, 14)
+    _campo(dlg, 5, "Preço gelada (R$, opcional)", v_gelada, 14)
+    ttk.Label(dlg.corpo, text="Com preço gelada, o caixa pergunta natural ou gelada a cada venda; o estoque é o mesmo.",
+              foreground=tema.COR["suave"]).grid(row=6, column=0, columnspan=2, sticky="w")
     msg = ttk.Label(dlg.corpo, text="", foreground=tema.COR["perigo"])
-    msg.grid(row=5, column=0, columnspan=2, sticky="w")
+    msg.grid(row=7, column=0, columnspan=2, sticky="w")
 
     def gravar(_=None):
         try:
             preco = fmt.para_centavos(v_preco.get() or "0")
+            gelada = fmt.para_centavos(v_gelada.get() or "0")
             estoque = fmt.para_qtd(v_estoque.get()) if v_estoque.get().strip() else None
         except ValueError:
             msg.configure(text="Preço ou quantidade inválidos.")
             return
         sub = next((i for i, n in opcoes if n == v_sub.get()), None)
         try:
-            p = ctx.produtos.cadastrar_rapido(cbarra, v_nome.get().strip(), preco, sub, estoque, ctx.operador_id)
+            p = ctx.produtos.cadastrar_rapido(cbarra, v_nome.get().strip(), preco, sub, estoque, ctx.operador_id,
+                                              preco_gelada_cent=gelada)
         except ErroNegocio as e:
             msg.configure(text=str(e))
             return
         dlg.ok(p)
-    _botoes(dlg, 6, gravar)
+    _botoes(dlg, 8, gravar)
     return dlg.mostrar(e_nome)
 
 

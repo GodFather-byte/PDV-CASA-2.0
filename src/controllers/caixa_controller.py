@@ -50,7 +50,8 @@ class CaixaController:
         return dict(r)
 
     def itens(self, venda_id: int, cancelados: bool = False) -> list[dict]:
-        sql = """SELECT i.*, p.codigo, p.nome, u.abreviatura AS unidade, s.rodizio_incluso
+        sql = """SELECT i.*, p.codigo, p.nome, u.abreviatura AS unidade, s.rodizio_incluso,
+                        (SELECT pv.preco_gelada_cent FROM produtos pv WHERE pv.id = i.produto_id) AS preco_gelada_cent
                  FROM itens_venda i JOIN produtos_historico p ON p.id = i.produto_id
                  JOIN unidades u ON u.id = p.unidade_id JOIN subgrupos s ON s.id = p.subgrupo_id
                  WHERE i.venda_id = ?"""

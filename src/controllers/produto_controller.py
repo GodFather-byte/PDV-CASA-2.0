@@ -186,9 +186,10 @@ class ProdutoController:
             raise ErroNegocio(f"O código {cbarra} já é do produto '{existente['nome']}'.")
 
     def cadastrar_rapido(self, cbarra: str, nome: str, preco_cent: int, subgrupo_id: int, estoque: float | None = None,
-                         operador_id: int | None = None) -> dict:
+                         operador_id: int | None = None, preco_gelada_cent: int = 0) -> dict:
         """Produto novo direto do caixa, pelo código de barras que o leitor passou: só nome, preço e categoria e, se
-        informada, a quantidade em estoque (aí ele já passa a controlar estoque). O código interno é o próximo livre."""
+        informada, a quantidade em estoque (aí ele já passa a controlar estoque). `preco_gelada_cent` > 0 cadastra também o
+        preço gelada (o caixa passa a perguntar a temperatura). O código interno é o próximo livre."""
         from src.controllers.cadastro_controller import CadastroController     # import tardio: evita ciclo de importação
         from src.controllers.estoque_controller import EstoqueController
         cbarra = (cbarra or "").strip()
@@ -196,12 +197,15 @@ class ProdutoController:
             self._codigo_de_barras_livre(cbarra)
         if preco_cent <= 0:
             raise ErroNegocio("Informe o preço de venda.")
+        if preco_gelada_cent < 0:
+            raise ErroNegocio("O preço gelada não pode ser negativo.")
         unidade = (self.banco.valor("SELECT id FROM unidades WHERE abreviatura = 'UN'")
                    or self.banco.valor("SELECT MIN(id) FROM unidades"))
         with self.banco.transacao():
             pid = CadastroController(self.banco).salvar("produtos", {
                 "codigo": self.proximo_codigo(), "nome": nome, "subgrupo_id": subgrupo_id, "unidade_id": unidade,
-                "preco_cent": fmt.fmt_num(preco_cent), "cbarra": cbarra or None, "cobrar_servico": "N"})
+                "preco_cent": fmt.fmt_num(preco_cent), "preco_gelada_cent": fmt.fmt_num(preco_gelada_cent),
+                "cbarra": cbarra or None, "cobrar_servico": "N"})
             if estoque is not None:
                 EstoqueController(self.banco, operador_id).registrar_rapido(pid, "contagem", estoque)
             self.banco.log("produto_cadastro_rapido", f"{nome} {cbarra}".strip(), operador_id)

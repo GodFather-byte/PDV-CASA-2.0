@@ -536,15 +536,25 @@ class JanelaCaixa(tk.Toplevel):
         if v:
             for it in itens:
                 nome = it["nome"] + (f"  [{' / '.join(it['partes_nomes'])}]" if it["partes_nomes"] else "")
+                observacao = it["observacao"] or ""
                 if self.perfil_adega:
-                    temperatura = "Gelada" if it.get("temperatura") == "gelada" else "Natural"
+                    # A etiqueta só quando diz algo: "Gelada" (ou "Natural" numa bebida que tem os dois preços) e "Atacado".
+                    gelada = it.get("temperatura") == "gelada"
                     preco_base = it.get("preco_base_cent")
                     if preco_base is None:
                         preco_base = it["preco_unit_cent"]
-                    atacado = " · Atacado" if preco_base > it["preco_unit_cent"] else ""
-                    nome += f"  [{temperatura}{atacado}]"
+                    etiquetas = []
+                    if gelada:
+                        etiquetas.append("Gelada")
+                        observacao = re.sub(r"^Gelada(?: - )?", "", observacao)     # a observação repete o selo; fica só o resto
+                    elif it.get("preco_gelada_cent"):
+                        etiquetas.append("Natural")
+                    if preco_base > it["preco_unit_cent"]:
+                        etiquetas.append("Atacado")
+                    if etiquetas:
+                        nome += f"  [{' · '.join(etiquetas)}]"
                 self.grade.adicionar([it["codigo"], nome, it["unidade"], fmt.fmt_num(it["preco_unit_cent"]),
-                                      fmt.fmt_qtd(it["quantidade"]), fmt.fmt_num(it["total_cent"]), it["observacao"] or ""], iid=it["id"])
+                                      fmt.fmt_qtd(it["quantidade"]), fmt.fmt_num(it["total_cent"]), observacao], iid=it["id"])
             self._itens_na_grade = self.grade.total()
             self._linhas_comissao(v, t)
             total = v["total_cent"]

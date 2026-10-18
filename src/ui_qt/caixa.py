@@ -1313,6 +1313,10 @@ class JanelaCaixa(QMainWindow):
                                       lambda t: ler_dinheiro(t, permitir_zero=True))
         if preco is None:
             return None
+        gelada = self._pedir_convertido("Produto novo", "Preço gelada (R$, opcional; vazio = só natural):",
+                                       lambda t: ler_dinheiro(t, permitir_zero=True) if t.strip() else 0)
+        if gelada is None:
+            return None
         opcoes = [(r["id"], f"{r['nome']} - {r['grupo']}") for r in self.ctx.banco.todos(
             "SELECT s.id, s.nome, g.nome AS grupo FROM subgrupos s "
             "JOIN grupos g ON g.id = s.grupo_id ORDER BY g.nome, s.nome")]
@@ -1326,7 +1330,7 @@ class JanelaCaixa(QMainWindow):
         if qtd is None:
             return None
         ok, p = self._executar(self.ctx.produtos.cadastrar_rapido, cbarra, nome.strip(), preco, subgrupo,
-                              None if qtd == "" else qtd, self.ctx.operador_id)
+                              None if qtd == "" else qtd, self.ctx.operador_id, preco_gelada_cent=gelada)
         if not ok:
             return None
         self._subgrupo_rapido = p["subgrupo_id"]

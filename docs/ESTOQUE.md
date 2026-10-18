@@ -90,7 +90,10 @@ O agrupamento pode ser desligado; os demais perfis mantêm o padrão anterior.
 
 O leitor continua aceitando **6*código** para lançar seis unidades diretamente.
 Código de barras numérico desconhecido com oito ou mais dígitos oferece cadastro
-rápido, com autorização de supervisor quando o operador não pode cadastrar produtos.
+rápido (nome, preço, categoria e, opcionais, estoque e preço gelada), com autorização de supervisor quando o operador não
+pode cadastrar produtos. A **Tabela de preços** impressa (Cadastro de Produtos > Imprimir Tabela) traz, sob cada produto,
+o preço gelada e as faixas de atacado. A importação por planilha aceita as colunas "Preço gelada", "Atacado a partir de" e
+"Preço atacado" ([IMPORTAR_PRODUTOS.md](IMPORTAR_PRODUTOS.md)).
 
 Antes da instalação, homologue em cópia do banco: seis unidades atingindo o atacado,
 natural e gelada sem somar mínimos, cobrança com/sem troca de casco, cancelamento,

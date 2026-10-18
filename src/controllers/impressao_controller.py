@@ -461,13 +461,20 @@ class ImpressaoController:
         return para_texto(rel, self.largura())
 
     def tabela_precos(self) -> str:
-        """Botão 'Imprimir Tabela' do cadastro de produtos: código, descrição e preço."""
+        """Botão 'Imprimir Tabela' do cadastro de produtos: código, descrição e preço. Na adega, o preço gelada e a faixa de
+        atacado de cada temperatura saem logo abaixo do produto."""
         w = self.largura()
         linhas = ["TABELA DE PREÇOS".center(w), fmt.fmt_datahora(fmt.agora()).center(w), "=" * w]
         from src.controllers.produto_controller import ProdutoController
         prods = ProdutoController(self.banco)
         for p in prods.listar_venda():
             linhas.append(_lr(f"{p['codigo'][-6:]} {p['nome']}", M(prods.preco_vigente(p)), w))
+            if p.get("preco_gelada_cent"):
+                linhas.append(_lr("       gelada", M(p["preco_gelada_cent"]), w))
+            for rotulo, qtd, preco in (("atacado", p.get("atacado_qtd"), p.get("preco_atacado_cent")),
+                                       ("atacado gelada", p.get("atacado_gelada_qtd"), p.get("preco_atacado_gelada_cent"))):
+                if qtd and preco:
+                    linhas.append(_lr(f"       {rotulo} a partir de {_q(qtd)}", M(preco), w))
         return "\n".join(linhas)
 
     # ----------------------------------------------------------- saída
