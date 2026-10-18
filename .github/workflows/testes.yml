@@ -1,0 +1,71 @@
+# Roda a suíte inteira (regras, telas Tkinter e API da nuvem) a cada push e pull request.
+# Windows é onde o PDV roda nas lojas; o Linux pega o que depende de sistema operacional sem querer.
+name: Testes
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  cobrancas-postgres:
+    name: Asaas / PostgreSQL 16
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: pdv_teste
+          POSTGRES_PASSWORD: senha_apenas_ci
+          POSTGRES_DB: pdv_teste
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pdv_teste -d pdv_teste"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PDV_TESTE_NUVEM_DB_URL: postgresql+psycopg://pdv_teste:senha_apenas_ci@localhost:5432/pdv_teste
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt httpx
+      - name: Inbox, concorrência, retentativas e reinício (PostgreSQL e SQLite)
+        run: python -m unittest tests.test_cobrancas_asaas tests.test_backend_operacao_asaas
+
+  testes:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20          # um teste de tela travado (janela esperando resposta) vira falha, não horas de espera
+    env:
+      QT_QPA_PLATFORM: offscreen
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Dependências (opcionais do PDV e da API, para nada ficar pulado)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r backend/requirements.txt httpx
+      - name: Testes (Windows)
+        if: runner.os == 'Windows'
+        run: python -m unittest discover -s tests
+      - name: Testes (Linux, telas num X virtual)
+        if: runner.os == 'Linux'
+        # 24 bits de cor: com a tela padrão do xvfb-run (8 bits) o Tk cai com segmentation fault.
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q xvfb python3-tk libegl1 libopengl0
+          # -X faulthandler: se o Tk cair, o log mostra em qual teste (sem isso só aparece "Segmentation fault")
+          xvfb-run -a -s "-screen 0 1920x1080x24" python -X faulthandler -m unittest discover -s tests
