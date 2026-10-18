@@ -1,9 +1,11 @@
-"""Interfaces dos equipamentos do caixa: balança (F2) e gaveta de dinheiro (F11).
+"""Interfaces dos equipamentos do caixa: balança (F2, e automática em produto marcado 'Balança')
+e gaveta de dinheiro (F11).
 
 A gaveta é aberta pelo pulso ESC/POS da impressora térmica (conector RJ-11 da impressora),
-que é o jeito padrão no varejo; veja `impressora_termica.py`. A balança (Toledo/Filizola) depende
-de biblioteca serial e do equipamento ligado, que não dá para testar aqui, então ela ainda cai no
-modo manual (digitar o peso) com mensagem clara. Para suportar um modelo, implemente `ler_peso`.
+que é o jeito padrão no varejo; veja `impressora_termica.py`. A balança (Toledo/Filizola) lê o
+peso pela porta serial (precisa do pyserial); como depende do equipamento ligado, que não dá
+para testar aqui, nunca foi homologada com um modelo real (ver `.ai/HANDOFF.md`) — sem balança
+configurada, ou se ela não responder, cai no modo manual (digitar o peso) com mensagem clara.
 """
 from __future__ import annotations
 

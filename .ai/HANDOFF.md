@@ -1,52 +1,44 @@
 # HANDOFF
 
 ## Último trabalho
-- **Split de conta** (segundo módulo do ecossistema de operação, depois de Cozinha/Bar):
-  divisão guiada do pagamento por pessoa, direto na tela de pagamento do caixa. Decisão com
-  o titular: fluxo guiado (pergunta em quantas partes, calcula o rateio e vai guiando parte
-  por parte), não calculadora solta nem divisão por item consumido (isso exigiria mudança de
-  esquema — ver Pendências). **Sem mudança de esquema**: lançar vários pagamentos (formas e
-  valores diferentes) na mesma venda já funcionava (`adicionar_pagamento`/`liquidar`); faltava
-  só a conta de dividir.
-  - `CaixaController.dividir_restante(venda_id, partes)` (`src/controllers/caixa_controller.py`,
-    perto de `liquidar`): divide `liquidar()['falta']` (não o total bruto — se já tem pagamento
-    lançado, divide só o que falta) em N partes iguais, em centavos, sem perder nem sobrar
-    (`LIMITE_PARTES_DIVISAO = 30`, erro de digitação acima disso).
-  - `src/ui/caixa_pagamento.py` (`JanelaPagamento`): botão "Dividir conta" (some na caderneta/
-    crédito), estado `_divisao`/`_parte_atual`. Pergunta as partes (`tema.pedir_numero`), sugere
-    o valor de cada parte em `_sugerir_valor` (guarda no topo: durante a divisão, a parte manda,
-    não a falta inteira), avança em `_lancar_valor` a cada pagamento lançado, sai do modo guiado
-    se um pagamento é removido no meio (`_remover_pagamento`) — simples e previsível, sem tentar
-    "voltar" para a parte certa. O operador ainda digita no mesmo campo de valor de sempre, então
-    pode mudar o valor de uma parte específica (ex.: uma pessoa paga mais) sem nenhum código
-    extra. `fechar_venda`/`CaixaController.fechar` não mudaram: a divisão só lança pagamentos
-    normais, o fechamento já sabia liquidar vários.
-  - Testes: `tests/test_caixa.py` (`TesteDividirConta`, regra pura) e `tests/test_ui.py`
-    (`TesteFluxosCaixa`, fluxo completo com o robô — 3 casos: divide e fecha, cancela ao remover
-    no meio, divide só o que falta depois de um pagamento parcial).
-  - Nota de robô (reafirma a do HANDOFF anterior): clicar em "Dividir conta" **dentro** do
-    callback de `JanelaPagamento` trava o Dialogo da pergunta de partes — precisa de
-    `j.after(30, lambda: clicar(...))` para rodar fora do `_tick` atual. E nunca `assert` dentro
-    do callback do Tk: uma exceção lá só é impressa (não reprova o teste) — grave num dict e
-    confira depois do `sem_travar()`.
-  - **Qt (`src/ui_qt/caixa.py`) NÃO recebeu "Dividir conta"** — mesmo padrão já registrado para
-    Cozinha/Bar: o piloto Qt segue sem os módulos de operação novos.
+- **Venda por peso** (terceira peça do ecossistema de operação, depois de Cozinha/Bar e Split de
+  conta). Descoberta ao investigar: o caixa **já tinha** o fluxo de pesagem pronto — F2
+  (`JanelaCaixa.balanca`, `src/ui/caixa_ui.py`) já lê a balança configurada (ou pede o peso
+  digitado, se não houver) e o cálculo preço-por-quilo × peso já funcionava e já tinha teste
+  (`test_quantidade_fracionada_so_se_o_produto_aceita`). O que faltava era só uma coisa: o campo
+  `produtos.balanca` (cadastro, "Balança") **não acionava nada** — o operador tinha que lembrar
+  de apertar F2 na mão, e nada impedia confirmar "1" por engano num produto vendido a quilo.
+  - Corrigido: `selecionar_produto()` (`caixa_ui.py`) agora chama a pesagem direto quando
+    `p["balanca"]` está marcado, em vez de sugerir quantidade "1". Extraí a lógica de pesagem de
+    `balanca()` (F2) para `_capturar_peso()`, reaproveitada pelos dois caminhos — o F2 continua
+    funcionando igual, manual, em qualquer produto (não só os marcados "Balança").
+  - Sem flag em `CONFIG_PADRAO`: é opt-in por produto (`balanca = 1` no cadastro), então uma casa
+    que nunca marca nenhum produto não vê nenhuma mudança — mesmo raciocínio do Split de conta
+    (ver abaixo), nenhum dos dois precisou de `usar_<modulo>`.
+  - **Achado à parte, documentado mas não mudado**: `src/hardware/dispositivos.py` já tem a
+    leitura serial real da Toledo/Filizola implementada (`Balanca.ler_peso`), mas a documentação
+    antiga (docstring do arquivo e `docs/ESPECIFICACAO.md`) dizia que só existia o modo manual —
+    corrigido o texto; o código em si não mudou. **Nunca foi homologado com equipamento real**
+    (mesma pendência de sempre, só reforçada abaixo).
+  - Testes novos em `tests/test_ui.py` (`TesteFluxosCaixa`): selecionar produto de balança pesa
+    direto e calcula o total certo; F2 continua funcionando manualmente num produto comum (não
+    havia nenhum teste do fluxo de balança antes disso).
 
 ## Pendências
-- **Qt dos módulos de operação**: alinhar `src/ui_qt/caixa.py` com o Tk — nem o roteamento de
-  impressão por setor (Cozinha/Bar) nem "Dividir conta" (Split) foram portados. Mesma observação
-  de sempre sobre o acerto da garota no Qt (ver linha abaixo).
-- **Próximos módulos de operação** (mesma convenção documentada em `config_controller.py` e
-  `docs/ESPECIFICACAO.md`, cada um como fatia independente, não implementados ainda):
-  - **Rodízio por pessoa**: cobrança fixa por pessoa no fechamento da conta (não em
-    `itens_venda`); `usar_rodizio` + valor configurável; decidir como interage com
-    desconto/serviço em `CaixaController.fechar`.
-  - **Venda por peso**: `produtos.balanca` já existe; falta o fluxo de pesagem no caixa ligado à
-    balança (`src/hardware/dispositivos.py`) atrás de `usar_venda_peso`.
-  - **Split por item consumido** (evolução do split atual, só se o titular quiser depois): cada
-    pessoa paga o que pediu, não uma fração igual — exige marcar os itens de cada pessoa
-    (mudança de esquema, provavelmente uma tag/grupo em `itens_venda`); por ora o split cobre só
-    divisão em partes (iguais ou ajustadas à mão), que já atende o caso comum.
+- **Homologar a balança com equipamento real** (Toledo ou Filizola, porta serial): o protocolo em
+  `Balanca.ler_peso` nunca foi testado fora do código. Mesma observação já valia (genérica,
+  "escala") desde o HANDOFF anterior ao módulo de operação — agora é específica.
+- **Qt dos módulos de operação**: alinhar `src/ui_qt/caixa.py` com o Tk — roteamento de impressão
+  por setor (Cozinha/Bar), "Dividir conta" (Split) e o acionamento automático da balança não foram
+  portados. Mesma observação de sempre sobre o acerto da garota no Qt (ver linha abaixo).
+- **Próximo módulo de operação** (mesma convenção documentada em `config_controller.py` e
+  `docs/ESPECIFICACAO.md`): **Rodízio por pessoa** — cobrança fixa por pessoa no fechamento da
+  conta (não em `itens_venda`); `usar_rodizio` + valor configurável; decidir como interage com
+  desconto/serviço em `CaixaController.fechar`. Este sim precisa de flag (é um jeito de cobrar
+  diferente, não um opt-in silencioso por produto/venda como os dois anteriores).
+- **Split por item consumido** (evolução do split, só se o titular quiser depois): cada pessoa
+  paga o que pediu, não uma fração igual — exige marcar os itens de cada pessoa (mudança de
+  esquema); por ora o split cobre só divisão em partes (iguais ou ajustadas à mão).
 - Qt (`src/ui_qt/`, opt-in) ainda tem a regra antiga do acerto da garota (`_acerto_so_de_shows`,
   `comissao.py`) e o recibo/comprovante com o tipo antigo (letra normal); o texto do recibo já
   vem sem os lançamentos. Alinhar com o Tk se o Qt for substituir o Tk. O painel Qt do

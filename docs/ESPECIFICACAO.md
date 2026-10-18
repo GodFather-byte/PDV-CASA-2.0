@@ -173,11 +173,16 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
   `banco.cfg_bool("usar_<modulo>", False)` direto. Primeiro módulo pelo padrão: **Cozinha/Bar**
   (`usar_cozinha_bar`) — impressoras remotas nomeadas por setor (`setores_impressao`, em vez de uma única por
   terminal) e status de preparo por item (pendente/em preparo/entregue, `itens_venda.status_preparo`), painel em
-  Utilitários > Painel da Cozinha/Bar (`preparo_controller.py`, `cozinha_ui.py`). Módulos seguintes planejados com
-  a mesma convenção (ver `.ai/HANDOFF.md`): rodízio por pessoa, venda por peso.
-  **Split de conta** (dividir o pagamento entre pessoas, `CaixaController.dividir_restante` + botão "Dividir
-  conta" em `caixa_pagamento.py`) é universal o bastante para não precisar de flag: fica sempre disponível na
-  tela de pagamento, sem mudar nada em quem não usa (é só um botão a mais, sem custo quando não clicado).
+  Utilitários > Painel da Cozinha/Bar (`preparo_controller.py`, `cozinha_ui.py`). Próximo módulo planejado com a
+  mesma convenção (ver `.ai/HANDOFF.md`): rodízio por pessoa.
+  **Split de conta** e **venda por peso** não precisaram de flag em `CONFIG_PADRAO`: cada um já tem o seu próprio
+  liga/desliga natural (um botão que não muda nada em quem nunca clica; um campo "Balança" por produto que já era
+  cadastrado e simplesmente não fazia nada), então não há necessidade de um `usar_<modulo>` a mais.
+  **Split de conta** (`CaixaController.dividir_restante` + botão "Dividir conta" em `caixa_pagamento.py`) divide o
+  pagamento entre pessoas, guiado parte por parte. **Venda por peso**: selecionar um produto com `balanca = 1`
+  já aciona a pesagem automaticamente (`JanelaCaixa._capturar_peso`, antes só acessível pelo F2 manual) — lê a
+  balança configurada ou pede o peso digitado, preenche a quantidade, e o preço por quilo (`preco_cent` do
+  produto) já multiplica certo (exige `aceita_decimal = S` no cadastro, como qualquer produto fracionado).
 - **Senhas** são guardadas com PBKDF2 e comparadas sem diferenciar maiúsculas, como pede o manual.
 - **Busca por nome** (produtos, clientes, contas, cadastros) ignora acento e caixa: "cafe" acha "Café" (função SQL `norm()`).
 - **Quantidade por item** tem teto (configuração `qtd_maxima_item`, padrão 99.999; 0 desliga), para um código de
@@ -192,7 +197,7 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
 |------|----------|
 | Impressora fiscal (ECF), NFC-e, SAT | Não emite documento fiscal. Cupom é "NÃO FISCAL". Leitura X e Redução Z são relatórios gerenciais. Campos fiscais do produto (NCM, alíquotas) são guardados mas não usados. |
 | TEF (cartões) | Campos do cadastro existem; não há integração. |
-| Balança Toledo/Filizola | Há a interface; a leitura automática não foi implementada (depende do equipamento). O caixa pede o peso digitado. |
+| Balança Toledo/Filizola | A leitura automática pela porta serial está implementada (`src/hardware/dispositivos.py`), mas nunca foi homologada com um equipamento real (depende do protocolo exato do modelo). Sem balança configurada, ou se ela não responder, o caixa pede o peso digitado — e produto marcado "Balança" já entra direto nesse fluxo ao ser selecionado (não precisa mais do operador lembrar do F2). |
 | Gaveta | Abre pelo pulso da impressora térmica (ESC p) e a abertura manual é registrada. Sem impressora térmica configurada o caixa só registra. Não testada em gaveta real. |
 | Impressora térmica em equipamento real | Testada só com impressora TCP simulada e arquivo. Faltam modelos reais: página de código, corte, pino da gaveta e velocidade serial variam. |
 | Rede com vários caixas no mesmo banco | O banco SQLite é local a cada terminal. |

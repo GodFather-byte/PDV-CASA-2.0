@@ -714,6 +714,9 @@ class JanelaCaixa(tk.Toplevel):
             self.confirmar_item()
             return
         self.ent_qtd.configure(state="normal")
+        if p["balanca"]:          # produto de balança: pesa direto, sem esperar o operador lembrar do F2
+            self._capturar_peso()
+            return
         self.var_qtd.set("1")
         self.ent_qtd.focus_set()
         self.ent_qtd.selection_range(0, "end")
@@ -1600,6 +1603,11 @@ class JanelaCaixa(tk.Toplevel):
         if self.produto is None:
             tema.aviso(self, "Lance o código do produto antes de capturar o peso.")
             return
+        self._capturar_peso()
+
+    def _capturar_peso(self) -> None:
+        """Lê o peso da balança configurada em Configurações > Máquinas; sem balança (ou se ela não responder),
+        pede o peso digitado. Usado pelo F2 e, direto, ao selecionar um produto marcado como 'Balança'."""
         try:
             peso = self.ctx.balanca().ler_peso()
         except DispositivoIndisponivel as e:

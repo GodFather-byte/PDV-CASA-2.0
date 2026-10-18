@@ -585,6 +585,38 @@ class TesteFluxosCaixa(BaseUI):
         self.assertEqual(self.cx.lbl_troco.cget("text"), "4,00")
         self.sem_travar()
 
+    def _produto_balanca(self, codigo: str, nome: str, preco_cent: int) -> int:
+        sub = self.banco.valor("SELECT id FROM subgrupos")
+        un = self.banco.valor("SELECT id FROM unidades WHERE abreviatura = 'UN'")
+        return CadastroController(self.banco).salvar("produtos", {
+            "codigo": codigo, "nome": nome, "subgrupo_id": sub, "unidade_id": un,
+            "preco_cent": f"{preco_cent / 100:.2f}".replace(".", ","), "aceita_decimal": "S", "balanca": "S"})
+
+    def _responder_peso(self, texto: str):
+        def responder(w):
+            e = entradas(w)[0]
+            e.delete(0, "end"); e.insert(0, texto)
+            clicar(w, "OK")
+        return responder
+
+    def test_selecionar_produto_de_balanca_pesa_direto_e_calcula_o_total(self):
+        self._produto_balanca("9", "QUEIJO KG", 4000)                  # R$ 40,00/kg
+        self.robo.quando("Dialogo", self._responder_peso("0,315"))
+        self.cx.var_cod.set("9"); self.cx._enter_codigo(); self.cx.update()
+        self.sem_travar()
+        self.assertEqual(self.cx.var_qtd.get(), "0,315")                # pesou sem pedir quantidade "1" antes
+        self.cx.confirmar_item(); self.cx.update()
+        self.assertEqual(self.cx.lbl_total.cget("text"), "12,60")
+        self.assertEqual(self.banco.valor("SELECT quantidade FROM itens_venda"), 0.315)
+
+    def test_f2_continua_pedindo_o_peso_manualmente_em_produto_comum(self):
+        self.cx.var_cod.set("1"); self.cx._enter_codigo(); self.cx.update()    # SKOL, sem balança
+        self.assertEqual(self.cx.var_qtd.get(), "1")                    # produto comum: continua sugerindo 1
+        self.robo.quando("Dialogo", self._responder_peso("2,5"))
+        self.cx.balanca(); self.cx.update()
+        self.sem_travar()
+        self.assertEqual(self.cx.var_qtd.get(), "2,500")
+
     def _lancar_parte_da_divisao(self, j, forma: str) -> None:
         """Escolhe a forma e lança o valor já sugerido pela divisão (não digita nada)."""
         f = [i for i in j.grade_formas.tree.get_children() if j.grade_formas.valores(i)[0] == forma][0]
