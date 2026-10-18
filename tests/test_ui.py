@@ -585,6 +585,95 @@ class TesteFluxosCaixa(BaseUI):
         self.assertEqual(self.cx.lbl_troco.cget("text"), "4,00")
         self.sem_travar()
 
+    def _lancar_parte_da_divisao(self, j, forma: str) -> None:
+        """Escolhe a forma e lança o valor já sugerido pela divisão (não digita nada)."""
+        f = [i for i in j.grade_formas.tree.get_children() if j.grade_formas.valores(i)[0] == forma][0]
+        j.grade_formas.selecionar(f); j._forma_escolhida()
+        j._lancar_valor()
+
+    def _responder_dividir_em(self, partes: int):
+        def responder(w):
+            e = entradas(w)[0]
+            e.delete(0, "end"); e.insert(0, str(partes))
+            clicar(w, "OK")
+        return responder
+
+    def test_dividir_conta_guia_pagamento_em_partes_e_fecha_a_venda(self):
+        # Assertivas ficam fora do callback do Tk: uma exceção lá dentro só é impressa, não reprova o teste
+        # (ver nota do HANDOFF sobre o robô); por isso só gravamos estado em `resultado` e conferimos depois.
+        self.lancar("1", 5)                                             # 40,00
+        formas = ["Dinheiro", "Pix", "Dinheiro"]
+        resultado = {}
+
+        def acao(j):
+            def passo():
+                clicar(j, "Dividir conta")                              # abre o Dialogo (robô responde "3")
+                for forma in formas:
+                    self._lancar_parte_da_divisao(j, forma)
+                resultado["divisao_final"] = j._divisao                 # None se as 3 partes esgotaram a divisão
+                j.after(10, j.fechar_venda)
+            j.after(30, passo)                                          # fora do _tick: permite o Dialogo aninhado
+        self.robo.quando("Dialogo", self._responder_dividir_em(3))
+        self.robo.quando("JanelaPagamento", acao)
+        self.robo.quando("Visualizador", lambda w: w.destroy())
+        self.cx.pagar(); self.cx.update()
+        self.sem_travar()
+        self.assertIn("divisao_final", resultado, "o passo() não rodou até o fim (ver saída do teste)")
+        self.assertIsNone(resultado["divisao_final"])
+        v = self.banco.um("SELECT * FROM vendas")
+        self.assertEqual((v["status"], v["pago_cent"], v["troco_cent"]), ("fechada", 4000, 0))
+        self.assertEqual(len(self.ctx.caixa.pagamentos(v["id"])), 3)
+
+    def test_remover_pagamento_durante_a_divisao_cancela_o_modo_guiado(self):
+        self.lancar("1", 5)                                             # 40,00
+        resultado = {}
+
+        def acao(j):
+            def passo():
+                clicar(j, "Dividir conta")
+                self._lancar_parte_da_divisao(j, "Dinheiro")             # parte 1 de 2
+                resultado["divisao_apos_lancar"] = j._divisao
+                j.grade_pag.selecionar_indice(0)
+                j._remover_pagamento()
+                resultado["divisao_apos_remover"] = j._divisao
+                j.destroy()
+            j.after(30, passo)
+        self.robo.quando("Dialogo", self._responder_dividir_em(2))
+        self.robo.quando("JanelaPagamento", acao)
+        self.cx.pagar(); self.cx.update()
+        self.sem_travar()
+        self.assertIn("divisao_apos_remover", resultado, "o passo() não rodou até o fim (ver saída do teste)")
+        self.assertIsNotNone(resultado["divisao_apos_lancar"])          # estava em modo guiado após a parte 1
+        self.assertIsNone(resultado["divisao_apos_remover"])            # remover tirou do modo guiado
+        self.assertEqual(len(self.ctx.caixa.pagamentos(self.venda_aberta())), 0)
+
+    def test_dividir_conta_depois_de_pagamento_parcial_considera_so_a_falta(self):
+        self.lancar("1", 5)                                             # 40,00
+        resultado = {}
+
+        def acao(j):
+            def passo():
+                f = [i for i in j.grade_formas.tree.get_children() if j.grade_formas.valores(i)[0] == "Dinheiro"][0]
+                j.grade_formas.selecionar(f); j._forma_escolhida()
+                j.var_valor.set("10,00"); j._lancar_valor()             # paga 10,00 manualmente; faltam 30,00
+                clicar(j, "Dividir conta")                              # robô responde "3": divide os 30,00 restantes
+                resultado["partes"] = list(j._divisao) if j._divisao else None
+                for _ in range(3):
+                    self._lancar_parte_da_divisao(j, "Pix")
+                j.after(10, j.fechar_venda)
+            j.after(30, passo)
+        self.robo.quando("Dialogo", self._responder_dividir_em(3))
+        self.robo.quando("JanelaPagamento", acao)
+        self.robo.quando("Visualizador", lambda w: w.destroy())
+        self.cx.pagar(); self.cx.update()
+        self.sem_travar()
+        self.assertEqual(resultado.get("partes"), [1000, 1000, 1000])   # dividiu só o que faltava (30,00), não os 40,00
+        v = self.banco.um("SELECT * FROM vendas")
+        self.assertEqual((v["status"], v["pago_cent"]), ("fechada", 4000))
+
+    def venda_aberta(self) -> int:
+        return self.banco.valor("SELECT id FROM vendas WHERE status IN ('aberta', 'conta_enviada')")
+
     def test_busca_por_nome_e_produto_inexistente(self):
         self.cx.var_cod.set("zzz"); self.cx._enter_codigo(); self.cx.update()
         self.assertIsNone(self.cx.produto)

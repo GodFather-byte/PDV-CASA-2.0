@@ -198,6 +198,41 @@ class TesteVenda(BaseCaixa):
             self.caixa.cancelar_venda(v2)                                 # turno já fechado
 
 
+class TesteDividirConta(BaseCaixa):
+    def test_divide_sem_perder_nem_sobrar_centavo(self):
+        produto = self.novo_produto("CEM", 10000)
+        vid = self.vender((produto, 1))
+        self.assertEqual(self.caixa.dividir_restante(vid, 3), [3334, 3333, 3333])
+        self.assertEqual(sum(self.caixa.dividir_restante(vid, 3)), 10000)
+
+    def test_recusa_menos_de_2_ou_mais_que_o_limite(self):
+        vid = self.vender((self.skol, 5))
+        with self.assertRaises(ErroNegocio):
+            self.caixa.dividir_restante(vid, 1)
+        with self.assertRaises(ErroNegocio):
+            self.caixa.dividir_restante(vid, 31)
+
+    def test_recusa_quando_nao_ha_falta(self):
+        vid = self.vender((self.skol, 1))
+        self.pagar(vid, "Dinheiro", 800)
+        with self.assertRaises(ErroNegocio):
+            self.caixa.dividir_restante(vid, 2)
+
+    def test_divide_so_o_que_falta_quando_ja_tem_pagamento_lancado(self):
+        produto = self.novo_produto("CEM", 10000)
+        vid = self.vender((produto, 1))
+        self.pagar(vid, "Dinheiro", 4000)                                  # falta 60,00
+        self.assertEqual(self.caixa.dividir_restante(vid, 3), [2000, 2000, 2000])
+
+    def test_a_soma_das_partes_fecha_a_conta_sem_falta_nem_troco(self):
+        produto = self.novo_produto("CEM", 10000)
+        vid = self.vender((produto, 1))
+        for cent in self.caixa.dividir_restante(vid, 3):
+            self.pagar(vid, "Dinheiro", cent)
+        v = self.caixa.fechar(vid)
+        self.assertEqual((v["status"], v["pago_cent"], v["troco_cent"]), ("fechada", 10000, 0))
+
+
 class TesteDescontoServico(BaseCaixa):
     def setUp(self):
         super().setUp()

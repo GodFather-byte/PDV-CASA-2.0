@@ -174,7 +174,10 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
   (`usar_cozinha_bar`) — impressoras remotas nomeadas por setor (`setores_impressao`, em vez de uma única por
   terminal) e status de preparo por item (pendente/em preparo/entregue, `itens_venda.status_preparo`), painel em
   Utilitários > Painel da Cozinha/Bar (`preparo_controller.py`, `cozinha_ui.py`). Módulos seguintes planejados com
-  a mesma convenção (ver `.ai/HANDOFF.md`): rodízio por pessoa, venda por peso, split de conta.
+  a mesma convenção (ver `.ai/HANDOFF.md`): rodízio por pessoa, venda por peso.
+  **Split de conta** (dividir o pagamento entre pessoas, `CaixaController.dividir_restante` + botão "Dividir
+  conta" em `caixa_pagamento.py`) é universal o bastante para não precisar de flag: fica sempre disponível na
+  tela de pagamento, sem mudar nada em quem não usa (é só um botão a mais, sem custo quando não clicado).
 - **Senhas** são guardadas com PBKDF2 e comparadas sem diferenciar maiúsculas, como pede o manual.
 - **Busca por nome** (produtos, clientes, contas, cadastros) ignora acento e caixa: "cafe" acha "Café" (função SQL `norm()`).
 - **Quantidade por item** tem teto (configuração `qtd_maxima_item`, padrão 99.999; 0 desliga), para um código de

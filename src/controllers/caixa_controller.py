@@ -27,6 +27,7 @@ from src.core.erros import ErroNegocio
 
 ABERTAS = ("aberta", "conta_enviada")
 NUM_COMANDAS_PADRAO = 10000
+LIMITE_PARTES_DIVISAO = 30   # dividir a conta entre mais que isso é quase certo erro de digitação
 # Teto de quantidade por item (config qtd_maxima_item; 0 = sem limite): barra o código de barras bipado
 # no campo Quantidade, que viraria uma venda de bilhões.
 QTD_MAXIMA_ITEM = 99_999
@@ -507,6 +508,17 @@ class CaixaController:
                 restante -= parte
         out.update(troco=troco, vale=vale)
         return out
+
+    def dividir_restante(self, venda_id: int, partes: int) -> list[int]:
+        """Divide o que falta pagar (liquidar()['falta']) em `partes` iguais, em centavos, sem
+        perder nem sobrar: as primeiras parcelas recebem o centavo que não divide exato."""
+        if not 2 <= partes <= LIMITE_PARTES_DIVISAO:
+            raise ErroNegocio(f"Divida entre 2 e {LIMITE_PARTES_DIVISAO} partes.")
+        falta = self.liquidar(venda_id)["falta"]
+        if falta <= 0:
+            raise ErroNegocio("Não há valor em aberto para dividir.")
+        base, resto = divmod(falta, partes)
+        return [base + (1 if i < resto else 0) for i in range(partes)]
 
     def info_credito(self, venda_id: int) -> dict:
         """Recebimento de dívida na caderneta: dívida atual, valor pago e excedente."""

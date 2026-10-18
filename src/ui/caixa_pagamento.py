@@ -14,6 +14,7 @@ import tkinter as tk
 from decimal import Decimal
 from tkinter import ttk
 
+from src.controllers.caixa_controller import LIMITE_PARTES_DIVISAO
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
 from src.ui import caixa_dialogos, caixa_tema, tema
@@ -53,6 +54,8 @@ class JanelaPagamento(tk.Toplevel):
         self.fechou = False
         self._fechando = False
         self._falta = 0
+        self._divisao: list[int] | None = None
+        self._parte_atual = 0
         try:
             self._abrir(master, venda_id)
         except Exception:
@@ -155,6 +158,9 @@ class JanelaPagamento(tk.Toplevel):
         self.btn_remover = ttk.Button(cab, text="Remover (Delete)", style="Cx.Perigo.TButton", takefocus=False,
                                       command=self._remover_pagamento)
         self.btn_remover.pack(side="right")
+        if not self.eh_credito:        # dívida de caderneta não se divide entre pessoas
+            ttk.Button(cab, text="Dividir conta", takefocus=False, command=self._dividir_conta).pack(
+                side="right", padx=(0, 6))
         self.grade_pag = tema.Grade(dir_, [("tipo", "Pagamento", 220, "w"), ("valor", "Valor", 110, "e")], altura=4,
                                     estilo="Cx", cor_par=CX["linha_par"])
         self.grade_pag.pack(fill="x", pady=(4, 0))
@@ -224,6 +230,9 @@ class JanelaPagamento(tk.Toplevel):
         if liq["falta"] > 0:
             self.lbl_troco_rotulo.configure(text="Falta:")
             self.lbl_troco.configure(text=fmt.fmt_num(liq["falta"]), fg=CX["vermelho"])
+            if self._divisao:
+                self._aviso(f"Dividir conta: parte {self._parte_atual + 1} de {len(self._divisao)} — "
+                            f"{fmt.fmt_brl(self._divisao[self._parte_atual])}", CX["azul"])
         else:
             self.lbl_troco_rotulo.configure(text="Troco:")
             self.lbl_troco.configure(text=fmt.fmt_num(liq["troco"]), fg=CX["azul"])
@@ -234,8 +243,11 @@ class JanelaPagamento(tk.Toplevel):
 
     def _sugerir_valor(self, falta: int) -> None:
         """O que falta receber; se a forma escolhida tem acréscimo (crédito: R$ 5,00) e a venda ainda não o cobra, já vem somado,
-        para o cartão passar com a taxa e a conta fechar."""
+        para o cartão passar com a taxa e a conta fechar. Durante a divisão da conta, sugere a parte atual em vez da falta inteira."""
         self._falta = falta
+        if self._divisao:
+            self.var_valor.set(fmt.fmt_num(self._divisao[self._parte_atual]))
+            return
         forma = self.grade_formas.selecionado() if hasattr(self, "grade_formas") else None
         acrescimo = self.caixa.acrescimo_da_forma(self.venda_id, int(forma)) if forma is not None and falta > 0 else 0
         self.var_valor.set(fmt.fmt_num(falta + acrescimo) if falta > 0 else "")
@@ -323,10 +335,15 @@ class JanelaPagamento(tk.Toplevel):
                 self, f"O troco será de {fmt.fmt_brl(liq['troco'])} (recebido: {fmt.fmt_brl(cent)}).\nO valor recebido está certo?",
                 "Troco alto", sim="Está certo", nao="Corrigir"):
             tema.tratar(self, self.caixa.remover_pagamento, pid)
+            self._divisao = None           # desfez o lançamento: sai da divisão para não ficar com estado incoerente
             self.atualizar()
             self.e_valor.focus_set()
             self.e_valor.selection_range(0, "end")
             return "break"
+        if self._divisao:
+            self._parte_atual += 1
+            if self._parte_atual >= len(self._divisao) or self.caixa.liquidar(self.venda_id)["falta"] <= 0:
+                self._divisao = None       # dividiu tudo (ou alguém já cobriu o resto)
         self.atualizar()
         pago = sum(p["valor_cent"] for p in self.caixa.pagamentos(self.venda_id))
         if self.eh_credito or pago >= self.caixa.obter(self.venda_id)["total_cent"]:
@@ -343,10 +360,25 @@ class JanelaPagamento(tk.Toplevel):
             self._aviso("Não há pagamento lançado para remover.", CX["ambar"])
             return "break"
         ok, _ = tema.tratar(self, self.caixa.remover_pagamento, int(s))
+        if ok:
+            self._divisao = None           # removeu um pagamento no meio da divisão: recomeça do zero se precisar
         self.atualizar()
         if ok:
             self._aviso("Pagamento removido.", CX["ambar"])
             self.grade_formas.tree.focus_set()
+        return "break"
+
+    def _dividir_conta(self, e=None) -> str:
+        n = tema.pedir_numero(self, "Dividir conta", "Dividir o restante em quantas partes?", 2, 2, LIMITE_PARTES_DIVISAO)
+        if n is None:
+            return "break"
+        ok, partes = tema.tratar(self, self.caixa.dividir_restante, self.venda_id, n)
+        if not ok:
+            return "break"
+        self._divisao, self._parte_atual = partes, 0
+        self.atualizar()
+        self.grade_formas.selecionar_indice(0)
+        self.grade_formas.tree.focus_set()
         return "break"
 
     def _autorizar_desconto(self) -> bool:
