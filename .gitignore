@@ -1,0 +1,53 @@
+# Ignorar arquivos temporários do Python (Lixo de memória)
+__pycache__/
+*.pyc
+
+# Ignorar o Banco de Dados Local (CRUCIAL!)
+# Não queremos subir as vendas da Boate A para o GitHub
+*.db
+*.sqlite3
+loja_offline.db
+
+# Ignorar configurações de ambiente (Senhas e Chaves de API)
+.env
+config.ini
+
+# Ignorar arquivos do sistema operacional (Lixo do Windows/Mac)
+.DS_Store
+Thumbs.db
+
+# Ignorar pastas de editores de código
+.vscode/
+.idea/
+
+# Arquivos gerados pelo PDV em tempo de execucao
+Backup/
+impressao/
+mala_direta/
+*.legado-*.bak
+
+# Arquivos auxiliares do SQLite: o -wal guarda vendas ainda não gravadas no .db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Ambiente virtual e resultado do build do executável (PyInstaller)
+.venv/
+build/
+dist/
+*.spec
+
+# Chaves privadas (ex.: licença do fornecedor) nunca vão para o repositório
+*.key
+*.pdvbkp
+*.antes-migracao-*.bak
+
+# Instalador gerado pelo Inno Setup (build_pdv.py)
+instalador/saida/
+logs/
+logs/
+
+# Saídas de delegação entre agentes (ver AGENTS.md)
+.ai/respostas/

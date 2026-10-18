@@ -1,0 +1,8 @@
+# Dependências do PDV: Tk funciona sem extras; Qt e backup seguro exigem os pacotes abaixo.
+# Instale com `pip install -r requirements.txt` (o instalador Windows já os inclui).
+requests>=2.31                              # sincronização com a nuvem (python -m src.app --sync)
+pyserial>=3.5                               # balança e impressora térmica serial
+cryptography>=43,<47                        # backup externo com criptografia autenticada
+PySide6-Essentials>=6.7,<7                  # Qt Widgets em migração (python -m src.app --qt)
+# Para gerar o executável: pip install pyinstaller  (python build_pdv.py)
+# A API de nuvem tem as suas próprias dependências em backend/requirements.txt

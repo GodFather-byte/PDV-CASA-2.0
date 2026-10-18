@@ -1,0 +1,58 @@
+WillPDV — Licença de Código Visível (Proprietária)
+Copyright (c) 2026 WillyanPHP. Todos os direitos reservados.
+
+Este repositório é público para transparência e avaliação, mas o WillPDV NÃO é software livre nem de código aberto. Ao
+copiar, baixar, executar, modificar ou distribuir qualquer parte dele, você concorda com os termos abaixo.
+
+1. O QUE VOCÊ PODE FAZER (sem pedir permissão)
+   a) Ler, estudar e avaliar o código-fonte.
+   b) Executar o programa em um computador seu, para avaliação e testes SEM fins comerciais (por exemplo, conhecer o sistema
+      antes de contratar), sem usá-lo para registrar vendas reais de um estabelecimento.
+   c) Fazer um fork no GitHub apenas na medida em que os Termos de Serviço do próprio GitHub permitem, sem que isso conceda
+      qualquer direito além deste documento.
+
+2. O QUE EXIGE LICENÇA COMERCIAL
+   Usar o WillPDV para operar um estabelecimento (caixa, vendas, comandas, estoque, relatórios) exige uma licença comercial
+   emitida pelo titular, entregue como um código de licença assinado para a loja. Sem ela, o uso comercial não é autorizado.
+
+3. O QUE É PROIBIDO (sem autorização escrita do titular)
+   a) Copiar, reproduzir ou incorporar o código, no todo ou em parte, em outro programa, produto ou serviço.
+   b) Modificar e distribuir, publicar ou disponibilizar o WillPDV ou versões derivadas dele, gratuitamente ou não, inclusive
+      instaladores e executáveis gerados a partir deste código.
+   c) Vender, alugar, sublicenciar, emprestar ou oferecer o WillPDV como serviço a terceiros.
+   d) Remover, desativar ou contornar a verificação do código de licença, ou emitir/forjar códigos de licença.
+   e) Remover ou alterar os avisos de direitos autorais, esta licença ou a identificação do titular.
+   f) Usar o nome WillPDV ou WillyanPHP de forma que sugira origem, apoio ou parceria que não existe.
+
+4. CONTRIBUIÇÕES
+   Quem enviar código, correções ou documentação a este repositório concede ao titular uma licença perpétua, mundial,
+   irrevogável e gratuita para usar, modificar, sublicenciar e distribuir essa contribuição como parte do WillPDV, sem
+   obrigação de crédito ou pagamento.
+
+5. COMPONENTES DE TERCEIROS
+   O WillPDV usa componentes de terceiros (por exemplo Python, Tk, SQLite, requests, pyserial, PyInstaller e Inno Setup),
+   que continuam sob as licenças próprias de cada um. Esta licença não altera os direitos que elas concedem.
+   Qt/PySide6, Shiboken6 e cryptography também conservam suas licenças. As restrições acima não limitam os direitos
+   concedidos pela LGPL sobre as bibliotecas Qt, incluindo sua substituição por versões modificadas compatíveis e a
+   engenharia reversa necessária para depurar essas modificações. Veja docs/TERCEIROS_QT.md e os avisos no instalador.
+
+6. SEM GARANTIA
+   O PROGRAMA É FORNECIDO "COMO ESTÁ", SEM GARANTIA DE QUALQUER TIPO, EXPRESSA OU IMPLÍCITA, INCLUINDO ADEQUAÇÃO A UM FIM
+   ESPECÍFICO, E NÃO EMITE DOCUMENTO FISCAL. O TITULAR NÃO RESPONDE POR PERDA DE DADOS, LUCROS CESSANTES OU DANOS DECORRENTES
+   DO USO OU DA IMPOSSIBILIDADE DE USO, NA MEDIDA MÁXIMA PERMITIDA PELA LEI. FAÇA BACKUP DOS SEUS DADOS.
+
+7. RESCISÃO
+   Descumprir estes termos encerra automaticamente os direitos da cláusula 1. Os demais direitos pertencem ao titular.
+
+8. CONTATO
+   Para licença comercial, parcerias ou autorização para qualquer uso proibido acima, fale com o titular: WillyanPHP
+   (https://github.com/GodFather-byte/PDV-CASA-).
+
+----------------------------------------------------------------------------------------------------------------------------
+ENGLISH SUMMARY (the Portuguese text above prevails)
+
+WillPDV is proprietary, source-visible software. Copyright (c) 2026 WillyanPHP. All rights reserved. You may read and study
+the source and run it locally for non-commercial evaluation. Running it for a real business requires a commercial license (a
+signed license code issued by the owner). You may NOT copy it into other projects, modify and redistribute it, sell, rent or
+sublicense it, offer it as a service, build and distribute installers from it, remove or bypass the license check, or strip the
+copyright notices. Contributions are licensed to the owner as described in section 4. Provided "AS IS", without warranty.

@@ -1,0 +1,26 @@
+# Nuvem do WillPDV no Render (plano gratuito). Passo a passo em docs/NUVEM.md, "Opção grátis: Render + Neon".
+# O banco NÃO fica no Render: o disco do plano grátis é apagado a cada reinício. Os dados ficam num PostgreSQL
+# gratuito do Neon (neon.tech), informado em PDV_NUVEM_DB_URL.
+# Cobrança Asaas: docs/COBRANCA_LICENCAS_ASAAS.md. Em produção, escolha plano pago
+# sempre ligado e configure ASAAS_AMBIENTE, ASAAS_API_KEY e ASAAS_WEBHOOK_TOKEN no painel.
+# A API só enfileira eventos. Worker/agenda: python -m backend.worker_asaas
+# em processo supervisionado separado (não provisionado aqui; verificar custo no guia).
+services:
+  - type: web
+    name: willpdv-nuvem
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /v1/saude
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: TZ                       # datas da nuvem no horário do Brasil (datas da licença)
+        value: America/Sao_Paulo
+      - key: PDV_API_TOKEN            # sua senha de administrador: o Render gera uma; veja em Environment
+        generateValue: true
+      - key: PDV_NUVEM_DB_URL         # cole o endereço do banco do Neon (postgresql://...)
+        sync: false
+      - key: PDV_LICENCA_CHAVE        # arquivo secreto (Secret File) com a chave da licença
+        value: /etc/secrets/licenca_privada.key

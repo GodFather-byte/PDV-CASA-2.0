@@ -1,0 +1,345 @@
+# Gera o WillPDV para Windows: o programa (.exe, PyInstaller) e o instalador (Inno Setup), conferidos por um autoteste, e deixa
+# os arquivos para baixar. Guia de uso: docs/INSTALAR_E_TESTAR.md
+#
+#   * Manual: aba Actions > "Gerar instalador (Windows)" > Run workflow  (escolha a branch).
+#   * Automático: a cada push na main ou numa branch claude/**, e numa tag v* (esta ainda publica uma Release).
+#
+# Onde pegar (o mais fácil): aba Releases > "WillPDV - última versão". A cada push na main o instalador (WillPDV-Instalador.exe)
+# e a versão portátil (WillPDV-Portatil.zip) são republicados ali, com link fixo e sem .zip em volta. Também ficam nos
+# "Artifacts" da página da execução (o .exe vem dentro de um .zip que o GitHub cria). Numa tag v*, vai uma Release de versão.
+name: Gerar instalador (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, "claude/**"]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Programa e instalador
+    runs-on: windows-latest
+    timeout-minutes: 30          # um programa travado (janela esperando resposta) vira falha, não horas de espera
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      versao: ${{ steps.info.outputs.versao }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64          # o instalador só aceita Windows 64 bits (ArchitecturesAllowed=x64compatible)
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Dependências (o que o programa usa de opcional entra no pacote) e PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt "pyinstaller>=6,<7"
+
+      - name: Versão e commit
+        id: info
+        run: |
+          $versao = python -c "from src.versao import VERSAO; print(VERSAO)"
+          "versao=$versao" >> $env:GITHUB_OUTPUT
+          "curto=$($env:GITHUB_SHA.Substring(0,7))" >> $env:GITHUB_OUTPUT
+
+      - name: Inno Setup (compilador do instalador)
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          if (-not (Test-Path $iscc)) { throw "Inno Setup não foi encontrado depois da instalação." }
+          Write-Host "Inno Setup: $iscc"
+
+      - name: Gerar o programa e o instalador (python build_pdv.py)
+        run: python build_pdv.py
+
+      - name: Conferir que os dois arquivos existem
+        run: |
+          if (-not (Test-Path dist\WillPDV\WillPDV.exe)) { throw "Faltou dist\WillPDV\WillPDV.exe" }
+          $inst = Get-ChildItem instalador\saida\WillPDV-Setup-*.exe
+          if (-not $inst) { throw "Faltou o instalador em instalador\saida" }
+          $inst | Format-Table Name, Length
+
+      # O .exe nunca tinha sido gerado: o autoteste abre o programa empacotado (módulos, SQLite, Tk, SSL, menu e telas) e
+      # confere a conexão HTTPS com o Telegram (token falso: basta o Telegram responder "não autorizado").
+      - name: Autoteste do programa empacotado
+        run: |
+          $saida = Join-Path $env:RUNNER_TEMP "autoteste-exe.txt"
+          $exe = (Resolve-Path "dist\WillPDV\WillPDV.exe").Path
+          $p = Start-Process -FilePath $exe -ArgumentList "--autoteste", "`"$saida`"", "--rede" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw "O autoteste travou (mais de 4 minutos)." }
+          if (Test-Path $saida) { Get-Content $saida } else { Write-Host "O programa não escreveu o relatório do autoteste." }
+          if ($p.ExitCode -ne 0) { throw "Autoteste do programa falhou (código $($p.ExitCode))." }
+          $saidaQt = Join-Path $env:RUNNER_TEMP "autoteste-qt-exe.txt"
+          $qt = Start-Process -FilePath $exe -ArgumentList "--autoteste-qt", "`"$saidaQt`"" -PassThru
+          if (-not $qt.WaitForExit(240000)) { $qt.Kill(); throw "O autoteste Qt travou." }
+          if (Test-Path $saidaQt) { Get-Content $saidaQt }
+          if ($qt.ExitCode -ne 0) { throw "Autoteste Qt do programa empacotado falhou." }
+
+      - name: Instalar o instalador de verdade (silencioso) e rodar o autoteste do instalado
+        run: |
+          $inst = (Get-ChildItem instalador\saida\WillPDV-Setup-*.exe | Select-Object -First 1).FullName
+          $destino = Join-Path $env:RUNNER_TEMP "WillPDV-instalado"
+          $log = Join-Path $env:RUNNER_TEMP "instalador.log"
+          $p = Start-Process -FilePath $inst -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=`"$destino`"", "/LOG=`"$log`"" -PassThru
+          if (-not $p.WaitForExit(300000)) { $p.Kill(); throw "O instalador travou (mais de 5 minutos)." }
+          if ($p.ExitCode -ne 0) { if (Test-Path $log) { Get-Content $log -Tail 40 }; throw "O instalador terminou com erro (código $($p.ExitCode))." }
+          if (-not (Test-Path "$destino\WillPDV.exe")) { throw "O instalador não colocou o WillPDV.exe em $destino." }
+          $saida = Join-Path $env:RUNNER_TEMP "autoteste-instalado.txt"
+          $t = Start-Process -FilePath "$destino\WillPDV.exe" -ArgumentList "--autoteste", "`"$saida`"" -PassThru
+          if (-not $t.WaitForExit(240000)) { $t.Kill(); throw "O autoteste do programa instalado travou." }
+          if (Test-Path $saida) { Get-Content $saida }
+          if ($t.ExitCode -ne 0) { throw "Autoteste do programa instalado falhou (código $($t.ExitCode))." }
+          $saidaQt = Join-Path $env:RUNNER_TEMP "autoteste-qt-instalado.txt"
+          $qt = Start-Process -FilePath "$destino\WillPDV.exe" -ArgumentList "--autoteste-qt", "`"$saidaQt`"" -PassThru
+          if (-not $qt.WaitForExit(240000)) { $qt.Kill(); throw "O autoteste Qt instalado travou." }
+          if (Test-Path $saidaQt) { Get-Content $saidaQt }
+          if ($qt.ExitCode -ne 0) { throw "Autoteste Qt instalado falhou." }
+
+      # O caso do PC da boate: o WillPDV continua rodando (tela de entrada aberta e o processo de segundo plano --sync, que nem
+      # janela tem) quando se roda o instalador de novo. O Restart Manager não fecha o que não tem janela e a instalação travava em
+      # "os aplicativos a seguir estão usando arquivos que precisam ser atualizados". Aqui reproduzimos isso e exigimos que passe.
+      - name: Atualizar por cima com o WillPDV aberto (instalador não pode travar)
+        run: |
+          $inst = (Get-ChildItem instalador\saida\WillPDV-Setup-*.exe | Select-Object -First 1).FullName
+          $destino = Join-Path $env:RUNNER_TEMP "WillPDV-instalado"
+          $gui = Start-Process -FilePath "$destino\WillPDV.exe" -PassThru
+          $bg = Start-Process -FilePath "$destino\WillPDV.exe" -ArgumentList "--sync" -PassThru
+          Start-Sleep -Seconds 8
+          $vivos = @(Get-Process -Name WillPDV -ErrorAction SilentlyContinue)
+          Write-Host "WillPDV rodando antes de atualizar: $($vivos.Count) (esperado: 2)"
+          if ($vivos.Count -lt 2) { throw "Não consegui deixar o programa aberto para testar a atualização por cima." }
+          $log = Join-Path $env:RUNNER_TEMP "instalador-por-cima.log"
+          $p = Start-Process -FilePath $inst -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=`"$destino`"", "/LOG=`"$log`"" -PassThru
+          if (-not $p.WaitForExit(300000)) { $p.Kill(); throw "O instalador travou com o WillPDV aberto (mais de 5 minutos)." }
+          if (Test-Path $log) { Get-Content $log | Select-String -Pattern "close|Restart|in use|WillPDV.exe|Exit code" | Select-Object -Last 25 }
+          Start-Sleep -Seconds 2
+          $restam = @(Get-Process -Name WillPDV -ErrorAction SilentlyContinue)
+          Write-Host "WillPDV rodando depois de atualizar: $($restam.Count) (esperado: 0 ou o recém-aberto)"
+          if ($p.ExitCode -ne 0) { throw "O instalador falhou com o WillPDV aberto (código $($p.ExitCode))." }
+          # desinstala (confere também que o desinstalador funciona)
+          Get-Process -Name WillPDV -ErrorAction SilentlyContinue | Stop-Process -Force
+          $u = Start-Process -FilePath "$destino\unins000.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -PassThru
+          $u.WaitForExit(120000) | Out-Null
+
+      - name: Empacotar a versão portátil (pasta do programa, sem instalar)
+        run: |
+          Compress-Archive -Path dist\WillPDV -DestinationPath "WillPDV-Portatil.zip" -CompressionLevel Optimal
+
+      - name: Resumo (versão, tamanho e SHA-256)
+        run: |
+          $inst = Get-ChildItem instalador\saida\WillPDV-Setup-*.exe | Select-Object -First 1
+          $hash = (Get-FileHash $inst.FullName -Algorithm SHA256).Hash
+          $mb = [math]::Round($inst.Length / 1MB, 1)
+          @"
+          ## WillPDV ${{ steps.info.outputs.versao }} — commit ${{ steps.info.outputs.curto }}
+
+          | Arquivo | Tamanho | SHA-256 |
+          | --- | --- | --- |
+          | ``$($inst.Name)`` | $mb MB | ``$hash`` |
+
+          O programa e o instalador passaram no autoteste (módulos, banco, telas e conexão HTTPS com o Telegram).
+
+          **Mais fácil:** na main, o instalador também vai para a aba **Releases** (link fixo, sem .zip): https://github.com/${{ github.repository }}/releases/tag/ultima-versao
+          Em qualquer branch: baixe em *Artifacts*, no fim desta página: ``WillPDV-Instalador-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}`` (o instalador, dentro de um .zip) e ``WillPDV-Portatil`` (a pasta do programa, sem instalar).
+          Passo a passo: ``docs/INSTALAR_E_TESTAR.md``.
+          "@ >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Guardar o instalador
+        uses: actions/upload-artifact@v4
+        with:
+          name: WillPDV-Instalador-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
+          path: instalador/saida/WillPDV-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Guardar a versão portátil
+        uses: actions/upload-artifact@v4
+        with:
+          name: WillPDV-Portatil-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
+          path: WillPDV-Portatil.zip
+          if-no-files-found: error
+          compression-level: 0          # já é um .zip
+          retention-days: 30
+
+      - name: Guardar os relatórios do autoteste
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autoteste-${{ steps.info.outputs.curto }}
+          path: |
+            ${{ runner.temp }}/autoteste-*.txt
+            ${{ runner.temp }}/instalador.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # O programa SEPARADO do fornecedor que emite as licenças (mensais, permanentes e de teste). É para quem vende o WillPDV, não para o
+  # cliente: por isso fica só nos artifacts e NÃO vai para a aba Releases. Mesma disciplina do job acima: autoteste no .exe, instalação
+  # silenciosa de verdade e atualização por cima com o programa aberto. Guia: docs/LICENCIADOR.md
+  licenciador:
+    name: Programa de licenças (WillPDV Licenças)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: PyInstaller e criptografia (backup da chave com senha usa "cryptography", como o PDV)
+        run: |
+          python -m pip install --upgrade pip
+          pip install "pyinstaller>=6,<7" "cryptography>=43,<47"
+
+      - name: Versão e commit
+        id: info
+        run: |
+          $versao = python -c "from licenciador.nucleo import VERSAO; print(VERSAO)"
+          "versao=$versao" >> $env:GITHUB_OUTPUT
+          "curto=$($env:GITHUB_SHA.Substring(0,7))" >> $env:GITHUB_OUTPUT
+
+      - name: Inno Setup (compilador do instalador)
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          if (-not (Test-Path $iscc)) { throw "Inno Setup não foi encontrado depois da instalação." }
+          Write-Host "Inno Setup: $iscc"
+
+      - name: Gerar o programa e o instalador (python build_licenciador.py)
+        run: python build_licenciador.py
+
+      - name: Autoteste do programa empacotado
+        run: |
+          $saida = Join-Path $env:RUNNER_TEMP "autoteste-licencas-exe.txt"
+          $exe = (Resolve-Path "dist\WillLicencas\WillLicencas.exe").Path
+          $p = Start-Process -FilePath $exe -ArgumentList "--autoteste", "`"$saida`"" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw "O autoteste travou (mais de 4 minutos)." }
+          if (Test-Path $saida) { Get-Content $saida } else { Write-Host "O programa não escreveu o relatório do autoteste." }
+          if ($p.ExitCode -ne 0) { throw "Autoteste do programa falhou (código $($p.ExitCode))." }
+
+      - name: Instalar de verdade, rodar o autoteste do instalado e atualizar por cima com o programa aberto
+        run: |
+          $inst = (Get-ChildItem instalador\saida\WillLicencas-Setup-*.exe | Select-Object -First 1).FullName
+          $destino = Join-Path $env:RUNNER_TEMP "WillLicencas-instalado"
+          $log = Join-Path $env:RUNNER_TEMP "instalador-licencas.log"
+          $args1 = "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=`"$destino`"", "/LOG=`"$log`""
+          $p = Start-Process -FilePath $inst -ArgumentList $args1 -PassThru
+          if (-not $p.WaitForExit(300000)) { $p.Kill(); throw "O instalador travou (mais de 5 minutos)." }
+          if ($p.ExitCode -ne 0) { if (Test-Path $log) { Get-Content $log -Tail 40 }; throw "O instalador terminou com erro (código $($p.ExitCode))." }
+          if (-not (Test-Path "$destino\WillLicencas.exe")) { throw "O instalador não colocou o WillLicencas.exe em $destino." }
+          $saida = Join-Path $env:RUNNER_TEMP "autoteste-licencas-instalado.txt"
+          $t = Start-Process -FilePath "$destino\WillLicencas.exe" -ArgumentList "--autoteste", "`"$saida`"" -PassThru
+          if (-not $t.WaitForExit(240000)) { $t.Kill(); throw "O autoteste do programa instalado travou." }
+          if (Test-Path $saida) { Get-Content $saida }
+          if ($t.ExitCode -ne 0) { throw "Autoteste do programa instalado falhou (código $($t.ExitCode))." }
+          # atualização por cima com o programa aberto (a janela fica esperando; o instalador precisa encerrá-la e seguir)
+          $aberto = Start-Process -FilePath "$destino\WillLicencas.exe" -PassThru
+          Start-Sleep -Seconds 6
+          if ($aberto.HasExited) { throw "O programa instalado fechou sozinho; não dá para testar a atualização por cima." }
+          $p2 = Start-Process -FilePath $inst -ArgumentList $args1 -PassThru
+          if (-not $p2.WaitForExit(300000)) { $p2.Kill(); throw "O instalador travou com o programa aberto (mais de 5 minutos)." }
+          if ($p2.ExitCode -ne 0) { throw "O instalador falhou com o programa aberto (código $($p2.ExitCode))." }
+          Start-Sleep -Seconds 2
+          if (Get-Process -Name WillLicencas -ErrorAction SilentlyContinue) { throw "Ainda há WillLicencas.exe rodando depois da atualização." }
+          $u = Start-Process -FilePath "$destino\unins000.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -PassThru
+          $u.WaitForExit(120000) | Out-Null
+
+      - name: Resumo (versão, tamanho e SHA-256)
+        run: |
+          $inst = Get-ChildItem instalador\saida\WillLicencas-Setup-*.exe | Select-Object -First 1
+          $hash = (Get-FileHash $inst.FullName -Algorithm SHA256).Hash
+          $mb = [math]::Round($inst.Length / 1MB, 1)
+          @"
+          ## WillPDV Licenças ${{ steps.info.outputs.versao }} — commit ${{ steps.info.outputs.curto }}
+
+          | Arquivo | Tamanho | SHA-256 |
+          | --- | --- | --- |
+          | ``$($inst.Name)`` | $mb MB | ``$hash`` |
+
+          Programa do FORNECEDOR (emite licenças mensais, permanentes e de teste). Não entregue a clientes. Guia: ``docs/LICENCIADOR.md``.
+          "@ >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Guardar o instalador do programa de licenças
+        uses: actions/upload-artifact@v4
+        with:
+          name: WillLicencas-Instalador-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
+          path: instalador/saida/WillLicencas-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  # Só em tag v*: publica o instalador na aba Releases (link fixo, sem .zip, que dá para mandar ao cliente).
+  publicar:
+    name: Publicar na aba Releases
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: WillPDV-Instalador-*
+          merge-multiple: true
+          path: publicar
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: publicar/WillPDV-Setup-*.exe
+          generate_release_notes: true
+
+  # A cada push na main: republica o instalador e a versão portátil numa Release "última versão", com link fixo. É o lugar mais
+  # fácil de achar (aba Releases, lado direito da página principal do repositório) e dá para mandar o link a quem vai testar.
+  # O programa de licenças (do fornecedor) NÃO vai para cá: a Release é pública. Ele fica nos Artifacts da execução.
+  ultima_versao:
+    name: Publicar "última versão" na aba Releases
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: publicar-ultima-versao
+      cancel-in-progress: false          # nunca interrompe no meio de apagar e recriar a Release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: WillPDV-*
+          merge-multiple: true
+          path: publicar
+
+      - name: Nomes fixos (o link não muda a cada versão)
+        run: |
+          ls -l publicar
+          cp publicar/WillPDV-Setup-*.exe publicar/WillPDV-Instalador.exe
+          ls -l publicar
+
+      - name: Recriar a Release "ultima-versao" apontando para este commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSAO: ${{ needs.build.outputs.versao }}
+        run: |
+          gh release delete ultima-versao --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          curto="${GITHUB_SHA:0:7}"
+          notas="Instalador e versão portátil gerados automaticamente a partir do código mais recente da main (versão $VERSAO, commit $curto). Já passaram no autoteste do programa empacotado, na instalação silenciosa e na atualização por cima com o programa aberto. Esta Release é sobrescrita a cada atualização da main; para uma versão numerada, veja as outras Releases. Passo a passo: docs/INSTALAR_E_TESTAR.md"
+          gh release create ultima-versao --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "WillPDV - última versão ($VERSAO, commit $curto)" --notes "$notas" \
+            publicar/WillPDV-Instalador.exe publicar/WillPDV-Portatil.zip
