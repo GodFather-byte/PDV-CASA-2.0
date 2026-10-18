@@ -278,7 +278,8 @@ class TesteMigracaoAuditoria(BaseTeste):
         banco = self.banco_v17()
         banco.log("evento_legado", "preservado", 1)
         self.assertEqual(banco.valor("PRAGMA user_version"), 17)
-        banco._criar_esquema()
+        with patch.object(esquema, "VERSAO_ESQUEMA", 18):     # só o passo v17->v18 (esta classe testa só esse passo)
+            banco._criar_esquema()
         self.assertEqual(banco.valor("PRAGMA user_version"), 18)
         self.assertEqual(banco.valor("SELECT COUNT(*) FROM auditoria_eventos"), 0)
         self.assertEqual(banco.valor("SELECT detalhe FROM log_eventos"), "preservado")
@@ -287,7 +288,8 @@ class TesteMigracaoAuditoria(BaseTeste):
         banco.definir_operador_auditoria(1)
         banco.executar("UPDATE operadores SET nivel = 3 WHERE id = 1")
         self.assertEqual(banco.valor("SELECT acao FROM auditoria_eventos"), "permissao_alterada")
-        banco._criar_esquema()
+        with patch.object(esquema, "VERSAO_ESQUEMA", 18):
+            banco._criar_esquema()
         banco.executar("UPDATE operadores SET nivel = 4 WHERE id = 1")
         self.assertEqual(banco.valor("SELECT COUNT(*) FROM auditoria_eventos"), 2)
 
@@ -300,7 +302,8 @@ class TesteMigracaoAuditoria(BaseTeste):
         self.assertIsNone(banco.um("SELECT name FROM sqlite_master WHERE name = 'auditoria_eventos'"))
         self.assertEqual(banco.valor(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'auditoria_%'"), 0)
-        banco._criar_esquema()
+        with patch.object(esquema, "VERSAO_ESQUEMA", 18):      # só o passo v17->v18 (esta classe testa só esse passo)
+            banco._criar_esquema()
         self.assertEqual(banco.valor("PRAGMA user_version"), 18)
 
     def test_arquivo_v17_backup_e_reabertura_preservam_eventos(self):
@@ -317,7 +320,8 @@ class TesteMigracaoAuditoria(BaseTeste):
             banco.log("antes_migracao", "preservado", 1)
         finally:
             banco.fechar()
-        banco = BancoDados(str(caminho))
+        with patch.object(esquema, "VERSAO_ESQUEMA", 18):     # só o passo v17->v18 (esta classe testa só esse passo)
+            banco = BancoDados(str(caminho))
         try:
             self.assertEqual(banco.valor("PRAGMA user_version"), 18)
             self.assertEqual(banco.valor("SELECT COUNT(*) FROM auditoria_eventos"), 0)

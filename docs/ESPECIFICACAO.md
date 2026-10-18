@@ -162,6 +162,19 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
   enviadas à nuvem quando a sincronização está configurada e preserva o saldo da caderneta.
 - **Módulos de acesso**: o manual cita 31 módulos sem listá-los; foram definidos 40 (ver `sementes.ACESSOS`),
   todos com nível configurável de 1 a 4.
+- **Módulo de operação configurável** (não confundir com "módulo de acesso" acima, que é nível de permissão de
+  menu): o PDV nasceu só para casa noturna (comissão de garota/shows, comanda, saída da portaria). Para servir
+  também bar, restaurante, churrascaria e pequenos comércios sem reescrever nada da boate, cada recurso de outro
+  tipo de negócio entra como um módulo que liga/desliga em Configurações > Módulos, reaproveitando o mecanismo que
+  já existia para Delivery/Caderneta/Contas (`CONFIG_PADRAO`, `CAMPOS_CONFIG`, `MODULOS_OPCIONAIS` e
+  `modulos_desligados()` em `config_controller.py`). Convenção: toda flag nasce em `CONFIG_PADRAO` como
+  `usar_<modulo>` = `"N"`; entra em `CAMPOS_CONFIG` na seção "Módulos"; se esconder item de menu, entra em
+  `MODULOS_OPCIONAIS`; se decide algo fora do menu, o ponto específico do código chama
+  `banco.cfg_bool("usar_<modulo>", False)` direto. Primeiro módulo pelo padrão: **Cozinha/Bar**
+  (`usar_cozinha_bar`) — impressoras remotas nomeadas por setor (`setores_impressao`, em vez de uma única por
+  terminal) e status de preparo por item (pendente/em preparo/entregue, `itens_venda.status_preparo`), painel em
+  Utilitários > Painel da Cozinha/Bar (`preparo_controller.py`, `cozinha_ui.py`). Módulos seguintes planejados com
+  a mesma convenção (ver `.ai/HANDOFF.md`): rodízio por pessoa, venda por peso, split de conta.
 - **Senhas** são guardadas com PBKDF2 e comparadas sem diferenciar maiúsculas, como pede o manual.
 - **Busca por nome** (produtos, clientes, contas, cadastros) ignora acento e caixa: "cafe" acha "Café" (função SQL `norm()`).
 - **Quantidade por item** tem teto (configuração `qtd_maxima_item`, padrão 99.999; 0 desliga), para um código de

@@ -33,6 +33,9 @@ def executar(master, ctx, chave: str) -> None:
     elif chave == "fila_impressao":
         from src.ui.fila_impressao_ui import JanelaFilaImpressao
         JanelaFilaImpressao(master, ctx)
+    elif chave == "cozinha":
+        from src.ui.cozinha_ui import JanelaCozinha
+        JanelaCozinha(master, ctx)
 
 
 def limpeza(master, ctx) -> None:

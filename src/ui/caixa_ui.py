@@ -781,7 +781,8 @@ class JanelaCaixa(tk.Toplevel):
         """Manda os itens para a cozinha/bar. Falha de impressora remota não bloqueia a venda."""
         try:
             for sub, texto in self.ctx.impressao.pedido_remoto(self.venda_id, item_ids).items():
-                self.ctx.impressao.enviar_remoto(texto, f"pedido_{sub}")
+                setor = self.ctx.impressao.setor_do_subgrupo(sub)
+                self.ctx.impressao.enviar_remoto(texto, f"pedido_{sub}", setor=setor)
                 self.avisar(f"Pedido enviado à impressora remota: {sub}", tema.COR["ok"])
         except ErroImpressao as e:
             self.avisar(f"Impressora da cozinha/bar indisponível: {e}", tema.COR["perigo"])

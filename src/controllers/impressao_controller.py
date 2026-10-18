@@ -222,6 +222,13 @@ class ImpressaoController:
             saida[sub] = "\n".join(linhas)
         return saida
 
+    def setor_do_subgrupo(self, nome_subgrupo: str) -> dict | None:
+        """O setor de impressão (Configurações > Módulos > Cozinha/Bar) do subgrupo, se tiver um cadastrado."""
+        r = self.banco.um(
+            """SELECT st.* FROM subgrupos s JOIN setores_impressao st ON st.id = s.setor_impressao_id
+               WHERE s.nome = ? AND st.ativo = 1""", (nome_subgrupo,))
+        return dict(r) if r else None
+
     # ------------------------------------------------- turno e relatórios
     def fechamento(self, resumo: dict) -> str:
         """Fita da troca de turno, em blocos: a conta da gaveta e o resultado primeiro (o que o gerente confere), depois as
@@ -540,21 +547,26 @@ class ImpressaoController:
                 os.startfile(caminho, "print")  # type: ignore[attr-defined]
         return caminho
 
-    def enviar_remoto(self, texto: str, nome: str) -> str:
+    def enviar_remoto(self, texto: str, nome: str, setor: dict | None = None) -> str:
         """Pedido para a cozinha/bar: vai para a impressora remota (pasta ou rede), nunca para a do caixa.
-        Por rede entra na fila (a cozinha fora do ar não trava o caixa). Também grava no histórico."""
+        Por rede entra na fila (a cozinha fora do ar não trava o caixa). Também grava no histórico.
+
+        `setor` (Configurações > Módulos > Cozinha/Bar) usa a conexão cadastrada nele em vez da impressora
+        remota única da máquina; sem setor (módulo desligado ou subgrupo sem setor), nada muda."""
         caminho = self._historico(texto, nome)
         m = self.config.maquina()
-        conexao = (m["impressora_remota_conexao"] or "pasta").strip()
+        conexao = ((setor or {}).get("conexao") or m["impressora_remota_conexao"] or "pasta").strip()
+        endereco = (setor or {}).get("endereco") or m["impressora_remota_endereco"]
+        pasta = (setor or {}).get("pasta") or m["impressora_remota_pasta"]
         if conexao in ("rede", "spooler"):
-            if not (m["impressora_remota_endereco"] or "").strip():
+            if not (endereco or "").strip():
                 raise ErroImpressao("Informe o endereço (rede) ou o nome (Windows) da impressora remota "
-                                    "(Configurações > Máquinas).")
+                                    "(Configurações > Máquinas, ou do setor em Cadastros > Setores de Impressão).")
             dados = term.texto_para_escpos(texto, codepage=m["impressora_termica_codepage"] or "cp850",
                                            cortar=True, negrito_linhas=1)
-            self.fila.enfileirar("remota", nome, dados, "pedido")
+            self.fila.enfileirar("remota", nome, dados, "pedido", setor_id=(setor or {}).get("id"))
         elif conexao == "pasta":
-            pasta = (m["impressora_remota_pasta"] or "").strip()
+            pasta = (pasta or "").strip()
             if pasta:
                 destino = Path(pasta)
                 destino.mkdir(parents=True, exist_ok=True)

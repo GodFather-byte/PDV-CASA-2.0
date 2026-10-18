@@ -21,6 +21,7 @@ ACESSOS = [
     ("cad_clientes", "Cadastro de Clientes", "Cadastros", 1),
     ("cad_garotas", "Cadastro de Garotas", "Cadastros", 2),
     ("cad_bairros", "Bairros e taxas de entrega", "Cadastros", 2),
+    ("cad_setores_impressao", "Setores de Impressão (Cozinha/Bar)", "Cadastros", 2),
     ("cad_tipos_pagamento", "Tipos de Pagamento", "Cadastros", 3),
     ("cad_plano_contas", "Plano de Contas", "Cadastros", 3),
     ("cad_subplanos", "Sub Planos", "Cadastros", 3),
@@ -52,6 +53,7 @@ ACESSOS = [
     ("util_comunicacao", "Programa de comunicação", "Utilitários", 2),
     ("util_backup", "Backup de dados", "Utilitários", 2),
     ("util_fila_impressao", "Fila de impressão", "Utilitários", 2),
+    ("util_cozinha", "Painel da Cozinha/Bar", "Utilitários", 2),
     ("cfg_acessos", "Configurar níveis de acesso", "Configurações", 4),
     ("cfg_loja", "Dados da Loja", "Configurações", 3),
     ("cfg_configuracoes", "Configurações operacionais", "Configurações", 4),
@@ -80,6 +82,8 @@ CONFIG_PADRAO = {
     "usar_desconto": "N",       # boate não dá desconto: o campo some do fechamento da conta (Configurações > Caixa liga)
     # Módulos que a boate não usa ficam escondidos (Configurações > Módulos liga cada um).
     "usar_delivery": "N", "usar_caderneta": "N", "usar_contas": "N",
+    # Módulo de operação Cozinha/Bar: impressoras nomeadas por setor e status de preparo por item.
+    "usar_cozinha_bar": "N",
     "api_url": "", "api_token": "", "sync_intervalo_seg": "60",
     "programa_comunicacao": "", "pasta_backup": "", "pasta_backup_extra": "", "backup_erro": "", "backup_extra_erro": "",
     "email_loja": "", "email_destino": "", "smtp_servidor": "",

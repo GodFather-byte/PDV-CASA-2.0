@@ -96,6 +96,8 @@ CAMPOS_CONFIG = [
     ("taxa_entrega_padrao", "Taxa de entrega padrão do delivery (R$)", "texto", "Módulos"),
     ("usar_caderneta", "Caderneta: venda a prazo para clientes (F5) e cadastro de clientes", "sn", "Módulos"),
     ("usar_contas", "Contas a pagar/receber, plano de contas e relatórios financeiros", "sn", "Módulos"),
+    ("usar_cozinha_bar", "Cozinha/Bar: imprimir por setor (impressoras nomeadas) e acompanhar o preparo dos itens "
+     "(pendente/em preparo/entregue)", "sn", "Módulos"),
     ("programa_comunicacao", "Programa de comunicação (caminho do executável)", "texto", "Utilitários"),
     ("pasta_backup", "Pasta do backup (vazio = pasta Backup do sistema)", "texto", "Utilitários"),
     ("pasta_backup_extra", "Cópia extra do backup: pendrive, outro disco ou pasta de rede (vazio = sem cópia extra)", "texto", "Utilitários"),
@@ -121,9 +123,16 @@ _OPCOES_CONFIG = {c[0]: [o[0] for o in c[4]] for c in CAMPOS_CONFIG if len(c) > 
 
 
 # Módulos opcionais (a boate não usa): o que cada chave "usar_*" desligada esconde dos menus (códigos de módulo de acesso).
+#
+# Convenção para módulos de operação por tipo de negócio (cozinha/bar, e no futuro rodízio, venda por peso,
+# split de conta): toda flag nasce em CONFIG_PADRAO como "usar_<modulo>" = "N"; entra em CAMPOS_CONFIG na seção
+# "Módulos" (acima), para aparecer em Configurações sem UI extra; se esconder item de menu, entra aqui. Se o
+# módulo decide algo fora do menu (botão no caixa, aba no painel), o código daquele ponto chama
+# banco.cfg_bool("usar_<modulo>", False) direto, sem precisar de nenhum registro central novo.
 MODULOS_OPCIONAIS = {
     "usar_contas": {"lanc_contas", "rel_financeiro", "cad_plano_contas", "cad_subplanos"},
     "usar_delivery": {"cad_bairros"},
+    "usar_cozinha_bar": {"cad_setores_impressao", "util_cozinha"},
 }
 
 

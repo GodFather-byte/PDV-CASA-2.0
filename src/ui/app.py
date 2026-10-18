@@ -23,7 +23,8 @@ CADASTROS = [("unidades", "Unidades"), ("grupos", "Grupos"), ("subgrupos", "Subg
              ("observacoes", "Observações"), ("composicao", "Composição"), ("cargos", "Cargos"),
              ("operadores", "Operadores"), ("fornecedores", "Fornecedores"), ("clientes", "Clientes"), ("garotas", "Garotas"),
              ("bairros", "Bairros e taxas de entrega"), ("tipos_pagamento", "Tipos de Pagamento"),
-             ("planos_contas", "Plano de Contas"), ("subplanos", "Sub Planos"), ("aliquotas", "Alíquotas")]
+             ("planos_contas", "Plano de Contas"), ("subplanos", "Sub Planos"), ("aliquotas", "Alíquotas"),
+             ("setores_impressao", "Setores de Impressão")]
 MODULO_CADASTRO = {"planos_contas": "cad_plano_contas"}   # os demais seguem o padrão cad_<chave>
 
 LANCAMENTOS = [("contas", "Contas", "lanc_contas"), ("estoque", "Estoque", "lanc_estoque")]
@@ -53,7 +54,8 @@ UTILITARIOS = [("limpeza", "Limpeza do movimento", "util_limpeza"),
                ("backup", "Backup de dados", "util_backup"), ("restaurar", "Restaurar backup", "util_backup"),
                ("backup_externo", "Backup externo criptografado", "util_backup"),
                ("suporte", "Pacote de suporte (log de erros)", "util_backup"),
-               ("fila_impressao", "Fila de impressão", "util_fila_impressao")]
+               ("fila_impressao", "Fila de impressão", "util_fila_impressao"),
+               ("cozinha", "Painel da Cozinha/Bar", "util_cozinha")]
 CONFIGURACOES = [("acessos", "Acessos", "cfg_acessos"), ("loja", "Loja", "cfg_loja"),
                  ("configuracoes", "Configurações", "cfg_configuracoes"), ("maquinas", "Máquinas", "cfg_maquinas"),
                  ("telegram", "Telegram (celular do dono)", "cfg_telegram")]

@@ -30,33 +30,37 @@ DESTINOS = ("caixa", "remota")
 _ACORDAR = threading.Event()
 
 
-def _enviar_padrao(item: dict, maquina: dict) -> None:
-    """Envia os bytes do item pela conexão atualmente configurada para o destino dele."""
-    if item["destino"] == "remota":
-        endereco = (maquina.get("impressora_remota_endereco") or "").strip()
-        if (maquina.get("impressora_remota_conexao") or "") == "spooler":
-            term.enviar_spooler(endereco, item["dados"], "PDV Pedido")
-        else:
-            term.enviar_rede(endereco, item["dados"])
-    else:
-        ImpressoraTermica.da_maquina(maquina).enviar_bytes(item["dados"])
-
-
 class FilaImpressao:
     def __init__(self, banco, enviador=None):
         self.banco = banco
-        self.enviador = enviador or _enviar_padrao
+        self.enviador = enviador or self._enviar_padrao_setor
+
+    def _enviar_padrao_setor(self, item: dict, maquina: dict) -> None:
+        """Envia os bytes do item pela conexão configurada para o destino dele. Com `setor_id` (módulo
+        Cozinha/Bar), usa a conexão cadastrada no setor em vez da impressora remota única da máquina."""
+        if item["destino"] == "remota":
+            setor = self.banco.um("SELECT * FROM setores_impressao WHERE id = ?", (item.get("setor_id"),)) \
+                if item.get("setor_id") else None
+            conexao = (setor["conexao"] if setor else maquina.get("impressora_remota_conexao")) or ""
+            endereco = (setor["endereco"] if setor else maquina.get("impressora_remota_endereco")) or ""
+            endereco = endereco.strip()
+            if conexao == "spooler":
+                term.enviar_spooler(endereco, item["dados"], "PDV Pedido")
+            else:
+                term.enviar_rede(endereco, item["dados"])
+        else:
+            ImpressoraTermica.da_maquina(maquina).enviar_bytes(item["dados"])
 
     # ------------------------------------------------------------ gravação
     def enfileirar(self, destino: str, nome: str, dados: bytes, tipo: str | None = None,
-                   venda_id: int | None = None) -> int:
+                   venda_id: int | None = None, setor_id: int | None = None) -> int:
         if destino not in DESTINOS:
             raise ErroNegocio(f"Destino de impressão inválido: {destino}")
         if not dados:
             raise ErroNegocio("Nada para imprimir.")
         item_id = self.banco.inserir("fila_impressao", {
             "criado_em": fmt.agora(), "destino": destino, "tipo": tipo, "nome": nome,
-            "dados": bytes(dados), "status": "pendente", "venda_id": venda_id})
+            "dados": bytes(dados), "status": "pendente", "venda_id": venda_id, "setor_id": setor_id})
         _ACORDAR.set()
         return item_id
 

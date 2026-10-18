@@ -65,6 +65,7 @@ LOOKUPS = {
     "aliquotas": "SELECT id, descricao FROM aliquotas ORDER BY descricao",
     "cargos": "SELECT id, nome FROM cargos ORDER BY nome",
     "bairros": "SELECT id, nome FROM bairros ORDER BY nome",
+    "setores_impressao": "SELECT id, nome FROM setores_impressao WHERE ativo = 1 ORDER BY ordem, nome",
     "planos_contas": "SELECT id, nome FROM planos_contas ORDER BY ordem, nome",
     "subplanos": ("SELECT sp.id, sp.nome || ' - ' || pl.nome FROM subplanos sp "
                   "JOIN planos_contas pl ON pl.id = sp.plano_id ORDER BY pl.ordem, sp.nome"),
@@ -78,6 +79,8 @@ LOOKUPS = {
 NIVEIS = [(i, str(i)) for i in range(0, 5)]
 DIAS = [(1, "Dom"), (2, "Seg"), (3, "Ter"), (4, "Qua"), (5, "Qui"), (6, "Sex"), (7, "Sáb")]
 TEF = [(0, "Nenhum"), (1, "Visa/Redecard/Amex"), (2, "Tecban"), (3, "Hipercard")]
+CONEXAO_SETOR = [("pasta", "Pasta de arquivos"), ("rede", "Rede (TCP/IP)"),
+                  ("spooler", "Impressora do Windows (USB ou instalada)"), ("nenhuma", "Nenhuma")]
 
 
 def _sn(nome, rotulo, padrao=0, secao="Geral", **kw):
@@ -217,6 +220,7 @@ _ENTIDADES = [
         Campo("nome", "Subgrupo", obrigatorio=True, tamanho=40, largura=30),
         Campo("grupo_id", "Grupo", "lookup", obrigatorio=True, lookup="grupos", largura=24),
         _sn("impressora_remota", "Imprimir em outra impressora (cozinha/bar)", na_grade=True),
+        Campo("setor_impressao_id", "Setor de impressão (cozinha/bar)", "lookup", lookup="setores_impressao", na_grade=False),
         Campo("figura", "Figura (bmp 180x121)", na_grade=False, largura=40),
     ], ordem="nome", busca=("nome",)),
 
@@ -225,6 +229,15 @@ _ENTIDADES = [
         Campo("aliquota", "Alíquota %", "decimal", padrao=0, largura=10),
         Campo("formato", "Formato (impressora)", obrigatorio=True, tamanho=4, largura=12),
     ], ordem="descricao", busca=("descricao",), antes_salvar=_antes_aliquota),
+
+    Entidade("setores_impressao", "Setores de Impressão (Cozinha/Bar)", "setores_impressao", "cad_setores_impressao", [
+        Campo("nome", "Setor", obrigatorio=True, tamanho=40, largura=24),
+        Campo("conexao", "Conexão", "escolha", opcoes=CONEXAO_SETOR, padrao="pasta", largura=16),
+        Campo("pasta", "Pasta de arquivos", na_grade=False),
+        Campo("endereco", "Endereço de rede (IP:porta) ou nome da impressora do Windows", na_grade=False),
+        Campo("ordem", "Ordem", "int", padrao=0, largura=7),
+        _sn("ativo", "Ativo", 1, na_grade=True),
+    ], ordem="ordem", busca=("nome",), tem_ativo=True),
 
     Entidade("produtos", "Cadastro de Produtos", "produtos", "cad_produtos", [
         Campo("codigo", "Código", "cod13", obrigatorio=True, largura=15),

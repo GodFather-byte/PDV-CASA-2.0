@@ -341,6 +341,48 @@ class TesteRoteamento(BaseCaixa):
         self.assertIn(b"p", recebido["dados"])
 
 
+class TesteSetorImpressao(BaseCaixa):
+    """Módulo Cozinha/Bar (usar_cozinha_bar): impressoras remotas nomeadas por setor."""
+
+    def setUp(self):
+        super().setUp()
+        self.imp = ImpressaoController(self.banco)
+
+    def test_pedido_remoto_usa_a_conexao_do_setor_quando_o_subgrupo_tem_setor(self):
+        with impressora_falsa() as (endereco_setor, recebido):
+            setor_id = self.banco.inserir("setores_impressao", {
+                "nome": "Cozinha", "conexao": "rede", "endereco": endereco_setor, "ativo": 1, "ordem": 0})
+            self.banco.executar("UPDATE subgrupos SET impressora_remota = 1, setor_impressao_id = ?", (setor_id,))
+            # a máquina aponta para um endereço que não responde: se o código usasse a máquina em vez do
+            # setor, o teste travaria/erraria em vez de passar.
+            self.banco.executar(
+                "UPDATE maquinas SET impressora_remota_conexao='rede', impressora_remota_endereco='127.0.0.1:1'")
+            vid = self.caixa.abrir_balcao()
+            item = self.caixa.adicionar_item(vid, self.skol, 1)
+            for sub, texto in self.imp.pedido_remoto(vid, [item]).items():
+                setor = self.imp.setor_do_subgrupo(sub)
+                self.assertEqual(setor["id"], setor_id)
+                self.imp.enviar_remoto(texto, f"pedido_{sub}", setor=setor)
+            self.assertEqual(self.banco.valor("SELECT setor_id FROM fila_impressao ORDER BY id DESC LIMIT 1"), setor_id)
+            self.assertEqual(self.imp.fila.processar()["enviados"], 1)
+        self.assertTrue(recebido["dados"].startswith(b"\x1b@"))
+
+    def test_sem_setor_cadastrado_mantem_o_comportamento_atual(self):
+        with impressora_falsa() as (endereco, recebido):
+            self.banco.executar(
+                "UPDATE maquinas SET impressora_remota_conexao='rede', impressora_remota_endereco=?", (endereco,))
+            self.banco.executar("UPDATE subgrupos SET impressora_remota = 1")
+            vid = self.caixa.abrir_balcao()
+            item = self.caixa.adicionar_item(vid, self.skol, 1)
+            for sub, texto in self.imp.pedido_remoto(vid, [item]).items():
+                setor = self.imp.setor_do_subgrupo(sub)
+                self.assertIsNone(setor)
+                self.imp.enviar_remoto(texto, f"pedido_{sub}", setor=setor)
+            self.assertIsNone(self.banco.valor("SELECT setor_id FROM fila_impressao ORDER BY id DESC LIMIT 1"))
+            self.assertEqual(self.imp.fila.processar()["enviados"], 1)
+        self.assertTrue(recebido["dados"].startswith(b"\x1b@"))
+
+
 class TesteMigracao(unittest.TestCase):
     def test_v1_migra_ate_a_versao_atual_preservando_dados_e_adicionando_termica(self):
         import shutil

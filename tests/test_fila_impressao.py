@@ -163,6 +163,32 @@ class TesteFila(BaseTeste):
         self.assertEqual(nivel, "aviso")
         self.assertIn("fora", texto)
 
+    def test_enfileirar_com_setor_grava_a_coluna(self):
+        setor_id = self.banco.inserir("setores_impressao", {"nome": "Cozinha", "conexao": "pasta", "ativo": 1, "ordem": 0})
+        iid = self.fila.enfileirar("remota", "pedido_cozinha", b"x", setor_id=setor_id)
+        self.assertEqual(self.banco.valor("SELECT setor_id FROM fila_impressao WHERE id = ?", (iid,)), setor_id)
+
+    def test_enfileirar_sem_setor_grava_nulo(self):
+        iid = self.novo(destino="remota")
+        self.assertIsNone(self.banco.valor("SELECT setor_id FROM fila_impressao WHERE id = ?", (iid,)))
+
+
+# ------------------------------------------------ enviador padrão (sem mock) e setor de impressão
+class TesteEnviadorPadraoSetor(BaseCaixa):
+    def setUp(self):
+        super().setUp()
+        self.imp = ImpressaoController(self.banco)
+
+    def test_enviador_padrao_resolve_a_conexao_do_setor(self):
+        with impressora_falsa() as (endereco_setor, recebido):
+            setor_id = self.banco.inserir("setores_impressao", {
+                "nome": "Bar", "conexao": "rede", "endereco": endereco_setor, "ativo": 1, "ordem": 0})
+            self.banco.executar(
+                "UPDATE maquinas SET impressora_remota_conexao='rede', impressora_remota_endereco='127.0.0.1:1'")
+            self.imp.fila.enfileirar("remota", "pedido_bar", b"\x1b@TESTE", setor_id=setor_id)
+            self.assertEqual(self.imp.fila.processar()["enviados"], 1)
+        self.assertEqual(recebido["dados"], b"\x1b@TESTE")
+
 
 def fmt_dt(texto: str):
     from datetime import datetime

@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 18
+VERSAO_ESQUEMA = 19
 
 PRODUTOS_HISTORICO_DDL = """CREATE TABLE IF NOT EXISTS produtos_historico (
     id INTEGER PRIMARY KEY,
@@ -96,6 +96,7 @@ TABELAS = [
         nome TEXT NOT NULL,
         grupo_id INTEGER NOT NULL REFERENCES grupos(id),
         impressora_remota INTEGER NOT NULL DEFAULT 0,
+        setor_impressao_id INTEGER REFERENCES setores_impressao(id),
         figura TEXT,
         UNIQUE (grupo_id, nome)
     )""",
@@ -362,7 +363,10 @@ TABELAS = [
         cancelado INTEGER NOT NULL DEFAULT 0,
         cancelado_em TEXT,
         operador_id INTEGER REFERENCES operadores(id),
-        criado_em TEXT NOT NULL
+        criado_em TEXT NOT NULL,
+        status_preparo TEXT NOT NULL DEFAULT 'pendente',
+        preparo_atualizado_em TEXT,
+        preparo_operador_id INTEGER REFERENCES operadores(id)
     )""",
     "CREATE INDEX IF NOT EXISTS ix_itens_venda ON itens_venda(venda_id)",
     """CREATE TABLE IF NOT EXISTS itens_venda_partes (
@@ -411,6 +415,17 @@ TABELAS = [
         criado_em TEXT NOT NULL
     )""",
     "CREATE INDEX IF NOT EXISTS ix_caderneta_cli ON caderneta(cliente_id)",
+    # Setores de impressão (v19): impressoras remotas nomeadas (cozinha, bar...), para o módulo de operação
+    # Cozinha/Bar (usar_cozinha_bar). Sem CHECK em conexao: mesmo motivo do modo_impressao acima.
+    """CREATE TABLE IF NOT EXISTS setores_impressao (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL UNIQUE,
+        conexao TEXT NOT NULL DEFAULT 'pasta',
+        pasta TEXT,
+        endereco TEXT,
+        ativo INTEGER NOT NULL DEFAULT 1,
+        ordem INTEGER NOT NULL DEFAULT 0
+    )""",
     # Fila de impressão (v5): o que vai para a impressora térmica/remota é gravado aqui e enviado por uma thread,
     # então a impressora fora do ar não trava o caixa e nenhum cupom se perde. `dados` são os bytes ESC/POS prontos.
     """CREATE TABLE IF NOT EXISTS fila_impressao (
@@ -425,7 +440,8 @@ TABELAS = [
         proxima_tentativa TEXT,
         ultimo_erro TEXT,
         enviado_em TEXT,
-        venda_id INTEGER
+        venda_id INTEGER,
+        setor_id INTEGER REFERENCES setores_impressao(id)
     )""",
     "CREATE INDEX IF NOT EXISTS ix_fila_status ON fila_impressao(status, destino, id)",
     # Telegram do dono (v11): `telegram_chats` são as conversas autorizadas (quem digitou o código de pareamento no bot);
@@ -789,4 +805,13 @@ MIGRACOES = {
     ],
     17: _migracao_historico_produtos(),
     18: AUDITORIA,
+    # v19: módulo de operação Cozinha/Bar (usar_cozinha_bar). A tabela setores_impressao nasce em TABELAS
+    # (IF NOT EXISTS); aqui só as colunas aditivas em tabelas que já existiam.
+    19: [
+        ("coluna", "subgrupos", "setor_impressao_id", "INTEGER REFERENCES setores_impressao(id)"),
+        ("coluna", "itens_venda", "status_preparo", "TEXT NOT NULL DEFAULT 'pendente'"),
+        ("coluna", "itens_venda", "preparo_atualizado_em", "TEXT"),
+        ("coluna", "itens_venda", "preparo_operador_id", "INTEGER REFERENCES operadores(id)"),
+        ("coluna", "fila_impressao", "setor_id", "INTEGER REFERENCES setores_impressao(id)"),
+    ],
 }
