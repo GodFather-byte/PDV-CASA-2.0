@@ -6,6 +6,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   cobrancas-postgres:
     name: Asaas / PostgreSQL 16
