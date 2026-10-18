@@ -10,6 +10,7 @@
     python -m backend.lojas cobranca vincular BOATE-CENTRO sub_EXEMPLO 9900
     python -m backend.lojas cobranca conciliar BOATE-CENTRO
     python -m backend.lojas cobranca listar
+    python -m backend.lojas painel BOATE-CENTRO [senha]         # senha do painel do dono no celular (gera uma se omitir)
 
 No PDV da loja, em Configurações > Nuvem: a chave da loja (ex.: BOATE-CENTRO) e o token mostrado aqui.
 Usa o mesmo banco da API (PDV_NUVEM_DB_URL).
@@ -113,6 +114,16 @@ def main(argv: list[str] | None = None) -> int:
                     raise ErroLoja("Informe a data como AAAA-MM-DD (ex.: 2026-11-30) ou 'cancelar'.") from None
                 definir_assinatura(db, resto[0], ate)
                 print(f"Loja {resto[0]} com assinatura paga até {ate.strftime('%d/%m/%Y')}. O PDV renova sozinho.")
+        elif comando == "painel" and 1 <= len(resto) <= 2:
+            from backend import painel
+            _obter(db, resto[0])
+            senha = resto[1] if len(resto) == 2 else painel.gerar_senha()
+            try:
+                painel.definir_senha(db, resto[0], senha)
+            except ValueError as e:
+                raise ErroLoja(str(e)) from None
+            print(f"Senha do painel da loja {resto[0]} definida. Passe ao dono (ela não aparece de novo):\n{senha}\n"
+                  f"No celular: abra o endereço da nuvem + /painel/ e entre com a loja {resto[0]} e esta senha.")
         elif comando == "listar" and not resto:
             lojas = listar(db)
             for loja in lojas:

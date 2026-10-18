@@ -1,0 +1,68 @@
+# Nuvem (backend/ + painel do dono): testa e, se passar, aciona o deploy no Render.
+# O Actions NÃO hospeda a nuvem (um job dura no máximo horas): quem fica no ar é o Render ou o servidor próprio
+# (docs/NUVEM.md). O deploy só acontece em push na main, com o segredo RENDER_DEPLOY_HOOK_URL cadastrado
+# (Render > serviço > Settings > Deploy Hook). Sem o segredo, só testa. Guia: docs/PAINEL_DONO.md.
+name: "Nuvem: testar e publicar"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "src/**"
+      - "tests/test_painel_dono.py"
+      - "tests/test_nuvem.py"
+      - "render.yaml"
+      - ".github/workflows/nuvem-deploy.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "src/sync/**"
+      - "tests/test_painel_dono.py"
+      - "tests/test_nuvem.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nuvem-deploy
+  cancel-in-progress: false
+
+jobs:
+  testar:
+    name: Testes da nuvem (API, painel do dono e envio do PDV)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt httpx requests
+      - name: API, painel do dono e laço de sincronização
+        run: python -m unittest tests.test_painel_dono tests.test_nuvem
+      - name: App web (manifesto válido e arquivos no lugar)
+        run: |
+          python -m json.tool backend/painel_web/manifest.webmanifest > /dev/null
+          test -f backend/painel_web/index.html && test -f backend/painel_web/app.js && test -f backend/painel_web/sw.js
+          test -f backend/painel_web/icones/icone-192.png && test -f backend/painel_web/icones/icone-512.png
+
+  publicar:
+    name: Deploy no Render
+    needs: testar
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Acionar o Deploy Hook (se configurado)
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL não cadastrado: testes ok, deploy não acionado."
+            exit 0
+          fi
+          codigo=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$HOOK")
+          echo "Render respondeu HTTP $codigo"
+          case "$codigo" in 2*) ;; *) echo "Deploy Hook falhou"; exit 1;; esac

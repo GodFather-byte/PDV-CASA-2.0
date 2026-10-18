@@ -1,89 +1,71 @@
-# HANDOFF
+﻿# HANDOFF
 
 ## Último trabalho
 
-Continuação do módulo **Adega / depósito de bebidas**, sobre os commits `7cd4090` e `2f28d41`.
-O titular confirmou as prioridades e regras por formulário. Três agentes trabalharam em arquivos
-separados (caixa Tk, caixa Qt e cadastro); o titular da sessão integrou regras, migração e testes.
+**Painel do dono no celular** (PWA), pedido logo depois da modernização da adega (commit `9bf8cdb`, que
+continua descrita em `docs/ESTOQUE.md` e no HANDOFF anterior no git). O titular perguntou se dava para o
+dono acompanhar tudo pelo celular "rodando pelo GitHub Actions"; a resposta foi: sim ao app instalável
+pelo navegador, Actions só testa e publica (não hospeda). Ele mandou fazer. Decisões tomadas sem resposta
+dele (titular ausente): envio **opcional e desligado por padrão**; senha do dono separada do token do PDV,
+definida pelo fornecedor; PWA servida pela própria API; deploy pelo Deploy Hook do Render.
 
-### Entregue
+### Entregue (commit deste HANDOFF)
 
-- **Cadastro > Produtos > Adega** (descrição compartilhada entre Tk e Qt):
-  preço gelada opcional, mínimo/preço unitário de atacado natural, mínimo/preço unitário de
-  atacado gelada e produto de casco vinculado. Validações consideram alterações parciais.
-- **Natural e gelada** compartilham produto/estoque. Produto com preço gelado pergunta a
-  temperatura antes de lançar. A temperatura fica no item e a observação preserva "Gelada"
-  para impressão, inclusive depois de editar observações.
-- **Atacado automático somente no balcão**, por produto e temperatura. Ao atingir o mínimo,
-  reprecifica todas as linhas elegíveis da venda; cancelar abaixo do mínimo restaura a base.
-  O preço-base é preservado em cada leitura; montagens e itens antigos sem base não são
-  reprecificados. Natural compara promoção vigente com atacado; gelada compara seu próprio
-  varejo com seu próprio atacado.
-- **Cascos simples**, sem empréstimo ou saldo: cadastrar CASCO como produto e vinculá-lo à
-  bebida; ao vender, informar quantos cobrar (0 = todas as trocas). Bebida e casco são
-  lançados numa transação, mas são produtos independentes no cancelamento. Os diálogos avisam
-  que cancelar a bebida não cancela o casco. Não há entrada automática das trocas.
-  Vínculo somente em bebida por unidade, sem composição/fardo/montagem/fracionamento.
-  Também bloqueia criar composição/fardo depois do vínculo. Desativar ou excluir casco
-  referenciado orienta desvincular nas bebidas primeiro.
-- **Agrupar leituras repetidas**: configuração `agrupar_itens_balcao` em Configurações > Caixa;
-  perfil Adega liga, demais perfis mantêm desligado. Separa temperatura, observação,
-  operador, preço-base e montagem; respeita limite por linha. Não agrupa itens preparados nem
-  categorias com impressão remota, para não reenviar quantidades acumuladas à cozinha/bar.
-  Delete cancela toda a linha agrupada.
-- **Tk**: faixa de orientação de balcão, atalhos visíveis de pagamento/delivery/caderneta,
-  resumo de quantidades natural/gelada, economia no atacado e indicação das faixas.
-  Novo `src/ui/adega_dialogos.py` registrado também em `src/autoteste.py`.
-- **Qt**: adega sem painel/posição/ações de mesa, `6*código`, cadastro rápido de EAN
-  desconhecido com permissão/supervisor, temperatura e cascos. Cadastro ganhou **Criar fardo**
-  usando o controlador existente. Delivery/caderneta preservados. Continua opt-in.
-- **Esquema v22**: colunas comerciais em produtos; temperatura e preço-base em itens_venda.
-  Atualiza gatilhos de auditoria para registrar os novos campos. Migração liga agrupamento
-  para adega já existente sem sobrescrever configuração explícita; backup prévio permanece
-  no mecanismo padrão. Teste confirma integridade, FKs e preservação dos preços antigos.
-- Guia atualizado em `docs/ESTOQUE.md`; paridade de adega em `docs/INTERFACE_QT.md`; mapa atualizado.
-  Nenhum banco real foi migrado nem instalador foi gerado nesta sessão.
+- **PDV** `src/sync/painel_envio.py` (novo): a cada rodada do `--sync`, com `painel_dono = S`, sobe as vendas
+  fechadas/canceladas com `sincronizado = 0` (itens com temperatura/preço-base, pagamentos, dia operacional
+  pela virada) em lotes de 200 e um retrato (turno via `TurnoController.resumo`, estoque zerado/abaixo do
+  mínimo, caderneta a receber, entregas pendentes). Só marca `sincronizado = 1` nos uuids que a nuvem
+  confirmou; cancelar venda já zera a marca (código existente), então o cancelamento sobe de novo.
+  `sincronizador.rodada` chama `_enviar_painel` (edição pontual no arquivo do Antigravity).
+  Config nova `painel_dono` (sementes + aba Nuvem do `CAMPOS_CONFIG`). Registrado em `autoteste.MODULOS`.
+- **Nuvem** `backend/painel.py` (novo), instalado no fim de `backend/main.py` com `instalar(app, Loja, autenticar)`
+  (sem import circular). Tabelas `painel_acessos` (PBKDF2 da senha), `painel_sessoes` (30 dias, hash do token),
+  `painel_vendas` (único por loja+uuid, venda inteira em JSON, agregação em Python na consulta),
+  `painel_retratos`. Rotas: `POST /v1/painel/envio` (token da loja), `POST /v1/painel/senha` (token da loja),
+  `POST /v1/admin/lojas/{chave}/painel` (admin; gera senha xxxx-xxxx-xxxx se não informar),
+  `POST /v1/painel/login` (8 erros/15 min bloqueiam, em memória), `/sair`, `GET /resumo?dia`, `/vendas?dia&pagina`,
+  `/historico?dias`. `/painel/` serve a PWA (`FileResponse` no index + `StaticFiles`). CLI
+  `python -m backend.lojas painel LOJA [senha]` (edição pontual em `lojas.py`).
+- **PWA** `backend/painel_web/` (agente): index/app.js/estilo.css/sw.js/manifest, 4 abas (Hoje, Caixa, Produtos,
+  Vendas), vanilla, offline com último resumo em localStorage, SW cache-first só do shell (nunca `/v1/`).
+  Ícones PNG gerados por `tools/gerar_icones_painel.py` (sem Pillow).
+- **Actions** `.github/workflows/nuvem-deploy.yml`: testa (`test_painel_dono`, `test_nuvem`, manifesto) e, em
+  push na `main` com o segredo `RENDER_DEPLOY_HOOK_URL`, chama o hook. Sem segredo só testa.
+- **Docs**: `docs/PAINEL_DONO.md` (novo, guia completo), `docs/NUVEM.md` (tabela inicial, aba Nuvem, seção 7),
+  `.ai/MAPA.md`. `tests/test_nuvem.py`: o teste "não tem painel" virou "não tem envio genérico nem painel do admin".
 
 ### Validação
 
-- Novos testes: `test_adega_regras.py`, `test_adega_cadastro.py`, `test_adega_tk.py`,
-  `test_adega_qt.py` (102 casos ao todo). Ajustada a expectativa antiga de leituras repetidas
-  em `test_adega.py` para a regra de agrupamento confirmada pelo titular.
-- Suíte completa: `QT_QPA_PLATFORM=offscreen`, `python -m unittest discover -s tests`:
-  **2070 testes, 62 ignorados, uma falha** (faltava registrar o novo diálogo em MODULOS).
-  Essa falha foi corrigida em `src/autoteste.py`.
-- Após a correção: **192 testes passaram** em uma execução conjunta de
-  `tests.test_autoteste`, `tests.test_adega`, `tests.test_adega_regras`,
-  `tests.test_adega_cadastro`, `tests.test_adega_tk`, `tests.test_adega_qt`,
-  `tests.test_qt_caixa`, `tests.test_qt_caixa_operacoes`, `tests.test_qt_composicao`.
-  A suíte completa não foi repetida após a correção pontual do registro.
-- Também passaram seletores de migrações antigas, pré-pago, cozinha, estoque, histórico,
-  auditoria, importação e perfis. Pylance sem diagnósticos de erro nas telas/controladores
-  alterados; `git diff --check` limpo.
+- `tests/test_painel_dono.py` (25 casos: envio, lotes, marcação parcial, cancelamento reenviado, retrato, laço do
+  sincronizador; nuvem: envio/upsert, senha/sessão/bloqueio/isolamento entre lojas, resumo com atacado e
+  gelada, paginação, histórico, PWA servida, CLI). Rodado junto com `test_nuvem`, `test_autoteste`,
+  `test_modulos`, `test_perfil`, `test_qt_configuracoes`, `test_atualizacoes`, `test_licenca_nuvem`: **134 OK**.
+- Ensaio de ponta a ponta nesta máquina: uvicorn local + SQLite + PDV de teste enviando 5 vendas via `requests`;
+  painel aberto no navegador (390 px): login, 4 abas e valores conferidos à mão (Pix 82,18; esperado na gaveta
+  123,00; economia do atacado 6,12). Script do ensaio foi apagado (não ficou no repositório).
+- Suíte completa **não** foi rodada de novo depois deste trabalho (a última completa foi antes do commit da adega,
+  2070 testes, 1 falha corrigida). O CI roda tudo no push.
+- Para os testes da nuvem rodarem localmente: `python -m pip install -r backend/requirements.txt httpx requests`
+  (foram instalados nesta máquina durante a sessão).
 
 ## Pendências
 
-- **Homologar antes de instalar:** leitor, impressora, gaveta e balança reais; testar natural/
-  gelada, limiar do atacado, cancelamento das duas linhas de bebida/casco e estoque de fardos
-  em cópia do banco. Não houve validação com periféricos físicos.
-- **Promoção por temperatura:** foi mantida a promoção antiga somente no preço natural,
-  e isso está explícito no guia. A tentativa de confirmar esse detalhe ao final não recebeu
-  resposta (titular indisponível). Se ele quiser promoção também na gelada, confirmar a regra
-  e ajustar controlador/prévias/testes juntos; não usar preço natural como substituto do gelado.
-- **NFC-e:** ainda não emite documento fiscal, somente cupom NÃO FISCAL. Conferir exigências
-  da SEFAZ antes de instalar em adega/comércio. Exige certificado/integração; não foi feito.
-- Retornáveis avançados (empréstimo, depósito/reembolso, saldo por cliente), etiquetas de
-  gôndola e múltiplas faixas de atacado ficaram fora desta etapa.
-- **Qt fora da adega:** ainda alinhar com Tk os demais recursos pendentes (pré-pago,
-  rodízio/perfil na operação, impressão por setor, dividir conta, balança automática,
-  corte/acerto de garotas e tipografia dos comprovantes). Esta entrega não certifica
-  paridade integral do Qt. Não abrir Tk e Qt simultaneamente sobre o mesmo banco.
-- **Pré-pago:** confirmar com titular a devolução em dinheiro de saldo recarregado por crédito
-  (risco de "saque"); evoluções: comprovante de recarga, RFID e relatório de recargas.
-- Demais evoluções preservadas: split por item, rodízio por faixa, EAN de balança,
-  consumação mínima por entrada e cobrança de comanda sem consumo (ESPECIFICACAO seção 3).
-- Homologar backup/restauração em outra máquina; configurar pasta do Google Drive e senha
-  do cofre do licenciador; conferir cartões 184x126/faixa 52 e impressão física.
-- Regra de renovação a partir do vencimento atual ainda pede autorização do titular.
-- Asaas/nuvem: homologar credenciais/webhook e hospedar API/worker supervisionados antes
-  de contratar. Painel web e múltiplos caixas continuam fora de escopo.
+- **Titular decide**: (1) ligar o painel para quais lojas e definir as senhas (`backend.lojas painel`); (2) cadastrar
+  `RENDER_DEPLOY_HOOK_URL` nos segredos do GitHub se quiser deploy automático; (3) a promoção antiga vale só para
+  o preço natural (pergunta sem resposta na sessão da adega).
+- **Painel, evoluções não feitas**: campo no PDV para o dono definir a própria senha do painel (a rota
+  `POST /v1/painel/senha` já existe; falta a tela em Configurações > Nuvem, Tk e Qt); avisos push; mais de um
+  terminal por loja (o retrato é do último que enviou); apagar dados antigos da nuvem; freio de login persistente
+  (hoje em memória por processo); homologar no Render + Neon de verdade e num celular real (Android/iPhone: instalar,
+  offline, dark mode). Nada disso foi testado fora desta máquina.
+- **Adega** (do commit anterior): homologar com leitor/impressora/gaveta reais; NFC-e continua fora (cupom NÃO
+  FISCAL); retornáveis avançados, etiquetas de gôndola e várias faixas de atacado ficaram fora.
+- **Qt fora da adega**: alinhar com o Tk pré-pago, rodízio/perfil, impressão por setor, dividir conta, balança,
+  acerto das garotas e tipografia dos comprovantes. Não abrir Tk e Qt ao mesmo tempo sobre o mesmo banco.
+- **Pré-pago**: confirmar a devolução em dinheiro de saldo recarregado no cartão; comprovante de recarga, RFID,
+  relatório de recargas.
+- Demais: split por item, rodízio por faixa, EAN de balança, consumação mínima por entrada, cobrança de comanda
+  sem consumo; backup/restauração em outra máquina; Google Drive e senha do cofre do licenciador; cartões
+  184x126 e faixa 52 na impressora real; regra de renovação a partir do vencimento (pede OK do titular); Asaas
+  (homologar credenciais/webhook e hospedar API/worker supervisionados). Painel web do **fornecedor** (todas as
+  lojas) e múltiplos caixas seguem fora de escopo.

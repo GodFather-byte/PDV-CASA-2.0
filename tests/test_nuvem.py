@@ -80,9 +80,11 @@ class TesteApi(BaseTeste):
         self.assertEqual(r.status_code, 403)
         self.assertIn("desativada", r.json()["detail"])
 
-    def test_nuvem_nao_recebe_vendas_nem_tem_painel(self):
+    def test_nuvem_nao_tem_envio_generico_nem_painel_do_administrador(self):
+        """O painel é por loja (/v1/painel/*, backend/painel.py): não existe envio genérico nem um dashboard de todas as lojas."""
         self.assertEqual(self.http.post("/v1/sincronizar", json={}, headers=cabecalho()).status_code, 404)
         self.assertEqual(self.http.get("/v1/dashboard/resumo", headers=ADMIN).status_code, 404)
+        self.assertEqual(self.http.get("/v1/painel/resumo", headers=ADMIN).status_code, 401)
 
     def test_admin_ve_as_lojas_e_loja_nao_ve(self):
         r = self.http.get("/v1/admin/lojas", headers=ADMIN)

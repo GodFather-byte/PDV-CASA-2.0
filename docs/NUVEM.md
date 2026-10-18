@@ -1,13 +1,14 @@
 # Nuvem do WillPDV: como colocar no ar e acompanhar as lojas
 
-A nuvem é a parte que fica com **você**, o fornecedor. Ela faz três coisas (**não recebe vendas e não tem painel**: cada
-boate guarda as próprias vendas no caixa):
+A nuvem é a parte que fica com **você**, o fornecedor. Ela faz quatro coisas (cada loja continua guardando as próprias
+vendas no caixa; só a que ligar o painel do dono manda uma cópia para a nuvem):
 
 | O quê | Para quê |
 |---|---|
 | Guarda até quando cada loja pagou | O caixa renova a licença **sozinho** quando a loja está em dia |
 | Avisa sobre versão nova | Aparece uma faixa no caixa: "Nova versão disponível" |
 | Bloqueia uma loja | Desativou: a loja deixa de renovar a licença e de ver avisos |
+| Painel do dono no celular (opcional) | O dono da loja acompanha vendas, caixa e estoque em `/painel/`; guia em [PAINEL_DONO.md](PAINEL_DONO.md) |
 
 O caixa **não depende** da nuvem para vender: sem internet ele continua funcionando e tenta renovar a licença depois.
 
@@ -236,6 +237,7 @@ No caixa, entre em **Configurações > Configurações > aba Nuvem**:
 | Chave da loja (licença) | `BOATE-ESTRELA` |
 | Endereço da nuvem | `https://nuvem.seusite.com.br` |
 | Token da API | o token que o `criar` mostrou |
+| Painel do dono no celular | **Sim** só se o dono quiser acompanhar pelo celular (as vendas passam a subir para a nuvem; veja [PAINEL_DONO.md](PAINEL_DONO.md)) |
 
 Na instalação, marque **"Verificar licença e atualizações na nuvem em segundo plano"**: a verificação passa a abrir
 sozinha junto com o Windows. Se o caixa já estiver instalado, rode o instalador de novo e marque essa opção. O histórico
@@ -311,6 +313,11 @@ systemctl restart willpdv
 ```
 
 Colunas novas no banco da nuvem são criadas sozinhas, sem perder o que já está lá.
+
+**Pelo GitHub Actions:** o workflow `.github/workflows/nuvem-deploy.yml` roda os testes da nuvem a cada push em `main` que
+mexa em `backend/` ou `src/` e, se passarem, aciona o deploy no Render pelo *Deploy Hook* guardado no segredo
+`RENDER_DEPLOY_HOOK_URL` do repositório (Render > serviço > Settings > Deploy Hook). Sem o segredo, o workflow só testa. O
+Actions **não hospeda** a nuvem: ele testa e publica; quem fica no ar é o Render (ou o seu servidor da seção 2).
 
 ---
 

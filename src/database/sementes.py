@@ -95,6 +95,8 @@ CONFIG_PADRAO = {
     "usar_mesas": "S",
     "agrupar_itens_balcao": "N",
     "api_url": "", "api_token": "", "sync_intervalo_seg": "60",
+    # Painel do dono no celular: desligado até o dono pedir (as vendas só saem da loja com isto ligado).
+    "painel_dono": "N",
     "programa_comunicacao": "", "pasta_backup": "", "pasta_backup_extra": "", "backup_erro": "", "backup_extra_erro": "",
     "email_loja": "", "email_destino": "", "smtp_servidor": "",
     # Telegram do dono: desligado até o dono criar o bot e parear (Configurações > Telegram).

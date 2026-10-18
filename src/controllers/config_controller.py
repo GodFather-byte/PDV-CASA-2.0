@@ -118,6 +118,7 @@ CAMPOS_CONFIG = [
     ("smtp_servidor", "Servidor de e-mail (provedor)", "texto", "E-mail"),
     ("chave_loja", "Chave da loja (licença)", "texto", "Nuvem"), ("api_url", "Endereço da nuvem (licença e atualizações)", "texto", "Nuvem"),
     ("api_token", "Token da API", "texto", "Nuvem"), ("sync_intervalo_seg", "Intervalo da verificação na nuvem (segundos)", "int", "Nuvem"),
+    ("painel_dono", "Painel do dono no celular: enviar vendas fechadas, caixa e estoque para a nuvem", "sn", "Nuvem"),
     # O token do bot e o pareamento ficam na janela Configurações > Telegram (não aqui, para o token não aparecer em tela cheia).
     ("telegram_ativo", "Telegram ligado: avisar o celular do dono e responder aos botões (precisa parear em Configurações > Telegram)",
      "sn", "Telegram"),

@@ -1,4 +1,5 @@
-"""Segundo plano do PDV com a nuvem: renova a licença e avisa de versão nova (a nuvem não recebe vendas).
+"""Segundo plano do PDV com a nuvem: renova a licença, avisa de versão nova e, se o painel do dono estiver ligado
+(Configurações > Nuvem), envia as vendas fechadas e o retrato do caixa para o celular do dono (src/sync/painel_envio.py).
 
 Roda separado da interface (`python -m src.app --sync`, ou `WillPDV.exe --sync` no executável). Lê o endereço, o token e a
 chave da loja de Configurações > Nuvem. Sem endereço configurado não faz nada. Falha de rede só espera e tenta de novo.
@@ -43,9 +44,19 @@ class Sincronizador:
             if aviso:
                 log.info("Versão nova do PDV disponível: %s%s.", aviso["ultima"], " (CRÍTICA)" if aviso["critica"] else "")
             licenca_nuvem.renovar(self.banco, self._http)
-            return True
         except Exception:
             log.exception("Falha ao consultar atualizações ou licença.")
+            return False
+        return self._enviar_painel()
+
+    def _enviar_painel(self) -> bool:
+        """Painel do dono (opcional): sobe as vendas que faltam e o retrato do caixa. Falha aqui só espera a próxima rodada."""
+        try:
+            from src.sync import painel_envio
+            painel_envio.enviar(self.banco, self._http)
+            return True
+        except Exception:
+            log.exception("Falha ao enviar os dados do painel do dono.")
             return False
 
     def iniciar_loop(self, rodadas: int | None = None, dormir=time.sleep) -> None:

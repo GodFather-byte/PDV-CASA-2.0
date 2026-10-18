@@ -1,8 +1,9 @@
-"""API de nuvem do PDV (FastAPI): licença das lojas e aviso de versão nova.
+"""API de nuvem do PDV (FastAPI): licença das lojas, aviso de versão nova e o painel do dono no celular.
 
-A nuvem NÃO recebe vendas nem tem painel de faturamento: o PDV funciona sozinho em cada boate. Ela guarda a lista de
-lojas e cobranças de licença Asaas (cada loja com o SEU token e a data até quando pagou), entrega a licença e publica as
-versões novas do PDV. Cadastro das lojas (o token aparece uma única vez):
+O PDV funciona sozinho em cada loja; a nuvem não é necessária para vender. Ela guarda a lista de lojas e cobranças de
+licença Asaas (cada loja com o SEU token e a data até quando pagou), entrega a licença e publica as versões novas do PDV.
+Com o painel do dono ligado na loja (opcional), recebe também as vendas fechadas e um retrato do caixa/estoque, que o dono
+consulta pelo celular em /painel/ (backend/painel.py). Cadastro das lojas (o token aparece uma única vez):
     python -m backend.lojas criar BOATE-CENTRO "Boate Centro"
 
 Como rodar, na raiz do repositório:
@@ -236,3 +237,11 @@ def licenca(acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db))
         raise HTTPException(status_code=503, detail="A nuvem não está configurada para emitir licenças.")
     return {"codigo": licenca_pdv.gerar_licenca(semente, loja.chave_loja, (ate - hoje).days, hoje),
             "expira_em": ate.isoformat()}
+
+
+# ------------------------------------------------------- painel do dono
+# Opcional por loja (Configurações > Nuvem > painel_dono no PDV): vendas, caixa e estoque para o celular do dono, em
+# /painel/. Fica em backend/painel.py; recebe daqui o modelo de loja e a autenticação por token.
+from backend import painel as _painel   # noqa: E402  (depois de Loja e autenticar existirem)
+
+_painel.instalar(app, Loja, autenticar)
