@@ -191,9 +191,8 @@ O guia [NUVEM.md](NUVEM.md) explica o cadastro no Render e Neon. Para esta integ
 
 1. Crie ou selecione o PostgreSQL e guarde sua connection string com TLS.
 2. No Render, conecte o repositório e use o serviço web Python existente.
-3. O blueprint já usa o plano pago `starter` (instância sempre ligada). Confira o preço
-   atual em render.com/pricing; para um teste sem custo, troque para `free` só no ambiente
-   de teste. O plano do *workspace* (Hobby, grátis) é outra cobrança e não liga o serviço.
+3. O blueprint atual é gratuito por padrão: **mude o plano do serviço para pago**
+   antes de atender cobranças reais, após conferir o orçamento.
 4. Build: `pip install -r backend/requirements.txt`.
 5. Start: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`.
 6. Configure `PDV_NUVEM_DB_URL`, `PDV_API_TOKEN` e `TZ=America/Sao_Paulo`.
@@ -517,21 +516,6 @@ build `pip install -r backend/requirements.txt` e comando acima.
 banco, câmbio e impostos; o exemplo de R$ 38,50 da seção 3 cobre só a API.
 Nada é contratado ou provisionado pelo código/blueprint. O teto de R$ 50
 não é garantido. Não habilite outro serviço pago sem aprovação do custo.
-
-**Opção adotada para começar: agendador no GitHub Actions.** O workflow
-`.github/workflows/worker-asaas.yml` roda `python -m backend.worker_asaas --uma-vez` a cada
-5 minutos, sem custo de serviço extra. Em *Settings > Secrets and variables > Actions*, cadastre os
-segredos `PDV_NUVEM_DB_URL` e `ASAAS_API_KEY` e a variável `ASAAS_AMBIENTE` (`sandbox` ou
-`producao`). Sem os segredos o job apenas avisa e sai. Limites a conhecer: o GitHub só dispara
-agendamentos a partir do branch padrão, pode atrasar vários minutos (a renovação atrasa junto) e
-desativa o agendamento de repositório público após 60 dias sem atividade. A chave do Asaas fica
-nos secrets do repositório: restrinja quem tem acesso a ele. Quando a carteira crescer, troque
-pelo Background Worker do Render (mesmo comando, sem `--uma-vez`) e desative o workflow.
-
-O workflow `.github/workflows/monitor-asaas.yml` consulta o indicador a cada 30 minutos com
-`python -m tools.monitor_asaas` (secret `PDV_API_TOKEN`, variável `PDV_API_URL`) e falha, avisando
-por e-mail, se houver tarefa com erro, fila ou conciliação atrasada ou worker parado há mais de
-30 minutos (o servidor alerta com 5, mas o cron do GitHub atrasa).
 
 **Alternativa sem novo serviço contratado:** em servidor que você já administra
 e mantém ligado, use um processo supervisionado para API e outro para o worker.
