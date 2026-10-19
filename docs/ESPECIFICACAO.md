@@ -246,6 +246,27 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
 
 ## 3. O que NÃO está implementado
 
+### Preparação de iFood e NFC-e SP
+
+Configurações > Integrações (Tk) ou Parâmetros e módulos (Qt) permite marcar iFood e NFC-e como
+**Desativado** (padrão) ou **Em preparação (sem operação)** e informar o regime tributário a confirmar
+com o contador. O botão **Pendências das integrações** consulta somente a configuração já salva.
+Não há opção de ativar em produção, contratação, envio de dados, recebimento de pedidos ou emissão
+fiscal nesta etapa. O delivery manual e os cupons NÃO FISCAIS continuam como antes.
+
+Os perfis elegíveis são adega, bar, restaurante, churrascaria e comércio; delivery integrado também
+dependerá de habilitar o delivery manual. Boate está fora desta etapa. Trocar de perfil preserva a
+preferência de preparação, mas nunca habilita uma operação; a consulta informa a incompatibilidade.
+Não se avalia conformidade fiscal apenas por preencher os campos: a primeira integração fiscal será
+NFC-e modelo 65 para SP, com provedor ainda não escolhido, regime e tributação validados pelo contador,
+credenciamento, certificado e CSC conforme requisitos aplicáveis. Emissão sem internet não está implementada.
+O iFood ainda depende de acesso de desenvolvedor, conector, testes, homologação e autorização por loja.
+Não cadastrar tokens, certificados ou CSC nestes campos de preparação.
+
+As preferências usam a tabela de configurações existente e são inseridas idempotentemente em bancos
+novos e existentes, sem mudança de esquema. A consulta compartilhada está em
+`src/controllers/integracoes_controller.py`; não existe integração externa funcional.
+
 | Item | Situação |
 |------|----------|
 | Impressora fiscal (ECF), NFC-e, SAT | Não emite documento fiscal. Cupom é "NÃO FISCAL". Leitura X e Redução Z são relatórios gerenciais. Campos fiscais do produto (NCM, alíquotas) são guardados mas não usados. |

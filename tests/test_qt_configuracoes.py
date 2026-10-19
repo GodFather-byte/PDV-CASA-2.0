@@ -79,6 +79,29 @@ class TestConfiguracoesQt(BaseTeste):
             self.assertEqual(janela.campos["preferencias"][chave].isChecked(),
                              esperados[chave] == "S")
 
+    def test_integracoes_preparacao_e_pendencias_sem_operacao(self):
+        janela = self.janela()
+        janela.abas.setCurrentIndex(SECOES.index("parametros"))
+        for modulo in ("ifood", "nfce"):
+            chave = f"integracao_{modulo}_estado"
+            editor = janela.campos["parametros"][chave]
+            self.assertEqual(editor.currentData(), "desativado")
+            self.assertEqual(editor.count(), 2)
+            self.definir(janela, "parametros", chave, "preparacao")
+        self.assertTrue(janela.salvar())
+        with patch("src.ui_qt.configuracoes.QMessageBox.information") as mensagem:
+            self.assertTrue(janela.mostrar_integracoes())
+        self.assertIn("não emite notas fiscais", mensagem.call_args.args[2])
+        self.assertIn("Boate está fora", mensagem.call_args.args[2])
+
+    def test_pendencias_integracoes_revalidam_permissao(self):
+        janela = self.janela()
+        self.operador(nivel=3)
+        with patch("src.ui_qt.configuracoes.QMessageBox.information") as mensagem:
+            self.assertFalse(janela.mostrar_integracoes())
+        mensagem.assert_not_called()
+        self.assertFalse(janela.btn_integracoes.isEnabled())
+
     def test_escopo_explicito_nao_expoe_nem_regrava_segredos_e_parametros_criticos(self):
         self.ctx.config.salvar_config({
             "api_token": "SEGREDO_NAO_EXIBIR", "api_url": "https://exemplo.invalid",

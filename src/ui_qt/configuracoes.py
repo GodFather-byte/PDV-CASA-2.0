@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.controllers.config_controller import CAMPOS_CONFIG, CAMPOS_LOJA
+from src.controllers.integracoes_controller import IntegracoesController
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.sync import painel_envio
 from src.ui_qt.tema import texto
@@ -101,6 +102,10 @@ class JanelaConfiguracoes(QDialog):
                         editor.setPlaceholderText("Vazio mantém o token atual")
                 self.campos[secao][chave] = editor
                 formulario.addRow(rotulo, editor)
+            if secao == "parametros":
+                self.btn_integracoes = QPushButton("Pendências das integrações…")
+                self.btn_integracoes.clicked.connect(self.mostrar_integracoes)
+                formulario.addRow(self.btn_integracoes)
             if secao == "nuvem":
                 self.apagar_token = QCheckBox("Apagar o token salvo ao salvar esta aba")
                 formulario.addRow(self.apagar_token)
@@ -160,6 +165,7 @@ class JanelaConfiguracoes(QDialog):
                 self._originais[secao] = {}
         self.btn_salvar.setEnabled(permissoes[SECOES[self.abas.currentIndex()]])
         self.apagar_token.setEnabled(permissoes["nuvem"])
+        self.btn_integracoes.setEnabled(permissoes["parametros"])
         self.btn_senha_painel.setEnabled(permissoes["nuvem"] and not self._trocando_senha)
         if not permissoes["nuvem"]:
             self.apagar_token.setChecked(False)
@@ -262,6 +268,16 @@ class JanelaConfiguracoes(QDialog):
             self.mensagem.setText("Aba salva, mas não foi possível reler os valores. Recarregue a aba.")
             return True
         self.mensagem.setText("Configurações desta aba salvas.")
+        return True
+
+    def mostrar_integracoes(self):
+        try:
+            self._autorizar("parametros")
+            resumo = IntegracoesController(self.ctx.banco).resumo()
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return False
+        QMessageBox.information(self, "Integrações — configuração salva", resumo)
         return True
 
     # ------------------------------------------------ senha do painel do dono

@@ -2,39 +2,36 @@
 
 ## Último trabalho
 
-**Versão do PDV subida para 1.6.0** (pedido do titular): `src/versao.py` e o padrão de `instalador/WillPDV.iss` são os únicos
-lugares onde o número existe (o `build_pdv.py` e a faixa da tela principal leem de `src/versao.py`). O instalador novo sai do
-workflow "Gerar instalador (Windows)" quando isto chega na `main` (Releases > "última versão"). O WillPDV Licenças tem versão
-própria (1.1.0) e não mudou.
+**Preparação local de iFood e NFC-e SP**, autorizada pelo titular depois de esclarecer os pré-requisitos:
 
-**O que a 1.6.0 traz** (PRs já mesclados na `main`; guia completo em `docs/PAINEL_DONO.md`):
-
-- **O dono troca a própria senha do painel pelo PDV:** Configurações > botão "Senha do painel do dono..." (Tk) ou aba "Conexão
-  com a nuvem" (Qt). Usa `POST /v1/painel/senha` com o token da loja; em branco, a nuvem gera a senha e ela aparece uma vez.
-- **Vários caixas por loja:** cada caixa se identifica (`painel_envio.id_do_caixa`) e a nuvem guarda um retrato por caixa
-  (`painel_caixas`). Caderneta e entregas somam; o estoque **não** (cada caixa tem o seu banco). Só passa a valer para as lojas
-  quando **todos** os caixas estiverem na 1.6.0: PDV mais antigo entra na nuvem como um caixa só ("unico").
-- **Limpeza automática na nuvem:** vendas do painel com mais de 120 dias (`PDV_PAINEL_RETENCAO_DIAS`), sessões vencidas e caixas
-  parados há 14 dias saem sozinhos; `python -m backend.lojas limpar-painel` roda na hora. É só da nuvem (não depende da versão
-  do PDV). O histórico completo continua no caixa.
-- PDV novo funciona com a nuvem antiga e a nuvem nova funciona com o PDV antigo.
-
-**Decisão do titular:** a licença segue **manual** e a nuvem serve **só para o painel do dono** (Render + Neon, plano grátis).
-O trabalho do Asaas (worker e monitor no GitHub Actions, Render pago) não será usado: o PR #2 foi fechado sem merge. O commit
-continua no histórico (`832bed9`) e o `cfa840f` o desfaz, caso a cobrança automática volte. As edições em `backend/` (área do
-Antigravity) foram pontuais e pedidas pelo titular.
+- Escopo: módulos opcionais por loja para adega, bar, restaurante, churrascaria e comércio; boate fora desta etapa.
+- O titular ainda não tem acesso de desenvolvedor ao iFood, não escolheu provedor fiscal e não sabe o regime tributário.
+  Autorizou **apenas a base interna desativada**, sem contratação ou integração externa funcional.
+- `integracoes_controller.py` consulta estado, elegibilidade do perfil e pendências. `operacional` é sempre falso.
+  Configurações Tk/Qt oferecem só **Desativado** ou **Em preparação (sem operação)**, regime tributário e botão de pendências
+  baseado nos dados já salvos. Não há credenciais, emissão, importação de pedidos, contratação ou comunicação externa.
+- Novas preferências são inseridas pela semeadura idempotente na tabela `config` existente; sem migração de esquema.
+  Perfis não ativam nada automaticamente. Voltar à boate preserva preferências mas informa a exclusão.
+- Delivery manual, caixa e cupom NÃO FISCAL mantidos. Documentação em `docs/ESPECIFICACAO.md`, seção 3; mapa atualizado.
+- Versão continua **1.6.0** (licenciador 1.1.0). A nuvem segue só para o painel do dono, licença manual e Asaas fora de uso.
+  A 1.6.0 já inclui troca de senha do painel pelo PDV, retratos por caixa e retenção do painel; estoque segue por caixa.
 
 ### Validação
 
-- Suíte completa antes da subida de versão (`xvfb-run`, `QT_QPA_PLATFORM=offscreen`, Python 3.12, Linux): **2179 testes, OK, 15
-  ignorados** pelo ambiente; Windows e Linux, Python 3.10 e 3.12, passaram no GitHub. Os testes do painel que falam com a nuvem
-  também passam contra PostgreSQL 16 de verdade (`PDV_TESTE_NUVEM_DB_URL=postgresql+psycopg://...`; o cluster precisa ser UTF8).
-- Ensaio real: API local com 3 PDVs enviando por HTTP, o app do celular no Chromium (claro e escuro; 3 caixas, 1 caixa e a
-  resposta antiga) e a troca de senha por HTTP real.
-- **Não validado:** o app novo no Render/Neon, num celular de verdade e instalado como PWA; impressora e leitor; Windows na prática.
+- Windows, `python -m unittest`: **167 testes passaram**, sem ignorados:
+  - `tests.test_integracoes tests.test_integracoes_tk tests.test_qt_configuracoes tests.test_perfil`: 74.
+  - `tests.test_caixa tests.test_modulos tests.test_base`: 83.
+  - `tests.test_gestao.TesteConfig tests.test_gestao.TesteImpressao`: 10 (inclui entrega manual e cupom).
+- Pylance: controlador novo sem erros de sintaxe; arquivos Python alterados sem diagnósticos reportados pelo editor.
+- `git diff --check` passou. Não foi rodada a suíte completa nesta mudança.
+- **Não validado nem implementado:** integração real com iFood/SEFAZ/provedor, homologação fiscal, contingência e produção.
 
 ## Pendências
 
+- **Integrações:** obter acesso e loja de teste no iFood; escolher provedor fiscal depois de cotar CNPJ, volume, excedentes,
+  certificado e contingência em SP. Confirmar regime, emitente e tributação com contador. Depois implementar conectores,
+  pedidos idempotentes, pagamentos, cancelamentos e documentos fiscais; homologar ponta a ponta antes de oferecer ativação.
+  Não prometer operação sem internet ou emissão fiscal com a base atual. Não há preços confirmados nem provedor contratado.
 - **Publicar a 1.6.0 na nuvem** para os caixas conectados avisarem o dono (ação do titular, precisa do banco do Neon; exemplo):
   `python -m backend.atualizacoes publicar 1.6.0 --notas "Painel do dono: o dono troca a senha do painel em Configurações; lojas com mais de um caixa aparecem separadas no celular." --url https://github.com/GodFather-byte/PDV-CASA-2.0/releases/tag/ultima-versao`
   (trocar a `--url` se o repositório ficar privado ou se o instalador for entregue de outro jeito). Release versionada com o

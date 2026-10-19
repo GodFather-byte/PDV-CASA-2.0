@@ -7,6 +7,7 @@ from queue import Empty, Queue
 from tkinter import ttk
 
 from src.controllers.config_controller import CAMPOS_CONFIG, CAMPOS_LOJA, CAMPOS_MAQUINA
+from src.controllers.integracoes_controller import IntegracoesController
 from src.controllers.perfil_controller import PERFIS
 from src.core.erros import ErroNegocio
 from src.sync import painel_envio
@@ -52,8 +53,15 @@ def abrir(master, ctx, chave: str):
     return JanelaFormulario(master, ctx, "Configurações", [(c[0], c[1], c[2], c[3], c[4] if len(c) > 4 else None) for c in CAMPOS_CONFIG],
                             ctx.config.todas, ctx.config.salvar_config,
                             acoes=[("Perfil do estabelecimento...", lambda j: escolher_perfil(j, ctx)),
+                                   ("Pendências das integrações...", lambda j: mostrar_integracoes(j, ctx)),
                                    ("Senha do painel do dono...", lambda j: trocar_senha_painel(j, ctx))],
                             depois_de_gravar=lambda janela: aplicar_visual(janela, ctx))
+
+
+def mostrar_integracoes(janela, ctx) -> None:
+    ok, resumo = tema.tratar(janela, IntegracoesController(ctx.banco).resumo)
+    if ok:
+        tema.mensagem(janela, resumo, "Integrações — configuração salva")
 
 
 def _senha_ou_vazia(v: str) -> str:

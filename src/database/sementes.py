@@ -82,6 +82,8 @@ CONFIG_PADRAO = {
     "usar_desconto": "N",       # boate não dá desconto: o campo some do fechamento da conta (Configurações > Caixa liga)
     # Módulos que a boate não usa ficam escondidos (Configurações > Módulos liga cada um).
     "usar_delivery": "N", "usar_caderneta": "N", "usar_contas": "N",
+    "integracao_ifood_estado": "desativado", "integracao_nfce_estado": "desativado",
+    "nfce_regime_tributario": "nao_definido",
     # Módulo de operação Cozinha/Bar: impressoras nomeadas por setor e status de preparo por item.
     "usar_cozinha_bar": "N",
     # Módulo de operação Rodízio: cobrança fixa por pessoa, por mesa/comanda (opt-in por mesa).
