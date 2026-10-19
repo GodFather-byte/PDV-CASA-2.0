@@ -10,7 +10,7 @@ on:
     paths:
       - "backend/**"
       - "src/**"
-      - "tests/test_painel_dono.py"
+      - "tests/test_painel_*.py"
       - "tests/test_nuvem.py"
       - "render.yaml"
       - ".github/workflows/nuvem-deploy.yml"
@@ -18,7 +18,7 @@ on:
     paths:
       - "backend/**"
       - "src/sync/**"
-      - "tests/test_painel_dono.py"
+      - "tests/test_painel_*.py"
       - "tests/test_nuvem.py"
   workflow_dispatch:
 
@@ -41,7 +41,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -r backend/requirements.txt httpx requests
       - name: API, painel do dono e laço de sincronização
-        run: python -m unittest tests.test_painel_dono tests.test_nuvem
+        run: python -m unittest tests.test_painel_dono tests.test_painel_caixas tests.test_painel_limpeza tests.test_painel_senha_pdv tests.test_nuvem
       - name: App web (manifesto válido e arquivos no lugar)
         run: |
           python -m json.tool backend/painel_web/manifest.webmanifest > /dev/null

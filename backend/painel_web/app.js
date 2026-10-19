@@ -424,11 +424,15 @@
 
     // Status de atualização do PDV (relógio da loja no último envio).
     const status = $("status-atualizacao");
+    limpar(status);
     if (r.atualizado_em) {
-      status.textContent = "Atualizado às " + formatarHora(r.atualizado_em) +
-        (r.atraso_min !== null && r.atraso_min !== undefined ? " (há " + formatarAtraso(r.atraso_min) + ")" : "");
+      const nCaixas = Array.isArray(r.caixas) ? r.caixas.length : 0;
+      status.append("Atualizado às " + formatarHora(r.atualizado_em) +
+        (r.atraso_min !== null && r.atraso_min !== undefined ? " (há " + formatarAtraso(r.atraso_min) + ")" : ""));
+      // "· 3 caixas" não parte no meio: se faltar espaço, vai inteiro para a linha de baixo.
+      if (nCaixas > 1) status.append(el("span", { class: "sem-quebra", text: " · " + nCaixas + " caixas" }));
     } else {
-      status.textContent = "PDV ainda não enviou dados";
+      status.append("PDV ainda não enviou dados");
     }
     mostrarAtraso(r.atraso_min);
 
@@ -573,23 +577,70 @@
   // Renderização: aba Caixa
   // ------------------------------------------------------------------
 
+  // Os caixas da loja. Uma nuvem anterior aos vários caixas manda só `caixa`: vira uma lista de um item, no mesmo formato.
+  function caixasDoResumo(r) {
+    if (Array.isArray(r.caixas)) return r.caixas;
+    if (!r.atualizado_em && !r.caixa) return [];
+    return [{ id: "unico", rotulo: "Caixa", computador: "", atualizado_em: r.atualizado_em, atraso_min: r.atraso_min,
+              caixa: r.caixa || null }];
+  }
+
+  function cartaoValor(rotulo, valor, opcoes = {}) {
+    return el("article", { class: "cartao" + (opcoes.destaque ? " destaque" : "") },
+      el("span", { class: "rotulo", text: rotulo }),
+      el("strong", { class: "valor-grande", text: valor }),
+      opcoes.detalhe ? el("small", { class: "detalhe", text: opcoes.detalhe }) : null
+    );
+  }
+
+  function montarTurno(c) {
+    const numero = c.turno_numero !== null && c.turno_numero !== undefined ? "#" + c.turno_numero : "—";
+    return [
+      el("p", { class: "linha-detalhes" },
+        el("span", null, "Turno ", el("strong", { text: numero })),
+        el("span", null, "Operador: ", el("strong", { text: c.operador || "—" })),
+        el("span", null, "Aberto às ", el("strong", { text: formatarHora(c.aberto_em) }))
+      ),
+      el("div", { class: "grade-cartoes" },
+        cartaoValor("Esperado na gaveta", formatarCentavos(c.esperado_gaveta_cent), { destaque: true }),
+        cartaoValor("Valor inicial", formatarCentavos(c.valor_inicial_cent)),
+        cartaoValor("Recebido", formatarCentavos(c.recebido_cent)),
+        cartaoValor("Sangrias", formatarCentavos(c.sangrias_cent)),
+        cartaoValor("Suprimentos", formatarCentavos(c.suprimentos_cent)),
+        cartaoValor("Vendas no turno", formatarInteiro(c.tc), { detalhe: "Ticket médio " + formatarCentavos(c.tm_cent) }),
+        cartaoValor("Cancelamentos", formatarInteiro(c.cancelamentos))
+      ),
+    ];
+  }
+
+  // Com mais de um caixa cada cartão ganha cabeçalho: nome, aberto/fechado e há quanto tempo o PDV dele não fala.
+  function montarCaixa(c, varios) {
+    const aberto = !!c.caixa;
+    const parado = c.atraso_min !== null && c.atraso_min !== undefined && Number(c.atraso_min) > LIMITE_ATRASO_MIN;
+    const origem = [c.computador, c.atualizado_em ? "atualizado às " + formatarHora(c.atualizado_em) : "ainda não enviou"]
+      .filter(Boolean).join(" · ");
+    return el("div", { class: "caixa-cartao" },
+      varios ? el("div", { class: "caixa-titulo" },
+        el("strong", { text: c.rotulo || "Caixa" }),
+        el("span", { class: "etiqueta " + (aberto ? "etiqueta-aberto" : "etiqueta-fechado"), text: aberto ? "Aberto" : "Fechado" }),
+        parado ? el("span", { class: "etiqueta etiqueta-parado", text: "Sem enviar há " + formatarAtraso(c.atraso_min) }) : null,
+        el("span", { class: "detalhe", text: origem })
+      ) : null,
+      aberto ? montarTurno(c.caixa) : el("div", { class: "cartao cartao-neutro" },
+        el("strong", { text: "Caixa fechado" }),
+        el("p", { class: "detalhe", text: "Nenhum turno aberto no momento." })
+      )
+    );
+  }
+
   function renderizarCaixa(r) {
-    const c = r.caixa;
-    $("caixa-fechado").hidden = !!c;
-    $("caixa-aberto").hidden = !c;
-    if (c) {
-      $("cx-turno").textContent = c.turno_numero !== null && c.turno_numero !== undefined ? "#" + c.turno_numero : "—";
-      $("cx-operador").textContent = c.operador || "—";
-      $("cx-aberto-em").textContent = formatarHora(c.aberto_em);
-      $("cx-esperado").textContent = formatarCentavos(c.esperado_gaveta_cent);
-      $("cx-inicial").textContent = formatarCentavos(c.valor_inicial_cent);
-      $("cx-recebido").textContent = formatarCentavos(c.recebido_cent);
-      $("cx-sangrias").textContent = formatarCentavos(c.sangrias_cent);
-      $("cx-suprimentos").textContent = formatarCentavos(c.suprimentos_cent);
-      $("cx-tc").textContent = formatarInteiro(c.tc);
-      $("cx-tm").textContent = formatarCentavos(c.tm_cent);
-      $("cx-cancelamentos").textContent = formatarInteiro(c.cancelamentos);
-    }
+    const caixas = caixasDoResumo(r);
+    const alvo = $("lista-caixas");
+    limpar(alvo);
+    $("vazio-caixas").hidden = caixas.length > 0;
+    for (const c of caixas) alvo.append(montarCaixa(c, caixas.length > 1));
+    $("nota-soma-caderneta").hidden = caixas.length < 2;
+    $("nota-soma-entregas").hidden = caixas.length < 2;
     const cad = r.caderneta || {};
     $("cd-receber").textContent = formatarCentavos(cad.a_receber_cent);
     $("cd-clientes").textContent = formatarInteiro(cad.clientes_devendo);
@@ -626,22 +677,39 @@
     }
 
     $("atacado-economia").textContent = formatarCentavos(r.atacado_economia_cent);
+    renderizarEstoque(r);
+  }
 
+  // Cada caixa tem o seu banco, então o estoque de dois caixas não se soma: com mais de um controlando estoque, um bloco por caixa.
+  function renderizarEstoque(r) {
+    const comEstoque = caixasDoResumo(r).filter((c) => c.estoque && (Number(c.estoque.controlados) || 0) > 0);
+    const porCaixa = comEstoque.length > 1;
+    const alvo = $("estoque-por-caixa");
+    limpar(alvo);
+    alvo.hidden = !porCaixa;
+    $("bloco-estoque").hidden = porCaixa;
+    if (porCaixa) {
+      for (const c of comEstoque) alvo.append(montarBlocoEstoque(c.rotulo || "Caixa", c.estoque));
+      return;
+    }
     const est = r.estoque || {};
     $("est-controlados").textContent = formatarInteiro(est.controlados);
     $("est-zerados").textContent = formatarInteiro(est.zerados);
-
     const listaEst = $("lista-estoque");
-    const vazioEst = $("vazio-estoque");
     limpar(listaEst);
+    const itens = itensAbaixoDoMinimo(est);
+    $("vazio-estoque").hidden = itens.length > 0;
+    for (const li of itens) listaEst.append(li);
+  }
+
+  function itensAbaixoDoMinimo(est) {
     const abaixo = Array.isArray(est.abaixo_minimo) ? est.abaixo_minimo.slice() : [];
     abaixo.sort((a, b) => (Number(a.qt_atual) || 0) - (Number(b.qt_atual) || 0));
-    vazioEst.hidden = abaixo.length > 0;
-    for (const i of abaixo) {
+    return abaixo.map((i) => {
       const qt = Number(i.qt_atual) || 0;
       const zerado = qt <= 0;
       const unidade = i.unidade ? " " + i.unidade : "";
-      listaEst.append(el("li", { class: zerado ? "zerado" : "" },
+      return el("li", { class: zerado ? "zerado" : "" },
         el("div", { class: "nome" },
           el("strong", { text: i.nome || "—" }),
           el("span", { class: "sec", text: (i.codigo ? "Cód. " + i.codigo + " · " : "") +
@@ -651,8 +719,21 @@
           el("span", { class: "etiqueta " + (zerado ? "etiqueta-zerado" : "etiqueta-baixo"),
             text: zerado ? "Zerado" : formatarQuantidade(qt) + unidade })
         )
-      ));
-    }
+      );
+    });
+  }
+
+  function montarBlocoEstoque(rotulo, est) {
+    const itens = itensAbaixoDoMinimo(est);
+    return el("section", { class: "bloco" },
+      el("h2", { text: "Estoque · " + rotulo }),
+      el("p", { class: "linha-detalhes" },
+        el("span", null, "Controlados: ", el("strong", { text: formatarInteiro(est.controlados) })),
+        el("span", null, "Zerados: ", el("strong", { text: formatarInteiro(est.zerados) }))
+      ),
+      el("h3", { text: "Abaixo do mínimo" }),
+      itens.length ? el("ul", { class: "lista" }, itens) : el("p", { class: "vazio", text: "Nenhum produto abaixo do mínimo." })
+    );
   }
 
   // ------------------------------------------------------------------
@@ -680,13 +761,21 @@
     estado.paginaVendas = pagina;
   }
 
+  // Só com mais de um caixa na loja vale dizer de qual saiu a venda.
+  function rotuloDoCaixa(id) {
+    const caixas = estado.resumo && Array.isArray(estado.resumo.caixas) ? estado.resumo.caixas : [];
+    if (caixas.length < 2 || !id) return "";
+    const caixa = caixas.find((c) => c.id === id);
+    return caixa ? caixa.rotulo || "" : "";
+  }
+
   function montarVenda(v) {
     const cancelada = v.status === "cancelada";
     const titulo = (v.cupom ? "Cupom " + v.cupom : "Venda") + " · " + formatarHora(v.fechada_em);
     const modalidade = nomeModalidade(v.modalidade);
     const posicao = (v.posicao_rotulo || "").trim();
-    const sub = [modalidade, posicao.toLowerCase() !== modalidade.toLowerCase() ? posicao : "", v.operador]
-      .filter(Boolean).join(" · ");
+    const sub = [modalidade, posicao.toLowerCase() !== modalidade.toLowerCase() ? posicao : "", v.operador,
+      rotuloDoCaixa(v.terminal_id)].filter(Boolean).join(" · ");
 
     const itens = Array.isArray(v.itens) ? v.itens : [];
     const pagamentos = Array.isArray(v.pagamentos) ? v.pagamentos : [];

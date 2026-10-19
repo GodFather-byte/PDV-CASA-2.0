@@ -1,12 +1,15 @@
 """Configurações (manual ADM seção 8): acessos, loja, configurações operacionais e máquinas."""
 from __future__ import annotations
 
+import threading
 import tkinter as tk
+from queue import Empty, Queue
 from tkinter import ttk
 
 from src.controllers.config_controller import CAMPOS_CONFIG, CAMPOS_LOJA, CAMPOS_MAQUINA
 from src.controllers.perfil_controller import PERFIS
 from src.core.erros import ErroNegocio
+from src.sync import painel_envio
 from src.ui import paleta, tema
 from src.ui.escolher_impressora_ui import JanelaEscolherImpressora
 from src.ui.visualizador import Visualizador
@@ -48,8 +51,87 @@ def abrir(master, ctx, chave: str):
                                               "impressora_remota_endereco": ("Escolher da lista...", lambda j: escolher_impressora(j, ctx, "remota"))})
     return JanelaFormulario(master, ctx, "Configurações", [(c[0], c[1], c[2], c[3], c[4] if len(c) > 4 else None) for c in CAMPOS_CONFIG],
                             ctx.config.todas, ctx.config.salvar_config,
-                            acoes=[("Perfil do estabelecimento...", lambda j: escolher_perfil(j, ctx))],
+                            acoes=[("Perfil do estabelecimento...", lambda j: escolher_perfil(j, ctx)),
+                                   ("Senha do painel do dono...", lambda j: trocar_senha_painel(j, ctx))],
                             depois_de_gravar=lambda janela: aplicar_visual(janela, ctx))
+
+
+def _senha_ou_vazia(v: str) -> str:
+    return painel_envio.validar_senha(v) if v else ""
+
+
+def _com_espera(janela, texto: str, funcao):
+    """Roda `funcao` (rede) numa thread, com uma janelinha de espera, e devolve o que ela devolveu (ou levanta o que ela
+    levantou). O Tk não fica parado esperando a nuvem: no plano grátis do Render o primeiro acesso do dia demora."""
+    fila: Queue = Queue()
+
+    def rede():
+        try:
+            fila.put((funcao(), None))
+        except Exception as e:  # noqa: BLE001 - tudo volta para a thread da tela, que decide o que mostrar
+            fila.put((None, e))
+
+    threading.Thread(target=rede, name="senha-painel", daemon=True).start()
+    dlg = tema.Dialogo(janela, "Aguarde")
+    ttk.Label(dlg.corpo, text=texto, wraplength=380, justify="left").pack(anchor="w")
+    dlg.cancelar = lambda: None                       # sem botão e sem Esc: o pedido já foi para a nuvem
+    dlg.bind("<Escape>", lambda e: None)
+    dlg.protocol("WM_DELETE_WINDOW", lambda: None)
+
+    def olhar():
+        try:
+            resposta = fila.get_nowait()
+        except Empty:
+            dlg.after(100, olhar)
+            return
+        dlg.ok(resposta)
+    dlg.after(100, olhar)
+    retorno = dlg.mostrar()
+    if retorno is None:
+        raise ErroNegocio("A janela de espera foi fechada antes da resposta. Confira se a senha mudou tentando entrar no painel.")
+    resultado, erro = retorno
+    if erro is not None:
+        raise erro
+    return resultado
+
+
+def trocar_senha_painel(janela, ctx) -> None:
+    """O dono troca a senha do painel do celular pelo próprio PDV (rota da loja da nuvem), sem depender do fornecedor. Grava
+    antes o que está na tela (de lá vêm o endereço e o token). Em branco, a nuvem gera uma senha e ela aparece UMA vez."""
+    ok, _ = tema.tratar(janela, ctx.config.salvar_config, janela._coletar())
+    if not ok:
+        return
+    banco = ctx.banco
+    url, token = banco.cfg("api_url").strip(), banco.cfg("api_token").strip()
+    if not url or not token:
+        tema.erro(janela, "Preencha o endereço da nuvem e o token da API (aba Nuvem) antes de trocar a senha do painel.",
+                  "Senha do painel do dono")
+        return
+    nova = tema.pedir_texto(janela, "Senha do painel do dono",
+                            f"Senha nova do painel (mínimo {painel_envio.SENHA_MINIMA} caracteres).\n"
+                            "Deixe em branco para a nuvem gerar uma:", senha=True, largura=30, validar=_senha_ou_vazia)
+    if nova is None:
+        return
+    if nova:
+        def conferir(v):
+            if v != nova:
+                raise ErroNegocio("As senhas não conferem.")
+            return v
+        if tema.pedir_texto(janela, "Senha do painel do dono", "Digite a senha nova de novo:", senha=True, largura=30,
+                            validar=conferir) is None:
+            return
+    ok, gerada = tema.tratar(janela, lambda: _com_espera(
+        janela, "Trocando a senha na nuvem...\nIsto pode levar alguns segundos.",
+        lambda: painel_envio.trocar_senha_na_nuvem(url, token, nova or None)))
+    if not ok:
+        return
+    painel_envio.registrar_troca_de_senha(banco, bool(gerada), ctx.operador_id)
+    entrar_de_novo = "O celular do dono precisa entrar de novo com a senha nova."
+    if gerada:
+        tema.mensagem(janela, f"Senha do painel trocada.\n\nA senha nova é:\n\n        {gerada}\n\nAnote agora: ela não aparece "
+                              f"de novo. {entrar_de_novo}", "Senha do painel do dono")
+    else:
+        tema.mensagem(janela, f"Senha do painel trocada. {entrar_de_novo}", "Senha do painel do dono")
 
 
 def escolher_perfil(janela, ctx) -> None:

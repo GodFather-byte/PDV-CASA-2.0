@@ -2,7 +2,7 @@
  * Guarda só o "app shell" (arquivos estáticos) com cache-first e atualização em segundo plano.
  * Chamadas à API (/v1/) vão sempre à rede e NUNCA são guardadas: contêm dados sensíveis e o token. */
 
-const VERSAO = "painel-v1";
+const VERSAO = "painel-v2";
 const ARQUIVOS_SHELL = [
   "./",
   "./index.html",
@@ -15,10 +15,12 @@ const ARQUIVOS_SHELL = [
   "./icones/icone-maskable-512.png",
 ];
 
+// "reload": a versão nova do app nasce inteira da rede, nunca com um arquivo antigo que o cache HTTP do navegador ainda
+// considere fresco (index.html novo com app.js velho quebraria a primeira abertura).
 self.addEventListener("install", (evento) => {
   evento.waitUntil(
     caches.open(VERSAO)
-      .then((cache) => cache.addAll(ARQUIVOS_SHELL))
+      .then((cache) => cache.addAll(ARQUIVOS_SHELL.map((url) => new Request(url, { cache: "reload" }))))
       .then(() => self.skipWaiting())
   );
 });

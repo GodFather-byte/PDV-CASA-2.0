@@ -172,6 +172,7 @@ h3 { font-size: .95rem; color: var(--texto-suave); margin-top: .75rem; }
   font-size: 1rem;
 }
 .status-atualizacao { font-size: .78rem; opacity: .9; }
+.sem-quebra { white-space: nowrap; }
 
 .cabecalho-acoes { display: flex; gap: .35rem; flex-shrink: 0; }
 
@@ -409,6 +410,28 @@ h3 { font-size: .95rem; color: var(--texto-suave); margin-top: .75rem; }
 }
 
 li.zerado .nome strong { color: var(--vermelho); }
+
+/* ---------- Vários caixas ---------- */
+
+.caixa-cartao + .caixa-cartao {
+  margin-top: 1.1rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--borda);
+}
+.caixa-titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .25rem .6rem;
+}
+.caixa-titulo strong { font-size: 1.05rem; }
+.caixa-titulo .detalhe { flex-basis: 100%; margin: 0; }
+.etiqueta-aberto { background: var(--verde-claro); color: var(--verde); }
+.etiqueta-fechado { background: var(--borda); color: var(--texto-suave); }
+.etiqueta-parado { background: var(--ambar-fundo); color: var(--ambar); }
+@media (prefers-color-scheme: dark) {
+  .etiqueta-aberto { color: #86efac; }
+}
 
 /* ---------- Vendas ---------- */
 

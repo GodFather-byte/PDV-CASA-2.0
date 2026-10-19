@@ -153,6 +153,9 @@ chmod 600 /opt/willpdv/nuvem.env
 ```
 
 - `PDV_API_TOKEN` é a **sua** senha de administrador. Com ela você lista todas as lojas.
+- Opcional: `PDV_PAINEL_RETENCAO_DIAS=120` (padrão) é quantos dias de vendas o painel do dono guarda na nuvem; o que passa disso
+  é apagado sozinho (o histórico completo continua no PDV). Mínimo 7. Detalhes em [PAINEL_DONO.md](PAINEL_DONO.md), "Limpeza
+  automática".
 
 ### 2.4 Deixar a nuvem ligada sempre (reinicia sozinha se cair ou se o servidor reiniciar)
 

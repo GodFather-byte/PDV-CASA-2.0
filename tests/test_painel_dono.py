@@ -6,8 +6,10 @@ import io
 import os
 import shutil
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stdout
+from datetime import date
 from pathlib import Path
 from unittest import mock
 
@@ -196,7 +198,7 @@ class TesteEnvioDoPdv(BasePainel):
 def preparar_lojas():
     db = nuvem.SessionLocal()
     try:
-        for tabela in (painel.PainelVenda, painel.PainelRetrato, painel.PainelSessao, painel.PainelAcesso):
+        for tabela in (painel.PainelVenda, painel.PainelCaixa, painel.PainelSessao, painel.PainelAcesso):
             db.query(tabela).delete()
         db.query(nuvem.Loja).filter(nuvem.Loja.chave_loja.in_(list(TOKENS))).delete(synchronize_session=False)
         for chave, token in TOKENS.items():
@@ -206,6 +208,7 @@ def preparar_lojas():
         db.close()
     painel.tentativas.acertou("ADEGA-1")
     painel.tentativas.acertou("ADEGA-2")
+    painel._limpeza["ultima"] = time.monotonic()    # limpeza "recém-feita": só os testes de limpeza a querem (ultima = None)
 
 
 class _ClienteSemTimeout:
@@ -219,10 +222,16 @@ class _ClienteSemTimeout:
 
 
 @unittest.skipIf(TestClient is None, "fastapi/httpx não instalados")
-class TesteNuvemPainel(BasePainel):
+class BaseNuvem(BasePainel):
+    """O PDV de teste ligado à API de verdade (TestClient), com as lojas ADEGA-1 e ADEGA-2 e o "hoje" da nuvem no dia do
+    relógio dos testes (2026-10-03): a retenção compara o dia das vendas com a data do servidor, que sem isto seria a real."""
+
     def setUp(self):
         super().setUp()
         preparar_lojas()
+        relogio = mock.patch.object(painel, "_hoje", return_value=date(2026, 10, 3))
+        relogio.start()
+        self.addCleanup(relogio.stop)
         self.http = TestClient(nuvem.app)
         self.banco.cfg_set("api_url", "http://testserver/v1/sincronizar")
 
@@ -236,9 +245,12 @@ class TesteNuvemPainel(BasePainel):
         self.assertEqual(r.status_code, 200, r.text)
         return {"Authorization": f"Bearer {r.json()['token']}"}
 
-    def subir(self):
-        return painel_envio.enviar(self.banco, _ClienteSemTimeout(self.http))
+    def subir(self, banco=None):
+        return painel_envio.enviar(banco or self.banco, _ClienteSemTimeout(self.http))
 
+
+@unittest.skipIf(TestClient is None, "fastapi/httpx não instalados")
+class TesteNuvemPainel(BaseNuvem):
     # ---- envio
     def test_pdv_envia_e_a_nuvem_guarda_sem_duplicar(self):
         v = self.venda_fechada((self.skol, 2))
@@ -251,7 +263,7 @@ class TesteNuvemPainel(BasePainel):
             linhas = db.query(painel.PainelVenda).filter_by(chave_loja="ADEGA-1").all()
             self.assertEqual([(l.uuid, l.status, l.motivo_cancelamento) for l in linhas],
                              [(v["uuid"], "cancelada", "erro de digitação")])
-            self.assertEqual(db.query(painel.PainelRetrato).filter_by(chave_loja="ADEGA-1").count(), 1)
+            self.assertEqual(db.query(painel.PainelCaixa).filter_by(chave_loja="ADEGA-1").count(), 1)
         finally:
             db.close()
 

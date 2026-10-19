@@ -11,6 +11,7 @@
     python -m backend.lojas cobranca conciliar BOATE-CENTRO
     python -m backend.lojas cobranca listar
     python -m backend.lojas painel BOATE-CENTRO [senha]         # senha do painel do dono no celular (gera uma se omitir)
+    python -m backend.lojas limpar-painel                       # apaga já o que passou da retenção do painel (a nuvem também faz sozinha)
 
 No PDV da loja, em Configurações > Nuvem: a chave da loja (ex.: BOATE-CENTRO) e o token mostrado aqui.
 Usa o mesmo banco da API (PDV_NUVEM_DB_URL).
@@ -124,6 +125,12 @@ def main(argv: list[str] | None = None) -> int:
                 raise ErroLoja(str(e)) from None
             print(f"Senha do painel da loja {resto[0]} definida. Passe ao dono (ela não aparece de novo):\n{senha}\n"
                   f"No celular: abra o endereço da nuvem + /painel/ e entre com a loja {resto[0]} e esta senha.")
+        elif comando == "limpar-painel" and not resto:
+            from backend import painel
+            removidas = painel.limpar_antigos(db)
+            print(f"Limpeza do painel: {removidas['vendas']} vendas, {removidas['sessoes']} sessões vencidas e "
+                  f"{removidas['caixas']} caixas parados removidos. A nuvem guarda as vendas dos últimos "
+                  f"{painel.retencao_vendas_dias()} dias (PDV_PAINEL_RETENCAO_DIAS); o histórico completo fica no PDV.")
         elif comando == "listar" and not resto:
             lojas = listar(db)
             for loja in lojas:
