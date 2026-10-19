@@ -35,9 +35,10 @@ precisam de Tk/Qt.
 ### Validação
 
 - Suíte completa (`xvfb-run`, `QT_QPA_PLATFORM=offscreen`, Python 3.12, Linux): **2179 testes, OK, 15 ignorados** pelo ambiente
-  (nenhum é dos testes novos). Os 75 testes novos do painel também passam contra **PostgreSQL 16 de verdade**
+  (nenhum é dos testes novos). Os testes do painel que falam com a nuvem (`test_painel_dono`, `_caixas`, `_limpeza` e
+  `_senha_pdv`: 82, dos quais 57 novos) também passam contra **PostgreSQL 16 de verdade**
   (`PDV_TESTE_NUVEM_DB_URL=postgresql+psycopg://...`; atenção: o cluster precisa ser UTF8, em SQL_ASCII o psycopg devolve bytes),
-  e a subida da versão nova sobre uma tabela `painel_retratos` antiga foi conferida lá. As sintaxes foram conferidas para o
+  e a subida da versão nova sobre uma tabela `painel_retratos` antiga foi conferida lá. Os de tela (Tk e Qt) rodam só em SQLite. As sintaxes foram conferidas para o
   Python 3.10 do CI; o job da nuvem foi simulado num ambiente só com as dependências do `backend/`, sem Tk, Qt nem cryptography.
 - Os testes foram conferidos com mutações (apagar a regra e ver o teste cair); os que sobreviveram foram reforçados.
 - Ensaio real nesta sessão: API local (uvicorn + SQLite) com 3 PDVs enviando por HTTP de verdade; o app no Chromium (390x844,
