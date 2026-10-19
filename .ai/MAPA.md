@@ -17,7 +17,8 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `python -m backend.lojas` / `backend.atualizacoes` | Lojas, assinatura e versões na nuvem |
 | `python -m backend.lojas cobranca` | Vínculos Asaas e conciliação das mensalidades |
 | `python -m backend.worker_asaas` | Processamento durável de webhooks e conciliação periódica |
-| `python -m backend.lojas painel LOJA [senha]` | Senha do painel do dono no celular (app em `/painel/` da nuvem) |
+| `python -m backend.lojas painel LOJA [senha]` | Senha do painel do dono no celular (app em `/painel/` da nuvem); o dono também a troca no PDV (Configurações > Nuvem) |
+| `python -m backend.lojas limpar-painel` | Apaga já o que passou da retenção do painel (vendas > 120 dias, sessões vencidas, caixas parados); a nuvem também faz sozinha |
 | `python -m tools.gerar_icones_painel` | Ícones PNG da PWA do painel (só biblioteca padrão) |
 | `python build_pdv.py` / `build_licenciador.py` | Executável (PyInstaller) e instalador (Inno Setup) |
 
@@ -31,9 +32,9 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `src/ui/` | Telas Tkinter: `app.py` (janela principal), `caixa_ui.py` (caixa), `painel_mesas.py` (cartões, busca e abas das comandas), `caixa_tema.py` (cores e estilos do caixa), `paleta.py` (modo claro/escuro: as paletas e a troca), `login.py`, `tema.py` e uma tela por módulo |
 | `src/ui_qt/` | Migração PySide6/Qt: login, caixa, cadastros, estoque operacional, relatórios, configurações, máquinas, acessos, Telegram e utilitários; escopo em `docs/INTERFACE_QT.md` |
 | `src/hardware/` | Impressora térmica ESC/POS e gaveta, balança, logotipo no cupom, impressoras do Windows |
-| `src/sync/` | `sincronizador.py`, `licenca_nuvem.py`, `atualizacoes.py`, `telegram_api.py`, `painel_envio.py` (vendas e retrato para o painel do dono) |
+| `src/sync/` | `sincronizador.py`, `licenca_nuvem.py`, `atualizacoes.py`, `telegram_api.py`, `painel_envio.py` (vendas e retrato de cada caixa para o painel do dono; troca da senha do painel) |
 | `licenciador/` | `nucleo.py` (regras), `tela.py` (janela), `app.py`, `autoteste.py` |
-| `backend/` | FastAPI: `main.py` (rotas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobrancas.py` (Asaas), `operacao_asaas.py` e `worker_asaas.py` (fila, agenda e indicadores), `painel.py` (painel do dono: envio, senha, sessão, consultas) e `painel_web/` (a PWA servida em `/painel/`) |
+| `backend/` | FastAPI: `main.py` (rotas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobrancas.py` (Asaas), `operacao_asaas.py` e `worker_asaas.py` (fila, agenda e indicadores), `painel.py` (painel do dono: envio, um retrato por caixa, senha, sessão, consultas e limpeza automática) e `painel_web/` (a PWA servida em `/painel/`) |
 | `tools/` | `gerar_licenca.py`, `gerar_logos.py` (não vão no instalador do PDV) |
 | `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`) e imagens |
 | `tests/` | Um `test_*.py` por assunto; `base.py` (banco em memória, relógio controlável); `ui_robo.py` (robô das janelas modais) |

@@ -127,52 +127,14 @@
       <section id="aba-caixa" class="aba" role="tabpanel" aria-labelledby="tab-caixa" hidden>
         <section class="bloco">
           <h2>Caixa</h2>
-          <div id="caixa-fechado" class="cartao cartao-neutro" hidden>
-            <strong>Caixa fechado</strong>
-            <p class="detalhe">Nenhum turno aberto no momento.</p>
-          </div>
-          <div id="caixa-aberto" hidden>
-            <p class="linha-detalhes">
-              <span>Turno <strong id="cx-turno">—</strong></span>
-              <span>Operador: <strong id="cx-operador">—</strong></span>
-              <span>Aberto às <strong id="cx-aberto-em">—</strong></span>
-            </p>
-            <div class="grade-cartoes">
-              <article class="cartao destaque">
-                <span class="rotulo">Esperado na gaveta</span>
-                <strong id="cx-esperado" class="valor-grande">R$ 0,00</strong>
-              </article>
-              <article class="cartao">
-                <span class="rotulo">Valor inicial</span>
-                <strong id="cx-inicial" class="valor-grande">R$ 0,00</strong>
-              </article>
-              <article class="cartao">
-                <span class="rotulo">Recebido</span>
-                <strong id="cx-recebido" class="valor-grande">R$ 0,00</strong>
-              </article>
-              <article class="cartao">
-                <span class="rotulo">Sangrias</span>
-                <strong id="cx-sangrias" class="valor-grande">R$ 0,00</strong>
-              </article>
-              <article class="cartao">
-                <span class="rotulo">Suprimentos</span>
-                <strong id="cx-suprimentos" class="valor-grande">R$ 0,00</strong>
-              </article>
-              <article class="cartao">
-                <span class="rotulo">Vendas no turno</span>
-                <strong id="cx-tc" class="valor-grande">0</strong>
-                <small class="detalhe">Ticket médio <span id="cx-tm">R$ 0,00</span></small>
-              </article>
-              <article class="cartao">
-                <span class="rotulo">Cancelamentos</span>
-                <strong id="cx-cancelamentos" class="valor-grande">0</strong>
-              </article>
-            </div>
-          </div>
+          <!-- Um cartão por caixa da loja (app.js: renderizarCaixa). Com um caixa só, sem cabeçalho. -->
+          <div id="lista-caixas"></div>
+          <p id="vazio-caixas" class="vazio" hidden>O PDV ainda não enviou dados do caixa.</p>
         </section>
 
         <section class="bloco">
           <h2>Caderneta</h2>
+          <p id="nota-soma-caderneta" class="legenda" hidden>Soma dos caixas da loja (cada caixa tem a sua caderneta).</p>
           <div class="grade-cartoes">
             <article class="cartao">
               <span class="rotulo">A receber</span>
@@ -187,6 +149,7 @@
 
         <section class="bloco">
           <h2>Entregas</h2>
+          <p id="nota-soma-entregas" class="legenda" hidden>Soma dos caixas da loja.</p>
           <article class="cartao">
             <span class="rotulo">Pendentes</span>
             <strong id="entregas-pendentes" class="valor-grande">0</strong>
@@ -210,7 +173,7 @@
           </article>
         </section>
 
-        <section class="bloco">
+        <section id="bloco-estoque" class="bloco">
           <h2>Estoque</h2>
           <p class="linha-detalhes">
             <span>Controlados: <strong id="est-controlados">0</strong></span>
@@ -220,6 +183,9 @@
           <ul id="lista-estoque" class="lista"></ul>
           <p id="vazio-estoque" class="vazio" hidden>Nenhum produto abaixo do mínimo.</p>
         </section>
+
+        <!-- Mais de um caixa controla estoque: cada um tem o seu banco, então o estoque aparece separado por caixa. -->
+        <div id="estoque-por-caixa" hidden></div>
       </section>
 
       <!-- Aba Vendas -->

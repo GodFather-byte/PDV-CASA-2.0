@@ -4,13 +4,15 @@ JanelaConfiguracoes(ctx, parent) usa as APIs do ConfigController e os acessos
 cfg_loja/cfg_configuracoes. Cada aba grava separadamente, apenas alterações.
 Equipamentos, acessos e Telegram possuem janelas próprias.
 """
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLineEdit,
-    QPushButton, QScrollArea, QTabWidget, QVBoxLayout, QWidget,
+    QApplication, QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QInputDialog,
+    QLineEdit, QMessageBox, QPushButton, QScrollArea, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from src.controllers.config_controller import CAMPOS_CONFIG, CAMPOS_LOJA
 from src.core.erros import ErroNegocio, ErroPermissao
+from src.sync import painel_envio
 from src.ui_qt.tema import texto
 
 
@@ -31,10 +33,35 @@ CAMPOS = {
 }
 
 
+class _SinaisSenha(QObject):
+    concluida = Signal(object, object)          # (senha gerada pela nuvem ou None, mensagem de erro ou None)
+
+
+class _TrocaSenha(QRunnable):
+    """A rede fora da thread da tela: recebe só cópias do endereço, do token e da senha."""
+
+    def __init__(self, url, token, senha, sinais):
+        super().__init__()
+        self.url, self.token, self.senha, self.sinais = url, token, senha, sinais
+
+    def run(self):
+        try:
+            gerada = painel_envio.trocar_senha_na_nuvem(self.url, self.token, self.senha)
+        except ErroNegocio as erro:
+            self.sinais.concluida.emit(None, str(erro))
+        except Exception:
+            self.sinais.concluida.emit(None, "Erro inesperado ao falar com a nuvem. A senha NÃO foi trocada.")
+        else:
+            self.sinais.concluida.emit(gerada, None)
+
+
 class JanelaConfiguracoes(QDialog):
     def __init__(self, ctx, parent=None):
         super().__init__(parent)
         self.ctx = ctx
+        self._trocando_senha = False
+        self._sinais_senha = _SinaisSenha()
+        self._sinais_senha.concluida.connect(self._senha_trocada)
         permissoes = self._permissoes()
         if not any(permissoes.values()):
             raise ErroPermissao("Seu acesso não permite as configurações gerais.")
@@ -77,6 +104,11 @@ class JanelaConfiguracoes(QDialog):
             if secao == "nuvem":
                 self.apagar_token = QCheckBox("Apagar o token salvo ao salvar esta aba")
                 formulario.addRow(self.apagar_token)
+                self.btn_senha_painel = QPushButton("Trocar a senha do painel do dono…")
+                self.btn_senha_painel.setToolTip(
+                    "Muda a senha que o dono usa no celular (painel da nuvem). Usa o endereço e o token já salvos.")
+                self.btn_senha_painel.clicked.connect(self.trocar_senha_painel)
+                formulario.addRow(self.btn_senha_painel)
             rolagem = QScrollArea()
             rolagem.setWidgetResizable(True)
             rolagem.setWidget(pagina)
@@ -128,6 +160,7 @@ class JanelaConfiguracoes(QDialog):
                 self._originais[secao] = {}
         self.btn_salvar.setEnabled(permissoes[SECOES[self.abas.currentIndex()]])
         self.apagar_token.setEnabled(permissoes["nuvem"])
+        self.btn_senha_painel.setEnabled(permissoes["nuvem"] and not self._trocando_senha)
         if not permissoes["nuvem"]:
             self.apagar_token.setChecked(False)
 
@@ -231,7 +264,83 @@ class JanelaConfiguracoes(QDialog):
         self.mensagem.setText("Configurações desta aba salvas.")
         return True
 
+    # ------------------------------------------------ senha do painel do dono
+    def trocar_senha_painel(self):
+        """O dono troca a senha do painel do celular pelo próprio PDV, sem depender do fornecedor. Endereço e token são os
+        SALVOS (por isso exige a aba salva) e a rede roda em outra thread. Em branco, a nuvem gera a senha e ela aparece uma vez."""
+        if self._trocando_senha:
+            return False
+        try:
+            self._autorizar("nuvem")
+            if self._valores("nuvem") != self._originais["nuvem"] or self.apagar_token.isChecked():
+                raise ErroNegocio("Salve as alterações desta aba antes de trocar a senha do painel: o endereço e o token "
+                                  "usados são os que estão salvos.")
+            url, token = self.ctx.banco.cfg("api_url").strip(), self.ctx.banco.cfg("api_token").strip()
+            if not url or not token:
+                raise ErroNegocio("Preencha o endereço da nuvem e o token da API e salve a aba antes de trocar a senha do painel.")
+            nova = self._pedir_senha_nova()
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return False
+        if nova is None:
+            return False
+        self._trocando_senha = True
+        self.btn_senha_painel.setEnabled(False)
+        self.mensagem.setText("Trocando a senha na nuvem… isto pode levar alguns segundos.")
+        QThreadPool.globalInstance().start(_TrocaSenha(url, token, nova or None, self._sinais_senha))
+        return True
+
+    def _pedir_senha_nova(self):
+        """None = cancelou; "" = pediu para a nuvem gerar; senão a senha escolhida, já conferida."""
+        senha, aceito = QInputDialog.getText(
+            self, "Senha do painel do dono",
+            f"Senha nova do painel (mínimo {painel_envio.SENHA_MINIMA} caracteres).\n"
+            "Deixe em branco para a nuvem gerar uma:", QLineEdit.EchoMode.Password)
+        if not aceito:
+            return None
+        senha = senha.strip()
+        if not senha:
+            return ""
+        painel_envio.validar_senha(senha)
+        repetida, aceito = QInputDialog.getText(
+            self, "Senha do painel do dono", "Digite a senha nova de novo:", QLineEdit.EchoMode.Password)
+        if not aceito:
+            return None
+        if repetida.strip() != senha:
+            raise ErroNegocio("As senhas não conferem.")
+        return senha
+
+    @Slot(object, object)
+    def _senha_trocada(self, gerada, erro):
+        self._trocando_senha = False
+        try:
+            self._aplicar_permissoes(self._permissoes())
+        except ErroNegocio:
+            self._aplicar_permissoes(dict.fromkeys(SECOES, False))
+        if erro is not None:
+            self.mensagem.setText(erro)
+            return
+        painel_envio.registrar_troca_de_senha(self.ctx.banco, bool(gerada), self.ctx.operador_id)
+        aviso = "O celular do dono precisa entrar de novo com a senha nova."
+        if gerada:
+            self.mensagem.setText("Senha do painel trocada (a nova aparece uma única vez).")
+            QMessageBox.information(
+                self, "Senha do painel do dono",
+                f"Senha do painel trocada.\n\nA senha nova é:\n\n        {gerada}\n\nAnote agora: ela não aparece de novo. {aviso}")
+        else:
+            self.mensagem.setText(f"Senha do painel trocada. {aviso}")
+
+    def reject(self):
+        if self._trocando_senha:                 # a resposta da nuvem ainda vai chegar: não fecha antes de mostrá-la
+            self.mensagem.setText("Aguarde a nuvem responder antes de fechar.")
+            return
+        super().reject()
+
     def closeEvent(self, evento):
+        if self._trocando_senha:
+            self.mensagem.setText("Aguarde a nuvem responder antes de fechar.")
+            evento.ignore()
+            return
         self.campos["nuvem"]["api_token"].clear()
         super().closeEvent(evento)
 

@@ -8,6 +8,13 @@ Duas credenciais, de propósito separadas:
 Os dados ficam por loja (chave_loja) e nenhuma consulta cruza lojas. A nuvem guarda a venda como o PDV mandou (itens e
 pagamentos em JSON) e calcula os totais na hora da consulta; para o movimento de uma loja num dia isso é barato.
 
+Uma loja pode ter mais de um caixa (cada um com o seu banco local): as vendas se somam pelo uuid e cada caixa guarda o seu
+retrato (turno, estoque, caderneta, entregas), identificado por `terminal_id`. PDV de versão anterior, que não manda o
+identificador, entra como um caixa só ("unico").
+
+A nuvem não é o arquivo da loja: o histórico completo fica no PDV. Vendas além da retenção (padrão 120 dias,
+PDV_PAINEL_RETENCAO_DIAS), sessões vencidas e caixas parados há semanas saem sozinhos (`limpar_antigos`).
+
 Este módulo não importa backend.main (evita importação circular): `instalar(app, Loja, autenticar)` recebe o que precisa.
 """
 from __future__ import annotations
@@ -15,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import secrets
@@ -25,13 +33,15 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, FastAPI, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import Column, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, UniqueConstraint, inspect, text
 from sqlalchemy.orm import Session
 
-from backend.database import Base, engine, get_db
+from backend.database import Base, SessionLocal, engine, get_db
+
+log = logging.getLogger("pdv.nuvem.painel")
 
 PASTA_WEB = Path(__file__).resolve().parent / "painel_web"
 DIAS_SESSAO = 30
@@ -40,6 +50,17 @@ JANELA_LOGIN_SEG = 15 * 60
 LOTE_MAXIMO = 500
 VENDAS_POR_PAGINA = 50
 DIA_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+ID_CAIXA_RE = re.compile(r"[A-Za-z0-9_-]{1,40}")
+CAIXA_LEGADO = "unico"        # retrato de um PDV que ainda não manda o terminal_id
+MINUTOS_CAIXA_LEGADO = 15     # o "unico" some quando o PDV atualizado manda o seu e o antigo calou há este tempo
+MAX_CAIXAS_POR_LOJA = 20      # passando disto, o caixa parado há mais tempo sai para o novo entrar
+
+# Limpeza (ver limpar_antigos). A retenção cobre os 90 dias que a tela de histórico pode pedir.
+RETENCAO_VENDAS_DIAS = 120
+RETENCAO_MINIMA_DIAS = 7      # um valor de ambiente errado (0, 1) não pode apagar o movimento recente
+DIAS_CAIXA_PARADO = 14        # caixa que não manda retrato há tanto tempo deixou de existir (ou voltará e reaparece)
+INTERVALO_LIMPEZA_SEG = 6 * 3600
+LIMITE_CHAVES_TENTATIVAS = 500
 
 
 # ------------------------------------------------------------------ modelos
@@ -84,11 +105,15 @@ class PainelVenda(Base):
     recebida_em = Column(String, nullable=False)
 
 
-class PainelRetrato(Base):
-    """O último "momento" de cada loja: caixa, estoque, caderneta, entregas e o relógio do PDV."""
-    __tablename__ = "painel_retratos"
+class PainelCaixa(Base):
+    """O último "momento" de cada caixa da loja: turno, estoque, caderneta, entregas e o relógio do PDV. Cada caixa tem o
+    seu banco local e manda o seu retrato; (chave_loja, terminal_id) é a identidade e reenviar substitui o anterior."""
+    __tablename__ = "painel_caixas"
+    __table_args__ = (UniqueConstraint("chave_loja", "terminal_id", name="ux_painel_caixa"),)
     id = Column(Integer, primary_key=True)
-    chave_loja = Column(String, unique=True, index=True, nullable=False)
+    chave_loja = Column(String, index=True, nullable=False)
+    terminal_id = Column(String, nullable=False)  # gerado pelo PDV e guardado no banco dele; "unico" = PDV sem identificação
+    terminal = Column(Integer)                    # nº do terminal na loja: só ordena e rotula
     dados = Column(Text, nullable=False)
     momento = Column(String)                      # relógio da loja quando o retrato foi tirado
     recebido_em = Column(String, nullable=False)  # relógio da nuvem
@@ -151,19 +176,34 @@ class _Tentativas:
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._falhas: dict[str, deque] = defaultdict(deque)
+        self._falhas: dict[str, deque] = {}
+
+    def _vigentes(self, chave: str, agora: float) -> deque | None:
+        """As falhas que ainda estão na janela (com a trava tomada). Sem nenhuma, a chave sai do dicionário."""
+        fila = self._falhas.get(chave)
+        if fila is None:
+            return None
+        while fila and agora - fila[0] > JANELA_LOGIN_SEG:
+            fila.popleft()
+        if not fila:
+            del self._falhas[chave]
+            return None
+        return fila
 
     def bloqueada(self, chave: str, agora: float | None = None) -> bool:
-        agora = agora or time.monotonic()
+        agora = time.monotonic() if agora is None else agora
         with self._lock:
-            fila = self._falhas[chave]
-            while fila and agora - fila[0] > JANELA_LOGIN_SEG:
-                fila.popleft()
-            return len(fila) >= TENTATIVAS_LOGIN
+            fila = self._vigentes(chave, agora)
+            return fila is not None and len(fila) >= TENTATIVAS_LOGIN
 
     def falhou(self, chave: str, agora: float | None = None) -> None:
+        agora = time.monotonic() if agora is None else agora
         with self._lock:
-            self._falhas[chave].append(agora or time.monotonic())
+            if len(self._falhas) >= LIMITE_CHAVES_TENTATIVAS:
+                # Quem erra com nomes de loja inventados não pode encher a memória do servidor: varre o que já venceu.
+                for outra in list(self._falhas):
+                    self._vigentes(outra, agora)
+            self._falhas.setdefault(chave, deque()).append(agora)
 
     def acertou(self, chave: str) -> None:
         with self._lock:
@@ -216,6 +256,24 @@ def _dia_valido(dia: str | None) -> str | None:
     return dia
 
 
+def _hoje() -> date:
+    return date.today()
+
+
+def retencao_vendas_dias() -> int:
+    """Quantos dias de vendas a nuvem guarda: PDV_PAINEL_RETENCAO_DIAS, nunca menos de RETENCAO_MINIMA_DIAS."""
+    try:
+        dias = int(os.environ.get("PDV_PAINEL_RETENCAO_DIAS", ""))
+    except ValueError:
+        return RETENCAO_VENDAS_DIAS
+    return max(dias, RETENCAO_MINIMA_DIAS)
+
+
+def _corte_das_vendas() -> str:
+    """Primeiro dia guardado (AAAA-MM-DD): o que for anterior sai na limpeza e nem entra."""
+    return (_hoje() - timedelta(days=retencao_vendas_dias())).isoformat()
+
+
 def _guardar_venda(db: Session, chave_loja: str, v: dict, agora: str) -> str | None:
     uuid = str(v.get("uuid") or "").strip()
     if not uuid or len(uuid) > 64 or v.get("status") not in ("fechada", "cancelada"):
@@ -223,6 +281,8 @@ def _guardar_venda(db: Session, chave_loja: str, v: dict, agora: str) -> str | N
     dia = v.get("dia") if isinstance(v.get("dia"), str) and DIA_RE.fullmatch(v["dia"]) else None
     if dia is None:
         dia = str(v.get("fechada_em") or v.get("aberta_em") or agora)[:10]
+    if dia < _corte_das_vendas():
+        return uuid          # além da retenção: confirma (o PDV para de mandar) mas não guarda, para a limpeza não apagar depois
     linha = db.query(PainelVenda).filter_by(chave_loja=chave_loja, uuid=uuid).first()
     if linha is None:
         linha = PainelVenda(chave_loja=chave_loja, uuid=uuid)
@@ -243,15 +303,95 @@ def _guardar_venda(db: Session, chave_loja: str, v: dict, agora: str) -> str | N
     return uuid
 
 
-def _retrato(db: Session, chave_loja: str) -> tuple[dict, str | None, str | None]:
-    r = db.query(PainelRetrato).filter_by(chave_loja=chave_loja).first()
-    if r is None:
+def _id_do_caixa(retrato: dict) -> str:
+    bruto = str(retrato.get("terminal_id") or "").strip()
+    return bruto if ID_CAIXA_RE.fullmatch(bruto) else CAIXA_LEGADO
+
+
+def _guardar_retrato(db: Session, chave_loja: str, retrato: dict, enviado_em, agora: str) -> None:
+    """Guarda (ou substitui) o retrato do caixa que mandou. Caixas diferentes da mesma loja não se sobrescrevem."""
+    terminal_id = _id_do_caixa(retrato)
+    linha = db.query(PainelCaixa).filter_by(chave_loja=chave_loja, terminal_id=terminal_id).first()
+    if linha is None:
+        # Um caixa novo sempre entra: passando do limite, sai o que está calado há mais tempo.
+        antigos = db.query(PainelCaixa).filter_by(chave_loja=chave_loja).order_by(PainelCaixa.recebido_em).all()
+        for velho in antigos[:max(len(antigos) - MAX_CAIXAS_POR_LOJA + 1, 0)]:
+            db.delete(velho)
+        linha = PainelCaixa(chave_loja=chave_loja, terminal_id=terminal_id)
+        db.add(linha)
+    linha.terminal = _int(retrato.get("terminal"), 1)
+    linha.dados = json.dumps(retrato, ensure_ascii=False)
+    linha.momento = str(retrato.get("momento") or enviado_em or "")[:19] or None
+    linha.recebido_em = agora
+    if terminal_id != CAIXA_LEGADO:
+        # O PDV desta loja já se identifica: o "unico" que um PDV antigo deixou (e que ninguém mais renova) é o mesmo caixa.
+        corte = (datetime.now() - timedelta(minutes=MINUTOS_CAIXA_LEGADO)).strftime("%Y-%m-%d %H:%M:%S")
+        db.query(PainelCaixa).filter(PainelCaixa.chave_loja == chave_loja, PainelCaixa.terminal_id == CAIXA_LEGADO,
+                                     PainelCaixa.recebido_em < corte).delete(synchronize_session=False)
+
+
+def _ler_caixas(db: Session, chave_loja: str) -> list[tuple[PainelCaixa, dict]]:
+    """Cada caixa da loja com o retrato já lido, na ordem do terminal."""
+    pares = []
+    for linha in db.query(PainelCaixa).filter_by(chave_loja=chave_loja).all():
+        try:
+            dados = json.loads(linha.dados)
+        except ValueError:
+            dados = {}
+        pares.append((linha, dados if isinstance(dados, dict) else {}))
+    pares.sort(key=lambda p: (p[0].terminal if p[0].terminal is not None else 1, _rotulo_do_caixa(*p), p[0].terminal_id))
+    return pares
+
+
+def _rotulo_do_caixa(linha: PainelCaixa, dados: dict) -> str:
+    rotulo = str(dados.get("terminal_rotulo") or "").strip()[:60]
+    return rotulo or f"Caixa {linha.terminal if linha.terminal is not None else 1}"
+
+
+def _mais_recente(pares: list[tuple[PainelCaixa, dict]]) -> tuple[dict, str | None, str | None]:
+    """O retrato do caixa que falou por último: é dele o dia operacional, o nome da loja e o "atualizado às"."""
+    if not pares:
         return {}, None, None
-    try:
-        dados = json.loads(r.dados)
-    except ValueError:
-        dados = {}
-    return (dados if isinstance(dados, dict) else {}), r.momento, r.recebido_em
+    linha, dados = max(pares, key=lambda p: p[0].recebido_em)
+    return dados, linha.momento, linha.recebido_em
+
+
+def _retrato(db: Session, chave_loja: str) -> tuple[dict, str | None, str | None]:
+    return _mais_recente(_ler_caixas(db, chave_loja))
+
+
+def _estoque_vazio() -> dict:
+    return {"controlados": 0, "zerados": 0, "abaixo_minimo": []}
+
+
+def _caixa_publico(linha: PainelCaixa, dados: dict) -> dict:
+    """O que o app recebe de cada caixa. Estoque e caderneta são do banco DAQUELE caixa: não se misturam aqui."""
+    estoque, caderneta, turno = dados.get("estoque"), dados.get("caderneta"), dados.get("caixa")
+    return {
+        "id": linha.terminal_id, "terminal": linha.terminal if linha.terminal is not None else 1,
+        "rotulo": _rotulo_do_caixa(linha, dados), "computador": str(dados.get("terminal_computador") or "").strip()[:60],
+        "atualizado_em": linha.momento, "atraso_min": _atraso_min(linha.momento, linha.recebido_em),
+        "caixa": turno if isinstance(turno, dict) else None,
+        "estoque": estoque if isinstance(estoque, dict) else _estoque_vazio(),
+        "caderneta": caderneta if isinstance(caderneta, dict) else {"a_receber_cent": 0, "clientes_devendo": 0},
+        "entregas_pendentes": _int(dados.get("entregas_pendentes")),
+        "vendas_pendentes_envio": _int(dados.get("vendas_pendentes_envio")),
+    }
+
+
+def _totais_dos_caixas(caixas: list[dict]) -> dict:
+    """Os campos de sempre do /resumo (pensados para um caixa só), calculados de todos: o primeiro turno aberto, o primeiro
+    estoque controlado, caderneta e entregas somadas. O app antigo só conhece estes campos e continua certo."""
+    com_turno = next((c for c in caixas if c["caixa"]), None)
+    com_estoque = next((c for c in caixas if _int(c["estoque"].get("controlados")) > 0), None) or (caixas[0] if caixas else None)
+    return {
+        "caixa": com_turno["caixa"] if com_turno else None,
+        "estoque": com_estoque["estoque"] if com_estoque else _estoque_vazio(),
+        "caderneta": {"a_receber_cent": sum(_int(c["caderneta"].get("a_receber_cent")) for c in caixas),
+                      "clientes_devendo": sum(_int(c["caderneta"].get("clientes_devendo")) for c in caixas)},
+        "entregas_pendentes": sum(c["entregas_pendentes"] for c in caixas),
+        "vendas_pendentes_envio": sum(c["vendas_pendentes_envio"] for c in caixas),
+    }
 
 
 def _atraso_min(momento: str | None, recebido_em: str | None) -> int | None:
@@ -337,11 +477,67 @@ def resumo_do_dia(vendas: list[dict]) -> dict:
     }
 
 
+# ---------------------------------------------------------------- limpeza
+def limpar_antigos(db: Session) -> dict[str, int]:
+    """Apaga o que o painel não mostra mais e devolve quantas linhas saíram de cada coisa. O arquivo da loja é o PDV: a nuvem
+    guarda só a janela que o app consulta (vendas dos últimos `retencao_vendas_dias()`), tira as sessões vencidas e os caixas
+    que não mandam retrato há DIAS_CAIXA_PARADO dias. Seguro repetir: só apaga o que já passou do prazo."""
+    agora = datetime.now()
+    removidas = {
+        "vendas": db.query(PainelVenda).filter(PainelVenda.dia < _corte_das_vendas()).delete(synchronize_session=False),
+        "sessoes": db.query(PainelSessao).filter(PainelSessao.expira_em <= _agora()).delete(synchronize_session=False),
+        "caixas": db.query(PainelCaixa).filter(
+            PainelCaixa.recebido_em < (agora - timedelta(days=DIAS_CAIXA_PARADO)).strftime("%Y-%m-%d %H:%M:%S")
+        ).delete(synchronize_session=False),
+    }
+    db.commit()
+    return removidas
+
+
+_limpeza = {"ultima": None}
+_trava_limpeza = threading.Lock()
+
+
+def limpeza_periodica() -> dict[str, int] | None:
+    """A limpeza que roda sozinha: chamada a cada envio do PDV (em segundo plano, depois da resposta), mas só trabalha na
+    primeira vez do processo e depois a cada INTERVALO_LIMPEZA_SEG. Falha aqui nunca atrapalha o envio."""
+    agora = time.monotonic()
+    with _trava_limpeza:
+        ultima = _limpeza["ultima"]
+        if ultima is not None and agora - ultima < INTERVALO_LIMPEZA_SEG:
+            return None
+        _limpeza["ultima"] = agora
+    db = SessionLocal()
+    try:
+        removidas = limpar_antigos(db)
+    except Exception:
+        db.rollback()
+        log.exception("Painel: a limpeza dos dados antigos falhou; a próxima tentativa é daqui a algumas horas.")
+        return None
+    finally:
+        db.close()
+    if any(removidas.values()):
+        log.info("Painel: limpeza removeu %s.", ", ".join(f"{n} {nome}" for nome, n in removidas.items() if n))
+    return removidas
+
+
+def _descartar_retratos_antigos() -> None:
+    """`painel_retratos` (um retrato por loja) virou `painel_caixas` (um por caixa). O retrato é só o último "momento" e cada
+    PDV o refaz na próxima rodada de envio (cerca de 1 minuto), então nada é copiado: a tabela antiga apenas sai do caminho."""
+    try:
+        if inspect(engine).has_table("painel_retratos"):
+            with engine.begin() as con:
+                con.execute(text("DROP TABLE painel_retratos"))
+    except Exception:
+        log.exception("Painel: não consegui apagar a tabela antiga painel_retratos; ela fica sem uso.")
+
+
 # ----------------------------------------------------------------- rotas
 def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
     """Cria as tabelas, registra as rotas e serve o app web. `autenticar` é a dependência do backend.main (token da loja
     ou do administrador) e `Loja` o modelo das lojas."""
     Base.metadata.create_all(bind=engine)
+    _descartar_retratos_antigos()
     router = APIRouter()
 
     def _loja(db: Session, chave: str):
@@ -352,7 +548,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
 
     # ---- envio do PDV (token da loja)
     @router.post("/v1/painel/envio")
-    def envio(dados: dict = Body(...), acesso=Depends(autenticar), db: Session = Depends(get_db)):
+    def envio(tarefas: BackgroundTasks, dados: dict = Body(...), acesso=Depends(autenticar), db: Session = Depends(get_db)):
         if acesso.admin:
             raise HTTPException(status_code=403, detail="Use o token da loja para enviar dados.")
         vendas = dados.get("vendas") or []
@@ -367,14 +563,9 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
                     recebidos.append(uuid)
         retrato = dados.get("retrato")
         if isinstance(retrato, dict):
-            r = db.query(PainelRetrato).filter_by(chave_loja=acesso.loja).first()
-            if r is None:
-                r = PainelRetrato(chave_loja=acesso.loja)
-                db.add(r)
-            r.dados = json.dumps(retrato, ensure_ascii=False)
-            r.momento = str(retrato.get("momento") or dados.get("enviado_em") or "")[:19] or None
-            r.recebido_em = agora
+            _guardar_retrato(db, acesso.loja, retrato, dados.get("enviado_em"), agora)
         db.commit()
+        tarefas.add_task(limpeza_periodica)         # depois da resposta: o PDV não espera pela limpeza
         return {"recebidas": len(recebidos), "uuids": recebidos}
 
     # ---- senha do painel (administrador ou o próprio PDV da loja)
@@ -429,18 +620,16 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
     def resumo(dia: Optional[str] = Query(None, max_length=10), sessao: PainelSessao = Depends(sessao_do_dono),
                db: Session = Depends(get_db)):
         loja = _loja(db, sessao.chave_loja)
-        retrato, momento, recebido_em = _retrato(db, loja.chave_loja)
+        pares = _ler_caixas(db, loja.chave_loja)
+        retrato, momento, recebido_em = _mais_recente(pares)
+        caixas = [_caixa_publico(linha, dados_) for linha, dados_ in pares]
         dias = _dias_recentes(db, loja.chave_loja)
         dia = _dia_valido(dia) or retrato.get("dia_operacional") or (dias[0] if dias else date.today().isoformat())
         r = resumo_do_dia(_vendas_do_dia(db, loja.chave_loja, dia))
         r.update({
             "loja": {"chave": loja.chave_loja, "nome": retrato.get("loja_nome") or loja.nome},
             "dia": dia, "atualizado_em": momento, "atraso_min": _atraso_min(momento, recebido_em),
-            "caixa": retrato.get("caixa"),
-            "estoque": retrato.get("estoque") or {"controlados": 0, "zerados": 0, "abaixo_minimo": []},
-            "caderneta": retrato.get("caderneta") or {"a_receber_cent": 0, "clientes_devendo": 0},
-            "entregas_pendentes": _int(retrato.get("entregas_pendentes")),
-            "vendas_pendentes_envio": _int(retrato.get("vendas_pendentes_envio")),
+            **_totais_dos_caixas(caixas), "caixas": caixas,
             "dias": dias if dia in dias else [dia] + dias,
         })
         return r
@@ -454,7 +643,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         paginas = max((len(todas) + VENDAS_POR_PAGINA - 1) // VENDAS_POR_PAGINA, 1)
         inicio = (min(pagina, paginas) - 1) * VENDAS_POR_PAGINA
         chaves = ("uuid", "cupom", "status", "modalidade", "posicao_rotulo", "operador", "fechada_em", "total_cent",
-                  "desconto_cent", "motivo_cancelamento", "itens", "pagamentos")
+                  "desconto_cent", "motivo_cancelamento", "itens", "pagamentos", "terminal_id")
         return {"dia": dia, "pagina": min(pagina, paginas), "paginas": paginas, "total": len(todas),
                 "vendas": [{k: v.get(k) for k in chaves} for v in todas[inicio:inicio + VENDAS_POR_PAGINA]]}
 

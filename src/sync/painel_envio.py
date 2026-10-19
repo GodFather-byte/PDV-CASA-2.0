@@ -5,16 +5,24 @@ A cada rodada da sincronização (`python -m src.app --sync`) o PDV manda, com o
     a nuvem confirma os uuids recebidos e só então eles são marcados como enviados (cancelar uma venda já enviada zera a
     marca, e ela sobe de novo com o status novo);
   * um retrato do momento: turno aberto, estoque controlado (zerados e abaixo do mínimo), caderneta a receber e entregas
-    pendentes. O retrato substitui o anterior na nuvem; é dele que o celular tira "atualizado às HH:MM".
+    pendentes. O retrato substitui o anterior DESTE caixa na nuvem; é dele que o celular tira "atualizado às HH:MM".
+
+Cada caixa tem o seu banco, então se identifica (`id_do_caixa`): numa loja com dois caixas a nuvem guarda um retrato de
+cada um, em vez de o último a falar apagar o do outro.
 
 Nada é apagado ou alterado no banco local além da marca de enviado. Sem rede, as vendas esperam a próxima rodada. O painel
 mostra só o que já subiu: não é um espelho ao vivo do caixa.
+
+Também daqui sai a troca da senha do painel pelo próprio PDV (`trocar_senha`): o dono não depende do fornecedor.
 """
 from __future__ import annotations
 
 import logging
+import socket
+from uuid import uuid4
 
 from src.core import formatacao as fmt
+from src.core.erros import ErroNegocio
 from src.core.posicao import nome as nome_posicao
 
 log = logging.getLogger("pdv.painel")
@@ -23,6 +31,10 @@ LOTE = 200                    # vendas por envio: cabe numa chamada curta mesmo 
 LIMITE_ABAIXO_MINIMO = 50     # produtos listados no retrato (o resto vira só contagem)
 CHAVE_ULTIMO_ENVIO = "painel_ultimo_envio"
 CHAVE_ULTIMO_ERRO = "painel_ultimo_erro"
+CHAVE_CAIXA_ID = "painel_caixa_id"
+CHAVE_CAIXA_COMPUTADOR = "painel_caixa_computador"
+SENHA_MINIMA = 8                # as mesmas regras da nuvem (backend/painel.py: validar_senha)
+SENHA_MAXIMA = 128
 
 
 def ligado(banco) -> bool:
@@ -31,12 +43,34 @@ def ligado(banco) -> bool:
             and bool(banco.cfg("api_token").strip()))
 
 
-def url_envio(api_url: str) -> str:
-    """O endereço configurado é o de envio antigo (.../v1/sincronizar); o do painel fica ao lado (.../v1/painel/envio)."""
+def _base_nuvem(api_url: str) -> str:
+    """O endereço configurado é o de envio antigo (.../v1/sincronizar); os do painel ficam ao lado (.../v1/painel/...)."""
     base = (api_url or "").strip().rstrip("/")
     if base.endswith("/v1/sincronizar"):
         base = base[: -len("/v1/sincronizar")]
-    return f"{base}/v1/painel/envio"
+    return base
+
+
+def url_envio(api_url: str) -> str:
+    return f"{_base_nuvem(api_url)}/v1/painel/envio"
+
+
+def url_senha(api_url: str) -> str:
+    return f"{_base_nuvem(api_url)}/v1/painel/senha"
+
+
+def id_do_caixa(banco) -> str:
+    """Identidade deste caixa na nuvem, para dois caixas da mesma loja não se sobrescreverem. Nasce na primeira vez e fica no
+    banco. Se o banco foi copiado para outro computador (nome diferente), o computador novo ganha o id dele: sem isso a
+    cópia e o original dividiriam o mesmo retrato."""
+    computador = socket.gethostname()
+    atual = banco.cfg(CHAVE_CAIXA_ID).strip()
+    if not atual or banco.cfg(CHAVE_CAIXA_COMPUTADOR).strip() != computador:
+        atual = uuid4().hex[:16]
+        with banco.transacao():
+            banco.cfg_set(CHAVE_CAIXA_ID, atual)
+            banco.cfg_set(CHAVE_CAIXA_COMPUTADOR, computador)
+    return atual
 
 
 def _virada(banco) -> int:
@@ -61,6 +95,7 @@ def coletar_vendas(banco, limite: int | None = None) -> list[dict]:
     """As vendas que faltam subir, da mais antiga para a mais nova, já no formato que a nuvem guarda."""
     limite = LOTE if limite is None else limite
     virada = _virada(banco)
+    caixa_id = id_do_caixa(banco)
     vendas = banco.todos(
         """SELECT v.*, o.nome AS operador, c.nome AS cliente, t.numero AS turno_numero
            FROM vendas v LEFT JOIN operadores o ON o.id = v.operador_id LEFT JOIN clientes c ON c.id = v.cliente_id
@@ -81,7 +116,7 @@ def coletar_vendas(banco, limite: int | None = None) -> list[dict]:
         saida.append({
             "uuid": v["uuid"], "cupom": v["cupom"], "status": v["status"], "modalidade": v["modalidade"],
             "posicao_rotulo": _rotulo_posicao(v, v["cliente"]), "operador": v["operador"] or "",
-            "turno_numero": v["turno_numero"], "terminal": v["terminal"],
+            "turno_numero": v["turno_numero"], "terminal": v["terminal"], "terminal_id": caixa_id,
             "aberta_em": v["aberta_em"], "fechada_em": momento, "dia": fmt.dia_operacional(momento, virada),
             "subtotal_cent": v["subtotal_cent"], "desconto_cent": v["desconto_cent"], "servico_cent": v["servico_cent"],
             "taxa_cent": v["taxa_cent"], "acrescimo_cent": v["acrescimo_cent"], "total_cent": v["total_cent"],
@@ -125,8 +160,13 @@ def retrato(banco) -> dict:
     }
     devedores = banco.um("SELECT COUNT(*) AS n, COALESCE(SUM(-saldo_cent), 0) AS total FROM clientes WHERE saldo_cent < 0")
     from src.controllers.config_controller import ConfigController
+    config = ConfigController(banco)
+    maquina = config.maquina()
     return {
-        "loja_nome": ConfigController(banco).nome_loja(), "virada_dia_hora": _virada(banco),
+        "loja_nome": config.nome_loja(), "virada_dia_hora": _virada(banco),
+        "terminal_id": id_do_caixa(banco), "terminal": turnos.terminal,
+        "terminal_rotulo": (maquina.get("descricao") or "").strip() or f"Caixa {turnos.terminal}",
+        "terminal_computador": (maquina.get("nome_computador") or "").strip() or socket.gethostname(),
         "dia_operacional": fmt.dia_operacional(None, _virada(banco)), "momento": fmt.agora(),
         "caixa": caixa, "estoque": estoque,
         "caderneta": {"a_receber_cent": int(devedores["total"]), "clientes_devendo": int(devedores["n"])},
@@ -178,3 +218,70 @@ def enviar(banco, http=None) -> dict | None:
     if enviadas:
         log.info("Painel do dono: %d venda(s) enviada(s) em %d lote(s).", enviadas, lotes)
     return {"vendas": enviadas, "lotes": lotes}
+
+
+# ------------------------------------------------------------------ senha do painel
+def validar_senha(senha: str) -> str:
+    """As regras da nuvem (backend/painel.py), conferidas antes para o operador ver o erro sem esperar a rede."""
+    senha = (senha or "").strip()
+    if len(senha) < SENHA_MINIMA:
+        raise ErroNegocio(f"A senha do painel precisa ter pelo menos {SENHA_MINIMA} caracteres.")
+    if len(senha) > SENHA_MAXIMA:
+        raise ErroNegocio("A senha do painel é longa demais.")
+    return senha
+
+
+def _detalhe(resposta) -> str:
+    try:
+        detalhe = resposta.json().get("detail")
+    except (ValueError, AttributeError):
+        return ""
+    return detalhe.strip() if isinstance(detalhe, str) else ""
+
+
+def trocar_senha_na_nuvem(url_api: str, token: str, senha: str | None = None, http=None, timeout=(5, 30)) -> str | None:
+    """Troca a senha do painel do dono, com o token DA LOJA (o administrador da nuvem não é preciso). Sem `senha` a nuvem gera
+    uma e ela volta aqui (aparece só agora); com `senha` devolve None. As sessões abertas no celular caem: o dono entra de
+    novo. Não toca no banco local, então pode rodar fora da thread da tela. Levanta ErroNegocio com a mensagem pronta para o
+    operador (a senha só muda quando a nuvem responde 200)."""
+    senha = validar_senha(senha) if (senha or "").strip() else None
+    if not (url_api or "").strip() or not (token or "").strip():
+        raise ErroNegocio("Preencha o endereço da nuvem e o token da API em Configurações > Nuvem antes de trocar a senha do painel.")
+    if http is None:
+        import requests as http
+    try:
+        r = http.post(url_senha(url_api), json={"senha": senha} if senha else {},
+                      headers={"Authorization": f"Bearer {token.strip()}"}, timeout=timeout)
+    except OSError as e:
+        raise ErroNegocio("Sem conexão com a nuvem: a senha NÃO foi trocada. Confira a internet e o endereço em "
+                          "Configurações > Nuvem.") from e
+    if r.status_code != 200:
+        detalhe = _detalhe(r)
+        if r.status_code == 401:
+            raise ErroNegocio("A nuvem não reconheceu o token da API: a senha NÃO foi trocada. Confira o token em "
+                              "Configurações > Nuvem.")
+        if r.status_code in (403, 422) and detalhe:
+            raise ErroNegocio(f"{detalhe} A senha NÃO foi trocada.")
+        raise ErroNegocio(f"A nuvem respondeu HTTP {r.status_code}: a senha NÃO foi trocada.")
+    try:
+        dados = r.json()
+    except ValueError:
+        dados = {}
+    gerada = dados.get("senha") if isinstance(dados, dict) else None
+    if senha:
+        return None
+    if not gerada:
+        raise ErroNegocio("A nuvem trocou a senha mas não devolveu a nova. Defina uma senha própria para o painel.")
+    return str(gerada)
+
+
+def registrar_troca_de_senha(banco, gerada: bool, operador_id: int | None = None) -> None:
+    """Deixa no log do PDV que a senha do painel foi trocada e por quem (nunca a senha)."""
+    banco.log("painel_senha_trocada", "senha gerada pela nuvem" if gerada else "senha escolhida pelo operador", operador_id)
+
+
+def trocar_senha(banco, senha: str | None = None, http=None, operador_id: int | None = None) -> str | None:
+    """`trocar_senha_na_nuvem` com o endereço e o token desta loja (Configurações > Nuvem) e o registro no log do PDV."""
+    gerada = trocar_senha_na_nuvem(banco.cfg("api_url"), banco.cfg("api_token"), senha, http)
+    registrar_troca_de_senha(banco, bool(gerada), operador_id)
+    return gerada

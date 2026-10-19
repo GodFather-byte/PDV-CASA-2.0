@@ -416,3 +416,144 @@ class TestConfiguracoesQt(BaseTeste):
         self.assertNotIn("segredo-digitado", repr(janela._originais))
         self.assertEqual(janela.campos["nuvem"]["api_token"].text(), "")
         self.assertEqual(self.banco.cfg("api_token"), "segredo-digitado")
+
+    # ------------------------------------------------ senha do painel do dono (trocada pelo PDV)
+    def nuvem(self, url="https://nuvem.exemplo/v1/sincronizar", token="token-da-loja"):
+        self.ctx.config.salvar_config({"api_url": url, "api_token": token})
+
+    def na_aba_nuvem(self):
+        janela = self.janela()
+        janela.abas.setCurrentIndex(SECOES.index("nuvem"))
+        return janela
+
+    def esperar_a_nuvem(self):
+        from PySide6.QtCore import QThreadPool
+        self.assertTrue(QThreadPool.globalInstance().waitForDone(3000))
+        self.aplicacao.processEvents()
+
+    def trocar_senha(self, janela, digitado, retorno=None, erro=None):
+        """Aperta o botão com `digitado` nas caixas de senha; devolve (chamadas à nuvem, avisos mostrados)."""
+        from src.sync import painel_envio
+        with patch("src.ui_qt.configuracoes.QInputDialog.getText", side_effect=digitado) as caixas, \
+                patch.object(painel_envio, "trocar_senha_na_nuvem", return_value=retorno, side_effect=erro) as nuvem, \
+                patch("src.ui_qt.configuracoes.QMessageBox.information") as aviso:
+            janela.btn_senha_painel.click()
+            self.esperar_a_nuvem()
+        return nuvem, aviso, caixas
+
+    def eventos_da_senha(self):
+        return [l["detalhe"] for l in self.banco.todos("SELECT detalhe FROM log_eventos WHERE evento = 'painel_senha_trocada'")]
+
+    def test_botao_da_senha_do_painel_segue_a_permissao_da_aba_nuvem(self):
+        janela = self.na_aba_nuvem()
+        self.assertTrue(janela.btn_senha_painel.isEnabled())
+        self.operador(3)                                          # nível 3: só a loja, sem a nuvem
+        janela = self.janela()
+        self.assertFalse(janela.btn_senha_painel.isEnabled())
+
+    def test_troca_a_senha_escolhida_pela_nuvem_e_registra_sem_a_senha(self):
+        self.nuvem()
+        janela = self.na_aba_nuvem()
+        nuvem, aviso, _ = self.trocar_senha(janela, [("senha-qt-1234", True), ("senha-qt-1234", True)])
+        nuvem.assert_called_once_with("https://nuvem.exemplo/v1/sincronizar", "token-da-loja", "senha-qt-1234")
+        aviso.assert_not_called()
+        self.assertIn("Senha do painel trocada", janela.mensagem.text())
+        self.assertEqual(self.eventos_da_senha(), ["senha escolhida pelo operador"])
+        self.assertNotIn("senha-qt-1234", repr(self.banco.todos("SELECT detalhe FROM log_eventos")))
+        self.assertTrue(janela.btn_senha_painel.isEnabled())      # liberado para uma próxima troca
+
+    def test_em_branco_a_nuvem_gera_e_a_senha_aparece_uma_vez(self):
+        self.nuvem()
+        janela = self.na_aba_nuvem()
+        nuvem, aviso, caixas = self.trocar_senha(janela, [("", True)], retorno="abcd-efgh-jkmn")
+        nuvem.assert_called_once_with("https://nuvem.exemplo/v1/sincronizar", "token-da-loja", None)
+        self.assertEqual(caixas.call_count, 1)                    # em branco não pede confirmação
+        self.assertIn("abcd-efgh-jkmn", aviso.call_args.args[2])
+        self.assertNotIn("abcd-efgh-jkmn", janela.mensagem.text())
+        self.assertEqual(self.eventos_da_senha(), ["senha gerada pela nuvem"])
+
+    def test_senha_curta_confirmacao_diferente_ou_cancelamento_nao_chamam_a_nuvem(self):
+        self.nuvem()
+        janela = self.na_aba_nuvem()
+        for digitado, mensagem in ((["curta"], "pelo menos 8 caracteres"),
+                                   (["senha-qt-1234", "senha-qt-9999"], "não conferem")):
+            nuvem, _, _ = self.trocar_senha(janela, [(d, True) for d in digitado])
+            nuvem.assert_not_called()
+            self.assertIn(mensagem, janela.mensagem.text())
+        for caixas in ([("", False)], [("senha-qt-1234", True), ("", False)]):
+            janela.mensagem.clear()
+            nuvem, _, _ = self.trocar_senha(janela, caixas)
+            nuvem.assert_not_called()
+            self.assertEqual(janela.mensagem.text(), "")
+        self.assertEqual(self.eventos_da_senha(), [])
+
+    def test_exige_a_aba_salva_e_a_nuvem_configurada(self):
+        janela = self.na_aba_nuvem()                              # nada configurado ainda
+        nuvem, _, caixas = self.trocar_senha(janela, [])
+        self.assertIn("Preencha o endereço da nuvem", janela.mensagem.text())
+        caixas.assert_not_called()
+        self.nuvem()
+        janela = self.na_aba_nuvem()
+        self.definir(janela, "nuvem", "api_url", "https://outro.exemplo")       # editado e ainda não salvo
+        nuvem, _, caixas = self.trocar_senha(janela, [])
+        self.assertIn("Salve as alterações desta aba", janela.mensagem.text())
+        caixas.assert_not_called()
+        self.assertTrue(janela.salvar())
+        nuvem, _, _ = self.trocar_senha(janela, [("senha-qt-1234", True), ("senha-qt-1234", True)])
+        nuvem.assert_called_once_with("https://outro.exemplo", "token-da-loja", "senha-qt-1234")
+
+    def test_erro_da_nuvem_aparece_na_janela_e_nao_deixa_registro(self):
+        self.nuvem()
+        janela = self.na_aba_nuvem()
+        digitado = [("senha-qt-1234", True), ("senha-qt-1234", True)]
+        self.trocar_senha(janela, digitado, erro=ErroNegocio("A nuvem não reconheceu o token. A senha NÃO foi trocada."))
+        self.assertIn("NÃO foi trocada", janela.mensagem.text())
+        self.assertTrue(janela.btn_senha_painel.isEnabled())
+        self.trocar_senha(janela, digitado, erro=RuntimeError("falha qualquer"))
+        self.assertIn("Erro inesperado", janela.mensagem.text())
+        self.assertNotIn("falha qualquer", janela.mensagem.text())
+        self.assertEqual(self.eventos_da_senha(), [])
+
+    def test_nao_fecha_nem_repete_enquanto_a_nuvem_nao_respondeu(self):
+        import threading
+        from src.sync import painel_envio
+        self.nuvem()
+        janela = self.na_aba_nuvem()
+        liberar = threading.Event()
+
+        def devagar(url, token, senha):
+            liberar.wait(3)
+            return None
+        with patch("src.ui_qt.configuracoes.QInputDialog.getText", side_effect=[("senha-qt-1234", True)] * 2), \
+                patch.object(painel_envio, "trocar_senha_na_nuvem", side_effect=devagar) as nuvem:
+            janela.show()
+            self.assertTrue(janela.trocar_senha_painel())
+            self.assertFalse(janela.btn_senha_painel.isEnabled())
+            self.assertFalse(janela.trocar_senha_painel())            # um clique repetido não dispara outra troca
+            janela.mensagem.clear()
+            janela.reject()                                           # Esc
+            self.assertTrue(janela.isVisible())
+            self.assertIn("Aguarde", janela.mensagem.text())
+            janela.mensagem.clear()
+            self.assertFalse(janela.close())                          # botão de fechar da janela
+            self.assertTrue(janela.isVisible())
+            self.assertIn("Aguarde", janela.mensagem.text())
+            liberar.set()
+            self.esperar_a_nuvem()
+        nuvem.assert_called_once()
+        self.assertTrue(janela.btn_senha_painel.isEnabled())
+        self.assertTrue(janela.close())
+
+    def test_permissao_perdida_durante_a_troca_nao_reabilita_o_botao(self):
+        import threading
+        from src.sync import painel_envio
+        self.nuvem()
+        janela = self.na_aba_nuvem()
+        liberar = threading.Event()
+        with patch("src.ui_qt.configuracoes.QInputDialog.getText", side_effect=[("senha-qt-1234", True)] * 2), \
+                patch.object(painel_envio, "trocar_senha_na_nuvem", side_effect=lambda *a: liberar.wait(3) and None):
+            janela.trocar_senha_painel()
+            self.ctx.operador = None                                  # saiu da sessão com a nuvem ainda pensando
+            liberar.set()
+            self.esperar_a_nuvem()
+        self.assertFalse(janela.btn_senha_painel.isEnabled())

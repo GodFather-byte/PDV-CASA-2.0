@@ -79,7 +79,9 @@ sincronização contínua pelo painel Qt.
   para exibição: vazio mantém o atual, substituição exige digitar um novo e
   remoção exige marcar a opção explícita. Tema claro/escuro vale também no Qt.
   Reabra as telas operacionais para reler parâmetros; configurar uma URL/token
-  não inicia sincronização nem contrata nuvem.
+  não inicia sincronização nem contrata nuvem. A aba da nuvem tem o botão
+  "Trocar a senha do painel do dono…" (rede em outra thread, usa o endereço e o
+  token já salvos; ver `docs/PAINEL_DONO.md`), que só troca essa senha.
 - Máquinas e periféricos: configuração completa do terminal pelos campos do
   controlador, com testes explícitos de impressão/gaveta. Envio não comprova
   saída física; não instala drivers nem limpa filas do Windows.
