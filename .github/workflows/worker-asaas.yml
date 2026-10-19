@@ -1,0 +1,52 @@
+# Worker do Asaas como agendador: roda um lote (webhooks pendentes + conciliação) e sai.
+# Alternativa ao Background Worker pago do Render; veja docs/COBRANCA_LICENCAS_ASAAS.md, seção 11.
+# O GitHub só executa agendamentos a partir do branch padrão e pode atrasar alguns minutos.
+# Em repositório público, o GitHub desativa o agendamento após 60 dias sem atividade.
+# Configure em Settings > Secrets and variables > Actions:
+#   Secrets:   PDV_NUVEM_DB_URL, ASAAS_API_KEY
+#   Variables: ASAAS_AMBIENTE (sandbox ou producao; sem valor, usa sandbox)
+name: Worker Asaas
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: worker-asaas
+  cancel-in-progress: false
+
+jobs:
+  lote:
+    name: Processar lote
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: America/Sao_Paulo          # as datas da licença usam o horário do Brasil, como na API
+      PDV_NUVEM_DB_URL: ${{ secrets.PDV_NUVEM_DB_URL }}
+      ASAAS_API_KEY: ${{ secrets.ASAAS_API_KEY }}
+      ASAAS_AMBIENTE: ${{ vars.ASAAS_AMBIENTE || 'sandbox' }}
+    steps:
+      - name: Conferir configuração
+        id: config
+        run: |
+          if [ -z "$PDV_NUVEM_DB_URL" ] || [ -z "$ASAAS_API_KEY" ]; then
+            echo "Segredos PDV_NUVEM_DB_URL e ASAAS_API_KEY ainda não configurados; nada a fazer."
+            echo "pronto=nao" >> "$GITHUB_OUTPUT"
+          else
+            echo "pronto=sim" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.pronto == 'sim'
+      - uses: actions/setup-python@v5
+        if: steps.config.outputs.pronto == 'sim'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Dependências
+        if: steps.config.outputs.pronto == 'sim'
+        run: pip install -r backend/requirements.txt
+      - name: Um lote do worker
+        if: steps.config.outputs.pronto == 'sim'
+        run: python -m backend.worker_asaas --uma-vez --limite 100

@@ -34,11 +34,11 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `src/sync/` | `sincronizador.py`, `licenca_nuvem.py`, `atualizacoes.py`, `telegram_api.py`, `painel_envio.py` (vendas e retrato para o painel do dono) |
 | `licenciador/` | `nucleo.py` (regras), `tela.py` (janela), `app.py`, `autoteste.py` |
 | `backend/` | FastAPI: `main.py` (rotas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobrancas.py` (Asaas), `operacao_asaas.py` e `worker_asaas.py` (fila, agenda e indicadores), `painel.py` (painel do dono: envio, senha, sessão, consultas) e `painel_web/` (a PWA servida em `/painel/`) |
-| `tools/` | `gerar_licenca.py`, `gerar_logos.py` (não vão no instalador do PDV) |
+| `tools/` | `gerar_licenca.py`, `gerar_logos.py`, `monitor_asaas.py` (não vão no instalador do PDV) |
 | `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`) e imagens |
 | `tests/` | Um `test_*.py` por assunto; `base.py` (banco em memória, relógio controlável); `ui_robo.py` (robô das janelas modais) |
 | `docs/` | Guias por assunto (lista abaixo) |
-| `.github/workflows/` | `testes.yml` (suíte), `build-windows.yml` (instaladores) e `nuvem-deploy.yml` (testa a nuvem e aciona o deploy no Render) |
+| `.github/workflows/` | `testes.yml` (suíte), `build-windows.yml` (instaladores), `nuvem-deploy.yml` (testa a nuvem e aciona o deploy no Render), `worker-asaas.yml` (lote do worker a cada 5 min) e `monitor-asaas.yml` (indicador de operação a cada 30 min) |
 
 ## Onde fica cada regra (`src/controllers/`)
 

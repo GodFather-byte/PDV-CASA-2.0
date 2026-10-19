@@ -1,0 +1,39 @@
+# Monitor da cobrança Asaas: consulta /v1/admin/cobrancas/operacao e falha se algo precisa de atenção.
+# O GitHub envia e-mail quando o job falha. Veja docs/COBRANCA_LICENCAS_ASAAS.md, seção 11.
+# Configure em Settings > Secrets and variables > Actions:
+#   Secret:   PDV_API_TOKEN (o token administrativo da API, nunca o de uma loja)
+#   Variable: PDV_API_URL (ex.: https://SEU-SERVICO.onrender.com)
+name: Monitor Asaas
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    name: Indicador de operação
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PDV_API_URL: ${{ vars.PDV_API_URL }}
+      PDV_API_TOKEN: ${{ secrets.PDV_API_TOKEN }}
+    steps:
+      - name: Conferir configuração
+        id: config
+        run: |
+          if [ -z "$PDV_API_URL" ] || [ -z "$PDV_API_TOKEN" ]; then
+            echo "PDV_API_URL e PDV_API_TOKEN ainda não configurados; nada a fazer."
+            echo "pronto=nao" >> "$GITHUB_OUTPUT"
+          else
+            echo "pronto=sim" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.pronto == 'sim'
+      - uses: actions/setup-python@v5
+        if: steps.config.outputs.pronto == 'sim'
+        with:
+          python-version: "3.12"
+      - name: Consultar indicador
+        if: steps.config.outputs.pronto == 'sim'
+        run: python -m tools.monitor_asaas

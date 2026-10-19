@@ -1,15 +1,15 @@
-# Nuvem do WillPDV no Render (plano gratuito). Passo a passo em docs/NUVEM.md, "Opção grátis: Render + Neon".
-# O banco NÃO fica no Render: o disco do plano grátis é apagado a cada reinício. Os dados ficam num PostgreSQL
-# gratuito do Neon (neon.tech), informado em PDV_NUVEM_DB_URL.
-# Cobrança Asaas: docs/COBRANCA_LICENCAS_ASAAS.md. Em produção, escolha plano pago
-# sempre ligado e configure ASAAS_AMBIENTE, ASAAS_API_KEY e ASAAS_WEBHOOK_TOKEN no painel.
-# A API só enfileira eventos. Worker/agenda: python -m backend.worker_asaas
-# em processo supervisionado separado (não provisionado aqui; verificar custo no guia).
+# Nuvem do WillPDV no Render. Passo a passo em docs/NUVEM.md ("Render + Neon") e, para a cobrança,
+# em docs/COBRANCA_LICENCAS_ASAAS.md.
+# O banco NÃO fica no Render: ele fica num PostgreSQL do Neon (neon.tech), informado em PDV_NUVEM_DB_URL.
+# Plano "starter" = instância paga sempre ligada (o plano "free" dorme após 15 min e não serve para webhook).
+# Confira o preço atual em render.com/pricing. Para testar de graça, troque para "free" só no ambiente de teste.
+# O worker NÃO é um serviço do Render aqui: roda como agendador no GitHub Actions
+# (.github/workflows/worker-asaas.yml). Para usar um Background Worker do Render, veja a seção 11 do guia.
 services:
   - type: web
     name: willpdv-nuvem
     runtime: python
-    plan: free
+    plan: starter
     buildCommand: pip install -r backend/requirements.txt
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /v1/saude
@@ -24,3 +24,9 @@ services:
         sync: false
       - key: PDV_LICENCA_CHAVE        # arquivo secreto (Secret File) com a chave da licença
         value: /etc/secrets/licenca_privada.key
+      - key: ASAAS_AMBIENTE           # sandbox (testes) ou producao, preenchido no painel (sem valor aqui, para uma
+        sync: false                   # sincronização do Blueprint nunca desfazer a virada); sem valor, o padrão é sandbox
+      - key: ASAAS_API_KEY            # chave do Asaas do ambiente acima; preencha no painel
+        sync: false
+      - key: ASAAS_WEBHOOK_TOKEN      # segredo do webhook (o mesmo cadastrado no Asaas); preencha no painel
+        sync: false
