@@ -2,59 +2,48 @@
 
 ## Último trabalho
 
-**Decisão do titular:** a licença segue **manual** (WillPDV Licenças) e a nuvem serve **só para o painel do dono** (Render +
-Neon, plano grátis). O trabalho do Asaas (worker e monitor no GitHub Actions, Render pago) não será usado: o PR #2 foi fechado
-sem merge. O commit continua no histórico desta branch (`832bed9`) e o `cfa840f` o desfaz, caso a cobrança automática volte.
+**Versão do PDV subida para 1.6.0** (pedido do titular): `src/versao.py` e o padrão de `instalador/WillPDV.iss` são os únicos
+lugares onde o número existe (o `build_pdv.py` e a faixa da tela principal leem de `src/versao.py`). O instalador novo sai do
+workflow "Gerar instalador (Windows)" quando isto chega na `main` (Releases > "última versão"). O WillPDV Licenças tem versão
+própria (1.1.0) e não mudou.
 
-**Pedido:** concluir as três pendências do painel do dono. Guia completo em `docs/PAINEL_DONO.md`. As edições em `backend/`
-(área do Antigravity) foram pontuais e pedidas pelo titular.
+**O que a 1.6.0 traz** (PRs já mesclados na `main`; guia completo em `docs/PAINEL_DONO.md`):
 
-- **O dono troca a própria senha pelo PDV.** `painel_envio.trocar_senha_na_nuvem(url, token, senha)` chama
-  `POST /v1/painel/senha` com o token da loja (em branco: a nuvem gera a senha e ela aparece uma vez). Tk: botão "Senha do
-  painel do dono..." na barra de Configurações (grava antes o que está na tela; a rede roda numa thread, com janelinha de
-  espera). Qt: botão na aba "Conexão com a nuvem" (QThreadPool; exige a aba salva; a janela não fecha com a troca em andamento).
-  O log do PDV registra `painel_senha_trocada` (quem e se foi gerada, nunca a senha).
-- **Mais de um caixa por loja.** Cada caixa se identifica (`painel_envio.id_do_caixa`: código gravado na config, que muda se o
-  banco for copiado para outro computador) e a nuvem guarda **um retrato por caixa** (tabela nova `painel_caixas`; a antiga
-  `painel_retratos` é apagada na subida, e o retrato se refaz em ~1 min). `GET /v1/painel/resumo` devolve `caixas[]` e mantém no
-  topo `caixa`, `estoque`, `caderneta`, `entregas_pendentes` (turno aberto e estoque do primeiro caixa que tem; caderneta e
-  entregas **somadas**), então o app antigo e o PDV antigo (sem `terminal_id`, entra como o caixa "unico") seguem funcionando.
-  **Estoque não se soma** (cada caixa tem o seu banco): com mais de um caixa controlando, aparece um bloco por caixa. App do
-  celular: um cartão por caixa na aba Caixa, de qual caixa saiu cada venda, "Sem enviar há ..." por caixa; `sw.js` foi para
-  `painel-v2` e instala os arquivos com `cache: "reload"`.
-- **Limpeza automática** (`backend/painel.py`: `limpar_antigos`, `limpeza_periodica`): vendas do painel com mais de 120 dias
-  (`PDV_PAINEL_RETENCAO_DIAS`, mínimo 7; venda mais velha é confirmada ao PDV mas nem guardada), sessões vencidas e caixas sem
-  retrato há 14 dias. Roda em segundo plano depois de um envio, no máximo a cada 6 h; `python -m backend.lojas limpar-painel`
-  roda na hora. De quebra, o freio de tentativas de login deixou de crescer com nomes de loja inventados.
+- **O dono troca a própria senha do painel pelo PDV:** Configurações > botão "Senha do painel do dono..." (Tk) ou aba "Conexão
+  com a nuvem" (Qt). Usa `POST /v1/painel/senha` com o token da loja; em branco, a nuvem gera a senha e ela aparece uma vez.
+- **Vários caixas por loja:** cada caixa se identifica (`painel_envio.id_do_caixa`) e a nuvem guarda um retrato por caixa
+  (`painel_caixas`). Caderneta e entregas somam; o estoque **não** (cada caixa tem o seu banco). Só passa a valer para as lojas
+  quando **todos** os caixas estiverem na 1.6.0: PDV mais antigo entra na nuvem como um caixa só ("unico").
+- **Limpeza automática na nuvem:** vendas do painel com mais de 120 dias (`PDV_PAINEL_RETENCAO_DIAS`), sessões vencidas e caixas
+  parados há 14 dias saem sozinhos; `python -m backend.lojas limpar-painel` roda na hora. É só da nuvem (não depende da versão
+  do PDV). O histórico completo continua no caixa.
+- PDV novo funciona com a nuvem antiga e a nuvem nova funciona com o PDV antigo.
 
-Testes novos: `test_painel_caixas`, `test_painel_limpeza`, `test_painel_senha_pdv` (regras e nuvem de verdade),
-`test_painel_senha_tk` e 8 casos em `test_qt_configuracoes`. `test_painel_dono` ganhou a base `BaseNuvem` (relógio da nuvem fixo
-em 2026-10-03, porque a retenção compara o dia da venda com a data do servidor). O job "Nuvem: testar e publicar" roda os que não
-precisam de Tk/Qt.
+**Decisão do titular:** a licença segue **manual** e a nuvem serve **só para o painel do dono** (Render + Neon, plano grátis).
+O trabalho do Asaas (worker e monitor no GitHub Actions, Render pago) não será usado: o PR #2 foi fechado sem merge. O commit
+continua no histórico (`832bed9`) e o `cfa840f` o desfaz, caso a cobrança automática volte. As edições em `backend/` (área do
+Antigravity) foram pontuais e pedidas pelo titular.
 
 ### Validação
 
-- Suíte completa (`xvfb-run`, `QT_QPA_PLATFORM=offscreen`, Python 3.12, Linux): **2179 testes, OK, 15 ignorados** pelo ambiente
-  (nenhum é dos testes novos). Os testes do painel que falam com a nuvem (`test_painel_dono`, `_caixas`, `_limpeza` e
-  `_senha_pdv`: 82, dos quais 57 novos) também passam contra **PostgreSQL 16 de verdade**
-  (`PDV_TESTE_NUVEM_DB_URL=postgresql+psycopg://...`; atenção: o cluster precisa ser UTF8, em SQL_ASCII o psycopg devolve bytes),
-  e a subida da versão nova sobre uma tabela `painel_retratos` antiga foi conferida lá. Os de tela (Tk e Qt) rodam só em SQLite. As sintaxes foram conferidas para o
-  Python 3.10 do CI; o job da nuvem foi simulado num ambiente só com as dependências do `backend/`, sem Tk, Qt nem cryptography.
-- Os testes foram conferidos com mutações (apagar a regra e ver o teste cair); os que sobreviveram foram reforçados.
-- Ensaio real nesta sessão: API local (uvicorn + SQLite) com 3 PDVs enviando por HTTP de verdade; o app no Chromium (390x844,
-  claro e escuro) com 3 caixas, com 1 e com a resposta antiga (sem `caixas`); troca de senha por HTTP real (escolhida, gerada,
-  token errado, servidor fora do ar); janela do Tk numa tela virtual.
-- **Não validado:** o app novo no Render/Neon, num celular de verdade e instalado como PWA; impressora e leitor; Windows.
+- Suíte completa antes da subida de versão (`xvfb-run`, `QT_QPA_PLATFORM=offscreen`, Python 3.12, Linux): **2179 testes, OK, 15
+  ignorados** pelo ambiente; Windows e Linux, Python 3.10 e 3.12, passaram no GitHub. Os testes do painel que falam com a nuvem
+  também passam contra PostgreSQL 16 de verdade (`PDV_TESTE_NUVEM_DB_URL=postgresql+psycopg://...`; o cluster precisa ser UTF8).
+- Ensaio real: API local com 3 PDVs enviando por HTTP, o app do celular no Chromium (claro e escuro; 3 caixas, 1 caixa e a
+  resposta antiga) e a troca de senha por HTTP real.
+- **Não validado:** o app novo no Render/Neon, num celular de verdade e instalado como PWA; impressora e leitor; Windows na prática.
 
 ## Pendências
 
-- **Versão:** nada foi subido. Para levar a troca de senha e a identificação do caixa às lojas, subir `src/versao.py` e
-  `instalador/WillPDV.iss` (sugestão 1.6.0) e gerar o instalador (workflow "Gerar instalador (Windows)" na `main`). O PDV novo
-  funciona com a nuvem antiga; a nuvem nova funciona com o PDV antigo.
+- **Publicar a 1.6.0 na nuvem** para os caixas conectados avisarem o dono (ação do titular, precisa do banco do Neon; exemplo):
+  `python -m backend.atualizacoes publicar 1.6.0 --notas "Painel do dono: o dono troca a senha do painel em Configurações; lojas com mais de um caixa aparecem separadas no celular." --url https://github.com/GodFather-byte/PDV-CASA-2.0/releases/tag/ultima-versao`
+  (trocar a `--url` se o repositório ficar privado ou se o instalador for entregue de outro jeito). Release versionada com o
+  instalador `WillPDV-Setup-1.6.0.exe` é por tag (`git tag v1.6.0 && git push origin v1.6.0`, ver `docs/INSTALAR_E_TESTAR.md`): não foi criada.
 - **Nuvem no ar (Render + Neon, grátis):** o Neon está ligado e a `LOJA-TESTE` existe; falta homologar de ponta a ponta com um
-  caixa enviando e um celular real. **Trocar o `PDV_API_TOKEN` e a senha do Neon** (apareceram numa conversa). Para o Render
-  grátis não dormir: UptimeRobot em `GET /v1/saude` a cada 5 min (a rota é só GET: usar método GET ou palavra-chave; conferir se o
-  plano grátis deles permite uso comercial).
+  caixa enviando e um celular real. O GitHub não aciona o deploy (falta o segredo `RENDER_DEPLOY_HOOK_URL`): conferir no Render
+  se o Auto-Deploy está ligado. **Trocar o `PDV_API_TOKEN` e a senha do Neon** (apareceram numa conversa). Para o Render grátis
+  não dormir: UptimeRobot em `GET /v1/saude` a cada 5 min (a rota é só GET: usar método GET ou palavra-chave; conferir se o plano
+  grátis deles permite uso comercial).
 - **Ao ligar o painel em loja com meses de histórico:** todo o histórico ainda não enviado sobe (lotes de 200, de uma vez) e a
   nuvem descarta o que passa de 120 dias. Se pesar, o PDV pode deixar de mandar vendas mais velhas que a retenção (não feito).
 - **Painel:** campo para o dono trocar a senha também no próprio app do celular (hoje só pelo PDV ou pelo fornecedor); push;

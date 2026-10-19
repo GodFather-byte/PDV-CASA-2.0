@@ -73,8 +73,8 @@ mas só guarda as vendas dentro da retenção (120 dias): as mais antigas não o
 
 ## O dono troca a própria senha (no PDV)
 
-A senha que o fornecedor passou não precisa ficar para sempre. No caixa da loja (Tk ou Qt), com o endereço e o token da nuvem
-já salvos em Configurações > Nuvem:
+A senha que o fornecedor passou não precisa ficar para sempre. No caixa da loja (Tk ou Qt, **a partir do PDV 1.6.0**), com o
+endereço e o token da nuvem já salvos em Configurações > Nuvem:
 
 * **Tk:** Configurações > botão **Senha do painel do dono...** (na barra de cima, em qualquer aba). Grava antes o que está na
   tela e pede a senha duas vezes.
@@ -92,7 +92,9 @@ perdeu a senha troca por aqui mesmo (basta o caixa estar com a nuvem configurada
 
 Cada caixa tem o seu próprio banco, então cada um **se identifica** na nuvem (um código gerado na primeira vez e guardado no
 banco do caixa; se o banco for copiado para outro computador, o computador novo ganha o código dele) e a nuvem guarda **um
-retrato por caixa**. Antes, o último a falar apagava o retrato do outro.
+retrato por caixa**. Antes, o último a falar apagava o retrato do outro. A identificação vem do **PDV 1.6.0**: enquanto uma
+loja usar caixas mais antigos, eles continuam aparecendo como um caixa só (veja o último item da lista abaixo); atualize todos
+os caixas da loja para ver cada um separado.
 
 * **Vendas:** somam sozinhas (cada venda tem o seu uuid). Na aba Vendas aparece de qual caixa saiu cada uma.
 * **Caixa:** um cartão por caixa, com "Aberto/Fechado", o computador e "atualizado às". Um caixa que não fala há mais de 10
