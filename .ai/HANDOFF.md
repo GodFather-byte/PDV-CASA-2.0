@@ -13,15 +13,17 @@ Personalização do logotipo da loja/Adega:
 
 ## Validação
 
-- 146 testes direcionados de identidade, janelas Tk/Qt, impressão e caixas: **OK**, com Xvfb.
+- 187 testes direcionados de identidade, janelas Tk/Qt, impressão, caixas e autoteste: **OK**, com Xvfb.
 - Verificação manual com banco temporário em disco: apagar original, imprimir ESC/POS com raster e texto e abrir configurações/caixa; **OK**. Janela Tk visível em 1366×768, preview dentro do layout.
-- Primeira suíte completa: **2.225 testes, 3 falhas, 3 erros, 129 ignorados**. Falha nova da lista do autoteste corrigida.
+- Suíte completa final: **2.225 testes, 2 falhas, 3 erros, 129 ignorados**. Lista de módulos do autoteste validada.
 - Os outros cinco resultados reproduzidos sem alterações em cópia temporária da base: `test_boate_extras.TesteAlertaDeGaveta` (dois erros por saldo), `test_telegram.TesteAvisosEmTempoReal` (um erro por saldo), `test_qt_composicao.TestComposicaoQt.test_incluir_valida_insumo_compoe_e_preserva_dados_do_produto` e `test_qt_estoque.TestEstoqueQt.test_tela_funciona_em_banco_somente_leitura_sem_modificar_dados` (duas falhas).
 - Pillow 12.3.0 sem alertas na consulta à base de vulnerabilidades.
+- CodeQL: **zero alertas**; varredura de segredos: **nenhum encontrado**. Revisão independente do diff: **sem bugs encontrados** (revisor do pipeline indisponível por erro de modelo).
+- `compileall`, `git diff --check` e verificação da cópia dos avisos de licença do Pillow: **OK**.
 
 ## Pendências
 
-- Concluir nova validação após inclusão na lista do autoteste, revisão e análise de segurança do PR.
+- Acompanhar CI/revisão do PR antes da instalação; validação local concluída.
 - Homologar em impressora física compatível com `GS v 0`; desligar imagem quando não houver suporte. Não há detecção automática.
 - Backup atual guarda o banco, não a pasta de imagens: ao transferir de computador, selecionar novamente o logo. Cópias antigas permanecem preservadas.
 - Tratar os cinco testes preexistentes em trabalho separado. Próxima melhoria sugerida: reposição por giro de 7/14/30 dias.
