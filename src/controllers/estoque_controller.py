@@ -14,6 +14,7 @@ from src.controllers import notificacoes
 from src.controllers.produto_controller import ProdutoController
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
+from src.database.conexao import normalizar
 
 TIPOS = {
     "inicial": "Inicial", "pedido": "Pedido", "compra": "Compra", "entrada": "Entrada",
@@ -216,6 +217,13 @@ class EstoqueController:
         return self.banco.valor("SELECT SUM(valor_cent) FROM itens_estoque WHERE lancamento_id = ?", (lanc_id,), 0)
 
     # ----------------------------------------------------------- itens
+    @staticmethod
+    def _validar_quantidade(quantidade: float) -> float:
+        try:
+            return fmt.validar_qtd(quantidade)
+        except ValueError as exc:
+            raise ErroNegocio(str(exc).capitalize() + ".") from None
+
     def adicionar_item(self, lanc_id: int, produto_id: int, quantidade: float, valor_cent: int = 0,
                        desconto_cent: int = 0, estoque_minimo: float | None = None, ligar_controle: bool = False,
                        observacao: str | None = None) -> int:
@@ -233,17 +241,14 @@ class EstoqueController:
         p = self.produtos.por_id(produto_id)
         if p is None:
             raise ErroNegocio("Produto não encontrado.")
+        quantidade = self._validar_quantidade(quantidade)
         emb = self.produtos.embalagem(produto_id) if tipo != "desc_acabados" else None
         if emb:
             if tipo in ("inicial", "contagem"):
                 raise ErroNegocio(f"'{p['nome']}' é um fardo/caixa de {emb['quantidade']} '{emb['unitario']}' e não tem estoque "
                                   f"próprio: conte as unidades no produto '{emb['unitario']}'.")
             produto_id, p = emb["unitario_id"], self.produtos.por_id(emb["unitario_id"])
-            quantidade *= emb["quantidade"]
-        try:
-            quantidade = fmt.validar_qtd(quantidade)
-        except ValueError as exc:
-            raise ErroNegocio(str(exc).capitalize() + ".") from None
+            quantidade = fmt.arred_qtd(quantidade * emb["quantidade"])
         if quantidade < 0 or (quantidade == 0 and tipo not in ("inicial", "contagem")):
             raise ErroNegocio("Informe uma quantidade maior que zero.")
         if tipo == "desc_acabados" and not self.produtos.composicao(produto_id):
@@ -395,9 +400,10 @@ class EstoqueController:
         """Produtos que controlam estoque, já com a situação (sem/ponto/normal), o valor parado e o quanto repor.
 
         `situacao` filtra por 'sem', 'ponto', 'normal' ou 'livre' (produtos que ainda não controlam estoque); `texto` procura no
-        nome/código (e inclui os que não controlam); `grupo` filtra pelo grupo do produto.
+        nome sem acentos, código ou código de barras (e inclui os que não controlam);
+        `grupo` filtra pelo grupo do produto.
         `adega` recorta categorias típicas e produtos com configuração de bebida/atacado/casco."""
-        busca = (texto or "").strip().casefold()
+        busca = normalizar((texto or "").strip())
         # Quem procura por nome também acha o produto que ainda NÃO controla estoque (senão o RedBull cadastrado sem a marca
         # "Controla estoque" ficava invisível, sem como começar a controlar). 'livre' lista só esses.
         controle = "p.controla_estoque = 1" if not busca and situacao != "livre" else \
@@ -411,7 +417,7 @@ class EstoqueController:
                                  WHERE casco_produto_id IS NOT NULL))""" if adega else ""
         linhas = []
         for r in self.banco.todos(
-                f"""SELECT p.id, p.codigo, p.nome, p.qt_atual, p.estoque_minimo, p.ult_preco_cent, p.ult_atualizacao,
+                f"""SELECT p.id, p.codigo, p.cbarra, p.nome, p.qt_atual, p.estoque_minimo, p.ult_preco_cent, p.ult_atualizacao,
                           p.controla_estoque, u.abreviatura AS unidade, g.nome AS grupo, s.nome AS categoria
                    FROM produtos p JOIN unidades u ON u.id = p.unidade_id
                    JOIN subgrupos s ON s.id = p.subgrupo_id JOIN grupos g ON g.id = s.grupo_id
@@ -422,7 +428,8 @@ class EstoqueController:
                 continue
             if grupo and p["grupo"] != grupo:
                 continue
-            if busca and busca not in p["nome"].casefold() and busca not in p["codigo"].casefold().lstrip("0"):
+            if busca and not any(busca in normalizar(campo or "") for campo in
+                                 (p["nome"], p["codigo"], p["cbarra"])):
                 continue
             p["valor_cent"] = round(max(p["qt_atual"], 0) * p["ult_preco_cent"]) if p["controla_estoque"] else 0
             p["repor"] = self.sugestao_reposicao(p)
@@ -471,9 +478,10 @@ class EstoqueController:
         p = self.produtos.por_id(produto_id)
         if p is None:
             raise ErroNegocio("Produto não encontrado.")
+        quantidade = self._validar_quantidade(quantidade)
         emb = self.produtos.embalagem(produto_id)
         if emb and tipo != "contagem":               # fardo/caixa: o movimento é das unidades (a contagem o adicionar_item recusa)
-            produto_id, quantidade = emb["unitario_id"], quantidade * emb["quantidade"]
+            produto_id, quantidade = emb["unitario_id"], fmt.arred_qtd(quantidade * emb["quantidade"])
             p = self.produtos.por_id(produto_id)
         if tipo in ("saida", "descarte", "quebra", "oxidacao", "devolucao") \
                 and fmt.arred_qtd(quantidade) > max(p["qt_atual"], 0) and p["controla_estoque"]:

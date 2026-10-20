@@ -8,8 +8,9 @@ principal (o cartão "Sem estoque" já abre a lista só com os produtos zerados)
 * **Cartões:** produtos controlados, sem estoque, para repor, normais e o **valor parado** (quantidade × último preço de
   compra). Clicar num cartão filtra a lista.
 * **Lista:** cor por situação (vermelho = sem estoque, amarelo = no ponto de pedido ou abaixo, normal), barrinha de nível,
-  quanto repor e valor parado. Clique no título da coluna para ordenar. A busca filtra enquanto você digita (nome ou código) e
-  dá para filtrar por grupo.
+  quanto repor e valor parado. Clique no título da coluna para ordenar. A busca filtra enquanto você digita:
+  nome (com ou sem acentos), código interno (com ou sem zeros à esquerda) ou código de barras do leitor.
+  Também dá para filtrar por grupo e combinar a busca com a situação do estoque e o recorte da adega.
 * **Detalhe do produto** (ao clicar numa linha): quantidade, mínimo, último preço, sugestão de compra e os últimos movimentos.
   Quatro botões resolvem o dia a dia sem montar lançamento:
   * **Entrada** (chegou mercadoria; duplo clique ou Enter na linha também abre),
@@ -49,6 +50,9 @@ O fardo (ou a caixa fechada) é criado no Cadastro de Produtos pelo botão **Far
   fica por lata. O painel mostra a prévia já em latas.
 * **Contagem e estoque inicial:** conte as latas no produto unitário. No fardo eles são recusados, porque as latas soltas
   da prateleira também fazem parte do estoque.
+* **Quantidade informada:** é validada antes da conversão para unidades, tanto no movimento rápido quanto no
+  lançamento completo. Frações de fardo continuam permitidas com até quatro casas decimais; entradas inválidas
+  são recusadas sem alterar saldo ou histórico. Por exemplo, 0,1 fardo de 12 corresponde a 1,2 unidades.
 
 Permissões: o painel e o lançamento usam o módulo **Lançamento de estoque**; quem só tem o relatório de estoque continua
 abrindo o relatório pelos cartões.
