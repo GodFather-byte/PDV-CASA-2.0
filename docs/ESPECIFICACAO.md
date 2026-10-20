@@ -154,8 +154,10 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
   40 e 60 s e depois a cada minuto, até 60, quando o item vira `erro` e espera o operador (nada pendente é apagado
   sozinho; impresso e cancelado somem após 7 dias). A gaveta abre pelo pulso da impressora quando alguma forma
   usada tem `na_gaveta`, quando há troco e na sangria. As vias são o maior `tipos_pagamento.vias` (1 a 3). O
-  manual pede logotipo BMP de 180x121 em 256 cores; aceitamos BMP sem compressão (1, 4, 8, 24 ou 32 bits) e
-  reduzimos o que passar da largura do papel. Tudo é não fiscal. As impressoras do computador são listadas pela API do
+  logotipo é selecionado com preview em Configurações > Loja (PNG/JPG/JPEG/BMP, até 5 MiB e 16 milhões de pixels),
+  copiado junto ao banco e normalizado para BMP de até 384x192, preservando proporção. BMP legado continua aceito;
+  o cabeçalho do caixa Tk/Qt também mostra o logo. Sem imagem válida, a identidade textual permanece.
+  Veja limites de impressão e backup em `ADEGA.md`. Tudo é não fiscal. As impressoras do computador são listadas pela API do
   Windows (`hardware/impressoras_so.py`, ctypes) e o envio RAW pelo spooler usa a mesma API: o `pywin32` deixou de ser
   necessário. As portas COM vêm do registro do Windows (e do `pyserial`, só para a descrição).
 - **Limpeza do movimento** apaga até o dia anterior à data informada, faz backup antes, recusa apagar vendas não

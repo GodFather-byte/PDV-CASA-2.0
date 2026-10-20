@@ -45,6 +45,55 @@ Diagnóstico, melhorias entregues, plano em fases e próxima evolução:
 
 ## Treinamento do operador (10 minutos)
 
+### Logotipo da adega
+
+Em **Configurações > Loja** (Tk) ou **Configurações > Identificação e contatos** (Qt):
+
+1. Clique em **Selecionar** e escolha PNG, JPG/JPEG ou BMP (compatibilidade com logos antigos).
+2. Confira o preview e clique em **Gravar** (Tk) ou **Salvar esta aba** (Qt).
+3. Para voltar à identidade textual, use **Remover / padrão** e salve. Antes de salvar,
+   **Cancelar** (Tk) ou **Descartar alterações desta aba** (Qt) recupera a configuração salva.
+4. Reabra o caixa para atualizar o cabeçalho. O nome da loja continua visível.
+5. Para o cupom, ative **Configurações > Máquinas > Imprimir o logotipo da loja no cupom**,
+   com o modo de impressão **Impressora térmica (ESC/POS)**.
+
+Limites: **5 MiB por arquivo (5.242.880 bytes)** e **16 milhões de pixels**. Imagens inválidas
+ou corrompidas são recusadas sem substituir o logo anterior. É necessário instalar as dependências
+de `requirements.txt` (Pillow); o instalador gerado com elas inclui esse suporte.
+
+O PDV aplica a orientação da foto, reduz para até **384 × 192 pixels**, sem ampliar nem
+distorcer, e compõe transparências sobre branco. Uma cópia BMP normalizada fica na pasta
+`identidade/` ao lado do banco (no executável, normalmente `%LOCALAPPDATA%\WILL-PDV`).
+Pode mover ou excluir o original depois de salvar. A referência usa o campo existente da loja,
+sem migração. Versões anteriores das cópias ficam preservadas; remover o logo desativa a referência,
+não apaga originais ou cópias de segurança.
+
+O logo aparece no **preview**, no **cabeçalho do caixa Tk/Qt** e nos documentos do cliente
+**cupom, pré-conta e entrega** via ESC/POS. Não é aplicado aos relatórios nem aos documentos
+internos. Modos **tela**, **arquivo de texto** e **impressora padrão do Windows** continuam
+textuais. Na térmica, a imagem sai em preto e branco; o equipamento precisa aceitar raster
+ESC/POS (`GS v 0`). Se não aceitar, desligue a opção de logo dessa máquina. Não há detecção
+automática desse suporte. Arquivo perdido/corrompido mantém o nome da loja e não impede a venda
+ou a impressão textual; falhas no carregamento térmico são registradas no log.
+
+**Transferência/backup:** o backup atual guarda o banco, não os arquivos de imagem externos.
+Ao trocar de computador, selecione novamente o logo (ou preserve a pasta e seu caminho).
+Logos BMP legados continuam funcionando; para obter a cópia controlada, remova e salve a
+referência antiga, depois selecione e salve novamente o arquivo original.
+
+**Validação manual rápida**
+
+- [ ] Selecionar PNG transparente e JPEG, conferir preview e proporção e salvar.
+- [ ] Mover o original, reabrir Configurações/caixa e conferir que o logo permanece.
+- [ ] Recusar arquivo corrompido ou maior que 5 MiB sem perder o logo anterior.
+- [ ] Remover, descartar a remoção e depois remover/salvar; conferir o fallback no caixa.
+- [ ] Imprimir cupom em térmica compatível, ligar/desligar a opção de imagem e conferir o texto.
+
+Próxima melhoria sugerida: sugestão de reposição por giro dos últimos 7/14/30 dias,
+mantendo o foco operacional de estoque separado da identidade visual.
+
+### Operação no balcão
+
 | O que | Como |
 |---|---|
 | Vender | Bipar. `6*` antes do bipe (ou `6*código`) lança 6 de uma vez. Bipes repetidos somam na mesma linha. |

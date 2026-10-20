@@ -144,7 +144,7 @@ class TestConfiguracoesQt(BaseTeste):
 
     def test_salva_so_alterados_preservando_edicao_externa_de_outros_campos(self):
         janela = self.janela()
-        self.ctx.config.salvar_loja({"telefone": "novo telefone externo", "logotipo": "logo.bmp"})
+        self.banco.atualizar("loja", 1, {"telefone": "novo telefone externo", "logotipo": "logo.bmp"})
         self.definir(janela, "loja", "nome_fantasia", "Casa")
         self.assertTrue(janela.salvar())
         self.assertEqual(self.ctx.config.loja()["telefone"], "novo telefone externo")

@@ -16,7 +16,7 @@ CAMPOS_LOJA = [
     ("endereco", "Endereço", "texto"), ("complemento", "Complemento", "texto"), ("bairro", "Bairro", "texto"),
     ("cidade", "Cidade", "texto"), ("uf", "UF", "texto"), ("cep", "CEP", "texto"),
     ("telefone", "Telefone", "texto"), ("email", "E-mail", "texto"),
-    ("logotipo", "Logotipo (bmp 180x121, 256 cores)", "texto"),
+    ("logotipo", "Logotipo (PNG/JPG/JPEG/BMP, até 5 MiB)", "texto"),
 ]
 
 CAMPOS_MAQUINA = [
@@ -36,7 +36,7 @@ CAMPOS_MAQUINA = [
     ("impressora_termica_cortar", "Impressora térmica: cortar o papel", "sn"),
     ("impressora_termica_gaveta", "Gaveta ligada à impressora térmica", "sn"),
     ("impressora_termica_pino", "Pino da gaveta (0 ou 1)", "int"),
-    ("impressora_termica_logotipo", "Imprimir o logotipo da loja no cupom (BMP em Configurações > Loja)", "sn"),
+    ("impressora_termica_logotipo", "Imprimir o logotipo da loja no cupom (Configurações > Loja)", "sn"),
     ("impressora_remota_conexao", "Impressora remota (cozinha/bar): conexão", "escolha",
      [("pasta", "Pasta de arquivos"), ("rede", "Rede (TCP/IP)"),
       ("spooler", "Impressora do Windows (USB ou instalada)"), ("nenhuma", "Nenhuma")]),
@@ -189,6 +189,9 @@ class ConfigController:
         limpos = {k: (str(v).strip() if v is not None else None) for k, v in dados.items() if k in validos}
         if limpos.get("uf") and len(limpos["uf"]) != 2:
             raise ErroValidacao("UF deve ter 2 letras.", {"uf": "inválido"})
+        if limpos.get("logotipo") and limpos["logotipo"] != self.loja().get("logotipo"):
+            from src.core.identidade_visual import importar_logotipo
+            limpos["logotipo"] = importar_logotipo(limpos["logotipo"], self.banco)
         self.banco.atualizar("loja", 1, limpos)
 
     def loja_cadastrada(self) -> bool:
