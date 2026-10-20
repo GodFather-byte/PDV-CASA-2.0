@@ -225,6 +225,23 @@ class TesteBalcaoAdegaTk(BaseAdegaTk):
         self.assertEqual(len(self.linhas()), 1)
         self.assertEqual(self.linhas()[0][1], "SKOL  [Atacado]")
         self.assertIn("Economia no atacado: R$ 6,00", self.cx.lbl_resumo_adega.cget("text"))
+        self.assertIn("a partir de 6 un", self.linhas()[0][6])
+        self.assertIn("economia nesta linha: R$ 6,00", self.linhas()[0][6])
+        self.assertIn("a partir de 6 un", self.cx.lbl_detalhe_preco.cget("text"))
+
+    def test_detalhe_de_preco_visivel_em_notebook_e_por_selecao(self):
+        self.cx.state("normal")
+        self.cx.geometry("1180x678")
+        self.banco.atualizar("produtos", self.skol, {"atacado_qtd": 6, "preco_atacado_cent": 700})
+        self.digitar_codigo("6*1")
+        self.digitar_codigo("2")
+        self.cx.grade.tree.selection_set(self.ctx.caixa.itens(self.cx.venda_id)[0]["id"])
+        self.cx.update()
+        self.assertIn("Atacado natural: a partir de 6 un", self.cx.lbl_detalhe_preco.cget("text"))
+        self.assertTrue(self.cx.lbl_detalhe_preco.winfo_ismapped())
+        self.assertLessEqual(self.cx.lbl_detalhe_preco.winfo_rooty() + self.cx.lbl_detalhe_preco.winfo_height(),
+                             self.cx.status.winfo_rooty())
+        self.assertGreater(self.cx.grade.tree.winfo_height(), 100)
 
     def test_bebida_com_dois_precos_mostra_natural_e_a_observacao_nao_repete_gelada(self):
         self.banco.atualizar("produtos", self.skol, {"preco_gelada_cent": 950})
@@ -266,6 +283,59 @@ class TesteBalcaoAdegaTk(BaseAdegaTk):
 
 
 class TesteDialogosAdegaTk(BaseAdegaTk):
+    def test_previa_cascos_usa_promocao_no_fluxo_real(self):
+        self.banco.atualizar("produtos", self.skol, {"casco_produto_id": self.agua})
+        self.banco.atualizar("produtos", self.agua, {"promo_de": "2026-01-01", "promo_ate": "2026-12-31",
+                                                   "promo_preco_cent": 200})
+        def responder(w):
+            clicar(w, "Sem troca (F3)")
+            self.assertIn("Impacto dos cascos: + R$ 4,00", self.textos(w))
+            clicar(w, "Confirmar")
+        self.dialogos({"Cascos / vasilhames": responder})
+        self.digitar_codigo("2*1")
+        self.assertEqual(self.ctx.caixa.obter(self.cx.venda_id)["total_cent"], 2000)
+        self.sem_travar()
+
+    def test_previa_admite_reducao_ao_reprecificar_cascos_anteriores(self):
+        def responder(w):
+            clicar(w, "Sem troca (F3)")
+            self.assertIn("Impacto dos cascos: - R$ 4,00", self.textos(w))
+            clicar(w, "Confirmar")
+        self.robo.quando("Dialogo", responder)
+        self.assertEqual(adega_dialogos.pedir_cascos(
+            self.cx, self.bebida(), self.bebida(), 1, prever_impacto=lambda n: -400 if n else 0), 1)
+
+    def test_atalhos_de_cascos_atualizam_previa_sem_confirmar(self):
+        def responder(w):
+            self.assertIn("Impacto dos cascos: + R$ 0,00", self.textos(w))
+            clicar(w, "Sem troca (F3)")
+            self.assertEqual(entradas(w)[0].get(), "6")
+            self.assertIn("Impacto dos cascos: + R$ 48,00", self.textos(w))
+            clicar(w, "Todas trocas (F2)")
+            self.assertEqual(entradas(w)[0].get(), "0")
+            w.focus_force()
+            w.event_generate("<KeyPress-F3>")
+            self.assertEqual(entradas(w)[0].get(), "6")
+            w.event_generate("<KeyPress-F2>")
+            self.assertEqual(entradas(w)[0].get(), "0")
+            entrada = entradas(w)[0]
+            entrada.delete(0, "end")
+            entrada.insert(0, "2")
+            self.assertIn("Impacto dos cascos: + R$ 16,00", self.textos(w))
+            clicar(w, "Confirmar")
+        self.robo.quando("Dialogo", responder)
+        self.assertEqual(adega_dialogos.pedir_cascos(self.cx, self.bebida(), self.bebida(), 6), 2)
+        self.sem_travar()
+
+    def test_cascos_fracionados_preservam_limite_arredondado_para_baixo(self):
+        def responder(w):
+            self.assertIn("A fração da bebida não gera casco: no máximo 2 casco(s).", self.textos(w))
+            clicar(w, "Sem troca (F3)")
+            self.assertIn("Impacto dos cascos: + R$ 16,00", self.textos(w))
+            clicar(w, "Confirmar")
+        self.robo.quando("Dialogo", responder)
+        self.assertEqual(adega_dialogos.pedir_cascos(self.cx, self.bebida(), self.bebida(), 2.5), 2)
+
     def test_cascos_aceita_zero_parcial_e_todos(self):
         for qtd in (0, 2, 6):
             with self.subTest(qtd=qtd):
@@ -280,7 +350,7 @@ class TesteDialogosAdegaTk(BaseAdegaTk):
         self.sem_travar()
 
     def test_cascos_recusa_fracao_negativo_acima_da_quantidade_e_vazio(self):
-        for valor in ("1,5", "1.5", "-1", "7", "", "nan"):
+        for valor in ("1,5", "1.5", "-1", "7", "", "nan", "9" * 5000):
             with self.subTest(valor=valor):
                 def responder(w, texto=valor):
                     entrada = entradas(w)[0]
@@ -289,6 +359,7 @@ class TesteDialogosAdegaTk(BaseAdegaTk):
                     clicar(w, "Confirmar")
                     self.assertTrue(w.winfo_exists())
                     self.assertIn("Informe um número inteiro de 0 a 6.", self.textos(w))
+                    self.assertIn("Impacto indisponível: corrija a quantidade.", self.textos(w))
                     entrada.delete(0, "end")
                     entrada.insert(0, "2")
                     clicar(w, "Confirmar")

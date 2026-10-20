@@ -303,6 +303,10 @@ class TestAdegaQt(BaseCaixaQt):
         self.assertEqual(self.j.venda()["total_cent"], 9600)
         self.assertIn("Natural · Atacado", self.j.tabela.item(0, 1).text())
         self.assertIn("Gelada · Atacado", self.j.tabela.item(1, 1).text())
+        for linha in (0, 1):
+            self.assertIn("a partir de 6 un", self.j.tabela.item(linha, 1).text())
+            self.assertIn("economia nesta linha: R$ 6,00", self.j.tabela.item(linha, 1).text())
+            self.assertIn("a partir de 6 un", self.j.tabela.item(linha, 3).toolTip())
 
     def test_delivery_e_caderneta_preservados_sem_mesas(self):
         cliente = self.ctx.cadastros.salvar("clientes", {"numero_consulta": "123", "nome": "CLIENTE",

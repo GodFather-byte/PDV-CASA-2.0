@@ -262,6 +262,37 @@ class TestePainelDeEstoque(BaseTeste):
         self.assertEqual(len(self.est.painel(grupo=grupo)), 3)
         self.assertEqual(self.est.painel(grupo="NÃO EXISTE"), [])
 
+    def test_visao_adega_por_categoria_configuracao_e_prioridade(self):
+        grupo = self.banco.inserir("grupos", {"nome": "Loja"})
+        categoria = self.banco.inserir("subgrupos", {"nome": "Águas e sucos", "grupo_id": grupo})
+        agua = self.novo_produto("AGUA ADEGA", estoque=True, qt=10, subgrupo_id=categoria)
+        self.banco.executar("UPDATE produtos SET preco_gelada_cent = 1000 WHERE id = ?", (self.sem,))
+        self.banco.executar("UPDATE produtos SET atacado_qtd = 6, preco_atacado_cent = 700 WHERE id = ?", (self.ponto,))
+        linhas = self.est.painel(adega=True)
+        self.assertEqual([p["id"] for p in linhas], [self.sem, self.ponto, agua])
+        self.assertEqual([p["prioridade"] for p in linhas], ["Alta", "Média", "Baixa"])
+        self.assertEqual(linhas[-1]["categoria"], "Águas e sucos")
+        self.assertEqual([p["id"] for p in self.est.painel("sem", adega=True)], [self.sem])
+        self.assertEqual([p["id"] for p in self.est.painel("ponto", texto="bra", adega=True)], [self.ponto])
+        self.assertEqual(self.est.painel("sem", grupo="Loja", adega=True), [])
+        resumo = self.est.resumo(adega=True)
+        self.assertEqual((resumo["total"], resumo["sem"], resumo["ponto"], resumo["normal"]), (3, 1, 1, 1))
+        self.assertEqual(self.est.resumo()["total"], 4)
+
+    def test_visao_adega_inclui_cascos_e_conveniencia_sem_inativos(self):
+        grupo = self.banco.inserir("grupos", {"nome": "Conveniência"})
+        categoria = self.banco.inserir("subgrupos", {"nome": "Petiscos", "grupo_id": grupo})
+        petisco = self.novo_produto("PETISCO", estoque=True, subgrupo_id=categoria)
+        casco = self.novo_produto("CASCO", estoque=True)
+        self.banco.executar("UPDATE produtos SET casco_produto_id = ? WHERE id = ?", (casco, self.sem))
+        livre = self.novo_produto("SEM CONTROLE", subgrupo_id=categoria)
+        inativo = self.novo_produto("INATIVO", estoque=True, subgrupo_id=categoria)
+        self.banco.executar("UPDATE produtos SET ativo = 0 WHERE id = ?", (inativo,))
+        self.assertEqual({p["id"] for p in self.est.painel(adega=True)}, {self.sem, petisco, casco})
+        self.assertEqual([p["id"] for p in self.est.painel("livre", adega=True)], [livre])
+        self.assertEqual(self.est.resumo(adega=True)["livre"], 1)
+        self.assertEqual(self.est.painel("sem", adega=True)[0]["repor"], 0)  # casco sem mínimo: sem sugestão inventada
+
     def test_sugestao_repoe_ate_o_dobro_do_minimo(self):
         por_nome = {p["nome"]: p for p in self.est.painel()}
         self.assertEqual(por_nome["SKOL"]["repor"], 20)                      # 10*2 - 0

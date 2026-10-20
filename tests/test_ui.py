@@ -2795,6 +2795,23 @@ class TesteTelegramNaTela(BaseUI):
 
 
 class TestePainelEstoqueUI(BaseUI):
+    def test_visao_adega_filtra_sem_estoque_e_ponto_de_pedido(self):
+        self.banco.executar("UPDATE produtos SET preco_gelada_cent = 1000 WHERE id = ?", (self.skol,))
+        j = self._painel()
+        j.v_visao.set("Adega")
+        j.cb_visao.event_generate("<<ComboboxSelected>>")
+        j.update()
+        self.assertEqual(j.tree.get_children(), (str(self.skol),))
+        self.assertIn("Alta", j.tree.item(str(self.skol), "values")[0])
+        self.assertIn("Visão Adega", j.lbl_sub.cget("text"))
+        self.assertEqual(j.cartoes["total"].valor.cget("text"), "1")
+        j.filtrar("ponto")
+        self.assertEqual(j.tree.get_children(), ())
+        j.v_visao.set("Geral")
+        j.atualizar()
+        self.assertEqual(j.tree.get_children(), (str(self.agua),))
+        j.destroy()
+
     def _menu_do(self, nome, senha):
         from src.ui.app import App
         app = App(self.banco)

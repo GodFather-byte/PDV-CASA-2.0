@@ -99,6 +99,25 @@ class TestEstoqueQt(BaseTeste):
         self.assertEqual(janela.grade.item(0, 4).text(), "—")
         self.assertEqual(janela.grade.item(0, 8).text(), "—")
 
+    def test_visao_adega_combina_filtros_e_exibe_prioridade(self):
+        sem, ponto, *_ = self.produtos()
+        self.banco.executar("UPDATE produtos SET preco_gelada_cent = 1000 WHERE id IN (?, ?)", (sem, ponto))
+        janela = self.janela()
+        janela.visao.setCurrentIndex(janela.visao.findData(True))
+        self.assertEqual([p["id"] for p in janela.linhas], [sem, ponto])
+        self.assertIn("Resumo Adega", janela.resumo.text())
+        self.assertIn("2 controlado(s)", janela.resumo.text())
+        self.assertEqual(janela.grade.item(0, 11).text(), "Alta")
+        self.assertEqual(janela.grade.item(1, 11).text(), "Média")
+        self.filtrar(janela, "ponto")
+        self.assertEqual([p["id"] for p in janela.linhas], [ponto])
+        janela.busca.setText("skol")
+        janela.atualizar()
+        self.assertEqual(janela.linhas, [])
+        janela.busca.clear()
+        janela.visao.setCurrentIndex(janela.visao.findData(False))
+        self.assertIn("3 controlado(s)", janela.resumo.text())
+
     def test_busca_por_nome_codigo_sem_controle_e_texto_literal(self):
         *_, livre = self.produtos()
         janela = self.janela()

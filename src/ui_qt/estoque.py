@@ -131,10 +131,14 @@ class JanelaEstoque(QDialog):
         self.busca.setPlaceholderText("Nome ou código • pressione Enter")
         self.busca.returnPressed.connect(self.atualizar)
         self.situacao, self.grupo = QComboBox(), QComboBox()
+        self.visao = QComboBox()
+        self.visao.addItem("Geral", False)
+        self.visao.addItem("Adega", True)
         for valor, rotulo in SITUACOES:
             self.situacao.addItem(rotulo, valor)
         self.grupo.addItem("Todos os grupos", None)
-        for rotulo, campo in (("Busca", self.busca), ("Situação", self.situacao), ("Grupo", self.grupo)):
+        for rotulo, campo in (("Visão", self.visao), ("Busca", self.busca),
+                              ("Situação", self.situacao), ("Grupo", self.grupo)):
             formulario = QFormLayout()
             formulario.addRow(rotulo, campo)
             filtros.addLayout(formulario)
@@ -142,9 +146,13 @@ class JanelaEstoque(QDialog):
         self.btn_atualizar.clicked.connect(self.atualizar)
         filtros.addWidget(self.btn_atualizar)
         layout.addLayout(filtros)
+        layout.addWidget(texto(
+            "Adega: categorias típicas e produtos configurados. Alta = sem estoque; média = repor. "
+            "Pedidos e lista de compras são gerais.", "suave"))
         self.grade = self._tabela([
             "Situação", "Código", "Produto", "Grupo", "Saldo", "Mínimo",
             "Reposição sugerida", "Último custo", "Valor em estoque", "Última atualização",
+            "Categoria", "Prioridade de reposição",
         ])
         self.grade.itemSelectionChanged.connect(self._selecionou)
         layout.addWidget(self.grade, 2)
@@ -181,6 +189,7 @@ class JanelaEstoque(QDialog):
         layout.addWidget(fechar)
         QShortcut(QKeySequence("F5"), self, activated=self.atualizar)
         QShortcut(QKeySequence("Ctrl+F"), self, activated=self.busca.setFocus)
+        self.visao.currentIndexChanged.connect(lambda _: self.atualizar())
         self.atualizar()
 
     @staticmethod
@@ -243,11 +252,12 @@ class JanelaEstoque(QDialog):
         try:
             self._exigir_acesso()
             estoque = self.ctx.estoque
-            resumo = estoque.resumo()
+            adega = self.visao.currentData()
+            resumo = estoque.resumo(adega=adega)
             grupos = estoque.grupos()
             grupo = self.grupo.currentData()
             linhas = estoque.painel(
-                situacao=self.situacao.currentData(), texto=self.busca.text(), grupo=grupo)
+                situacao=self.situacao.currentData(), texto=self.busca.text(), grupo=grupo, adega=adega)
         except ErroNegocio as erro:
             self._tratar_erro(erro, limpar=True)
             return False
@@ -273,7 +283,7 @@ class JanelaEstoque(QDialog):
                  fmt.fmt_qtd(p["repor"], fmt.CASAS_QTD),
                  fmt.fmt_brl(p["ult_preco_cent"]),
                  "—" if p["situacao"] == "livre" else fmt.fmt_brl(p["valor_cent"]),
-                 fmt.fmt_datahora(p["ult_atualizacao"]) or "—")
+                 fmt.fmt_datahora(p["ult_atualizacao"]) or "—", p["categoria"], p["prioridade"])
                 for p in linhas
             ])
         finally:
@@ -287,7 +297,7 @@ class JanelaEstoque(QDialog):
                     self.grade.selectRow(indice)
                     break
         self.resumo.setText(
-            f"Resumo geral (ativos) • {resumo['total']} controlado(s) • "
+            f"Resumo {'Adega' if adega else 'geral'} (ativos) • {resumo['total']} controlado(s) • "
             f"{resumo['sem']} sem estoque • {resumo['ponto']} para repor • "
             f"{resumo['normal']} normal(is) • {resumo['livre']} sem controle • "
             f"Valor: {fmt.fmt_brl(resumo['valor_cent'])} (saldo × último custo).")

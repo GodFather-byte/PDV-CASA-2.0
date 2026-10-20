@@ -60,6 +60,36 @@ class ProdutoController:
             "SELECT * FROM produtos WHERE ativo = 1 AND venda = 1 ORDER BY nome")]
 
     # --------------------------------------------------------------- preços
+    @staticmethod
+    def preco_por_quantidade_adega(produto: dict, base_cent: int, quantidade: float,
+                                  temperatura: str = "natural") -> int:
+        gelada = temperatura == "gelada"
+        minimo = produto["atacado_gelada_qtd" if gelada else "atacado_qtd"]
+        atacado = produto["preco_atacado_gelada_cent" if gelada else "preco_atacado_cent"]
+        if minimo > 0 and atacado > 0 and quantidade >= minimo:
+            return min(base_cent, atacado)
+        return base_cent
+
+    @staticmethod
+    def explicacao_preco_adega(item: dict, modalidade: str) -> dict:
+        """Explica o preço já aplicado pelo caixa, sem recalcular a venda."""
+        gelada = item.get("temperatura") == "gelada"
+        temperatura = "Gelada" if gelada else "Natural"
+        base = item.get("preco_base_cent")
+        atacado = modalidade == "balcao" and base is not None and base > item["preco_unit_cent"]
+        etiquetas = [temperatura] if gelada or item.get("preco_gelada_cent") else []
+        economia = 0
+        detalhe = ""
+        if atacado:
+            etiquetas.append("Atacado")
+            minimo = item.get("atacado_gelada_qtd" if gelada else "atacado_qtd") or 0
+            quantidade = fmt.fmt_qtd(minimo, fmt.CASAS_QTD).rstrip("0").rstrip(",") if minimo else ""
+            regra = (f"a partir de {quantidade} un da mesma bebida/temperatura"
+                     if minimo else "faixa de quantidade indisponível")
+            economia = max(0, fmt.mult_cent(base, item["quantidade"]) - item["total_cent"])
+            detalhe = f"Atacado {temperatura.lower()}: {regra}; economia nesta linha: {fmt.fmt_brl(economia)}"
+        return {"rotulo": " · ".join(etiquetas), "detalhe": detalhe, "economia_cent": economia}
+
     def preco_vigente(self, produto: dict, quando: datetime | None = None) -> int:
         """Preço de venda em centavos considerando promoções ativas.
 

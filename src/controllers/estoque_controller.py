@@ -303,23 +303,32 @@ class EstoqueController:
         "estorno": "Lançamento desfeito",
     }
 
-    def painel(self, situacao: str | None = None, texto: str = "", grupo: str | None = None) -> list[dict]:
+    def painel(self, situacao: str | None = None, texto: str = "", grupo: str | None = None,
+               adega: bool = False) -> list[dict]:
         """Produtos que controlam estoque, já com a situação (sem/ponto/normal), o valor parado e o quanto repor.
 
         `situacao` filtra por 'sem', 'ponto', 'normal' ou 'livre' (produtos que ainda não controlam estoque); `texto` procura no
-        nome/código (e inclui os que não controlam); `grupo` filtra pelo grupo do produto."""
+        nome/código (e inclui os que não controlam); `grupo` filtra pelo grupo do produto.
+        `adega` recorta categorias típicas e produtos com configuração de bebida/atacado/casco."""
         busca = (texto or "").strip().casefold()
         # Quem procura por nome também acha o produto que ainda NÃO controla estoque (senão o RedBull cadastrado sem a marca
         # "Controla estoque" ficava invisível, sem como começar a controlar). 'livre' lista só esses.
         controle = "p.controla_estoque = 1" if not busca and situacao != "livre" else \
                    "p.controla_estoque = 0" if situacao == "livre" else "1 = 1"
+        recorte = """AND (norm(g.nome) IN ('ADEGA', 'BEBIDAS', 'CONVENIENCIA')
+                     OR norm(s.nome) IN ('CERVEJAS', 'DESTILADOS', 'VINHOS E ESPUMANTES', 'REFRIGERANTES',
+                                        'AGUAS E SUCOS', 'ENERGETICOS', 'GELO E CARVAO')
+                     OR p.preco_gelada_cent > 0 OR p.atacado_qtd > 0 OR p.atacado_gelada_qtd > 0
+                     OR p.casco_produto_id IS NOT NULL
+                     OR p.id IN (SELECT casco_produto_id FROM produtos
+                                 WHERE casco_produto_id IS NOT NULL))""" if adega else ""
         linhas = []
         for r in self.banco.todos(
                 f"""SELECT p.id, p.codigo, p.nome, p.qt_atual, p.estoque_minimo, p.ult_preco_cent, p.ult_atualizacao,
-                          p.controla_estoque, u.abreviatura AS unidade, g.nome AS grupo
+                          p.controla_estoque, u.abreviatura AS unidade, g.nome AS grupo, s.nome AS categoria
                    FROM produtos p JOIN unidades u ON u.id = p.unidade_id
                    JOIN subgrupos s ON s.id = p.subgrupo_id JOIN grupos g ON g.id = s.grupo_id
-                   WHERE {controle} AND p.ativo = 1 ORDER BY p.controla_estoque DESC, p.nome"""):
+                   WHERE {controle} AND p.ativo = 1 {recorte} ORDER BY p.controla_estoque DESC, p.nome"""):
             p = dict(r)
             p["situacao"] = self.produtos.situacao_estoque(p) if p["controla_estoque"] else "livre"
             if situacao and p["situacao"] != situacao:
@@ -330,7 +339,10 @@ class EstoqueController:
                 continue
             p["valor_cent"] = round(max(p["qt_atual"], 0) * p["ult_preco_cent"]) if p["controla_estoque"] else 0
             p["repor"] = self.sugestao_reposicao(p)
+            p["prioridade"] = {"sem": "Alta", "ponto": "Média", "normal": "Baixa", "livre": "Definir controle"}[p["situacao"]]
             linhas.append(p)
+        if adega:
+            linhas.sort(key=lambda p: (("sem", "ponto", "normal", "livre").index(p["situacao"]), p["nome"]))
         return linhas
 
     @staticmethod
@@ -340,13 +352,14 @@ class EstoqueController:
             return 0.0
         return fmt.arred_qtd(max(p["estoque_minimo"] * 2 - max(p["qt_atual"], 0), 0))
 
-    def resumo(self) -> dict:
+    def resumo(self, adega: bool = False) -> dict:
         """Contagem por situação e valor total parado em estoque (quantidade × último preço de compra)."""
-        todos = self.painel()
+        todos = self.painel(adega=adega)
         r = {"total": len(todos), "sem": 0, "ponto": 0, "normal": 0, "valor_cent": sum(p["valor_cent"] for p in todos)}
         for p in todos:
             r[p["situacao"]] += 1
-        r["livre"] = self.banco.valor("SELECT COUNT(*) FROM produtos WHERE controla_estoque = 0 AND ativo = 1", (), 0)
+        r["livre"] = len(self.painel("livre", adega=True)) if adega else self.banco.valor(
+            "SELECT COUNT(*) FROM produtos WHERE controla_estoque = 0 AND ativo = 1", (), 0)
         return r
 
     def grupos(self) -> list[str]:

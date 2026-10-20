@@ -2,63 +2,41 @@
 
 ## Último trabalho
 
-**Versão do PDV subida para 1.6.0** (pedido do titular): `src/versao.py` e o padrão de `instalador/WillPDV.iss` são os únicos
-lugares onde o número existe (o `build_pdv.py` e a faixa da tela principal leem de `src/versao.py`). O instalador novo sai do
-workflow "Gerar instalador (Windows)" quando isto chega na `main` (Releases > "última versão"). O WillPDV Licenças tem versão
-própria (1.1.0) e não mudou.
+**Melhorias incrementais da Adega**, sem mudar versão (PDV 1.6.0 / licenciador 1.1.0), esquema ou regras de cobrança.
 
-**O que a 1.6.0 traz** (PRs já mesclados na `main`; guia completo em `docs/PAINEL_DONO.md`):
-
-- **O dono troca a própria senha do painel pelo PDV:** Configurações > botão "Senha do painel do dono..." (Tk) ou aba "Conexão
-  com a nuvem" (Qt). Usa `POST /v1/painel/senha` com o token da loja; em branco, a nuvem gera a senha e ela aparece uma vez.
-- **Vários caixas por loja:** cada caixa se identifica (`painel_envio.id_do_caixa`) e a nuvem guarda um retrato por caixa
-  (`painel_caixas`). Caderneta e entregas somam; o estoque **não** (cada caixa tem o seu banco). Só passa a valer para as lojas
-  quando **todos** os caixas estiverem na 1.6.0: PDV mais antigo entra na nuvem como um caixa só ("unico").
-- **Limpeza automática na nuvem:** vendas do painel com mais de 120 dias (`PDV_PAINEL_RETENCAO_DIAS`), sessões vencidas e caixas
-  parados há 14 dias saem sozinhos; `python -m backend.lojas limpar-painel` roda na hora. É só da nuvem (não depende da versão
-  do PDV). O histórico completo continua no caixa.
-- PDV novo funciona com a nuvem antiga e a nuvem nova funciona com o PDV antigo.
-
-**Decisão do titular:** a licença segue **manual** e a nuvem serve **só para o painel do dono** (Render + Neon, plano grátis).
-O trabalho do Asaas (worker e monitor no GitHub Actions, Render pago) não será usado: o PR #2 foi fechado sem merge. O commit
-continua no histórico (`832bed9`) e o `cfa840f` o desfaz, caso a cobrança automática volte. As edições em `backend/` (área do
-Antigravity) foram pontuais e pedidas pelo titular.
+- `ProdutoController.explicacao_preco_adega` centraliza rótulo, faixa e economia sobre o preço já aplicado.
+  Caixa Tk mostra detalhe fora da grade, inclusive em notebook; Qt mostra descrição e dica nas células.
+- Diálogo Tk de cascos: Todas trocas (F2), Sem troca (F3), prévia financeira e validação com correção sem fechar.
+  Preservados `floor(quantidade)` e cancelamentos independentes de bebida/casco. Qt mantém seu diálogo anterior.
+  Prévia considera promoção/atacado e reprecificação dos cascos anteriores, compartilhando cálculo com o lançamento.
+- Estoques Tk/Qt: seletor Geral/Adega, recorte por categorias/configurações, prioridade de reposição e resumo do recorte.
+  Filtros continuam combináveis. Pedido e lista de compras continuam **gerais**, com aviso nas telas.
+- Plano técnico/funcional, critérios de aceite, métricas, decisões e roteiro manual em `docs/ADEGA_MELHORIAS.md`,
+  ligado pelo guia `docs/ADEGA.md`. Top 1 recomendado: reposição por giro e prazo, com aprovação humana.
+- Sem alterações de pasta, ponto de entrada ou comandos; `.ai/MAPA.md` não precisou mudar.
 
 ### Validação
 
-- Suíte completa antes da subida de versão (`xvfb-run`, `QT_QPA_PLATFORM=offscreen`, Python 3.12, Linux): **2179 testes, OK, 15
-  ignorados** pelo ambiente; Windows e Linux, Python 3.10 e 3.12, passaram no GitHub. Os testes do painel que falam com a nuvem
-  também passam contra PostgreSQL 16 de verdade (`PDV_TESTE_NUVEM_DB_URL=postgresql+psycopg://...`; o cluster precisa ser UTF8).
-- Ensaio real: API local com 3 PDVs enviando por HTTP, o app do celular no Chromium (claro e escuro; 3 caixas, 1 caixa e a
-  resposta antiga) e a troca de senha por HTTP real.
-- **Não validado:** o app novo no Render/Neon, num celular de verdade e instalado como PWA; impressora e leitor; Windows na prática.
+- Linux, Python 3.12, Xvfb 1920×1080×24, Qt offscreen: **2194 testes, OK, 15 ignorados** pelo ambiente.
+- Recorte direcionado (preços, cascos, estoque e telas Tk/Qt): **166 testes, OK**, sem ignorados.
+- `python -m src.app --autoteste /tmp/adega-autoteste-tk.txt` e
+  `python -m src.app --autoteste-qt /tmp/adega-autoteste-qt.txt`: **OK**, bancos isolados.
+- Consulta + resumo Adega: 5.000 produtos sintéticos em memória, aproximadamente 53 ms (não mede renderização/hardware da loja).
+- Revisão especializada do diff encontrou divergência de promoção/atacado na prévia: corrigida e coberta por regressão.
+  O Code Review automático estava indisponível; CodeQL final sem alertas. Varreduras de segredos sem achados.
+- **Não homologado nesta entrega:** impressora/leitor físicos, Windows na prática e roteiro manual com operador da loja.
 
 ## Pendências
 
-- **Publicar a 1.6.0 na nuvem** para os caixas conectados avisarem o dono (ação do titular, precisa do banco do Neon; exemplo):
-  `python -m backend.atualizacoes publicar 1.6.0 --notas "Painel do dono: o dono troca a senha do painel em Configurações; lojas com mais de um caixa aparecem separadas no celular." --url https://github.com/GodFather-byte/PDV-CASA-2.0/releases/tag/ultima-versao`
-  (trocar a `--url` se o repositório ficar privado ou se o instalador for entregue de outro jeito). Release versionada com o
-  instalador `WillPDV-Setup-1.6.0.exe` é por tag (`git tag v1.6.0 && git push origin v1.6.0`, ver `docs/INSTALAR_E_TESTAR.md`): não foi criada.
-- **Nuvem no ar (Render + Neon, grátis):** o Neon está ligado e a `LOJA-TESTE` existe; falta homologar de ponta a ponta com um
-  caixa enviando e um celular real. O GitHub não aciona o deploy (falta o segredo `RENDER_DEPLOY_HOOK_URL`): conferir no Render
-  se o Auto-Deploy está ligado. **Trocar o `PDV_API_TOKEN` e a senha do Neon** (apareceram numa conversa). Para o Render grátis
-  não dormir: UptimeRobot em `GET /v1/saude` a cada 5 min (a rota é só GET: usar método GET ou palavra-chave; conferir se o plano
-  grátis deles permite uso comercial).
-- **Ao ligar o painel em loja com meses de histórico:** todo o histórico ainda não enviado sobe (lotes de 200, de uma vez) e a
-  nuvem descarta o que passa de 120 dias. Se pesar, o PDV pode deixar de mandar vendas mais velhas que a retenção (não feito).
-- **Painel:** campo para o dono trocar a senha também no próprio app do celular (hoje só pelo PDV ou pelo fornecedor); push;
-  homologar a instalação como PWA no Android e no iPhone.
-- **Estoque com dois caixas** é por caixa, por desenho. Um estoque único exige vários caixas no mesmo banco (fora de escopo, ver
-  `docs/ESPECIFICACAO.md`).
-- **Adega, evoluções não feitas:** cancelamento parcial de linha agrupada (hoje: Delete e relança `4*`); promoção por período só
-  no preço natural; empréstimo/saldo de cascos por cliente; etiqueta de gôndola; várias faixas de atacado; atacado gelada pela
-  planilha (só pela tela). Entrega da adega: `docs/ADEGA.md` e o aviso por escrito do cupom NÃO FISCAL.
-- **Qt fora da adega:** alinhar pré-pago, rodízio/perfil, impressão por setor, dividir conta, balança, acerto das garotas e
-  tipografia dos comprovantes. Não abrir Tk e Qt ao mesmo tempo sobre o mesmo banco.
-- **Pré-pago:** confirmar a devolução em dinheiro de saldo recarregado no cartão; comprovante de recarga, RFID, relatório de
-  recargas.
-- **Demais:** split por item, rodízio por faixa, EAN de balança, consumação mínima por entrada, cobrança de comanda sem consumo;
-  backup/restauração em outra máquina; Google Drive e senha do cofre do licenciador; cartões 184x126 e faixa 52 na impressora real;
-  regra de renovação a partir do vencimento (pede OK do titular); cobrança Asaas só se voltar (o que existe: `backend/cobrancas.py`,
-  `operacao_asaas.py`, `worker_asaas.py` e o commit `832bed9`). Painel web do fornecedor (todas as lojas) e vários caixas no mesmo
-  banco seguem fora de escopo.
+- Adega: executar checklist manual do novo documento antes de instalar. Faixa explicativa vem do cadastro atual;
+  economia vem do preço-base gravado. Não editar faixa durante atendimento; snapshot histórico exigirá migração futura.
+- Adega futura: reposição por giro/prazo, paridade de atalhos/prévia de cascos Qt, cancelamento parcial guiado,
+  importação de atacado gelada, etiquetas, múltiplas faixas e saldo de cascos por cliente (exigem decisões do dono).
+- Mantidas as pendências anteriores de publicação da 1.6.0 na nuvem e release versionada; homologar Render/Neon e
+  PWA em celular real. Confirmar Auto-Deploy e providenciar rotação das credenciais anteriormente sinalizadas.
+- Licença segue manual; nuvem só para painel do dono. Asaas continua fora de uso (PR #2 fechado; histórico preservado).
+  Não abrir Tk e Qt ao mesmo tempo sobre o mesmo banco. Estoque continua por caixa, não somado entre caixas.
+- Painel: limitar envio inicial ao período de retenção, senha no próprio app do celular e push.
+- Qt fora da Adega: pré-pago, rodízio/perfil, impressão por setor, dividir conta, balança e acerto das garotas.
+- Demais pendências anteriores (pré-pago, impressão física, backup em outra máquina, renovação de licença e recursos
+  avançados) seguem sem alteração; detalhes no histórico anterior deste arquivo e nos guias existentes.
