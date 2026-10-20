@@ -22,7 +22,7 @@ import math
 import sys
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont, QKeySequence, QShortcut
+from PySide6.QtGui import QColor, QFont, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
                                QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QStackedWidget, QTableWidget,
@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFormLayou
 from src.core import formatacao as fmt
 from src.controllers.produto_controller import ProdutoController
 from src.core.erros import ErroNegocio
+from src.core.identidade_visual import preview_logotipo
 from src.core.posicao import exemplos, parece_posicao, rotulo_do_campo
 from src.core.posicao import nome as nome_posicao
 from src.hardware.impressora_termica import ErroImpressao
@@ -206,7 +207,16 @@ class JanelaCaixa(QMainWindow):
         fundo.setObjectName("fundo")
         geral = QVBoxLayout(fundo)
         self.lbl_cabecalho = _rotulo("", "titulo")
-        geral.addWidget(self.lbl_cabecalho)
+        cabecalho = QHBoxLayout()
+        self.logo_loja = QLabel()
+        dados_logo = preview_logotipo(self.ctx.config.loja().get("logotipo"), (64, 48))
+        if dados_logo:
+            imagem = QPixmap()
+            imagem.loadFromData(dados_logo, "PNG")
+            self.logo_loja.setPixmap(imagem)
+            cabecalho.addWidget(self.logo_loja)
+        cabecalho.addWidget(self.lbl_cabecalho, 1)
+        geral.addLayout(cabecalho)
         self.paginas = QStackedWidget()
         self.paginas.addWidget(self._pagina_sem_operador())
         self.paginas.addWidget(self._pagina_abertura())

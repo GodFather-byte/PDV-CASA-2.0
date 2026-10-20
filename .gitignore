@@ -23,6 +23,7 @@ Thumbs.db
 # Arquivos gerados pelo PDV em tempo de execucao
 Backup/
 impressao/
+identidade/
 mala_direta/
 *.legado-*.bak
 

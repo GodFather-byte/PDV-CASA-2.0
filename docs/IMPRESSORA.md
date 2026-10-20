@@ -45,6 +45,16 @@ Configurações > Impressoras e scanners > Adicionar > impressora local > porta 
 | 5 | acesso negado | fechar outros programas que usam a impressora; rodar como administrador |
 | 1906 / 21 / 6 | impressora desconectada ou não pronta | ligar, conferir cabo e papel |
 
+## Logotipo da loja no cupom
+
+Selecione uma imagem em **Configurações > Loja**, confira o preview e salve. PNG e JPG/JPEG
+são aceitos (BMP legado também), até **5 MiB e 16 milhões de pixels**. Depois ligue
+**Máquinas > Imprimir o logotipo da loja no cupom**. A cópia normalizada não depende do original.
+O logo sai no cupom, pré-conta e entrega, em preto e branco, somente no modo **térmica ESC/POS**.
+Impressoras sem raster `GS v 0` devem manter essa opção desligada; os outros modos continuam
+textuais. O nome da loja permanece no cabeçalho e um arquivo perdido ou corrompido não bloqueia
+a impressão. Veja configuração, remoção e limitações de backup em [ADEGA.md](ADEGA.md#logotipo-da-adega).
+
 ## Outras conexões
 
 Em Configurações > Máquinas dá para usar também **rede** (IP:9100), **serial** (COM) e **arquivo**. O guia de testes do

@@ -34,6 +34,7 @@ MODULOS = [
     "src.controllers.turno_controller", "src.controllers.utilitario_controller",
     "src.core.ed25519", "src.core.erros", "src.core.formatacao", "src.core.instancia", "src.core.licenca",
     "src.core.posicao", "src.core.registro", "src.core.relatorio", "src.core.seguranca", "src.core.backup_seguro",
+    "src.core.identidade_visual",
     "src.database.conexao", "src.database.esquema", "src.database.protecao", "src.database.sementes",
     "src.hardware.dispositivos", "src.hardware.imagem_escpos", "src.hardware.impressora_termica",
     "src.hardware.impressoras_so",

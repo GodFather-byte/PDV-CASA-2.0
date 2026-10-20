@@ -18,6 +18,7 @@ pela comanda anterior/seguinte da lista do painel; Enter ou duplo clique numa li
 """
 from __future__ import annotations
 
+import base64
 import math
 import re
 import tkinter as tk
@@ -26,6 +27,7 @@ from tkinter import ttk
 from src.controllers.produto_controller import ProdutoController
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
+from src.core.identidade_visual import preview_logotipo
 from src.core.posicao import nome as nome_posicao
 from src.core.posicao import exemplos, parece_posicao, rotulo_do_campo
 from src.hardware.dispositivos import DispositivoIndisponivel
@@ -319,7 +321,12 @@ class JanelaCaixa(tk.Toplevel):
         self.slot_sair = tk.Frame(topo, bg=CX["cabecalho"])
         self.slot_sair.pack(side="right", padx=(18, 0))
         nome = self.ctx.config.nome_loja().upper()
-        tk.Label(topo, text=(nome[:1] or "W"), bg=CX["azul"], fg=CX["sobre_marca"], font=(FONTE, 15, "bold"), width=2).pack(side="left")
+        dados_logo = preview_logotipo(self.ctx.config.loja().get("logotipo"), (64, 48))
+        self._foto_logo = tk.PhotoImage(master=self, data=base64.b64encode(dados_logo)) if dados_logo else None
+        if self._foto_logo:
+            tk.Label(topo, image=self._foto_logo, bg=CX["cabecalho"]).pack(side="left")
+        else:
+            tk.Label(topo, text=(nome[:1] or "W"), bg=CX["azul"], fg=CX["sobre_marca"], font=(FONTE, 15, "bold"), width=2).pack(side="left")
         titulos = tk.Frame(topo, bg=CX["cabecalho"])
         titulos.pack(side="left", padx=(12, 0))
         tk.Label(titulos, text="CAIXA", bg=CX["cabecalho"], fg=CX["suave"], font=(FONTE, 8, "bold")).pack(anchor="w")

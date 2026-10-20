@@ -5,13 +5,15 @@ cfg_loja/cfg_configuracoes. Cada aba grava separadamente, apenas alterações.
 Equipamentos, acessos e Telegram possuem janelas próprias.
 """
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QInputDialog,
-    QLineEdit, QMessageBox, QPushButton, QScrollArea, QTabWidget, QVBoxLayout, QWidget,
+    QFileDialog, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from src.controllers.config_controller import CAMPOS_CONFIG, CAMPOS_LOJA
 from src.core.erros import ErroNegocio, ErroPermissao
+from src.core.identidade_visual import preview_logotipo
 from src.sync import painel_envio
 from src.ui_qt.tema import texto
 
@@ -101,6 +103,17 @@ class JanelaConfiguracoes(QDialog):
                         editor.setPlaceholderText("Vazio mantém o token atual")
                 self.campos[secao][chave] = editor
                 formulario.addRow(rotulo, editor)
+                if chave == "logotipo":
+                    editor.setReadOnly(True)
+                    self.btn_logo = QPushButton("Selecionar logotipo…")
+                    self.btn_remover_logo = QPushButton("Remover / restaurar padrão")
+                    self.btn_logo.clicked.connect(self._selecionar_logotipo)
+                    self.btn_remover_logo.clicked.connect(
+                        lambda: self.campos["loja"]["logotipo"].clear())
+                    formulario.addRow(self.btn_logo, self.btn_remover_logo)
+                    self.preview_logo = QLabel()
+                    formulario.addRow("Preview", self.preview_logo)
+                    editor.textChanged.connect(self._preview_logotipo)
             if secao == "nuvem":
                 self.apagar_token = QCheckBox("Apagar o token salvo ao salvar esta aba")
                 formulario.addRow(self.apagar_token)
@@ -161,6 +174,8 @@ class JanelaConfiguracoes(QDialog):
         self.btn_salvar.setEnabled(permissoes[SECOES[self.abas.currentIndex()]])
         self.apagar_token.setEnabled(permissoes["nuvem"])
         self.btn_senha_painel.setEnabled(permissoes["nuvem"] and not self._trocando_senha)
+        self.btn_logo.setEnabled(permissoes["loja"])
+        self.btn_remover_logo.setEnabled(permissoes["loja"])
         if not permissoes["nuvem"]:
             self.apagar_token.setChecked(False)
 
@@ -202,6 +217,29 @@ class JanelaConfiguracoes(QDialog):
                 valor = editor.text()
             valores[chave] = valor
         return valores
+
+    def _selecionar_logotipo(self):
+        try:
+            self._autorizar("loja")
+            caminho, _ = QFileDialog.getOpenFileName(
+                self, "Logotipo da adega", "", "Imagens (*.png *.jpg *.jpeg *.bmp)")
+            if not caminho:
+                return
+            if preview_logotipo(caminho) is None:
+                raise ErroNegocio("Escolha uma imagem PNG, JPG/JPEG ou BMP válida, de até 5 MiB e 16 milhões de pixels.")
+            self.campos["loja"]["logotipo"].setText(caminho)
+            self.mensagem.setText("Preview atualizado. Salve esta aba para aplicar o logotipo.")
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+
+    def _preview_logotipo(self):
+        dados = preview_logotipo(self.campos["loja"]["logotipo"].text())
+        if dados:
+            imagem = QPixmap()
+            imagem.loadFromData(dados, "PNG")
+            self.preview_logo.setPixmap(imagem)
+        else:
+            self.preview_logo.setText("Sem logotipo — identidade padrão")
 
     def _carregar(self, secao):
         carregar = self.ctx.config.loja if secao == "loja" else self.ctx.config.todas
