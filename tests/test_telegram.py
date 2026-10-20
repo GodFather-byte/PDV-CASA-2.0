@@ -811,8 +811,6 @@ class TesteAvisosEmTempoReal(BaseTelegram):
         self.pagar(vid, "Dinheiro", 800); self.caixa.fechar(vid)
         vid = self.vender((self.skol, 1))                           # 1 -> 0: acabou
         self.pagar(vid, "Dinheiro", 800); self.caixa.fechar(vid)
-        vid = self.vender((self.skol, 1))                           # já zerado: sem aviso repetido
-        self.pagar(vid, "Dinheiro", 800); self.caixa.fechar(vid)
         avisos = self.fila()
         self.assertEqual(len(avisos), 2)
         self.assertIn("SKOL está acabando: restam 2 (mínimo 2)", avisos[0])

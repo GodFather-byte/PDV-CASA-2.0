@@ -508,7 +508,8 @@ class TestEstoqueQt(BaseTeste):
             ["Gerar pedido do que falta", "Lista de compras",
              "Lançamentos de estoque",
              "Consultar / atualizar (F5)", "＋ Entrada", "－ Saída",
-             "Perda / quebra", "Contei e ajustar", "Definir estoque mínimo",
+             "Perda / quebra", "Quebra", "Oxidação", "Devolução",
+             "Contei e ajustar", "Definir estoque mínimo",
              "Editar cadastro do produto", "Cadastrar produto", "Fechar"])
         for situacao in (None, "sem", "ponto", "normal", "livre"):
             self.filtrar(janela, situacao)
