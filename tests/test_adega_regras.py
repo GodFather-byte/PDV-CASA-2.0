@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 from src.controllers.perfil_controller import PerfilController
+from src.controllers.produto_controller import ProdutoController
 from src.core.erros import ErroNegocio
 from src.database.conexao import BancoDados
 from tests.test_caixa import BaseCaixa
@@ -22,6 +23,33 @@ class TesteRegrasAdega(BaseCaixa):
 
     def lancar(self, qtd=1, **kw):
         return self.caixa.adicionar_item(self.vid, self.skol, qtd, **kw)
+
+    def test_explicacao_preco_por_temperatura_e_faixa(self):
+        for temperatura in ("natural", "gelada"):
+            self.lancar(6, temperatura=temperatura)
+        for item in self.caixa.itens(self.vid):
+            explicacao = ProdutoController.explicacao_preco_adega(item, "balcao")
+            self.assertEqual(explicacao["rotulo"], f"{item['temperatura'].capitalize()} · Atacado")
+            self.assertIn("a partir de 6 un da mesma bebida/temperatura", explicacao["detalhe"])
+            self.assertEqual(explicacao["economia_cent"], 900)
+            self.assertIn("R$ 9,00", explicacao["detalhe"])
+
+    def test_explicacao_preserva_promocao_entrega_e_item_migrado(self):
+        self.lancar()
+        item = self.caixa.itens(self.vid)[0]
+        for alteracoes, modalidade in (({}, "balcao"), ({"preco_base_cent": None}, "balcao"),
+                                      ({"preco_unit_cent": 650, "total_cent": 650}, "entrega"),
+                                      ({"preco_base_cent": 600, "preco_unit_cent": 600}, "balcao")):
+            with self.subTest(alteracoes=alteracoes, modalidade=modalidade):
+                explicacao = ProdutoController.explicacao_preco_adega({**item, **alteracoes}, modalidade)
+                self.assertEqual(explicacao, {"rotulo": "Natural", "detalhe": "", "economia_cent": 0})
+
+    def test_explicacao_faixa_fracionada_e_arredondamento_da_linha(self):
+        item = {"temperatura": "gelada", "preco_base_cent": 1000, "preco_unit_cent": 850,
+                "quantidade": 1.0001, "total_cent": 850, "atacado_gelada_qtd": 1.0001}
+        explicacao = ProdutoController.explicacao_preco_adega(item, "balcao")
+        self.assertIn("a partir de 1,0001 un", explicacao["detalhe"])
+        self.assertEqual(explicacao["economia_cent"], 150)
 
     def test_perfil_adega_liga_agrupamento_mas_boate_nao(self):
         self.assertTrue(self.banco.cfg_bool("agrupar_itens_balcao"))

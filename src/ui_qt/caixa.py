@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFormLayou
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from src.core import formatacao as fmt
+from src.controllers.produto_controller import ProdutoController
 from src.core.erros import ErroNegocio
 from src.core.posicao import exemplos, parece_posicao, rotulo_do_campo
 from src.core.posicao import nome as nome_posicao
@@ -581,16 +582,22 @@ class JanelaCaixa(QMainWindow):
             linha = self.tabela.rowCount()
             self.tabela.insertRow(linha)
             nome = it["nome"] + (f"  [{' / '.join(it['partes_nomes'])}]" if it["partes_nomes"] else "")
+            detalhe_preco = ""
             if self.ctx.banco.cfg("perfil_operacao") == "adega":
-                temperatura = "Gelada" if it.get("temperatura") == "gelada" else "Natural"
-                atacado = " · Atacado" if (it.get("preco_base_cent") or it["preco_unit_cent"]) > it["preco_unit_cent"] else ""
-                nome += f"  [{temperatura}{atacado}]"
+                explicacao = ProdutoController.explicacao_preco_adega(it, v["modalidade"])
+                if explicacao["rotulo"]:
+                    nome += f"  [{explicacao['rotulo']}]"
+                detalhe_preco = explicacao["detalhe"]
+                if detalhe_preco:
+                    nome += f" — {detalhe_preco}"
             if it["observacao"]:
                 nome += f" — {it['observacao']}"
             valores = [it["codigo"], nome, it["unidade"], fmt.fmt_num(it["preco_unit_cent"]), _fmt_qtd(it["quantidade"]),
                        fmt.fmt_num(it["total_cent"])]
             for col, texto in enumerate(valores):
                 celula = QTableWidgetItem(str(texto))
+                if detalhe_preco:
+                    celula.setToolTip(detalhe_preco)
                 celula.setData(Qt.UserRole, int(it["id"]))
                 if col >= 3:
                     celula.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
