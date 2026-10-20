@@ -258,6 +258,18 @@ class BancoDados:
         self.executar("INSERT INTO log_eventos(quando, operador_id, evento, detalhe) VALUES (?,?,?,?)",
                       (fmt.agora(), operador_id, evento, detalhe))
 
+    def registrar_auditoria(self, entidade: str, entidade_id: str, acao: str,
+                            antes: dict | None = None, depois: dict | None = None,
+                            operador_id: int | None = None) -> None:
+        """Grava evento estruturado explícito, inclusive quando a operação de negócio foi recusada."""
+        ator = self._operador_auditoria if operador_id is None else operador_id
+        self.executar(
+            "INSERT INTO auditoria_eventos(quando, operador_id, origem, entidade, entidade_id, acao, antes, depois) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (fmt.agora(), ator, "operador" if ator is not None else "sistema", entidade, str(entidade_id), acao,
+             json.dumps(antes, ensure_ascii=False, allow_nan=False) if antes is not None else None,
+             json.dumps(depois, ensure_ascii=False, allow_nan=False) if depois is not None else None))
+
     # --------------------------------------------------------------- backup
     def copiar_para(self, destino: str) -> None:
         """Cópia consistente do banco inteiro (API de backup do SQLite)."""

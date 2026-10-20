@@ -30,10 +30,14 @@ class _DialogoQuantidade(QDialog):
         super().__init__(parent)
         self.produto, self.tipo = produto, tipo
         self.quantidade = None
+        self.observacao = None
         titulo, pergunta = {
             "entrada": ("Chegou mercadoria", "Quantas unidades entraram?"),
             "saida": ("Saiu mercadoria", "Quantas unidades saíram (sem ser venda)?"),
             "descarte": ("Perda ou quebra", "Quantas unidades foram perdidas?"),
+            "quebra": ("Perda por quebra", "Quantas unidades quebraram?"),
+            "oxidacao": ("Perda por oxidação", "Quantas unidades oxidaram?"),
+            "devolucao": ("Devolução", "Quantas unidades foram devolvidas?"),
             "contagem": ("Contagem na prateleira", "Quantas unidades existem de verdade agora?"),
         }[tipo]
         self.setWindowTitle(titulo)
@@ -47,6 +51,10 @@ class _DialogoQuantidade(QDialog):
         self.entrada = QLineEdit()
         self.entrada.setPlaceholderText("Ex.: 2,5")
         formulario.addRow(pergunta, self.entrada)
+        self.nota = QLineEdit()
+        if tipo in ("quebra", "oxidacao", "devolucao"):
+            self.nota.setPlaceholderText("Observação (opcional)")
+            formulario.addRow("Observação (opcional)", self.nota)
         layout.addLayout(formulario)
         self.previa = texto("", "suave")
         layout.addWidget(self.previa)
@@ -89,6 +97,7 @@ class _DialogoQuantidade(QDialog):
             self.mensagem.setText("Digite uma quantidade válida.")
             return
         self.quantidade = quantidade
+        self.observacao = self.nota.text().strip() or None
         self.accept()
 
     def executar(self):
@@ -160,7 +169,8 @@ class JanelaEstoque(QDialog):
         acoes_produto = QHBoxLayout()
         for tipo, rotulo in (
             ("entrada", "＋ Entrada"), ("saida", "－ Saída"),
-            ("descarte", "Perda / quebra"), ("contagem", "Contei e ajustar"),
+            ("descarte", "Perda / quebra"), ("quebra", "Quebra"),
+            ("oxidacao", "Oxidação"), ("devolucao", "Devolução"), ("contagem", "Contei e ajustar"),
         ):
             botao = QPushButton(rotulo)
             botao.clicked.connect(lambda _=False, t=tipo: self.registrar_dialogo(t))
@@ -337,14 +347,14 @@ class JanelaEstoque(QDialog):
             f"• unidade: {produto['unidade']}" +
             (" • nenhum movimento registrado." if not movimentos else ""))
 
-    def registrar(self, tipo, quantidade):
+    def registrar(self, tipo, quantidade, observacao=None):
         """Registra um movimento rápido e recarrega o produto e seu histórico."""
         if self.produto is None:
             return False
         try:
             self._exigir_acesso()
             produto_id = self.produto["id"]
-            self.ctx.estoque.registrar_rapido(produto_id, tipo, quantidade)
+            self.ctx.estoque.registrar_rapido(produto_id, tipo, quantidade, observacao)
         except ErroNegocio as erro:
             return self._tratar_erro(erro)
         self.atualizar(preservar_produto=True)
@@ -352,6 +362,9 @@ class JanelaEstoque(QDialog):
             "entrada": "Entrada registrada.",
             "saida": "Saída registrada.",
             "descarte": "Perda / quebra registrada.",
+            "quebra": "Perda por quebra registrada.",
+            "oxidacao": "Perda por oxidação registrada.",
+            "devolucao": "Devolução registrada.",
             "contagem": "Contagem registrada.",
         }[tipo])
         return True
@@ -359,7 +372,10 @@ class JanelaEstoque(QDialog):
     def _pedir_quantidade(self, tipo):
         if self.produto is None:
             return None
-        return _DialogoQuantidade(self.produto, tipo, self).executar()
+        dialogo = _DialogoQuantidade(self.produto, tipo, self)
+        quantidade = dialogo.executar()
+        self._observacao_perda = dialogo.observacao
+        return quantidade
 
     def registrar_dialogo(self, tipo):
         if self.produto is None:
@@ -371,7 +387,7 @@ class JanelaEstoque(QDialog):
         quantidade = self._pedir_quantidade(tipo)
         if quantidade is None:
             return False
-        return self.registrar(tipo, quantidade)
+        return self.registrar(tipo, quantidade, getattr(self, "_observacao_perda", None))
 
     def definir_minimo(self):
         if self.produto is None:

@@ -234,7 +234,7 @@ class JanelaLancamentosEstoque(QDialog):
             self.grade_lancamentos.setRowCount(len(registros))
             for linha, registro in enumerate(registros):
                 valores = (
-                    fmt.fmt_data(registro["data"]), TIPOS[registro["tipo"]],
+                    fmt.fmt_data(registro["data"]), TIPOS[registro["tipo_perda"] or registro["tipo"]],
                     registro["fornecedor"] or "", registro["documento"] or "",
                     fmt.fmt_brl(registro["total_itens"]),
                 )
@@ -274,7 +274,7 @@ class JanelaLancamentosEstoque(QDialog):
             return self._erro(erro)
         self.lancamento_id = lancamento_id
         self.lancamento = lancamento
-        self.tipo.setCurrentIndex(max(self.tipo.findData(lancamento["tipo"]), 0))
+        self.tipo.setCurrentIndex(max(self.tipo.findData(lancamento["tipo_perda"] or lancamento["tipo"]), 0))
         indice = self.fornecedor.findData(lancamento["fornecedor_id"])
         self.fornecedor.setCurrentIndex(max(indice, 0))
         self.descricao.setText(lancamento["descricao"] or "")
@@ -356,7 +356,8 @@ class JanelaLancamentosEstoque(QDialog):
                 ligar = True
             self.ctx.estoque.adicionar_item(
                 self.lancamento_id, produto_id, quantidade, valor, desconto,
-                minimo, ligar)
+                minimo, ligar, self.descricao.text().strip() or None
+                if self.tipo.currentData() in ("quebra", "oxidacao", "devolucao") else None)
             self.quantidade.clear()
             self.valor_item.clear()
             self.desconto_item.clear()

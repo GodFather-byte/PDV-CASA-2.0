@@ -183,7 +183,7 @@ class TestePrevia(BaseTeste):
 class TesteGravacao(BaseTeste):
     def setUp(self):
         super().setUp()
-        self.imp = ImportacaoProdutos(self.banco)
+        self.imp = ImportacaoProdutos(self.banco, self.operador_adm())
 
     def importar(self, linhas, **kw):
         previa = self.imp.analisar([{"_linha": i + 2, **l} for i, l in enumerate(linhas)], **kw)

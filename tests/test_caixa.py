@@ -1,6 +1,8 @@
 """Caixa: turno, venda, mesas, desconto, serviço, pagamento, troco, vale, caderneta e cancelamentos."""
 from __future__ import annotations
 
+import json
+
 from src.controllers.cadastro_controller import CadastroController
 from src.controllers.caixa_controller import CaixaController
 from src.controllers.estoque_controller import EstoqueController
@@ -105,6 +107,34 @@ class TesteVenda(BaseCaixa):
         self.assertEqual(self.prod.por_id(self.skol)["qt_atual"], 97)
         with self.assertRaises(ErroNegocio):
             self.caixa.fechar(vid)                                         # já fechada
+
+    def test_venda_sem_saldo_suficiente_nao_fecha_e_audita_tentativa(self):
+        self.banco.executar("UPDATE produtos SET qt_atual = 1, aceita_decimal = 1 WHERE id = ?", (self.skol,))
+        vid = self.vender((self.skol, 0.75), (self.skol, 0.75))
+        self.pagar(vid, "Dinheiro", 1200)
+
+        with self.assertRaisesRegex(ErroNegocio, "Estoque insuficiente.*SKOL"):
+            self.caixa.fechar(vid)
+
+        venda = self.caixa.obter(vid)
+        self.assertEqual((venda["status"], venda["cupom"]), ("aberta", None))
+        self.assertEqual(self.prod.por_id(self.skol)["qt_atual"], 1)
+        self.assertEqual(self.banco.valor(
+            "SELECT COUNT(*) FROM movimentos_estoque WHERE ref_tipo = 'venda' AND ref_id = ?", (vid,)), 0)
+        evento = self.banco.um("SELECT * FROM auditoria_eventos WHERE acao = 'venda_sem_estoque'")
+        self.assertEqual((evento["operador_id"], evento["entidade_id"]), (self.adm, venda["uuid"]))
+        self.assertEqual(json.loads(evento["depois"])["resultado"], "recusada")
+
+    def test_venda_fracionada_respeita_quatro_casas_e_baixa_saldo(self):
+        self.banco.executar("UPDATE produtos SET qt_atual = 1, aceita_decimal = 1 WHERE id = ?", (self.skol,))
+        vid = self.vender((self.skol, 0.75))
+        self.pagar(vid, "Dinheiro", 600)
+        self.caixa.fechar(vid)
+        self.assertEqual(self.prod.por_id(self.skol)["qt_atual"], 0.25)
+
+        aberta = self.caixa.abrir_balcao()
+        with self.assertRaisesRegex(ErroNegocio, "4 casas decimais"):
+            self.caixa.adicionar_item(aberta, self.skol, 0.00001)
 
     def test_cupons_sao_sequenciais(self):
         for _ in range(3):
