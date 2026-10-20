@@ -8,6 +8,7 @@
   Caixa Tk mostra detalhe fora da grade, inclusive em notebook; Qt mostra descrição e dica nas células.
 - Diálogo Tk de cascos: Todas trocas (F2), Sem troca (F3), prévia financeira e validação com correção sem fechar.
   Preservados `floor(quantidade)` e cancelamentos independentes de bebida/casco. Qt mantém seu diálogo anterior.
+  Prévia considera promoção/atacado e reprecificação dos cascos anteriores, compartilhando cálculo com o lançamento.
 - Estoques Tk/Qt: seletor Geral/Adega, recorte por categorias/configurações, prioridade de reposição e resumo do recorte.
   Filtros continuam combináveis. Pedido e lista de compras continuam **gerais**, com aviso nas telas.
 - Plano técnico/funcional, critérios de aceite, métricas, decisões e roteiro manual em `docs/ADEGA_MELHORIAS.md`,
@@ -16,12 +17,13 @@
 
 ### Validação
 
-- Linux, Python 3.12, Xvfb 1920×1080×24, Qt offscreen: **2189 testes, OK, 15 ignorados** pelo ambiente.
-- Recorte direcionado (preços, cascos, estoque e telas Tk/Qt): **161 testes, OK**, sem ignorados.
+- Linux, Python 3.12, Xvfb 1920×1080×24, Qt offscreen: **2194 testes, OK, 15 ignorados** pelo ambiente.
+- Recorte direcionado (preços, cascos, estoque e telas Tk/Qt): **166 testes, OK**, sem ignorados.
 - `python -m src.app --autoteste /tmp/adega-autoteste-tk.txt` e
   `python -m src.app --autoteste-qt /tmp/adega-autoteste-qt.txt`: **OK**, bancos isolados.
 - Consulta + resumo Adega: 5.000 produtos sintéticos em memória, aproximadamente 53 ms (não mede renderização/hardware da loja).
-- Revisão automatizada de código e segurança: pendente ao registrar este estado.
+- Revisão especializada do diff encontrou divergência de promoção/atacado na prévia: corrigida e coberta por regressão.
+  O Code Review automático estava indisponível; CodeQL inicial sem alertas, rodada final pendente.
 - **Não homologado nesta entrega:** impressora/leitor físicos, Windows na prática e roteiro manual com operador da loja.
 
 ## Pendências

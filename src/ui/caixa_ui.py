@@ -934,7 +934,9 @@ class JanelaCaixa(tk.Toplevel):
             if casco is None:
                 self.avisar("Casco não encontrado. Confira o cadastro da bebida.", tema.COR["perigo"])
                 return
-            quantidade_cascos = adega_dialogos.pedir_cascos(self, p, casco, qtd)
+            quantidade_cascos = adega_dialogos.pedir_cascos(
+                self, p, casco, qtd,
+                prever_impacto=lambda n: self.ctx.caixa.previa_cascos(self.venda_id, casco, n))
             if quantidade_cascos is None:
                 self.cancelar_item_pendente()
                 return

@@ -61,6 +61,16 @@ class ProdutoController:
 
     # --------------------------------------------------------------- preços
     @staticmethod
+    def preco_por_quantidade_adega(produto: dict, base_cent: int, quantidade: float,
+                                  temperatura: str = "natural") -> int:
+        gelada = temperatura == "gelada"
+        minimo = produto["atacado_gelada_qtd" if gelada else "atacado_qtd"]
+        atacado = produto["preco_atacado_gelada_cent" if gelada else "preco_atacado_cent"]
+        if minimo > 0 and atacado > 0 and quantidade >= minimo:
+            return min(base_cent, atacado)
+        return base_cent
+
+    @staticmethod
     def explicacao_preco_adega(item: dict, modalidade: str) -> dict:
         """Explica o preço já aplicado pelo caixa, sem recalcular a venda."""
         gelada = item.get("temperatura") == "gelada"

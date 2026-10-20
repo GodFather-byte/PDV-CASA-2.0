@@ -180,6 +180,40 @@ class TesteRegrasAdega(BaseCaixa):
         self.caixa.fechar(self.vid)
         self.assertEqual(self.prod.por_id(casco)["qt_atual"], 18)
 
+    def test_previa_cascos_respeita_promocao_e_nao_grava(self):
+        pid = self.novo_produto("CASCO", 800, promo_de="01/01/2026", promo_ate="31/12/2026",
+                                promo_preco_cent="6,00", atacado_qtd="6", preco_atacado_cent="7,00")
+        casco = self.prod.por_id(pid)
+        antes = self.banco.valor("SELECT COUNT(*) FROM vendas")
+        self.assertEqual(self.caixa.previa_cascos(None, casco, 6), 3600)
+        self.assertEqual(self.caixa.previa_cascos(self.vid, casco, 0), 0)
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM vendas"), antes)
+        self.assertEqual(self.caixa.itens(self.vid), [])
+        self.caixa.adicionar_item(self.vid, pid, 6)
+        self.assertEqual(self.caixa.obter(self.vid)["total_cent"], 3600)
+
+    def test_previa_cascos_inclui_reprecificacao_anterior_sem_somar_gelada(self):
+        for agrupar in ("S", "N"):
+            with self.subTest(agrupar=agrupar):
+                self.banco.cfg_set("agrupar_itens_balcao", agrupar)
+                pid = self.novo_produto(f"CASCO {agrupar}", 800, atacado_qtd="6", preco_atacado_cent="6,00",
+                                        preco_gelada_cent="10,00")
+                casco = self.prod.por_id(pid)
+                self.caixa.adicionar_item(self.vid, pid, 5)
+                self.caixa.adicionar_item(self.vid, pid, 2, temperatura="gelada")
+                itens = self.caixa.itens(self.vid)
+                antes = self.caixa.obter(self.vid)["total_cent"]
+                impacto = self.caixa.previa_cascos(self.vid, casco, 1)
+                self.assertEqual(impacto, -400)  # seis por R$ 6 custam menos que as cinco anteriores por R$ 8
+                self.assertEqual(self.caixa.itens(self.vid), itens)
+                self.caixa.adicionar_item(self.vid, pid, 1)
+                self.assertEqual(self.caixa.obter(self.vid)["total_cent"] - antes, impacto)
+
+    def test_previa_cascos_fora_do_balcao_nao_aplica_atacado(self):
+        pid = self.novo_produto("CASCO", 800, atacado_qtd="6", preco_atacado_cent="6,00")
+        self.banco.atualizar("vendas", self.vid, {"modalidade": "entrega"})
+        self.assertEqual(self.caixa.previa_cascos(self.vid, self.prod.por_id(pid), 6), 4800)
+
     def test_troca_integral_nao_lanca_casco(self):
         casco = self.novo_produto("CASCO", 500)
         self.banco.executar("UPDATE produtos SET casco_produto_id = ? WHERE id = ?", (casco, self.skol))

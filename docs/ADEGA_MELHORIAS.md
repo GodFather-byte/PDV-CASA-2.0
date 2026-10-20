@@ -68,6 +68,8 @@ São hipóteses operacionais, não incidentes medidos. Devem ser confirmadas na 
 
 1. Use **Todas trocas (F2)** para cobrar zero ou **Sem troca (F3)** para cobrar o máximo.
 2. Para troca parcial, digite apenas quantos cascos faltam. Confira “Impacto dos cascos: + R$ …”.
+   A prévia considera promoção e atacado dos cascos, inclusive a reprecificação dos cascos naturais anteriores
+   da mesma venda. Pode mostrar redução (sinal negativo) ao atingir uma faixa. Não inclui taxas/desconto global.
 3. Confirme com Enter. Entrada inválida deixa o impacto indisponível e pede um inteiro entre zero e o máximo.
 4. Em desistência, confira **as duas linhas**: cancelar bebida não cancela casco, nem o contrário.
 
@@ -93,6 +95,8 @@ São hipóteses operacionais, não incidentes medidos. Devem ser confirmadas na 
   de desenvolvimento; não inclui renderização das grades nem representa garantia no hardware da loja.
 - A explicação compartilhada está em `ProdutoController.explicacao_preco_adega`; lê o resultado do
   `CaixaController.itens`, não calcula um segundo preço nem grava observações explicativas no banco/cupom.
+- `CaixaController.previa_cascos` consulta a venda sem gravar e compartilha `preco_por_quantidade_adega` com a
+  reprecificação real, mantendo promoções e o mínimo por temperatura também na prévia.
 - Economia usa o preço-base registrado. A faixa explicativa vem do **cadastro atual**, não de um retrato histórico.
   Não editar faixas durante um atendimento; para auditoria histórica exata, será necessário persistir a regra aplicada
   numa futura migração. Sem faixa disponível, a tela informa essa ausência em vez de inventar um mínimo.
@@ -167,6 +171,8 @@ insuficiente, testes de movimentos/estornos/composição e consulta agregada com
 - [ ] No diálogo Tk de seis retornáveis, F2 deve mostrar R$ 0,00; F3, R$ 12,00; digitar 2 deve mostrar R$ 4,00.
   Digitar 7, -1 ou 1,5 deve impedir confirmação; Esc não lança nada.
 - [ ] Confirmar dois cascos, verificar total e linhas independentes; cancelar bebida e conferir casco restante.
+- [ ] Configurar promoção/atacado no casco e conferir que a prévia corresponde à variação dos itens de casco,
+  inclusive quando uma nova unidade reduz o preço das anteriores. Conferir também fora do balcão.
 - [ ] Nos dois estoques, alternar Geral/Adega, combinar Sem estoque/Repor com busca/grupo, conferir categorias,
   prioridades e totais do recorte. Conferir produto sem mínimo e produto sem controle.
 - [ ] Conferir que pedido/lista continuam gerais; lançar entrada/perda/contagem e atualizar saldos.
@@ -174,8 +180,8 @@ insuficiente, testes de movimentos/estornos/composição e consulta agregada com
 
 ## Arquivos alterados e finalidade
 
-- `src/controllers/produto_controller.py`: explicação reutilizável do preço já aplicado.
-- `src/controllers/caixa_controller.py`: disponibiliza faixas atuais na consulta de itens, preservando produto excluído.
+- `src/controllers/produto_controller.py`: explicação reutilizável e cálculo compartilhado de preço por quantidade.
+- `src/controllers/caixa_controller.py`: faixas atuais na consulta de itens, preservando produto excluído; prévia de cascos.
 - `src/ui/caixa_ui.py`, `src/ui_qt/caixa.py`: exibem rótulo, regra e economia; detalhe legível no Tk e dica no Qt.
 - `src/ui/adega_dialogos.py`: atalhos, prévia financeira e validação de cascos.
 - `src/controllers/estoque_controller.py`: recorte Adega, categoria e prioridade com regras existentes de reposição.

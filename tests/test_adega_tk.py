@@ -283,6 +283,28 @@ class TesteBalcaoAdegaTk(BaseAdegaTk):
 
 
 class TesteDialogosAdegaTk(BaseAdegaTk):
+    def test_previa_cascos_usa_promocao_no_fluxo_real(self):
+        self.banco.atualizar("produtos", self.skol, {"casco_produto_id": self.agua})
+        self.banco.atualizar("produtos", self.agua, {"promo_de": "2026-01-01", "promo_ate": "2026-12-31",
+                                                   "promo_preco_cent": 200})
+        def responder(w):
+            clicar(w, "Sem troca (F3)")
+            self.assertIn("Impacto dos cascos: + R$ 4,00", self.textos(w))
+            clicar(w, "Confirmar")
+        self.dialogos({"Cascos / vasilhames": responder})
+        self.digitar_codigo("2*1")
+        self.assertEqual(self.ctx.caixa.obter(self.cx.venda_id)["total_cent"], 2000)
+        self.sem_travar()
+
+    def test_previa_admite_reducao_ao_reprecificar_cascos_anteriores(self):
+        def responder(w):
+            clicar(w, "Sem troca (F3)")
+            self.assertIn("Impacto dos cascos: - R$ 4,00", self.textos(w))
+            clicar(w, "Confirmar")
+        self.robo.quando("Dialogo", responder)
+        self.assertEqual(adega_dialogos.pedir_cascos(
+            self.cx, self.bebida(), self.bebida(), 1, prever_impacto=lambda n: -400 if n else 0), 1)
+
     def test_atalhos_de_cascos_atualizam_previa_sem_confirmar(self):
         def responder(w):
             self.assertIn("Impacto dos cascos: + R$ 0,00", self.textos(w))

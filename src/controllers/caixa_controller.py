@@ -347,6 +347,26 @@ class CaixaController:
                 self._conferir_credito(venda_id, v["total_cent"] - v["taxa_cent"])
         return item_id
 
+    def previa_cascos(self, venda_id: int | None, casco: dict, quantidade: int) -> int:
+        """Variação dos itens de casco, incluindo promoção e reprecificação dos já lançados; sem taxas/desconto global."""
+        if quantidade == 0:
+            return 0
+        base = self.produtos.preco_vigente(casco)
+        if venda_id is not None and self.obter(venda_id)["modalidade"] != "balcao":
+            return fmt.mult_cent(base, quantidade)
+        anteriores = self.banco.todos(
+            """SELECT i.* FROM itens_venda i WHERE i.venda_id = ? AND i.produto_id = ?
+               AND i.cancelado = 0 AND i.temperatura = 'natural' AND i.preco_base_cent IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM itens_venda_partes x WHERE x.item_id = i.id)""",
+            (venda_id, casco["id"])) if venda_id is not None else []
+        total_qtd = fmt.arred_qtd(quantidade + sum(i["quantidade"] for i in anteriores))
+        preco = self.produtos.preco_por_quantidade_adega(casco, base, total_qtd)
+        impacto = fmt.mult_cent(preco, quantidade)
+        for item in anteriores:
+            novo = self.produtos.preco_por_quantidade_adega(casco, item["preco_base_cent"], total_qtd)
+            impacto += fmt.mult_cent(novo, item["quantidade"]) - item["total_cent"]
+        return impacto
+
     def _reprecificar_balcao(self, venda_id: int) -> None:
         """Reavalia o mínimo por produto e temperatura sem perder o preço-base de cada leitura."""
         if self.obter(venda_id)["modalidade"] != "balcao":
@@ -362,12 +382,8 @@ class CaixaController:
             chave = (i["produto_id"], i["temperatura"])
             quantidades[chave] = fmt.arred_qtd(quantidades.get(chave, 0) + i["quantidade"])
         for i in itens:
-            gelada = i["temperatura"] == "gelada"
-            minimo = i["atacado_gelada_qtd" if gelada else "atacado_qtd"]
-            atacado = i["preco_atacado_gelada_cent" if gelada else "preco_atacado_cent"]
-            preco = i["preco_base_cent"]
-            if minimo > 0 and atacado > 0 and quantidades[(i["produto_id"], i["temperatura"])] >= minimo:
-                preco = min(preco, atacado)
+            preco = self.produtos.preco_por_quantidade_adega(
+                i, i["preco_base_cent"], quantidades[(i["produto_id"], i["temperatura"])], i["temperatura"])
             total = fmt.mult_cent(preco, i["quantidade"])
             if preco != i["preco_unit_cent"] or total != i["total_cent"]:
                 self.banco.executar(

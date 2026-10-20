@@ -27,12 +27,12 @@ def pedir_temperatura(master, produto: dict, preco_natural_cent: int) -> str | N
     return dlg.mostrar(natural)
 
 
-def pedir_cascos(master, produto: dict, casco: dict, quantidade: float) -> int | None:
+def pedir_cascos(master, produto: dict, casco: dict, quantidade: float, *, prever_impacto=None) -> int | None:
     dlg = tema.Dialogo(master, "Cascos / vasilhames")
     maximo = math.floor(quantidade)
     ttk.Label(dlg.corpo, text=produto["nome"], style="Rotulo.TLabel").pack(anchor="w")
     ttk.Label(dlg.corpo, text=f"Bebidas: {fmt.fmt_qtd(quantidade)}  ·  {casco['nome']}\n"
-              f"Cada casco: {fmt.fmt_brl(casco['preco_cent'])}", justify="left").pack(anchor="w", pady=(4, 10))
+              f"Cada casco (tabela): {fmt.fmt_brl(casco['preco_cent'])}", justify="left").pack(anchor="w", pady=(4, 10))
     ttk.Label(dlg.corpo, text="Quantos cascos cobrar?").pack(anchor="w")
     var = tk.StringVar(dlg, value="0")
     entrada = ttk.Entry(dlg.corpo, textvariable=var, width=12)
@@ -49,6 +49,8 @@ def pedir_cascos(master, produto: dict, casco: dict, quantidade: float) -> int |
                  foreground=tema.COR["suave"]).pack(anchor="w")
     previa = ttk.Label(dlg.corpo, text="", style="Rotulo.TLabel")
     previa.pack(anchor="w", pady=(8, 0))
+    ttk.Label(dlg.corpo, text="Prévia dos itens de casco; não inclui taxas ou desconto global.",
+              foreground=tema.COR["suave"]).pack(anchor="w")
     ttk.Label(dlg.corpo, text="Atenção: bebida e casco ficam em linhas independentes.\n"
               "Cancelar a bebida NÃO cancela o casco (nem o contrário).\n"
               "Em caso de desistência, confira e cancele as duas linhas.",
@@ -66,8 +68,12 @@ def pedir_cascos(master, produto: dict, casco: dict, quantidade: float) -> int |
 
     def atualizar_previa(*_):
         valor = quantidade_valida()
-        previa.configure(text=f"Impacto dos cascos: + {fmt.fmt_brl(valor * casco['preco_cent'])}"
-                         if valor is not None else "Impacto indisponível: corrija a quantidade.")
+        if valor is None:
+            previa.configure(text="Impacto indisponível: corrija a quantidade.")
+        else:
+            impacto = prever_impacto(valor) if prever_impacto else valor * casco["preco_cent"]
+            sinal = "+" if impacto >= 0 else "-"
+            previa.configure(text=f"Impacto dos cascos: {sinal} {fmt.fmt_brl(abs(impacto))}")
         erro.configure(text="")
 
     def confirmar(_=None):
