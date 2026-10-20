@@ -224,6 +224,12 @@ class JanelaCaixa(tk.Toplevel):
                                          ("preco", "Preço", 90, "e"), ("qtd", "Qtd", 90, "e"), ("tot", "Total", 100, "e"),
                                          ("obs", "Observação", 200, "w")], altura=6, estilo="Cx", cor_par=CX["linha_par"])
         self.grade.pack(fill="both", expand=True)
+        if self.perfil_adega:
+            self.lbl_detalhe_preco = ttk.Label(esq, text="", style="Cx.Rotulo.TLabel", wraplength=600)
+            self.lbl_detalhe_preco.pack(fill="x", pady=(4, 0))
+            esq.bind("<Configure>", lambda e: self.lbl_detalhe_preco.configure(wraplength=max(180, e.width - 32)), add="+")
+            self._detalhes_preco = {}
+            self.grade.tree.bind("<<TreeviewSelect>>", lambda e: self._mostrar_detalhe_preco())
         self.grade.tree.bind("<Configure>", self._ajustar_grade)
         self.grade.tag("comissao", foreground=CX["comissao_texto"])       # comissão marcada na comanda da garota: só leitura
         self.grade.tag("comissao_paga", foreground=CX["comissao_paga"])
@@ -530,6 +536,9 @@ class JanelaCaixa(tk.Toplevel):
         self.lbl_turno.configure(text=f"TURNO {t['numero'] if t else '-'}  ·  {self.ctx.operador.nome.upper()}")
         v = self.venda()
         self.grade.limpar()
+        if self.perfil_adega:
+            self._detalhes_preco = {}
+            self.lbl_detalhe_preco.configure(text="")
         total = 0
         self.comissao_marcada = []
         self._itens_na_grade = 0
@@ -546,6 +555,10 @@ class JanelaCaixa(tk.Toplevel):
                         nome += f"  [{explicacao['rotulo']}]"
                     if explicacao["detalhe"]:
                         observacao = " · ".join(filter(None, (observacao, explicacao["detalhe"])))
+                    detalhe = " · ".join(filter(None, (it["nome"], explicacao["rotulo"])))
+                    if explicacao["detalhe"]:
+                        detalhe += "\n" + explicacao["detalhe"]
+                    self._detalhes_preco[str(it["id"])] = detalhe
                 self.grade.adicionar([it["codigo"], nome, it["unidade"], fmt.fmt_num(it["preco_unit_cent"]),
                                       fmt.fmt_qtd(it["quantidade"]), fmt.fmt_num(it["total_cent"]), observacao], iid=it["id"])
             self._itens_na_grade = self.grade.total()
@@ -561,6 +574,7 @@ class JanelaCaixa(tk.Toplevel):
         self._detalhe_total(v)
         if self.perfil_adega:
             self._resumo_adega(itens, v)
+            self._mostrar_detalhe_preco()
         recebido = sum(p["valor_cent"] for p in self.ctx.caixa.pagamentos(v["id"])) if v else 0
         if v and v["prepago"]:
             s = self.ctx.caixa.saldo_prepago(v["id"])
@@ -575,6 +589,12 @@ class JanelaCaixa(tk.Toplevel):
         self._status_venda(v, total, recebido)
         self.lbl_leitor.configure(text="LEITOR ÓPTICO ATIVO" if self.leitor else "")
         self.carregar_mesas()                        # os cartões e os indicadores do cabeçalho acompanham a venda
+
+    def _mostrar_detalhe_preco(self) -> None:
+        selecionados = self.grade.tree.selection()
+        ultimo = next(reversed(self._detalhes_preco), None)
+        chave = selecionados[0] if selecionados else ultimo
+        self.lbl_detalhe_preco.configure(text=self._detalhes_preco.get(chave, ""))
 
     def _resumo_adega(self, itens: list[dict], venda: dict | None) -> None:
         naturais = sum(i["quantidade"] for i in itens if i.get("temperatura", "natural") == "natural")

@@ -108,6 +108,7 @@ class PainelEstoque(tk.Toplevel):
         self.linhas: list[dict] = []
         self._ordenar: tuple[str, bool] = ("nome", False)
         self.v_busca, self.v_grupo = tk.StringVar(), tk.StringVar(value="Todos os grupos")
+        self.v_visao = tk.StringVar(value="Geral")
         self._montar()
         self.bind("<Escape>", lambda e: self.destroy())
         self.bind("<F5>", lambda e: self.atualizar())
@@ -167,6 +168,17 @@ class PainelEstoque(tk.Toplevel):
         self.cb_grupo.bind("<<ComboboxSelected>>", lambda e: self.atualizar())
         self.lbl_cont = tk.Label(barra, text="", font=(FONTE, 9), fg=PAL["mudo"], bg=PAL["fundo"])
         self.lbl_cont.pack(side="right")
+
+        visao = tk.Frame(self, bg=PAL["fundo"])
+        visao.pack(fill="x", padx=22, pady=(8, 0))
+        tk.Label(visao, text="Visão:", bg=PAL["fundo"], fg=PAL["suave"]).pack(side="left")
+        self.cb_visao = ttk.Combobox(visao, textvariable=self.v_visao, values=["Geral", "Adega"],
+                                     state="readonly", width=12, style="Estoque.TCombobox")
+        self.cb_visao.pack(side="left", padx=8)
+        self.cb_visao.bind("<<ComboboxSelected>>", lambda e: self.atualizar())
+        tk.Label(visao, text="Adega: categorias típicas e produtos configurados; prioridade alta = sem estoque, média = repor. "
+                            "Pedidos e lista de compras são gerais.",
+                 bg=PAL["fundo"], fg=PAL["suave"]).pack(side="left")
 
         corpo = tk.Frame(self, bg=PAL["fundo"])
         corpo.pack(fill="both", expand=True, padx=22, pady=(12, 8))
@@ -243,26 +255,31 @@ class PainelEstoque(tk.Toplevel):
                 return
         except tk.TclError:
             return
-        r = self.est.resumo()
+        adega = self.v_visao.get() == "Adega"
+        r = self.est.resumo(adega=adega)
         self.cartoes["total"].definir(str(r["total"]), "controlados e ativos")
         for chave in ("sem", "ponto", "normal"):
             self.cartoes[chave].definir(str(r[chave]), f"{round(r[chave] * 100 / r['total'])}% dos produtos" if r["total"] else "")
         self.cartoes["valor"].definir(fmt.fmt_brl(r["valor_cent"]), "quantidade × último preço de compra")
         grupo = self.v_grupo.get()
         self.linhas = self.est.painel(None if self.filtro == "todos" else self.filtro, self.v_busca.get(),
-                                      None if grupo.startswith("Todos") else grupo)
+                                      None if grupo.startswith("Todos") else grupo, adega=adega)
         coluna, invertido = self._ordenar
         chaves = {"situ": lambda p: ("sem", "ponto", "normal", "livre").index(p["situacao"]), "cod": lambda p: p["codigo"],
                   "nome": lambda p: p["nome"].casefold(), "grupo": lambda p: p["grupo"].casefold(), "qtd": lambda p: p["qt_atual"],
                   "min": lambda p: p["estoque_minimo"], "nivel": lambda p: p["qt_atual"] / p["estoque_minimo"] if p["estoque_minimo"] else 0,
                   "repor": lambda p: p["repor"], "valor": lambda p: p["valor_cent"]}
-        self.linhas.sort(key=chaves[coluna], reverse=invertido)
+        if not adega or coluna != "nome":
+            self.linhas.sort(key=chaves[coluna], reverse=invertido)
         atual = self.produto["id"] if self.produto else None
         self.tree.delete(*self.tree.get_children())
         for p in self.linhas:
             rotulo, _ = SITUACAO[p["situacao"]]
+            if adega:
+                rotulo = f"{p['prioridade']} · {rotulo}"
             self.tree.insert("", "end", iid=str(p["id"]), tags=(p["situacao"],), values=[
-                f"● {rotulo}", p["codigo"].lstrip("0") or "0", p["nome"], p["grupo"],
+                f"● {rotulo}", p["codigo"].lstrip("0") or "0", p["nome"],
+                f"{p['grupo']} / {p['categoria']}" if adega else p["grupo"],
                 "—" if p["situacao"] == "livre" else f"{curta(p['qt_atual'])} {p['unidade']}",
                 curta(p["estoque_minimo"]) if p["estoque_minimo"] else "-", nivel(p),
                 curta(p["repor"]) if p["repor"] else "",
@@ -274,7 +291,7 @@ class PainelEstoque(tk.Toplevel):
             if r["total"] else "Nenhum produto controla estoque ainda."
         if r["livre"]:
             sub += f"  {r['livre']} produto(s) ainda não controlam estoque (filtro 'Sem controle')."
-        self.lbl_sub.configure(text=sub)
+        self.lbl_sub.configure(text=("Visão Adega · " if adega else "") + sub)
         self.lbl_cont.configure(text=f"{len(self.linhas)} de {r['total']} produtos")
         if not self.linhas:
             self.lbl_vazio.configure(text="Nenhum produto encontrado com esse filtro." if r["total"] or self.filtro == "livre" or

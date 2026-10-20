@@ -4,6 +4,9 @@ Checklist para instalar o WillPDV numa adega, do zero até a primeira venda, e o
 recurso (gelada, atacado, cascos, fardos, agrupamento) estão detalhadas em [ESTOQUE.md](ESTOQUE.md), seção
 "Operação de adega"; o painel do celular em [PAINEL_DONO.md](PAINEL_DONO.md).
 
+Diagnóstico, melhorias entregues, plano em fases e próxima evolução:
+[Adega: plano de melhorias e validação](ADEGA_MELHORIAS.md).
+
 ## Antes de ir à loja
 
 - [ ] Instalador gerado e testado (`docs/INSTALAR_E_TESTAR.md`); licença emitida para a chave da loja.

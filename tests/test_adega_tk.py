@@ -227,6 +227,21 @@ class TesteBalcaoAdegaTk(BaseAdegaTk):
         self.assertIn("Economia no atacado: R$ 6,00", self.cx.lbl_resumo_adega.cget("text"))
         self.assertIn("a partir de 6 un", self.linhas()[0][6])
         self.assertIn("economia nesta linha: R$ 6,00", self.linhas()[0][6])
+        self.assertIn("a partir de 6 un", self.cx.lbl_detalhe_preco.cget("text"))
+
+    def test_detalhe_de_preco_visivel_em_notebook_e_por_selecao(self):
+        self.cx.state("normal")
+        self.cx.geometry("1180x678")
+        self.banco.atualizar("produtos", self.skol, {"atacado_qtd": 6, "preco_atacado_cent": 700})
+        self.digitar_codigo("6*1")
+        self.digitar_codigo("2")
+        self.cx.grade.tree.selection_set(self.ctx.caixa.itens(self.cx.venda_id)[0]["id"])
+        self.cx.update()
+        self.assertIn("Atacado natural: a partir de 6 un", self.cx.lbl_detalhe_preco.cget("text"))
+        self.assertTrue(self.cx.lbl_detalhe_preco.winfo_ismapped())
+        self.assertLessEqual(self.cx.lbl_detalhe_preco.winfo_rooty() + self.cx.lbl_detalhe_preco.winfo_height(),
+                             self.cx.status.winfo_rooty())
+        self.assertGreater(self.cx.grade.tree.winfo_height(), 100)
 
     def test_bebida_com_dois_precos_mostra_natural_e_a_observacao_nao_repete_gelada(self):
         self.banco.atualizar("produtos", self.skol, {"preco_gelada_cent": 950})
