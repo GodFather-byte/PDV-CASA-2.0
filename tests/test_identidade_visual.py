@@ -144,7 +144,7 @@ class TesteIdentidadeVisual(BaseTeste):
         banco = BancoDados(str(self.pasta / "dados" / "loja.db"))
         try:
             self.assertEqual(ConfigController(banco).loja()["logotipo"], salvo)
-            self.assertEqual(Path(salvo).parent, self.pasta / "dados" / "identidade")
+            self.assertEqual(Path(salvo).resolve().parent, (self.pasta / "dados" / "identidade").resolve())
             self.assertIsNotNone(preview_logotipo(salvo))
         finally:
             banco.fechar()
