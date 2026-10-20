@@ -10,7 +10,6 @@ Regras principais:
 from __future__ import annotations
 
 import json
-import math
 from uuid import uuid4
 
 from src.controllers import notificacoes
@@ -24,7 +23,7 @@ from src.core.posicao import interpretar as interpretar_posicao
 from src.core.posicao import nome as nome_posicao
 from src.core.posicao import padrao_valido
 from src.core.posicao import rotulo as rotulo_posicao
-from src.core.erros import ErroNegocio
+from src.core.erros import ErroEstoqueInsuficiente, ErroNegocio
 
 ABERTAS = ("aberta", "conta_enviada")
 NUM_COMANDAS_PADRAO = 10000
@@ -266,8 +265,11 @@ class CaixaController:
             raise ErroNegocio("Temperatura inválida: escolha natural ou gelada.")
         if temperatura == "gelada" and (not p["preco_gelada_cent"] or partes):
             raise ErroNegocio("Este produto não tem preço gelado disponível para este lançamento.")
-        quantidade = fmt.arred_qtd(quantidade)
-        if not math.isfinite(quantidade) or quantidade <= 0:
+        try:
+            quantidade = fmt.validar_qtd(quantidade)
+        except ValueError as exc:
+            raise ErroNegocio(str(exc).capitalize() + ".") from None
+        if quantidade <= 0:
             raise ErroNegocio("Informe uma quantidade maior que zero.")
         maximo = self.banco.cfg_int("qtd_maxima_item", QTD_MAXIMA_ITEM)
         if 0 < maximo < quantidade:
@@ -714,56 +716,64 @@ class CaixaController:
         if v["modalidade"] == "mesa" and self.banco.cfg_bool("controle_garcom") and not (garcom_id or v["garcom_id"]):
             raise ErroNegocio("Informe o garçom que atendeu a mesa.")
 
-        with self.banco.transacao():
-            self.banco.executar("UPDATE pagamentos_venda SET turno_id = ? WHERE venda_id = ? AND turno_id IS NULL",
-                                (turno["id"], venda_id))
-            calc = self.recalcular(venda_id)
-            total = calc["total"]
-            troco = vale = devolucao = 0
-            rateio: dict = {}
-            if eh_credito:
-                info = self.info_credito(venda_id)
-                if info["pago"] <= 0:
-                    raise ErroNegocio("Informe a forma de pagamento e o valor recebido.")
-                creditar = info["pago"]
-                if info["excedente"] > 0 and excesso_como_credito is not True:
-                    if excesso_como_credito is None:
-                        raise ErroNegocio("O valor excede a dívida do cliente: defina se o troco vira crédito.")
-                    creditar = info["divida"]
-                    liq = self.liquidar(venda_id, creditar)
-                    troco, vale, rateio = liq["troco"], liq["vale"], liq["rateio"]
-                total = creditar
-            elif eh_debito:
-                if self.pagamentos(venda_id):
-                    raise ErroNegocio("Venda em caderneta não recebe pagamento. Remova os pagamentos lançados.")
-                self._debitar_caderneta(v["cliente_id"], total)
-            else:
-                liq = self.liquidar(venda_id, total)
-                if liq["falta"] > 0:
-                    raise ErroNegocio(f"Faltam {fmt.fmt_brl(liq['falta'])} para completar o pagamento.")
-                troco, vale, rateio, devolucao = liq["troco"], liq["vale"], liq["rateio"], liq["devolucao"]
+        try:
+            with self.banco.transacao():
+                self.banco.executar("UPDATE pagamentos_venda SET turno_id = ? WHERE venda_id = ? AND turno_id IS NULL",
+                                    (turno["id"], venda_id))
+                calc = self.recalcular(venda_id)
+                total = calc["total"]
+                troco = vale = devolucao = 0
+                rateio: dict = {}
+                if eh_credito:
+                    info = self.info_credito(venda_id)
+                    if info["pago"] <= 0:
+                        raise ErroNegocio("Informe a forma de pagamento e o valor recebido.")
+                    creditar = info["pago"]
+                    if info["excedente"] > 0 and excesso_como_credito is not True:
+                        if excesso_como_credito is None:
+                            raise ErroNegocio("O valor excede a dívida do cliente: defina se o troco vira crédito.")
+                        creditar = info["divida"]
+                        liq = self.liquidar(venda_id, creditar)
+                        troco, vale, rateio = liq["troco"], liq["vale"], liq["rateio"]
+                    total = creditar
+                elif eh_debito:
+                    if self.pagamentos(venda_id):
+                        raise ErroNegocio("Venda em caderneta não recebe pagamento. Remova os pagamentos lançados.")
+                    self._debitar_caderneta(v["cliente_id"], total)
+                else:
+                    liq = self.liquidar(venda_id, total)
+                    if liq["falta"] > 0:
+                        raise ErroNegocio(f"Faltam {fmt.fmt_brl(liq['falta'])} para completar o pagamento.")
+                    troco, vale, rateio, devolucao = liq["troco"], liq["vale"], liq["rateio"], liq["devolucao"]
 
-            for pag_id, parte in rateio.items():
-                self.banco.executar("UPDATE pagamentos_venda SET troco_cent = ? WHERE id = ?", (parte, pag_id))
-            if devolucao:
-                self.turnos.movimentar(turno["id"], self.operador_id, "saida", devolucao,
-                                       f"Devolução do crédito pré-pago da {nome_posicao(v['comanda'], v['posicao']).lower()}")
-            pago = sum(p["valor_cent"] for p in self.pagamentos(venda_id))
-            agora = fmt.agora()
-            self.banco.atualizar("vendas", venda_id, {
-                "turno_id": turno["id"], "cupom": self.proximo_cupom(), "status": "fechada", "fechada_em": agora,
-                "total_cent": total, "pago_cent": pago, "troco_cent": troco, "vale_cent": vale,
-                "garcom_id": garcom_id or v["garcom_id"],
-                "pessoas": 0 if eh_credito else (pessoas if pessoas is not None else (v["pessoas"] or 1)),
-                "sincronizado": 0})
-            if eh_credito:
-                self._creditar_caderneta(v["cliente_id"], venda_id, total)
-            elif itens:
-                self.estoque.baixar_venda(venda_id)
-            if eh_debito:
-                self.banco.inserir("caderneta", {
-                    "cliente_id": v["cliente_id"], "venda_id": venda_id, "tipo": "debito", "valor_cent": total,
-                    "descricao": "Venda em caderneta", "criado_em": agora})
+                for pag_id, parte in rateio.items():
+                    self.banco.executar("UPDATE pagamentos_venda SET troco_cent = ? WHERE id = ?", (parte, pag_id))
+                if devolucao:
+                    self.turnos.movimentar(turno["id"], self.operador_id, "saida", devolucao,
+                                           f"Devolução do crédito pré-pago da {nome_posicao(v['comanda'], v['posicao']).lower()}")
+                pago = sum(p["valor_cent"] for p in self.pagamentos(venda_id))
+                agora = fmt.agora()
+                self.banco.atualizar("vendas", venda_id, {
+                    "turno_id": turno["id"], "cupom": self.proximo_cupom(), "status": "fechada", "fechada_em": agora,
+                    "total_cent": total, "pago_cent": pago, "troco_cent": troco, "vale_cent": vale,
+                    "garcom_id": garcom_id or v["garcom_id"],
+                    "pessoas": 0 if eh_credito else (pessoas if pessoas is not None else (v["pessoas"] or 1)),
+                    "sincronizado": 0})
+                if eh_credito:
+                    self._creditar_caderneta(v["cliente_id"], venda_id, total)
+                elif itens:
+                    self.estoque.baixar_venda(venda_id)
+                if eh_debito:
+                    self.banco.inserir("caderneta", {
+                        "cliente_id": v["cliente_id"], "venda_id": venda_id, "tipo": "debito", "valor_cent": total,
+                        "descricao": "Venda em caderneta", "criado_em": agora})
+        except ErroEstoqueInsuficiente as exc:
+            self.banco.registrar_auditoria(
+                "vendas", v["uuid"], "venda_sem_estoque",
+                antes={"status": v["status"]},
+                depois={"resultado": "recusada", "faltas": exc.faltas},
+                operador_id=self.operador_id if self.operador_id is not None else self.banco._operador_auditoria)
+            raise
         notificacoes.avisar(self.banco, "venda", "venda_fechada", venda_id)      # fora da transação: só avisa o que ficou gravado
         return self.obter(venda_id)
 

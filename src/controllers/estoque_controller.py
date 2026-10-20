@@ -7,6 +7,9 @@ movimentos_estoque. É esse histórico que permite estornar com exatidão.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+
+from src.core.erros import ErroEstoqueInsuficiente, ErroPermissao
 from src.controllers import notificacoes
 from src.controllers.produto_controller import ProdutoController
 from src.core import formatacao as fmt
@@ -15,8 +18,11 @@ from src.core.erros import ErroNegocio
 TIPOS = {
     "inicial": "Inicial", "pedido": "Pedido", "compra": "Compra", "entrada": "Entrada",
     "saida": "Saída", "descarte": "Descarte", "contagem": "Contagem (diferença)",
-    "desc_acabados": "Descarte de produtos acabados",
+    "desc_acabados": "Descarte de produtos acabados", "quebra": "Quebra",
+    "oxidacao": "Oxidação", "devolucao": "Devolução",
 }
+TIPOS_AJUSTE_GERENTE = {"inicial", "entrada", "saida", "descarte", "contagem", "desc_acabados",
+                        "quebra", "oxidacao", "devolucao"}
 
 
 class EstoqueController:
@@ -25,23 +31,58 @@ class EstoqueController:
         self.produtos = ProdutoController(banco)
         self.operador_id = operador_id
 
+    def _exigir_gerente(self) -> None:
+        operador_id = self.operador_id if self.operador_id is not None else self.banco._operador_auditoria
+        if type(operador_id) is not int:
+            raise ErroPermissao("Somente gerente (nível 4) pode ajustar estoque ou custo.")
+        operador = self.banco.um("SELECT nivel FROM operadores WHERE id = ? AND ativo = 1", (operador_id,))
+        if operador is None or operador["nivel"] < 4:
+            raise ErroPermissao("Somente gerente (nível 4) pode ajustar estoque ou custo.")
+
+    @contextmanager
+    def _auditar_com_operador(self):
+        anterior = self.banco._operador_auditoria
+        atual = self.operador_id if self.operador_id is not None else anterior
+        if atual != anterior:
+            self.banco.definir_operador_auditoria(atual)
+        try:
+            yield
+        finally:
+            if atual != anterior:
+                self.banco.definir_operador_auditoria(anterior)
+
     # ---------------------------------------------------------- primitivas
     def _mover(self, produto_id: int, delta: float, tipo: str, ref_tipo: str | None = None,
-               ref_id: int | None = None) -> float:
+               ref_id: int | None = None, observacao: str | None = None) -> float:
         agora = fmt.agora()
         tabela = "produtos" if self.produtos.por_id(produto_id) is not None else "produtos_historico"
         if not self.banco.valor(f"SELECT 1 FROM {tabela} WHERE id = ?", (produto_id,)):
             raise ErroNegocio("Produto do movimento de estoque não encontrado.")
-        with self.banco.transacao():
-            self.banco.executar(
-                f"UPDATE {tabela} SET qt_atual = ROUND(qt_atual + ?, 4) WHERE id = ?",
-                (delta, produto_id))
+        with self._auditar_com_operador(), self.banco.transacao():
             if tabela == "produtos":
-                self.banco.executar("UPDATE produtos SET ult_atualizacao = ? WHERE id = ?", (agora, produto_id))
+                cur = self.banco.executar(
+                    "UPDATE produtos SET qt_atual = ROUND(qt_atual + ?, 4), ult_atualizacao = ? "
+                    "WHERE id = ? AND (? >= 0 OR ROUND(qt_atual + ?, 4) >= 0)",
+                    (delta, agora, produto_id, delta, delta))
+            else:
+                cur = self.banco.executar(
+                    "UPDATE produtos_historico SET qt_atual = ROUND(qt_atual + ?, 4) "
+                    "WHERE id = ? AND (? >= 0 OR ROUND(qt_atual + ?, 4) >= 0)",
+                    (delta, produto_id, delta, delta))
+            if cur.rowcount == 0:
+                p = self.produtos.por_id(produto_id)
+                nome = p["nome"] if p else self.banco.valor(
+                    "SELECT nome FROM produtos_historico WHERE id = ?", (produto_id,), "produto")
+                disponivel = self.banco.valor(f"SELECT qt_atual FROM {tabela} WHERE id = ?", (produto_id,), 0)
+                raise ErroNegocio(
+                    f"Estoque insuficiente de '{nome}': há {fmt.fmt_qtd(disponivel, fmt.CASAS_QTD)}, "
+                    f"mas a retirada é de {fmt.fmt_qtd(-delta, fmt.CASAS_QTD)}.")
             apos = self.banco.valor(f"SELECT qt_atual FROM {tabela} WHERE id = ?", (produto_id,))
             self.banco.inserir("movimentos_estoque", {
                 "produto_id": produto_id, "tipo": tipo, "quantidade": fmt.arred_qtd(delta),
-                "qt_apos": apos, "ref_tipo": ref_tipo, "ref_id": ref_id, "criado_em": agora})
+                "qt_apos": apos, "ref_tipo": ref_tipo, "ref_id": ref_id, "criado_em": agora,
+                "operador_id": self.operador_id if self.operador_id is not None else self.banco._operador_auditoria,
+                "observacao": observacao})
         return apos
 
     def _estornar_referencia(self, ref_tipo: str, ref_id: int, tipo_original: str | None, tipo_estorno: str) -> None:
@@ -58,19 +99,39 @@ class EstoqueController:
         """Dá baixa nos produtos (e insumos da composição) dos itens não cancelados.
 
         Idempotente: se a venda já tem movimentos de baixa, repetir a chamada não faz nada."""
-        if self.banco.um("SELECT 1 FROM movimentos_estoque WHERE ref_tipo = 'venda' AND ref_id = ? "
-                         "AND tipo = 'venda' LIMIT 1", (venda_id,)):
-            return
-        antes: dict[int, float] = {}
-        for it in self.banco.todos(
-                "SELECT id, produto_id, quantidade FROM itens_venda WHERE venda_id = ? AND cancelado = 0", (venda_id,)):
-            partes = self.banco.todos("SELECT produto_id, fracao FROM itens_venda_partes WHERE item_id = ?", (it["id"],))
-            alvos = self._dividir_em_partes(it["quantidade"], partes) or [(it["produto_id"], it["quantidade"])]
-            for pid, qtd in alvos:
-                for consumo_id, q in self.produtos.consumos(pid, qtd):
-                    antes.setdefault(consumo_id, self.banco.valor("SELECT qt_atual FROM produtos WHERE id = ?", (consumo_id,), 0))
-                    self._mover(consumo_id, -q, "venda", "venda", venda_id)
+        with self._auditar_com_operador(), self.banco.transacao():
+            if self.banco.um("SELECT 1 FROM movimentos_estoque WHERE ref_tipo = 'venda' AND ref_id = ? "
+                             "AND tipo = 'venda' LIMIT 1", (venda_id,)):
+                return
+            consumos = self._consumos_venda(venda_id)
+            faltas = self._faltas_estoque(consumos)
+            if faltas:
+                raise ErroEstoqueInsuficiente(faltas)
+            antes: dict[int, float] = {}
+            for produto_id, quantidade in consumos.items():
+                antes[produto_id] = self.banco.valor("SELECT qt_atual FROM produtos WHERE id = ?", (produto_id,), 0)
+                self._mover(produto_id, -quantidade, "venda", "venda", venda_id)
         self._avisar_cruzamentos(antes)
+
+    def _consumos_venda(self, venda_id: int) -> dict[int, float]:
+        consumos: dict[int, float] = {}
+        for item in self.banco.todos(
+                "SELECT id, produto_id, quantidade FROM itens_venda WHERE venda_id = ? AND cancelado = 0", (venda_id,)):
+            partes = self.banco.todos("SELECT produto_id, fracao FROM itens_venda_partes WHERE item_id = ?", (item["id"],))
+            alvos = self._dividir_em_partes(item["quantidade"], partes) or [(item["produto_id"], item["quantidade"])]
+            for produto_id, quantidade in alvos:
+                for consumo_id, qtd in self.produtos.consumos(produto_id, quantidade):
+                    consumos[consumo_id] = fmt.arred_qtd(consumos.get(consumo_id, 0) + qtd)
+        return consumos
+
+    def _faltas_estoque(self, consumos: dict[int, float]) -> list[dict]:
+        faltas = []
+        for produto_id, necessario in consumos.items():
+            produto = self.produtos.por_id(produto_id)
+            if produto and produto["controla_estoque"] and produto["qt_atual"] < necessario:
+                faltas.append({"produto_id": produto_id, "nome": produto["nome"],
+                               "disponivel": produto["qt_atual"], "necessario": necessario})
+        return faltas
 
     def _avisar_cruzamentos(self, antes: dict[int, float]) -> None:
         """Avisa o dono (Telegram) dos produtos que, por causa desta baixa, ACABARAM ou entraram no ponto de pedido.
@@ -110,10 +171,14 @@ class EstoqueController:
                          fornecedor_id: int | None = None, valor_cent: int = 0) -> int:
         if tipo not in TIPOS:
             raise ErroNegocio(f"Tipo de movimento inválido: {tipo}")
+        if tipo in TIPOS_AJUSTE_GERENTE:
+            self._exigir_gerente()
         if tipo in ("compra", "pedido") and not fornecedor_id:
             raise ErroNegocio("Informe o fornecedor (cadastre em Manutenção de Cadastros > Fornecedores).")
+        tipo_perda = tipo if tipo in ("quebra", "oxidacao", "devolucao") else None
+        tipo_registro = "descarte" if tipo_perda else tipo
         return self.banco.inserir("lancamentos_estoque", {
-            "tipo": tipo, "data": fmt.para_data_iso(data) or fmt.hoje(),
+            "tipo": tipo_registro, "tipo_perda": tipo_perda, "data": fmt.para_data_iso(data) or fmt.hoje(),
             "descricao": descricao or TIPOS[tipo], "documento": documento, "nota_fiscal": nota_fiscal,
             "fornecedor_id": fornecedor_id, "valor_cent": valor_cent,
             "operador_id": self.operador_id, "criado_em": fmt.agora()})
@@ -152,7 +217,8 @@ class EstoqueController:
 
     # ----------------------------------------------------------- itens
     def adicionar_item(self, lanc_id: int, produto_id: int, quantidade: float, valor_cent: int = 0,
-                       desconto_cent: int = 0, estoque_minimo: float | None = None, ligar_controle: bool = False) -> int:
+                       desconto_cent: int = 0, estoque_minimo: float | None = None, ligar_controle: bool = False,
+                       observacao: str | None = None) -> int:
         """Lança um item e já atualiza o estoque (como o sistema original).
 
         `valor_cent` é o total do item na nota (não o unitário). Com `ligar_controle`, uma compra/entrada/contagem de produto
@@ -161,7 +227,9 @@ class EstoqueController:
         Fardo/caixa fechada (`ProdutoController.embalagem`) não tem estoque próprio: o item é gravado nas unidades (10 fardos
         de 12 viram 120 latas, pelo mesmo valor da nota). Contagem e inventário inicial de fardo são recusados."""
         lanc = self.lancamento(lanc_id)
-        tipo = lanc["tipo"]
+        tipo = lanc["tipo_perda"] or lanc["tipo"]
+        if tipo in TIPOS_AJUSTE_GERENTE:
+            self._exigir_gerente()
         p = self.produtos.por_id(produto_id)
         if p is None:
             raise ErroNegocio("Produto não encontrado.")
@@ -172,7 +240,10 @@ class EstoqueController:
                                   f"próprio: conte as unidades no produto '{emb['unitario']}'.")
             produto_id, p = emb["unitario_id"], self.produtos.por_id(emb["unitario_id"])
             quantidade *= emb["quantidade"]
-        quantidade = fmt.arred_qtd(quantidade)
+        try:
+            quantidade = fmt.validar_qtd(quantidade)
+        except ValueError as exc:
+            raise ErroNegocio(str(exc).capitalize() + ".") from None
         if quantidade < 0 or (quantidade == 0 and tipo not in ("inicial", "contagem")):
             raise ErroNegocio("Informe uma quantidade maior que zero.")
         if tipo == "desc_acabados" and not self.produtos.composicao(produto_id):
@@ -186,7 +257,7 @@ class EstoqueController:
                 "SELECT 1 FROM itens_estoque WHERE lancamento_id = ? AND produto_id = ?", (lanc_id, produto_id)):
             raise ErroNegocio(f"'{p['nome']}' já foi lançado neste movimento. Exclua o item para lançá-lo de novo.")
 
-        with self.banco.transacao():
+        with self._auditar_com_operador(), self.banco.transacao():
             if liga_controle:
                 self.banco.executar("UPDATE produtos SET controla_estoque = 1 WHERE id = ?", (produto_id,))
                 self.banco.log("estoque_controle_ligado", p["nome"], self.operador_id)
@@ -195,15 +266,17 @@ class EstoqueController:
                 "preco_unit_cent": fmt.dividir_cent(max(valor_cent - desconto_cent, 0), quantidade),
                 "desconto_cent": desconto_cent, "valor_cent": valor_cent,
                 "qt_anterior": p["qt_atual"], "diferenca": 0, "aplicado": 0})
-            if tipo != "pedido":
-                self._aplicar_item(item_id, tipo, p, quantidade, valor_cent, desconto_cent)
+            if lanc["tipo"] != "pedido":
+                self._aplicar_item(item_id, tipo, p, quantidade, valor_cent, desconto_cent,
+                                   observacao)
             if estoque_minimo is not None:
                 self.banco.executar("UPDATE produtos SET estoque_minimo = ? WHERE id = ?",
                                     (fmt.arred_qtd(estoque_minimo), produto_id))
             self._atualizar_total(lanc_id)
         return item_id
 
-    def _aplicar_item(self, item_id: int, tipo: str, p: dict, qtd: float, valor_cent: int, desconto_cent: int) -> None:
+    def _aplicar_item(self, item_id: int, tipo: str, p: dict, qtd: float, valor_cent: int, desconto_cent: int,
+                      observacao: str | None = None) -> None:
         pid = p["id"]
         antes = p["qt_atual"]
         if tipo == "inicial":
@@ -215,8 +288,9 @@ class EstoqueController:
             self.banco.executar("UPDATE produtos SET ult_preco_cent = ? WHERE id = ?", (unit, pid))
         elif tipo == "entrada":
             self._mover(pid, qtd, "entrada", "item_estoque", item_id)
-        elif tipo in ("saida", "descarte"):
-            self._mover(pid, -qtd, tipo, "item_estoque", item_id)
+        elif tipo in ("saida", "descarte", "quebra", "oxidacao", "devolucao"):
+            self._mover(pid, -qtd, tipo, "item_estoque", item_id,
+                        observacao if tipo in ("quebra", "oxidacao", "devolucao") else None)
         elif tipo == "contagem":
             self._mover(pid, qtd - antes, "contagem", "item_estoque", item_id)
         elif tipo == "desc_acabados":
@@ -231,17 +305,19 @@ class EstoqueController:
         item = self.banco.um("SELECT * FROM itens_estoque WHERE id = ?", (item_id,))
         if item is None:
             raise ErroNegocio("Item não encontrado.")
-        with self.banco.transacao():
+        lanc = self.lancamento(item["lancamento_id"])
+        if item["aplicado"] or lanc["tipo"] in TIPOS_AJUSTE_GERENTE or lanc["tipo_perda"]:
+            self._exigir_gerente()
+        with self._auditar_com_operador(), self.banco.transacao():
             if item["aplicado"]:
                 self._estornar_referencia("item_estoque", item_id, None, "estorno")
             self.banco.executar("DELETE FROM itens_estoque WHERE id = ?", (item_id,))
-            lanc = self.lancamento(item["lancamento_id"])
             if lanc["tipo"] == "compra":
                 self._recalcular_ult_preco(item["produto_id"])
             self._atualizar_total(item["lancamento_id"])
 
     def excluir_lancamento(self, lanc_id: int) -> None:
-        with self.banco.transacao():
+        with self._auditar_com_operador(), self.banco.transacao():
             for it in self.banco.todos("SELECT id FROM itens_estoque WHERE lancamento_id = ?", (lanc_id,)):
                 self.remover_item(it["id"])
             self.banco.executar("DELETE FROM contas WHERE lancamento_estoque_id = ? AND dt_quitacao IS NULL", (lanc_id,))
@@ -262,7 +338,18 @@ class EstoqueController:
         self.banco.executar("UPDATE produtos SET ult_preco_cent = ? WHERE id = ?", (unit, produto_id))
 
     def definir_minimo(self, produto_id: int, minimo: float) -> None:
-        self.banco.executar("UPDATE produtos SET estoque_minimo = ? WHERE id = ?", (fmt.arred_qtd(minimo), produto_id))
+        self._exigir_gerente()
+        with self._auditar_com_operador():
+            self.banco.executar("UPDATE produtos SET estoque_minimo = ? WHERE id = ?", (fmt.arred_qtd(minimo), produto_id))
+
+    def alterar_custo(self, produto_id: int, custo_cent: int) -> None:
+        self._exigir_gerente()
+        if type(custo_cent) is not int or custo_cent < 0:
+            raise ErroNegocio("O custo deve ser informado em centavos inteiros e não negativos.")
+        if self.produtos.por_id(produto_id) is None:
+            raise ErroNegocio("Produto não encontrado.")
+        with self._auditar_com_operador():
+            self.banco.executar("UPDATE produtos SET ult_preco_cent = ? WHERE id = ?", (custo_cent, produto_id))
 
     # ------------------------------------------------------------ pedido
     def confirmar_pedido(self, lanc_id: int, valores: dict | None = None) -> None:
@@ -274,7 +361,7 @@ class EstoqueController:
         itens = self.itens(lanc_id)
         if not itens:
             raise ErroNegocio("O pedido não tem itens.")
-        with self.banco.transacao():
+        with self._auditar_com_operador(), self.banco.transacao():
             for it in itens:
                 total = (valores or {}).get(it["id"], it["valor_cent"])
                 self.banco.executar(
@@ -300,7 +387,7 @@ class EstoqueController:
     ROTULO_MOVIMENTO = {
         "inicial": "Estoque inicial", "compra": "Compra", "entrada": "Entrada", "saida": "Saída", "descarte": "Descarte",
         "contagem": "Contagem", "desc_acabados": "Descarte de acabado", "venda": "Venda", "estorno_venda": "Venda cancelada",
-        "estorno": "Lançamento desfeito",
+        "estorno": "Lançamento desfeito", "quebra": "Quebra", "oxidacao": "Oxidação", "devolucao": "Devolução",
     }
 
     def painel(self, situacao: str | None = None, texto: str = "", grupo: str | None = None,
@@ -379,8 +466,8 @@ class EstoqueController:
         """Um movimento de um item só (entrada, saída, descarte ou contagem), sem montar lançamento na mão.
 
         Cria o lançamento do dia com o item e devolve o id. Em 'contagem' a quantidade é o que existe de verdade na prateleira."""
-        if tipo not in ("entrada", "saida", "descarte", "contagem"):
-            raise ErroNegocio("Movimento rápido só vale para entrada, saída, descarte ou contagem.")
+        if tipo not in ("entrada", "saida", "descarte", "contagem", "quebra", "oxidacao", "devolucao"):
+            raise ErroNegocio("Tipo inválido para movimento rápido de estoque.")
         p = self.produtos.por_id(produto_id)
         if p is None:
             raise ErroNegocio("Produto não encontrado.")
@@ -388,11 +475,14 @@ class EstoqueController:
         if emb and tipo != "contagem":               # fardo/caixa: o movimento é das unidades (a contagem o adicionar_item recusa)
             produto_id, quantidade = emb["unitario_id"], quantidade * emb["quantidade"]
             p = self.produtos.por_id(produto_id)
-        if tipo in ("saida", "descarte") and fmt.arred_qtd(quantidade) > max(p["qt_atual"], 0) and p["controla_estoque"]:
+        if tipo in ("saida", "descarte", "quebra", "oxidacao", "devolucao") \
+                and fmt.arred_qtd(quantidade) > max(p["qt_atual"], 0) and p["controla_estoque"]:
             raise ErroNegocio(f"Só há {fmt.fmt_qtd(p['qt_atual'])} de '{p['nome']}' em estoque; não dá para tirar {fmt.fmt_qtd(quantidade)}.")
         with self.banco.transacao():
             lanc = self.criar_lancamento(tipo, descricao=descricao or f"{TIPOS[tipo]} rápida - {p['nome']}")
-            self.adicionar_item(lanc, produto_id, quantidade, ligar_controle=not p["controla_estoque"] and tipo in ("entrada", "contagem"))
+            self.adicionar_item(lanc, produto_id, quantidade,
+                                ligar_controle=not p["controla_estoque"] and tipo in ("entrada", "contagem"),
+                                observacao=descricao)
         return lanc
 
     def pedido_sugerido(self, fornecedor_id: int, produtos: list[tuple[int, float]] | None = None) -> int:

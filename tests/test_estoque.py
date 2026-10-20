@@ -1,11 +1,13 @@
 """Produtos (busca, preço vigente, composição) e lançamentos de estoque."""
 from __future__ import annotations
 
+import json
 from datetime import datetime
 
+from src.controllers.cadastro_controller import CadastroController
 from src.controllers.estoque_controller import EstoqueController
 from src.controllers.produto_controller import ProdutoController
-from src.core.erros import ErroNegocio
+from src.core.erros import ErroNegocio, ErroPermissao
 from tests.base import BaseTeste
 
 
@@ -114,6 +116,51 @@ class TesteEstoque(BaseTeste):
         self.lancar("saida", [(pid, 5)])
         self.lancar("descarte", [(pid, 2)])
         self.assertEqual(self.qt(pid), 43)
+
+    def test_perdas_tipadas_registram_saldo_operador_hora_e_observacao(self):
+        pid = self.novo_produto("VINHO", estoque=True, qt=2)
+        for tipo in ("quebra", "oxidacao", "devolucao"):
+            self.est.registrar_rapido(pid, tipo, 0.25, "garrafa danificada")
+
+        movimentos = self.banco.todos(
+            "SELECT tipo, quantidade, qt_apos, criado_em, operador_id, observacao "
+            "FROM movimentos_estoque WHERE produto_id = ? ORDER BY id", (pid,))
+        self.assertEqual([m["tipo"] for m in movimentos], ["quebra", "oxidacao", "devolucao"])
+        self.assertEqual([m["qt_apos"] for m in movimentos], [1.75, 1.5, 1.25])
+        self.assertTrue(all(m["operador_id"] == self.operador_adm() for m in movimentos))
+        self.assertTrue(all(m["criado_em"] == "2026-10-03 21:00:00" for m in movimentos))
+        self.assertEqual(movimentos[0]["observacao"], "garrafa danificada")
+        evento = self.banco.um("SELECT acao, operador_id FROM auditoria_eventos WHERE entidade = 'movimentos_estoque' "
+                               "AND acao = 'perda_registrada' ORDER BY id LIMIT 1")
+        self.assertEqual((evento["acao"], evento["operador_id"]), ("perda_registrada", self.operador_adm()))
+
+    def test_perfil_nao_gerente_nao_altera_estoque_ou_custo(self):
+        pid = self.novo_produto("VINHO", estoque=True, qt=2)
+        usuario = CadastroController(self.banco).salvar(
+            "operadores", {"nome": "ATENDENTE", "senha": "senha123", "nivel": "2"})
+        est = EstoqueController(self.banco, usuario)
+        with self.assertRaises(ErroPermissao):
+            est.registrar_rapido(pid, "quebra", 1)
+        with self.assertRaises(ErroPermissao):
+            est.alterar_custo(pid, 1200)
+        self.assertEqual((self.qt(pid), self.prod.por_id(pid)["ult_preco_cent"]), (2, 0))
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM movimentos_estoque WHERE produto_id = ?", (pid,)), 0)
+
+    def test_gerente_altera_custo_com_auditoria(self):
+        pid = self.novo_produto("VINHO", estoque=True)
+        self.est.alterar_custo(pid, 1234)
+        evento = self.banco.um("SELECT * FROM auditoria_eventos WHERE entidade = 'produtos' "
+                               "AND entidade_id = ? AND acao = 'preco_alterado'", (str(pid),))
+        self.assertEqual(evento["operador_id"], self.operador_adm())
+        self.assertEqual(json.loads(evento["antes"])["ult_preco_cent"], 0)
+        self.assertEqual(self.prod.por_id(pid)["ult_preco_cent"], 1234)
+
+    def test_quantidade_de_estoque_com_mais_de_quatro_casas_e_recusada(self):
+        pid = self.novo_produto("GELO", estoque=True)
+        lancamento = self.est.criar_lancamento("entrada")
+        with self.assertRaisesRegex(ErroNegocio, "4 casas decimais"):
+            self.est.adicionar_item(lancamento, pid, 0.12345)
+        self.assertEqual(self.qt(pid), 0)
 
     def test_produto_sem_controle_de_estoque_e_recusado(self):
         pid = self.novo_produto("SERVICO", 100)
@@ -243,7 +290,7 @@ class TestePainelDeEstoque(BaseTeste):
 
     def setUp(self):
         super().setUp()
-        self.est = EstoqueController(self.banco)
+        self.est = EstoqueController(self.banco, self.operador_adm())
         self.sem = self.novo_produto("SKOL", 800, estoque=True)
         self.ponto = self.novo_produto("BRAHMA", 800, estoque=True, qt=4)
         self.normal = self.novo_produto("COCA", 500, estoque=True, qt=30)

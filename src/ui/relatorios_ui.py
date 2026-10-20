@@ -26,7 +26,7 @@ FILTROS = {
     "cliente_id": ("Cliente", "lookup:clientes"),
     "modalidade": ("Modalidade", "escolha:balcao|mesa|comanda|caderneta|entrega"),
     "tipo_caixa": ("Movimento", "escolha:entrada|saida"),
-    "tipo_estoque": ("Tipo de movimento", "escolha:compra|entrada|saida|descarte|contagem|inicial|pedido|desc_acabados"),
+    "tipo_estoque": ("Tipo de movimento", "escolha:compra|entrada|saida|descarte|quebra|oxidacao|devolucao|contagem|inicial|pedido|desc_acabados"),
     "fornecedor_id": ("Fornecedor", "lookup:fornecedores"),
     "plano_id": ("Plano de contas", "lookup:planos_contas"), "subplano_id": ("Sub plano", "lookup:subplanos"),
     "por": ("Considerar a data de", "escolha:dt_quitacao|dt_entrada|dt_vencimento"),

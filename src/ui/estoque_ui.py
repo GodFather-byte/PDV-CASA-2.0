@@ -22,6 +22,9 @@ ACOES = [
     ("entrada", "＋  Entrada", PAL["verde"], "Chegou mercadoria", "Quantas unidades entraram?"),
     ("saida", "－  Saída", PAL["azul"], "Saiu mercadoria", "Quantas unidades saíram (sem ser venda)?"),
     ("descarte", "Perda / quebra", PAL["vermelho"], "Perda ou quebra", "Quantas unidades foram perdidas?"),
+    ("quebra", "Quebra", PAL["vermelho"], "Perda por quebra", "Quantas unidades quebraram?"),
+    ("oxidacao", "Oxidação", PAL["ambar"], "Perda por oxidação", "Quantas unidades oxidaram?"),
+    ("devolucao", "Devolução", PAL["violeta"], "Devolução", "Quantas unidades foram devolvidas?"),
     ("contagem", "Contei e ajustar", PAL["ambar"], "Contagem na prateleira", "Quantas unidades existem de verdade agora?"),
 ]
 
@@ -391,11 +394,11 @@ class PainelEstoque(tk.Toplevel):
         c.create_line(w / 2, 0, w / 2, 10, fill=PAL["texto"])       # marca do estoque mínimo
 
     # ------------------------------------------------------------- ações
-    def registrar(self, tipo: str, quantidade: float) -> bool:
+    def registrar(self, tipo: str, quantidade: float, observacao: str | None = None) -> bool:
         """Grava o movimento rápido do produto selecionado e atualiza a tela."""
         if self.produto is None:
             return False
-        ok, _ = tema.tratar(self, self.est.registrar_rapido, self.produto["id"], tipo, quantidade)
+        ok, _ = tema.tratar(self, self.est.registrar_rapido, self.produto["id"], tipo, quantidade, observacao)
         if ok:
             self.atualizar()
         return ok
@@ -404,9 +407,10 @@ class PainelEstoque(tk.Toplevel):
         if self.produto is None:
             return
         _, _, cor, titulo, pergunta = next(a for a in ACOES if a[0] == tipo)
+        self._observacao_perda = None
         q = self._pedir_quantidade(titulo, pergunta, tipo)
         if q is not None:
-            self.registrar(tipo, q)
+            self.registrar(tipo, q, self._observacao_perda)
 
     def _pedir_quantidade(self, titulo: str, pergunta: str, tipo: str) -> float | None:
         """Diálogo com a quantidade e uma prévia de quanto o produto vai ficar (evita erro de digitação no estoque)."""
@@ -426,6 +430,10 @@ class PainelEstoque(tk.Toplevel):
         v = tk.StringVar()
         ent = ttk.Entry(dlg.corpo, textvariable=v, width=18, font=("Segoe UI", 14))
         ent.pack(anchor="w", pady=(4, 0))
+        observacao = tk.StringVar()
+        if tipo in ("quebra", "oxidacao", "devolucao"):
+            ttk.Label(dlg.corpo, text="Observação (opcional)", style="Rotulo.TLabel").pack(anchor="w", pady=(8, 0))
+            ttk.Entry(dlg.corpo, textvariable=observacao, width=44).pack(anchor="w")
         previa = ttk.Label(dlg.corpo, text="", foreground=tema.COR["rotulo"], font=tema.FONTE_B)
         previa.pack(anchor="w", pady=(8, 0))
         msg = ttk.Label(dlg.corpo, text="", foreground=tema.COR["perigo"])
@@ -454,6 +462,7 @@ class PainelEstoque(tk.Toplevel):
             if q is None:
                 msg.configure(text="Digite uma quantidade válida.")
                 return
+            self._observacao_perda = observacao.get().strip() or None
             dlg.ok(q)
         v.trace_add("write", atualizar_previa)
         tema._botoes(dlg, ok_texto="Confirmar", comando_ok=aceitar)

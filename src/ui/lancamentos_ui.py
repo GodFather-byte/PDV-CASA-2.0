@@ -21,6 +21,9 @@ EXPLICACAO = {
     "entrada": (PAL["azul"], "Chegou mercadoria", "SOMA ao estoque, sem compra (doação, troca, devolução)."),
     "saida": (PAL["violeta"], "Saiu sem ser venda", "TIRA do estoque (consumo da casa, empréstimo, transferência)."),
     "descarte": (PAL["vermelho"], "Perda ou quebra", "TIRA do estoque o que quebrou, venceu ou estragou."),
+    "quebra": (PAL["vermelho"], "Quebra", "Registra a perda por quebra e TIRA do estoque."),
+    "oxidacao": (PAL["ambar"], "Oxidação", "Registra a perda por oxidação e TIRA do estoque."),
+    "devolucao": (PAL["violeta"], "Devolução", "Registra a devolução e TIRA do estoque."),
     "contagem": (PAL["ambar"], "Contei e ajusto", "O que você digitar passa a ser o estoque. A diferença fica registrada."),
     "inicial": (PAL["turquesa"], "Estoque inicial", "Primeira contagem de cada produto. Também define o estoque mínimo."),
     "pedido": (PAL["ardosia"], "Pedido ao fornecedor", "NÃO mexe no estoque até confirmar a entrega; aí vira compra."),
@@ -264,7 +267,8 @@ RAPIDO = re.compile(r"\s*(\d+(?:[.,]\d+)?)\s*(?:[xX*]\s*|\s)(.+?)\s*")      # "1
 
 
 class JanelaEstoque(tk.Toplevel):
-    ORDEM = ["compra", "entrada", "saida", "descarte", "contagem", "inicial", "pedido", "desc_acabados"]
+    ORDEM = ["compra", "entrada", "saida", "descarte", "quebra", "oxidacao", "devolucao",
+             "contagem", "inicial", "pedido", "desc_acabados"]
 
     def __init__(self, master, ctx):
         super().__init__(master)
@@ -304,7 +308,7 @@ class JanelaEstoque(tk.Toplevel):
             tipos.columnconfigure(i % 4, weight=1, uniform="tipo")
             self.tipos[t] = c
         self.lbl_dica = tk.Label(tipos, text="", font=("Segoe UI", 10), fg=PAL["texto"], bg=PAL["lateral"], anchor="w", justify="left")
-        self.lbl_dica.grid(row=3, column=0, columnspan=4, sticky="we", pady=(2, 0))
+        self.lbl_dica.grid(row=(len(self.ORDEM) + 3) // 4 + 1, column=0, columnspan=4, sticky="we", pady=(2, 0))
 
         cab = ttk.LabelFrame(self, text="2 · Dados do lançamento", padding=8)
         cab.pack(fill="x", padx=10, pady=8)
@@ -438,7 +442,7 @@ class JanelaEstoque(tk.Toplevel):
     def abrir_anterior(self) -> None:
         todos = self.est.lancamentos()
         lancs = todos[:LIMITE_LANCAMENTOS]
-        itens = [(l["id"], (fmt.fmt_data(l["data"]), TIPOS[l["tipo"]], l["fornecedor"] or "", l["documento"] or "", fmt.fmt_num(l["total_itens"])))
+        itens = [(l["id"], (fmt.fmt_data(l["data"]), TIPOS[l["tipo_perda"] or l["tipo"]], l["fornecedor"] or "", l["documento"] or "", fmt.fmt_num(l["total_itens"])))
                  for l in lancs]
         cols = [("d", "Data", 90, "w"), ("t", "Tipo", 190, "w"), ("f", "Fornecedor", 150, "w"), ("doc", "Documento", 100, "w"), ("v", "Total", 90, "e")]
         rotulo = "Filtrar por texto:"
@@ -452,7 +456,7 @@ class JanelaEstoque(tk.Toplevel):
         """Abre um lançamento já gravado (da lista de anteriores ou de um pedido recém-gerado pelo painel)."""
         l = self.est.lancamento(lid)
         self.lanc_id = lid
-        self.v_tipo.set(l["tipo"]); self.v_forn.set(l["fornecedor"] or ""); self.v_desc.set(l["descricao"] or "")
+        self.v_tipo.set(l["tipo_perda"] or l["tipo"]); self.v_forn.set(l["fornecedor"] or ""); self.v_desc.set(l["descricao"] or "")
         self.v_data.set(fmt.fmt_data(l["data"])); self.v_valor.set(fmt.fmt_num(l["valor_cent"])); self.v_doc.set(l["documento"] or "")
         self.v_nf.set(l["nota_fiscal"] or "")
         self._estado_header(editavel=False)
@@ -561,7 +565,10 @@ class JanelaEstoque(tk.Toplevel):
                                   "Controlar estoque", padrao_sim=True):
                 return
             ligar = True
-        ok, _ = tema.tratar(self, self.est.adicionar_item, self.lanc_id, self.produto["id"], qtd, valor, desc, minimo, ligar)
+        nota = self.v_desc.get().strip() or None
+        if self.v_tipo.get() in ("quebra", "oxidacao", "devolucao") and nota == TIPOS[self.v_tipo.get()]:
+            nota = None
+        ok, _ = tema.tratar(self, self.est.adicionar_item, self.lanc_id, self.produto["id"], qtd, valor, desc, minimo, ligar, nota)
         if ok:
             self._limpar_item()
             self.atualizar()
@@ -615,7 +622,7 @@ class JanelaEstoque(tk.Toplevel):
         if not self.lanc_id:
             return
         l = self.est.lancamento(self.lanc_id)
-        linhas = [f"{TIPOS[l['tipo']].upper()} - {fmt.fmt_data(l['data'])}", f"Fornecedor: {l['fornecedor'] or '-'}   Doc: {l['documento'] or '-'}", "-" * 70]
+        linhas = [f"{TIPOS[l['tipo_perda'] or l['tipo']].upper()} - {fmt.fmt_data(l['data'])}", f"Fornecedor: {l['fornecedor'] or '-'}   Doc: {l['documento'] or '-'}", "-" * 70]
         for i in self.est.itens(self.lanc_id):
             linhas.append(f"{i['codigo']} {i['nome'][:30]:<30} {fmt.fmt_qtd(i['quantidade']):>10} {fmt.fmt_num(i['valor_cent']):>12}")
         linhas += ["-" * 70, f"Total dos itens: {fmt.fmt_num(self.est.total_itens(self.lanc_id))}"]

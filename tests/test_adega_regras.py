@@ -302,7 +302,7 @@ class TesteRegrasAdega(BaseCaixa):
             antigo.fechar()
             migrado = BancoDados(str(caminho))
             try:
-                self.assertEqual(migrado.valor("PRAGMA user_version"), 22)
+                self.assertEqual(migrado.valor("PRAGMA user_version"), 23)
                 self.assertTrue(migrado.cfg_bool("agrupar_itens_balcao"))
                 item = migrado.um("SELECT * FROM itens_venda WHERE venda_id = ?", (self.vid,))
                 self.assertEqual((item["preco_unit_cent"], item["preco_base_cent"], item["temperatura"]),

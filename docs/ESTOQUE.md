@@ -53,6 +53,18 @@ O fardo (ou a caixa fechada) é criado no Cadastro de Produtos pelo botão **Far
 Permissões: o painel e o lançamento usam o módulo **Lançamento de estoque**; quem só tem o relatório de estoque continua
 abrindo o relatório pelos cartões.
 
+## Regras de saldo, perdas e acesso
+
+* O fechamento da venda confere, em uma transação, o saldo total necessário por produto e pelos insumos da composição.
+  Sem saldo suficiente, a venda continua aberta, o estoque não muda e o operador recebe a lista do que falta. A tentativa
+  fica na auditoria.
+* No cadastro, marque **Aceita decimal** para permitir quantidades fracionadas. Quantidades e movimentos aceitam até
+  quatro casas decimais; valores com precisão maior são recusados. Produtos sem essa opção aceitam somente inteiros.
+* Para perdas, escolha **Quebra**, **Oxidação** ou **Devolução**. Todas registram a baixa; em Devolução, informe a
+  devolução ao fornecedor. A observação é opcional. Tipo, quantidade, operador e data ficam no histórico/auditoria.
+* Ajustes manuais de saldo e custo exigem operador nível 4 (gerente/administrador). O lançamento normal de compra continua
+  registrando o custo informado na nota.
+
 ## Operação de adega: natural, gelada, atacado e cascos
 
 No Cadastro de Produtos, a seção **Adega** complementa o preço de venda normal:

@@ -15,3 +15,16 @@ class ErroValidacao(ErroNegocio):
 
 class ErroPermissao(ErroNegocio):
     """Operador sem nivel de acesso suficiente."""
+
+
+class ErroEstoqueInsuficiente(ErroNegocio):
+    """Venda recusada porque um ou mais produtos não têm saldo suficiente."""
+
+    def __init__(self, faltas: list[dict]):
+        self.faltas = faltas
+        qtd = lambda valor: f"{valor:.4f}".replace(".", ",").rstrip("0").rstrip(",")
+        linhas = [
+            f"{f['nome']}: disponível {qtd(f['disponivel'])}, necessário {qtd(f['necessario'])}"
+            for f in faltas
+        ]
+        super().__init__("Estoque insuficiente para concluir a venda — " + "; ".join(linhas) + ".")
