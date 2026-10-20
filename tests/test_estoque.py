@@ -162,6 +162,43 @@ class TesteEstoque(BaseTeste):
             self.est.adicionar_item(lancamento, pid, 0.12345)
         self.assertEqual(self.qt(pid), 0)
 
+    def test_fardo_valida_quantidade_antes_de_converter_para_unidades(self):
+        pid = self.novo_produto("CERVEJA", estoque=True, qt=10)
+        fardo = self.prod.criar_embalagem(pid, 10, "FARDO", 5000)
+        lancamento = self.est.criar_lancamento("entrada")
+        for quantidade in (0.00001, float("nan"), float("inf"), "abc", None, True):
+            for rapido in (False, True):
+                with self.subTest(quantidade=quantidade, rapido=rapido), self.assertRaises(ErroNegocio):
+                    if rapido:
+                        self.est.registrar_rapido(fardo, "entrada", quantidade)
+                    else:
+                        self.est.adicionar_item(lancamento, fardo, quantidade)
+        self.assertEqual(self.qt(pid), 10)
+        self.assertEqual(self.est.itens(lancamento), [])
+        self.assertEqual(self.est.historico(pid), [])
+        self.assertEqual(len(self.est.lancamentos()), 1)
+
+    def test_fardo_fracionado_preserva_quatro_casas_na_conversao(self):
+        pid = self.novo_produto("CERVEJA", estoque=True)
+        fardo = self.prod.criar_embalagem(pid, 12, "FARDO", 5000)
+        lancamento = self.est.criar_lancamento("entrada")
+        self.est.adicionar_item(lancamento, fardo, 0.3333)
+        self.est.registrar_rapido(fardo, "entrada", 0.3333)
+        self.est.adicionar_item(lancamento, fardo, 0.1)
+        self.est.registrar_rapido(fardo, "entrada", 0.1)
+        self.assertEqual(self.qt(pid), 10.3992)
+        self.assertEqual(self.est.itens(lancamento)[0]["quantidade"], 3.9996)
+        self.assertEqual([m["quantidade"] for m in self.est.historico(pid)], [1.2, 1.2, 3.9996, 3.9996])
+
+    def test_saida_rapida_recusa_quantidade_invalida_sem_gravar(self):
+        pid = self.novo_produto("VINHO", estoque=True, qt=10)
+        for quantidade in (float("nan"), float("inf"), "abc", None, True, 0.12345):
+            with self.subTest(quantidade=quantidade), self.assertRaises(ErroNegocio):
+                self.est.registrar_rapido(pid, "saida", quantidade)
+        self.assertEqual(self.qt(pid), 10)
+        self.assertEqual(self.est.lancamentos(), [])
+        self.assertEqual(self.est.historico(pid), [])
+
     def test_produto_sem_controle_de_estoque_e_recusado(self):
         pid = self.novo_produto("SERVICO", 100)
         lid = self.est.criar_lancamento("entrada")
@@ -308,6 +345,18 @@ class TestePainelDeEstoque(BaseTeste):
         grupo = self.est.painel()[0]["grupo"]
         self.assertEqual(len(self.est.painel(grupo=grupo)), 3)
         self.assertEqual(self.est.painel(grupo="NÃO EXISTE"), [])
+
+    def test_busca_estoque_por_nome_sem_acentos_codigo_e_barras(self):
+        pid = self.novo_produto("ÁGUA TÔNICA", codigo="42", cbarra="07891234567895",
+                                preco_gelada_cent="5")
+        for texto in ("  agua tonica  ", "ÁGUA", "tônica", "42", "0000000000042", "07891234567895"):
+            with self.subTest(texto=texto):
+                self.assertEqual([p["id"] for p in self.est.painel(texto=texto, adega=True)], [pid])
+        self.assertEqual(self.est.painel(texto="7899999999999"), [])
+        self.assertEqual(self.est.painel("sem", texto="07891234567895", adega=True), [])
+        self.assertEqual(self.est.painel(texto="07891234567895", grupo="INEXISTENTE", adega=True), [])
+        self.banco.executar("UPDATE produtos SET ativo = 0 WHERE id = ?", (pid,))
+        self.assertEqual(self.est.painel(texto="07891234567895", adega=True), [])
 
     def test_visao_adega_por_categoria_configuracao_e_prioridade(self):
         grupo = self.banco.inserir("grupos", {"nome": "Loja"})

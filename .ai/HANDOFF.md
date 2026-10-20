@@ -2,21 +2,23 @@
 
 ## Último trabalho
 
-Regras de estoque e vendas da Adega:
+Melhorias operacionais no estoque da Adega:
 
-- Fechamento agrega consumo de produtos e composição dentro de transação SQLite `BEGIN IMMEDIATE`; saldo insuficiente recusa a venda, preserva a venda aberta e registra a tentativa na auditoria.
-- Vendas aceitam até quatro casas decimais quando `aceita_decimal` está habilitado; precisão maior é recusada. Produto sem a opção continua aceitando somente inteiro.
-- Perdas tipadas (quebra, oxidação e devolução ao fornecedor) registram saldo, operador, data e observação opcional; movimentos e custo têm eventos estruturados de auditoria.
-- Ajustes manuais de estoque e custo exigem operador ativo de nível 4 (gerente/administrador); compras normais mantêm seu fluxo.
-- Esquema v23 acrescenta operador/observação a movimentos e subtipo de perda aos lançamentos. Documentação operacional em `docs/ESTOQUE.md`.
+- Busca do painel aceita nome com/sem acentos, código interno completo/sem zeros e código de barras, preservando filtros de situação, grupo, ativos e recorte Adega.
+- Movimentos rápidos e lançamentos completos validam a quantidade antes de converter fardos em unidades. Entradas inválidas geram `ErroNegocio`, sem alterar saldo ou histórico.
+- Conversão arredonda somente o resultado da multiplicação, preservando frações válidas (0,1 fardo de 12 = 1,2 unidades) sem erros de representação de float.
+- Quatro testes de regressão em `tests/test_estoque.py`; guia atualizado em `docs/ESTOQUE.md`. Sem migração ou dependência nova.
+- Mantidas as regras anteriores: saldo conferido no fechamento, ajustes manuais restritos ao gerente, perdas tipadas auditadas e preços de atacado separados por temperatura.
 
 ## Validação
 
-- `python -m unittest tests.test_caixa tests.test_estoque tests.test_esquema_v23 tests.test_auditoria_estruturada tests.test_adega_regras tests.test_regras_caixa tests.test_importacao_produtos`: **217 testes, OK**.
+- `python -m unittest tests.test_estoque tests.test_adega_regras tests.test_caixa tests.test_regras_caixa tests.test_esquema_v23 tests.test_auditoria_estruturada tests.test_importacao_produtos`: **221 testes, OK**.
 - `python -m compileall -q src tests` e `git diff --check`: **OK**.
-- Não foi possível executar os testes de interface neste runner: faltam `tkinter` e `PySide6`.
+- Verificação manual dos controladores com SQLite em memória: buscas por nome/EAN/código, entrada fracionada e recusa sem efeitos colaterais, **OK**.
+- Suíte completa: **1.097 testes, 50 erros, 201 ignorados**. Dependências gráficas ausentes (`tkinter`, `PySide6`/metadados) causam erros de importação e referências de UI; um erro adicional em `tests.test_telegram.TesteAvisosEmTempoReal.test_avisa_quando_produto_acaba_e_so_na_hora_que_cruza` ocorre também com o controlador original, por venda sem saldo.
 
 ## Pendências
 
-- Validar visualmente as telas Tk/Qt e o fluxo com operador da loja em ambiente com dependências gráficas.
+- Homologar no painel Tk/Qt: buscar bebida por EAN e nome sem acentos, combinar filtros e lançar frações de fardo.
+- Executar a suíte completa em ambiente com dependências gráficas e tratar separadamente o teste preexistente do Telegram.
 - Confirmar a revisão/CI do PR antes de instalar.
