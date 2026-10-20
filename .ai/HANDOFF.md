@@ -23,7 +23,7 @@
   `python -m src.app --autoteste-qt /tmp/adega-autoteste-qt.txt`: **OK**, bancos isolados.
 - Consulta + resumo Adega: 5.000 produtos sintéticos em memória, aproximadamente 53 ms (não mede renderização/hardware da loja).
 - Revisão especializada do diff encontrou divergência de promoção/atacado na prévia: corrigida e coberta por regressão.
-  O Code Review automático estava indisponível; CodeQL inicial sem alertas, rodada final pendente.
+  O Code Review automático estava indisponível; CodeQL final sem alertas. Varreduras de segredos sem achados.
 - **Não homologado nesta entrega:** impressora/leitor físicos, Windows na prática e roteiro manual com operador da loja.
 
 ## Pendências
