@@ -8,6 +8,8 @@ movimentos_estoque. É esse histórico que permite estornar com exatidão.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from datetime import datetime, timedelta
+import re
 
 from src.core.erros import ErroEstoqueInsuficiente, ErroPermissao
 from src.controllers import notificacoes
@@ -395,6 +397,47 @@ class EstoqueController:
         "estorno": "Lançamento desfeito", "quebra": "Quebra", "oxidacao": "Oxidação", "devolucao": "Devolução",
     }
 
+    @staticmethod
+    def _texto_adega(texto: str | None) -> str:
+        return " ".join(re.sub(r"[^A-Z0-9]+", " ", normalizar(texto or "")).split())
+
+    @classmethod
+    def _classificacao_adega(cls, p: dict) -> str | None:
+        """Recorte indicativo, não fiscal; sinais explícitos precedem famílias do cadastro."""
+        if (p["preco_gelada_cent"] > 0 or p["atacado_qtd"] > 0 or p["atacado_gelada_qtd"] > 0
+                or p["casco_produto_id"] is not None or p["casco_vinculado"]):
+            return "Configuração de gelada/atacado/casco"
+        familias = {
+            "ADEGA", "BEBIDA", "BEBIDAS", "CONVENIENCIA", "CERVEJA", "CERVEJAS",
+            "DESTILADO", "DESTILADOS", "VINHO", "VINHOS", "ESPUMANTE", "ESPUMANTES",
+            "REFRIGERANTE", "REFRIGERANTES", "AGUA", "AGUAS", "SUCO", "SUCOS",
+            "ENERGETICO", "ENERGETICOS", "GELO", "CARVAO", "WHISKY", "WHISKEY",
+            "VODKA", "GIN", "CACHACA", "LICOR", "RUM", "TEQUILA",
+        }
+        for campo in ("grupo", "categoria"):
+            termos = cls._texto_adega(p[campo]).split()
+            if familias.intersection(termos):
+                return "Família do grupo/subgrupo"
+        # Somente prefixos descritivos inequívocos, sem marcas nem trechos de palavras.
+        nome = cls._texto_adega(p["nome"])
+        prefixos = ("CERVEJA", "VINHO", "ESPUMANTE", "REFRIGERANTE", "ENERGETICO",
+                    "WHISKY", "WHISKEY", "VODKA", "CACHACA", "TEQUILA", "GIN",
+                    "SUCO", "AGUA MINERAL", "AGUA COM GAS", "AGUA SEM GAS",
+                    "GELO EM CUBOS", "CARVAO VEGETAL")
+        if any(nome == termo or nome.startswith(termo + " ") for termo in prefixos):
+            return "Nome indicativo"
+        return None
+
+    def _consumo_30_dias(self) -> dict[int, float]:
+        """Saídas líquidas no intervalo local [agora - 30 dias, agora], já em unidades."""
+        agora = fmt.agora()
+        inicio = (datetime.fromisoformat(agora) - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+        return {r["produto_id"]: max(round(-r["saldo"], fmt.CASAS_QTD), 0)
+                for r in self.banco.todos(
+                    """SELECT produto_id, SUM(quantidade) AS saldo FROM movimentos_estoque
+                       WHERE tipo IN ('venda', 'estorno_venda') AND ref_tipo = 'venda'
+                         AND criado_em >= ? AND criado_em <= ? GROUP BY produto_id""", (inicio, agora))}
+
     def painel(self, situacao: str | None = None, texto: str = "", grupo: str | None = None,
                adega: bool = False) -> list[dict]:
         """Produtos que controlam estoque, já com a situação (sem/ponto/normal), o valor parado e o quanto repor.
@@ -402,27 +445,34 @@ class EstoqueController:
         `situacao` filtra por 'sem', 'ponto', 'normal' ou 'livre' (produtos que ainda não controlam estoque); `texto` procura no
         nome sem acentos, código ou código de barras (e inclui os que não controlam);
         `grupo` filtra pelo grupo do produto.
-        `adega` recorta categorias típicas e produtos com configuração de bebida/atacado/casco."""
+        `adega` recorta famílias/configurações/nomes indicativos e inclui consumo líquido e cobertura em 30 dias."""
+        return self._painel(situacao, texto, grupo, adega=adega, calcular_cobertura=adega)
+
+    def _painel(self, situacao: str | None = None, texto: str = "", grupo: str | None = None,
+                 adega: bool = False, *, calcular_cobertura: bool = False) -> list[dict]:
+        """Base comum de saldo/recorte; resumo e compras não precisam consultar o histórico."""
         busca = normalizar((texto or "").strip())
         # Quem procura por nome também acha o produto que ainda NÃO controla estoque (senão o RedBull cadastrado sem a marca
         # "Controla estoque" ficava invisível, sem como começar a controlar). 'livre' lista só esses.
         controle = "p.controla_estoque = 1" if not busca and situacao != "livre" else \
                    "p.controla_estoque = 0" if situacao == "livre" else "1 = 1"
-        recorte = """AND (norm(g.nome) IN ('ADEGA', 'BEBIDAS', 'CONVENIENCIA')
-                     OR norm(s.nome) IN ('CERVEJAS', 'DESTILADOS', 'VINHOS E ESPUMANTES', 'REFRIGERANTES',
-                                        'AGUAS E SUCOS', 'ENERGETICOS', 'GELO E CARVAO')
-                     OR p.preco_gelada_cent > 0 OR p.atacado_qtd > 0 OR p.atacado_gelada_qtd > 0
-                     OR p.casco_produto_id IS NOT NULL
-                     OR p.id IN (SELECT casco_produto_id FROM produtos
-                                 WHERE casco_produto_id IS NOT NULL))""" if adega else ""
+        consumos = self._consumo_30_dias() if calcular_cobertura else {}
         linhas = []
         for r in self.banco.todos(
                 f"""SELECT p.id, p.codigo, p.cbarra, p.nome, p.qt_atual, p.estoque_minimo, p.ult_preco_cent, p.ult_atualizacao,
-                          p.controla_estoque, u.abreviatura AS unidade, g.nome AS grupo, s.nome AS categoria
+                          p.controla_estoque, p.preco_gelada_cent, p.atacado_qtd, p.atacado_gelada_qtd,
+                          p.casco_produto_id,
+                          p.id IN (SELECT casco_produto_id FROM produtos
+                                   WHERE casco_produto_id IS NOT NULL) AS casco_vinculado,
+                          u.abreviatura AS unidade, g.nome AS grupo, s.nome AS categoria
                    FROM produtos p JOIN unidades u ON u.id = p.unidade_id
                    JOIN subgrupos s ON s.id = p.subgrupo_id JOIN grupos g ON g.id = s.grupo_id
-                   WHERE {controle} AND p.ativo = 1 {recorte} ORDER BY p.controla_estoque DESC, p.nome"""):
+                   WHERE {controle} AND p.ativo = 1 ORDER BY p.controla_estoque DESC, p.nome"""):
             p = dict(r)
+            if adega:
+                p["classificacao_adega"] = self._classificacao_adega(p)
+                if not p["classificacao_adega"]:
+                    continue
             p["situacao"] = self.produtos.situacao_estoque(p) if p["controla_estoque"] else "livre"
             if situacao and p["situacao"] != situacao:
                 continue
@@ -434,6 +484,15 @@ class EstoqueController:
             p["valor_cent"] = round(max(p["qt_atual"], 0) * p["ult_preco_cent"]) if p["controla_estoque"] else 0
             p["repor"] = self.sugestao_reposicao(p)
             p["prioridade"] = {"sem": "Alta", "ponto": "Média", "normal": "Baixa", "livre": "Definir controle"}[p["situacao"]]
+            if calcular_cobertura:
+                p["consumo_30_dias"] = consumos.get(p["id"], 0)
+                p["media_diaria"] = p["consumo_30_dias"] / 30
+                p["cobertura_dias"] = (max(p["qt_atual"], 0) / p["media_diaria"]
+                                       if p["controla_estoque"] and p["media_diaria"] > 0 else None)
+                p["cobertura_rotulo"] = (
+                    "Sem controle" if not p["controla_estoque"] else
+                    "Sem consumo líquido em 30 dias" if p["cobertura_dias"] is None else
+                    f"{p['cobertura_dias']:.1f} dias".replace(".", ","))
             linhas.append(p)
         if adega:
             linhas.sort(key=lambda p: (("sem", "ponto", "normal", "livre").index(p["situacao"]), p["nome"]))
@@ -448,11 +507,11 @@ class EstoqueController:
 
     def resumo(self, adega: bool = False) -> dict:
         """Contagem por situação e valor total parado em estoque (quantidade × último preço de compra)."""
-        todos = self.painel(adega=adega)
+        todos = self._painel(adega=adega)
         r = {"total": len(todos), "sem": 0, "ponto": 0, "normal": 0, "valor_cent": sum(p["valor_cent"] for p in todos)}
         for p in todos:
             r[p["situacao"]] += 1
-        r["livre"] = len(self.painel("livre", adega=True)) if adega else self.banco.valor(
+        r["livre"] = len(self._painel("livre", adega=True)) if adega else self.banco.valor(
             "SELECT COUNT(*) FROM produtos WHERE controla_estoque = 0 AND ativo = 1", (), 0)
         return r
 
@@ -493,21 +552,32 @@ class EstoqueController:
                                 observacao=descricao)
         return lanc
 
-    def pedido_sugerido(self, fornecedor_id: int, produtos: list[tuple[int, float]] | None = None) -> int:
+    def pedido_sugerido(self, fornecedor_id: int, produtos: list[tuple[int, float]] | None = None, *,
+                        adega: bool = False, situacao: str | None = None, texto: str = "",
+                        grupo: str | None = None) -> int:
         """Cria um PEDIDO com o que está faltando (sem estoque ou no ponto de pedido), na quantidade sugerida.
 
-        `produtos` = [(produto_id, quantidade)] para escolher à mão; sem ele, usa a sugestão de todos os que precisam repor."""
-        itens = produtos if produtos is not None else [(p["id"], p["repor"]) for p in self.painel() if p["repor"] > 0]
+        `produtos` = [(produto_id, quantidade)] para escolher à mão; sem ele, usa a sugestão do recorte.
+        Adega combina os mesmos filtros do painel; itens explícitos também devem pertencer ao recorte a repor.
+        Sem filtros, mantém o pedido geral de todos os que precisam repor."""
+        sugestoes = self.lista_de_compras(adega=adega, situacao=situacao, texto=texto, grupo=grupo)
+        if produtos is not None and adega:
+            permitidos = {p["id"] for p in sugestoes}
+            if any(pid not in permitidos for pid, _ in produtos):
+                raise ErroNegocio("O pedido Adega só permite produtos a repor do recorte selecionado.")
+        itens = produtos if produtos is not None else [(p["id"], p["repor"]) for p in sugestoes]
         itens = [(pid, q) for pid, q in itens if q > 0]
         if not itens:
             raise ErroNegocio("Nenhum produto precisa de reposição agora (ou falta definir o estoque mínimo).")
         with self.banco.transacao():
-            lanc = self.criar_lancamento("pedido", descricao="Pedido sugerido pelo painel", fornecedor_id=fornecedor_id)
+            lanc = self.criar_lancamento("pedido", descricao="Pedido sugerido pelo painel" + (" Adega" if adega else ""),
+                                        fornecedor_id=fornecedor_id)
             for pid, q in itens:
                 self.adicionar_item(lanc, pid, q)
         return lanc
 
-    def lista_de_compras(self) -> list[dict]:
-        """Produtos a repor (sem estoque primeiro), para imprimir ou levar ao fornecedor."""
-        falta = [p for p in self.painel() if p["repor"] > 0]
+    def lista_de_compras(self, *, adega: bool = False, situacao: str | None = None,
+                         texto: str = "", grupo: str | None = None) -> list[dict]:
+        """Produtos a repor; os filtros opcionais reutilizam exatamente o recorte do painel."""
+        falta = [p for p in self._painel(situacao, texto, grupo, adega=adega) if p["repor"] > 0]
         return sorted(falta, key=lambda p: (p["situacao"] != "sem", p["nome"]))

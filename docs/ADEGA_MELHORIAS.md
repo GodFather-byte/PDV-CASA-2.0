@@ -3,8 +3,10 @@
 ## Resumo executivo
 
 Esta entrega incremental melhora a conferência de preços no caixa Tk e Qt, agiliza a escolha de cascos no Tk
-e acrescenta uma **Visão Adega** aos dois painéis de estoque. Não muda valores cobrados, promoções, baixa de estoque,
-fardos, permissões ou esquema do banco. O fluxo de venda continua exclusivamente no `CaixaController`.
+e acrescenta uma **Visão Adega** aos dois painéis de estoque. A evolução inclui pedido/lista por recorte,
+cobertura em dias e persistência da regra de preço aplicada, com migração do banco.
+Não muda valores cobrados, promoções, baixa de estoque, fardos ou permissões.
+O fluxo de venda continua exclusivamente no `CaixaController`.
 
 Referências: [implantação da Adega](ADEGA.md), [regras e movimentos de estoque](ESTOQUE.md) e
 [importação de produtos](IMPORTAR_PRODUTOS.md).
@@ -79,27 +81,36 @@ São hipóteses operacionais, não incidentes medidos. Devem ser confirmadas na 
 2. Use **Sem estoque** para rupturas e **Repor** para saldo positivo até o mínimo, inclusive o limite exato.
 3. Combine grupo e busca. Priorize Alta, depois Média. A lista Adega começa pelas rupturas e depois pelo ponto de pedido.
 4. Confira categoria, saldo, mínimo e reposição sugerida; ajuste o cadastro quando faltar mínimo/controle.
-5. **Gerar pedido do que falta e Lista de compras continuam gerais**, independentemente da visão, como antes.
-   Revise o conteúdo antes de comprar; esta versão não gera automaticamente um pedido exclusivo da Adega.
+5. **Gerar pedido do que falta** e **Lista de compras** permitem escolher **Geral** ou **Adega**.
+   O recorte Adega respeita grupo e busca da visão; confira a prévia antes de confirmar o pedido.
+   A sugestão continua sendo completar até o dobro do mínimo, não compra automática baseada no giro.
+6. A cobertura estima quantos dias o saldo atende ao consumo médio diário de vendas dos últimos 30 dias.
+   Estornos reduzem o consumo; perdas não são vendas. Sem consumo líquido positivo ou sem controle,
+   a cobertura fica indisponível: não significa estoque infinito. Veja a regra completa em [ESTOQUE.md](ESTOQUE.md).
 
 ## Decisões conservadoras e limites técnicos
 
-- Sem categoria obrigatória ou migração. O recorte reconhece grupos Adega/Bebidas/Conveniência, subgrupos típicos
-  (Cervejas, Destilados, Vinhos e espumantes, Refrigerantes, Águas e sucos, Energéticos, Gelo e carvão), ignorando
-  caixa e acentos; também inclui produtos com preço gelada, faixa de atacado ou vínculo de casco e os cascos vinculados.
-  Não tenta classificar pelo nome do produto. Atacado pode incluir itens de outras áreas: é um recorte operacional
-  indicativo, não uma classificação fiscal. Cadastros personalizados sem esses sinais podem ficar fora: use Geral.
+- Sem categoria obrigatória nem coluna nova para classificação. O recorte reconhece famílias de grupo/subgrupo
+  (Adega, Bebidas, Conveniência, Cervejas, Destilados, Vinhos, Refrigerantes, Águas, Sucos, Energéticos e outras),
+  normalizando caixa, acentos, espaços e pontuação. Também inclui produtos com preço gelada, faixa de atacado,
+  vínculo de casco e os cascos vinculados. Prefixos descritivos do nome, como “Cerveja”, “Vinho” e “Água mineral”,
+  cobrem parte dos cadastros incompletos, sem adivinhar marcas nem procurar trechos de palavras.
+  Para inclusão explícita, use um subgrupo pertencente ao grupo **Adega** no cadastro existente.
+  Atacado pode incluir itens de outras áreas e nomes podem ser ambíguos: é um recorte operacional indicativo,
+  não fiscal. Cadastros sem esses sinais ainda podem ficar fora: confira também a visão Geral.
 - O painel usa os joins já existentes e uma subconsulta de conjunto para identificar cascos, não uma consulta por produto.
-  Os filtros existentes continuam combináveis. Não há previsão de cobertura em dias nesta versão.
-  Consulta mais resumo de 5.000 produtos sintéticos em SQLite em memória levou aproximadamente 53 ms no ambiente Linux
-  de desenvolvimento; não inclui renderização das grades nem representa garantia no hardware da loja.
+  Os filtros existentes continuam combináveis. A cobertura usa uma consulta agregada de movimentos,
+  não uma consulta por produto.
+  Consulte cobertura apenas onde ela é exibida; resumos e listas de compra não precisam recalcular o consumo.
+  O desempenho final também depende do volume de movimentos e da renderização no hardware da loja.
 - A explicação compartilhada está em `ProdutoController.explicacao_preco_adega`; lê o resultado do
   `CaixaController.itens`, não calcula um segundo preço nem grava observações explicativas no banco/cupom.
 - `CaixaController.previa_cascos` consulta a venda sem gravar e compartilha `preco_por_quantidade_adega` com a
   reprecificação real, mantendo promoções e o mínimo por temperatura também na prévia.
-- Economia usa o preço-base registrado. A faixa explicativa vem do **cadastro atual**, não de um retrato histórico.
-  Não editar faixas durante um atendimento; para auditoria histórica exata, será necessário persistir a regra aplicada
-  numa futura migração. Sem faixa disponível, a tela informa essa ausência em vez de inventar um mínimo.
+- Economia usa o preço-base registrado. Novos itens guardam o retrato da regra aplicada, atualizado quando
+  agrupamento/cancelamento altera a faixa durante o atendimento. A explicação histórica usa esse retrato,
+  mesmo que o cadastro seja alterado depois. Itens anteriores à migração não ganham história inventada:
+  continuam legados, sem garantia de reconstituição exata da faixa.
 - O diálogo preserva `floor(quantidade)` para cascos. Não proíbe uma bebida fracionada que o controller já aceite;
   apenas limita os cascos a inteiros. Não transforma troca em crédito de cliente.
 - Não inclui NFC-e, promoção gelada por período, integração nova, compra automática ou estoque único entre caixas.
@@ -175,18 +186,49 @@ insuficiente, testes de movimentos/estornos/composição e consulta agregada com
   inclusive quando uma nova unidade reduz o preço das anteriores. Conferir também fora do balcão.
 - [ ] Nos dois estoques, alternar Geral/Adega, combinar Sem estoque/Repor com busca/grupo, conferir categorias,
   prioridades e totais do recorte. Conferir produto sem mínimo e produto sem controle.
-- [ ] Conferir que pedido/lista continuam gerais; lançar entrada/perda/contagem e atualizar saldos.
+- [ ] Conferir pedido/lista Geral e Adega com grupo e busca; verificar que não incluem produtos fora do recorte.
+  Lançar entrada/perda/contagem e atualizar saldos e cobertura.
+- [ ] Fechar venda, alterar preço/faixa no cadastro e conferir que a explicação mantém a regra registrada na venda.
 - [ ] Abrir outro perfil e testar venda comum, pagamento e fechamento; conferir cupom na impressora da loja.
 
 ## Arquivos alterados e finalidade
 
 - `src/controllers/produto_controller.py`: explicação reutilizável e cálculo compartilhado de preço por quantidade.
-- `src/controllers/caixa_controller.py`: faixas atuais na consulta de itens, preservando produto excluído; prévia de cascos.
+- `src/controllers/caixa_controller.py`: retrato aplicado por item, preservando agrupamento, reprecificação e produto excluído.
+- `src/database/esquema.py`: migração 24 para o retrato de preço opcional.
 - `src/ui/caixa_ui.py`, `src/ui_qt/caixa.py`: exibem rótulo, regra e economia; detalhe legível no Tk e dica no Qt.
 - `src/ui/adega_dialogos.py`: atalhos, prévia financeira e validação de cascos.
-- `src/controllers/estoque_controller.py`: recorte Adega, categoria e prioridade com regras existentes de reposição.
-- `src/ui/estoque_ui.py`, `src/ui_qt/estoque.py`: seletor de visão, resumo e identificação operacional.
+- `src/controllers/estoque_controller.py`: recorte Adega, cobertura, pedido/lista filtrados e prioridade de reposição.
+- `src/ui/estoque_ui.py`, `src/ui_qt/estoque.py`: seletor Geral/Adega para compras, cobertura e identificação operacional.
 - `tests/test_adega_regras.py`, `tests/test_adega_tk.py`, `tests/test_adega_qt.py`: regressão de preço, cascos e notebook.
 - `tests/test_estoque.py`, `tests/test_qt_estoque.py`, `tests/test_ui.py`: recorte, filtros e prioridades.
+- `tests/test_estoque_adega_melhorias.py`, `tests/test_adega_retrato.py`: cobertura, compras, classificação e auditoria histórica.
+- `.github/workflows/*.yml`: execução pós-merge na `main` ou manual.
 - `docs/ADEGA.md`, `docs/ADEGA_MELHORIAS.md`: acesso ao plano e documentação técnica/funcional.
 - `.ai/HANDOFF.md`: estado final e pendências para continuidade.
+
+## CI pós-merge
+
+Os três workflows em `.github/workflows/` executam automaticamente somente em `push` na `main`
+(incluindo merges), e mantêm `workflow_dispatch`. Push direto na `main` também executa:
+o gatilho não distingue merge de push direto. Não há execução automática em PR, branches de trabalho ou tags.
+O workflow da nuvem mantém seu filtro de caminhos; o instalador pode ser gerado manualmente em outra referência,
+inclusive numa tag `v*` existente para publicar uma versão numerada.
+
+Se a proteção da branch exigir checks de PR removidos por esta configuração, o administrador deve rever esses
+requisitos para não bloquear merges à espera de checks que não serão disparados. A validação automática passa
+a detectar erros depois da integração, não a impedir sua entrada na branch principal.
+
+## Migração e rollback
+
+A versão 24 do esquema acrescenta `itens_venda.regra_preco_json` (texto JSON opcional).
+O retrato registra temperatura, preço-base, preço aplicado, origem da promoção, faixa e mínimo de atacado,
+quantidade considerada e instante local de aplicação; leituras agrupadas preservam suas bases.
+O campo fica vazio em itens anteriores à migração. Não há preenchimento histórico usando o cadastro atual.
+A leitura/explicação não reprecifica a venda nem altera o cupom.
+
+Antes de instalar, feche o PDV e preserve um backup consistente. O mecanismo de migração também guarda uma
+cópia `.antes-migracao-v23-*.bak` do banco existente. Para voltar a um executável que só entende o esquema 23,
+restaure a cópia anterior à migração com o PDV fechado; bancos em versão superior são recusados pelo executável
+antigo. Não reduza apenas `PRAGMA user_version` nem apague a coluna manualmente. Restaurar o backup elimina as
+vendas posteriores à cópia: preserve o banco atualizado e planeje a reconciliação antes do rollback.

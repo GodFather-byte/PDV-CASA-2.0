@@ -2,18 +2,18 @@
 # os arquivos para baixar. Guia de uso: docs/INSTALAR_E_TESTAR.md
 #
 #   * Manual: aba Actions > "Gerar instalador (Windows)" > Run workflow  (escolha a branch).
-#   * Automático: a cada push na main ou numa branch claude/**, e numa tag v* (esta ainda publica uma Release).
+#   * Automático: somente a cada push na main (incluindo merge).
 #
 # Onde pegar (o mais fácil): aba Releases > "WillPDV - última versão". A cada push na main o instalador (WillPDV-Instalador.exe)
 # e a versão portátil (WillPDV-Portatil.zip) são republicados ali, com link fixo e sem .zip em volta. Também ficam nos
-# "Artifacts" da página da execução (o .exe vem dentro de um .zip que o GitHub cria). Numa tag v*, vai uma Release de versão.
+# "Artifacts" da página da execução (o .exe vem dentro de um .zip que o GitHub cria).
+# Para publicar uma tag v* já existente, selecione a tag numa execução manual.
 name: Gerar instalador (Windows)
 
 on:
   workflow_dispatch:
   push:
-    branches: [main, "claude/**"]
-    tags: ["v*"]
+    branches: [main]
 
 permissions:
   contents: read
@@ -287,7 +287,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # Só em tag v*: publica o instalador na aba Releases (link fixo, sem .zip, que dá para mandar ao cliente).
+  # Só em execução manual numa tag v*: publica o instalador na aba Releases.
   publicar:
     name: Publicar na aba Releases
     needs: build

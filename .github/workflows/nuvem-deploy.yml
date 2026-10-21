@@ -14,12 +14,6 @@ on:
       - "tests/test_nuvem.py"
       - "render.yaml"
       - ".github/workflows/nuvem-deploy.yml"
-  pull_request:
-    paths:
-      - "backend/**"
-      - "src/sync/**"
-      - "tests/test_painel_*.py"
-      - "tests/test_nuvem.py"
   workflow_dispatch:
 
 permissions:
@@ -51,7 +45,7 @@ jobs:
   publicar:
     name: Deploy no Render
     needs: testar
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -32,6 +32,43 @@ principal (o cartão "Sem estoque" já abre a lista só com os produtos zerados)
   quando vira compra. Produtos sem estoque mínimo definido não entram na sugestão.
 * **Lista de compras:** a mesma sugestão em texto, para imprimir ou levar ao fornecedor.
 
+### Visão Adega: compras, cobertura e classificação
+
+* **Geral** mantém o comportamento anterior: pedido e lista abrangem todos os produtos
+  a repor, independentemente dos filtros na tela. **Adega** gera pedido/lista exclusivos
+  do recorte Adega, combinando situação, busca e grupo atuais. Os botões e a prévia
+  identificam o escopo. Ao alternar a visão, cada uma conserva seus próprios filtros.
+  Somente os produtos com reposição sugerida positiva entram; sem mínimo ou sem controle
+  não se inventa uma quantidade. Consultar/imprimir não grava nada e pedido não baixa saldo.
+* **Cobertura (30 dias)**, exibida na Adega Tk/Qt, é `saldo não negativo ÷ média diária`.
+  A média é o consumo líquido **dividido por 30**, mesmo quando há poucos dias de histórico.
+  Uma única consulta agregada soma as quantidades dos movimentos de venda e de estorno
+  de venda com referência confiável (`ref_tipo = 'venda'`) no intervalo local inclusivo
+  de agora menos 30 dias até agora. Histórico legado sem essa referência não gera média. Movimentos
+  futuros, compras, perdas, ajustes e pedidos não entram. O consumo líquido negativo
+  é limitado a zero; sem consumo líquido ou sem controle, a cobertura fica indisponível
+  (não significa estoque infinito). Com consumo e saldo zerado/negativo, mostra zero dias.
+  Fardos e composições usam as unidades efetivamente baixadas, sem contar o fardo novamente.
+  Os detalhes mostram o consumo da janela e a origem da classificação.
+  Resumo, lista e pedido reutilizam os mesmos filtros/saldos sem consultar o consumo:
+  somente o painel calcula cobertura, em consulta agregada sem consultas por produto (sem N+1).
+* A cobertura é **indicativa**: histórico curto, ruptura, sazonalidade e estornos de vendas
+  fora da janela podem distorcer a média. A sugestão de compra continua sendo o **dobro
+  do mínimo menos saldo não negativo**, inclusive no fallback sem histórico. Não se inferem
+  prazo do fornecedor, estoque de segurança ou recebimentos pendentes; revise o pedido.
+* O recorte normaliza caixa, acentos, pontuação e espaços de grupo/subgrupo e reconhece
+  famílias como Adega, Bebidas, Conveniência, Cervejas, Destilados, Vinhos/Espumantes,
+  Refrigerantes, Águas/Sucos, Energéticos, Gelo/Carvão e famílias de destilados
+  (whisky, vodka, gin, cachaça, licor, rum, tequila). Configuração de preço gelada,
+  quantidade de atacado ou vínculo de casco também inclui o produto; cascos vinculados
+  entram no mesmo conjunto. Não há consulta individual por produto.
+* Cadastros sem esses sinais podem entrar por **prefixo descritivo** do nome:
+  cerveja, vinho, espumante, refrigerante, energético, whisky/whiskey, vodka, cachaça,
+  tequila, gin, suco, água mineral/com gás/sem gás, gelo em cubos e carvão vegetal.
+  Não se procuram marcas nem fragmentos de palavras (por exemplo, “GINÁSTICA”).
+  É uma classificação operacional **indicativa, não fiscal**: pode incluir atacado de
+  outras áreas ou omitir cadastros personalizados. Confira o cadastro ou use Geral.
+
 ## Novo lançamento (completo)
 
 A janela de lançamento continua com todos os tipos (compra com nota e conta a pagar, entrada, saída, descarte, contagem,

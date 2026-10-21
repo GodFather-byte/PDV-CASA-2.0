@@ -109,6 +109,14 @@ mantendo o foco operacional de estoque separado da identidade visual.
 
 ## Depois da instalação
 
+- Em **Estoque > Visão: Adega**, confira a cobertura estimada em dias e use **Lista de compras** ou
+  **Gerar pedido do que falta**, escolhendo Geral/Adega. O recorte Adega combina a classificação com os
+  filtros do painel; revise os itens antes da compra. A cobertura usa vendas líquidas dos últimos 30 dias
+  e não prevê sazonalidade ou prazo do fornecedor. Sem histórico útil, informa a indisponibilidade.
+- Para garantir a inclusão de um produto sem sinais de bebida, associe-o a um subgrupo do grupo **Adega**.
+  O reconhecimento automático por configuração, famílias e prefixos do nome é indicativo; confira também Geral.
+- Novas vendas registram a regra de preço aplicada por item. Alterar o cadastro depois não muda a explicação
+  histórica. Vendas antigas sem retrato são identificadas como legadas, sem inventar faixa ou promoção.
 - Conferir no fim do primeiro dia: fechamento do turno bate com a gaveta; estoque dos 5 produtos que mais saem; cupom
   legível; gaveta abre.
 - Pendências conhecidas (não impedem a operação): cancelamento parcial de uma linha agrupada (hoje: cancela e relança),

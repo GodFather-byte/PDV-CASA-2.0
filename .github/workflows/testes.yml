@@ -1,10 +1,11 @@
-# Roda a suíte inteira (regras, telas Tkinter e API da nuvem) a cada push e pull request.
+# Roda a suíte inteira após push na main (incluindo merge), ou por execução manual.
 # Windows é onde o PDV roda nas lojas; o Linux pega o que depende de sistema operacional sem querer.
 name: Testes
 
 on:
   push:
-  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read

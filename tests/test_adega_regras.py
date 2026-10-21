@@ -42,11 +42,15 @@ class TesteRegrasAdega(BaseCaixa):
                                       ({"preco_base_cent": 600, "preco_unit_cent": 600}, "balcao")):
             with self.subTest(alteracoes=alteracoes, modalidade=modalidade):
                 explicacao = ProdutoController.explicacao_preco_adega({**item, **alteracoes}, modalidade)
-                self.assertEqual(explicacao, {"rotulo": "Natural", "detalhe": "", "economia_cent": 0})
+                self.assertEqual(explicacao["rotulo"], "Natural")
+                self.assertIn("Preço-base registrado: R$ 8,00", explicacao["detalhe"])
+                self.assertEqual(explicacao["economia_cent"], 0)
 
     def test_explicacao_faixa_fracionada_e_arredondamento_da_linha(self):
-        item = {"temperatura": "gelada", "preco_base_cent": 1000, "preco_unit_cent": 850,
-                "quantidade": 1.0001, "total_cent": 850, "atacado_gelada_qtd": 1.0001}
+        self.banco.executar(
+            "UPDATE produtos SET aceita_decimal = 1, atacado_gelada_qtd = 1.0001 WHERE id = ?", (self.skol,))
+        self.lancar(1.0001, temperatura="gelada")
+        item = self.caixa.itens(self.vid)[0]
         explicacao = ProdutoController.explicacao_preco_adega(item, "balcao")
         self.assertIn("a partir de 1,0001 un", explicacao["detalhe"])
         self.assertEqual(explicacao["economia_cent"], 150)
@@ -285,7 +289,7 @@ class TesteRegrasAdega(BaseCaixa):
 
     def test_migracao_v21_preserva_produtos_e_precos_de_itens(self):
         self.lancar()
-        with tempfile.TemporaryDirectory() as pasta:
+        with tempfile.TemporaryDirectory(dir=".") as pasta:
             caminho = Path(pasta) / "antigo.db"
             antigo = BancoDados(str(caminho))
             self.banco.conexao.backup(antigo.conexao)
@@ -295,14 +299,15 @@ class TesteRegrasAdega(BaseCaixa):
             for coluna in ("preco_gelada_cent", "atacado_qtd", "preco_atacado_cent",
                            "atacado_gelada_qtd", "preco_atacado_gelada_cent", "casco_produto_id"):
                 antigo.executar(f"ALTER TABLE produtos DROP COLUMN {coluna}")
-            for coluna in ("preco_base_cent", "temperatura"):
+            for coluna in ("preco_base_cent", "temperatura", "regra_preco_json"):
                 antigo.executar(f"ALTER TABLE itens_venda DROP COLUMN {coluna}")
             antigo.executar("DELETE FROM config WHERE chave = 'agrupar_itens_balcao'")
             antigo.executar("PRAGMA user_version = 21")
             antigo.fechar()
             migrado = BancoDados(str(caminho))
             try:
-                self.assertEqual(migrado.valor("PRAGMA user_version"), 23)
+                self.assertEqual(migrado.valor("PRAGMA user_version"), 24)
+                self.assertIsNone(migrado.valor("SELECT regra_preco_json FROM itens_venda LIMIT 1"))
                 self.assertTrue(migrado.cfg_bool("agrupar_itens_balcao"))
                 item = migrado.um("SELECT * FROM itens_venda WHERE venda_id = ?", (self.vid,))
                 self.assertEqual((item["preco_unit_cent"], item["preco_base_cent"], item["temperatura"]),

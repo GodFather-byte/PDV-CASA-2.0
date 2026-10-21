@@ -289,6 +289,8 @@ class CaixaController:
             raise ErroNegocio("Selecione o cliente da caderneta antes de lançar itens.")
         self._conferir_limite_comanda(v)
 
+        quando = fmt.agora_dt()
+        agora = quando.strftime("%Y-%m-%d %H:%M:%S")
         if partes:
             qtd_partes = len(partes)
             if qtd_partes > p["partes"]:
@@ -302,14 +304,23 @@ class CaixaController:
                     raise ErroNegocio(f"'{c['nome']}' não pode compor '{p['nome']}'.")
                 componentes.append(c)
             preco = self.produtos.preco_partes(p, componentes)
+            base = {"tipo": "partes", "preco_cent": preco, "avaliado_em": agora,
+                    "criterio": "composto" if p["composto"] else "maior" if p["maior"] else "média"}
         else:
             componentes = []
-            preco = p["preco_gelada_cent"] if temperatura == "gelada" else self.produtos.preco_vigente(p)
+            preco = p["preco_gelada_cent"] if temperatura == "gelada" else self.produtos.preco_vigente(p, quando)
+            base = ({"tipo": "gelada", "preco_cent": preco, "avaliado_em": agora}
+                    if temperatura == "gelada" else self.produtos.regra_preco_vigente(p, quando))
+
+        retrato = {"versao": 1, "tipo": base["tipo"], "temperatura": temperatura,
+                   "preco_base_cent": preco, "preco_unit_cent": preco, "base": base,
+                   "minimo_qtd": None, "preco_faixa_cent": None, "faixa_atingida": False,
+                   "quantidade_grupo": quantidade, "tem_preco_gelada": bool(p["preco_gelada_cent"]),
+                   "aplicado_em": agora, "leituras": [{"quantidade": quantidade, "base": base}]}
 
         observacao = self._observacao_temperatura(observacao, temperatura)
 
         total = fmt.mult_cent(preco, quantidade)
-        agora = fmt.agora()
         with self.banco.transacao():
             existente = None
             if (v["modalidade"] == "balcao" and not partes
@@ -329,10 +340,20 @@ class CaixaController:
                 item_id = existente["id"]
                 nova_qtd = fmt.arred_qtd(existente["quantidade"] + quantidade)
                 self.banco.executar("UPDATE itens_venda SET quantidade = ? WHERE id = ?", (nova_qtd, item_id))
+                anterior = self.produtos.ler_regra_preco(dict(existente))
+                if anterior is None:
+                    base_legada = {"tipo": "legado", "preco_cent": existente["preco_base_cent"]}
+                    anterior = {**retrato, "tipo": "legado", "base": base_legada,
+                                "leituras": [{"quantidade": existente["quantidade"], "base": base_legada}]}
+                anterior["leituras"].extend(retrato["leituras"])
+                anterior["aplicado_em"] = agora
+                self.banco.atualizar("itens_venda", item_id, {
+                    "regra_preco_json": json.dumps(anterior, ensure_ascii=False)})
             else:
                 item_id = self.banco.inserir("itens_venda", {
                     "venda_id": venda_id, "produto_id": produto_id, "quantidade": quantidade,
                     "preco_unit_cent": preco, "preco_base_cent": None if partes else preco,
+                    "regra_preco_json": json.dumps(retrato, ensure_ascii=False),
                     "temperatura": temperatura, "total_cent": total, "cobra_servico": p["cobrar_servico"],
                     "observacao": observacao, "comissao_cent": fmt.pct_de(total, p["comissao_pct"]),
                     "partes": max(len(componentes), 1), "operador_id": self.operador_id, "criado_em": agora})
@@ -371,7 +392,8 @@ class CaixaController:
 
     def _reprecificar_balcao(self, venda_id: int) -> None:
         """Reavalia o mínimo por produto e temperatura sem perder o preço-base de cada leitura."""
-        if self.obter(venda_id)["modalidade"] != "balcao":
+        venda = self.obter(venda_id)
+        if venda["modalidade"] != "balcao" or venda["status"] not in ABERTAS:
             return
         itens = self.banco.todos(
             """SELECT i.*, p.atacado_qtd, p.preco_atacado_cent, p.atacado_gelada_qtd,
@@ -387,6 +409,27 @@ class CaixaController:
             preco = self.produtos.preco_por_quantidade_adega(
                 i, i["preco_base_cent"], quantidades[(i["produto_id"], i["temperatura"])], i["temperatura"])
             total = fmt.mult_cent(preco, i["quantidade"])
+            mudou_preco = preco != i["preco_unit_cent"] or total != i["total_cent"]
+            retrato = self.produtos.ler_regra_preco(dict(i))
+            if retrato is not None or mudou_preco:
+                # Uma reprecificação de legado prova a faixa atual, não a origem da base antiga.
+                retrato = retrato or {
+                    "versao": 1, "temperatura": i["temperatura"], "tem_preco_gelada": False,
+                    "preco_base_cent": i["preco_base_cent"], "leituras": [],
+                    "base": {"tipo": "legado", "preco_cent": i["preco_base_cent"]}}
+                gelada = i["temperatura"] == "gelada"
+                minimo = i["atacado_gelada_qtd" if gelada else "atacado_qtd"]
+                faixa = i["preco_atacado_gelada_cent" if gelada else "preco_atacado_cent"]
+                quantidade_grupo = quantidades[(i["produto_id"], i["temperatura"])]
+                novos = {"tipo": "atacado" if preco < i["preco_base_cent"] else retrato["base"]["tipo"],
+                         "preco_unit_cent": preco, "minimo_qtd": minimo, "preco_faixa_cent": faixa,
+                         "quantidade_grupo": quantidade_grupo,
+                         "faixa_atingida": minimo > 0 and faixa > 0 and quantidade_grupo >= minimo}
+                if mudou_preco or any(retrato.get(c) != valor for c, valor in novos.items()):
+                    retrato.update(novos)
+                    retrato["aplicado_em"] = fmt.agora()
+                    self.banco.atualizar("itens_venda", i["id"], {
+                        "regra_preco_json": json.dumps(retrato, ensure_ascii=False)})
             if preco != i["preco_unit_cent"] or total != i["total_cent"]:
                 self.banco.executar(
                     "UPDATE itens_venda SET preco_unit_cent = ?, total_cent = ?, comissao_cent = ? WHERE id = ?",
