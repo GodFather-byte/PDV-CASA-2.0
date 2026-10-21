@@ -12,11 +12,13 @@ reservados do caixa (comissão das garotas, saída da comanda) e os que já exis
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import re
 import unicodedata
 import zipfile
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -514,3 +516,199 @@ class ImportacaoProdutos:
                            fmt.fmt_qtd(r["atacado_qtd"], 4).rstrip("0").rstrip(",") if atacado else "",
                            fmt.fmt_num(r["preco_atacado_cent"]) if atacado else ""])
         return self._csv(linhas)
+
+
+@dataclass
+class ItemNFe:
+    numero: int
+    codigo: str
+    nome: str
+    unidade: str
+    quantidade: float
+    custo_unit_cent: int
+    custo_total_cent: int
+    codigo_barras: str = ""
+    produto_id: int | None = None
+    sugestoes: list[dict] = field(default_factory=list)
+
+
+@dataclass
+class PreviaNFe:
+    chave: str
+    numero: str
+    emitente: str
+    cnpj: str
+    data: str
+    arquivo: str
+    itens: list[ItemNFe]
+
+
+class ImportacaoNFe:
+    """Leitura e entrada de estoque de NF-e modelo 55, sem alterar preço de venda."""
+
+    def __init__(self, banco, operador_id: int | None = None):
+        self.banco = banco
+        self.operador_id = operador_id
+        self.cad = CadastroController(banco)
+        self.estoque = EstoqueController(banco, operador_id)
+
+    @staticmethod
+    def _filho(elemento, nome: str):
+        if elemento is None:
+            return None
+        return next((e for e in elemento if e.tag.rsplit("}", 1)[-1] == nome), None)
+
+    @classmethod
+    def _texto(cls, elemento, nome: str, padrao: str = "") -> str:
+        filho = cls._filho(elemento, nome)
+        return (filho.text or "").strip() if filho is not None else padrao
+
+    def analisar(self, caminho: str | Path) -> PreviaNFe:
+        caminho = Path(caminho)
+        try:
+            dados = caminho.read_bytes()
+            raiz = ET.fromstring(dados)
+        except (OSError, ET.ParseError) as erro:
+            raise ErroNegocio(f"Não consegui ler o XML da NF-e: {erro}") from erro
+        info = next((e for e in raiz.iter() if e.tag.rsplit("}", 1)[-1] == "infNFe"), None)
+        if info is None:
+            raise ErroNegocio("O XML não contém uma NF-e válida.")
+        ide = self._filho(info, "ide")
+        if self._texto(ide, "mod") != "55":
+            raise ErroNegocio("A importação aceita somente NF-e modelo 55.")
+        emit = self._filho(info, "emit")
+        cnpj = re.sub(r"\D", "", self._texto(emit, "CNPJ") or self._texto(emit, "CPF"))
+        emitente = self._texto(emit, "xNome") or f"Fornecedor NF-e {cnpj}".strip()
+        chave = info.get("Id", "").removeprefix("NFe") or hashlib.sha256(dados).hexdigest()
+        data = self._texto(ide, "dhEmi", self._texto(ide, "dEmi"))[:10]
+        previa = PreviaNFe(chave, self._texto(ide, "nNF"), emitente, cnpj, data,
+                           caminho.name, [])
+        for numero, det in enumerate(
+                (e for e in info.iter() if e.tag.rsplit("}", 1)[-1] == "det"), start=1):
+            prod = self._filho(det, "prod")
+            nome = re.sub(r"\s+", " ", self._texto(prod, "xProd")).strip()[:50]
+            unidade = self._texto(prod, "uCom").upper()[:6] or "UN"
+            try:
+                quantidade = fmt.para_qtd(self._texto(prod, "qCom"))
+                unitario = Decimal(self._texto(prod, "vUnCom"))
+                total = Decimal(self._texto(prod, "vProd"))
+                if quantidade <= 0 or unitario < 0 or total < 0:
+                    raise ValueError
+            except (ValueError, InvalidOperation):
+                raise ErroNegocio(f"Item {numero} da NF-e tem quantidade ou custo inválido.") from None
+            unit_cent = int((unitario * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            total_cent = int((total * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            if not total_cent:
+                total_cent = fmt.mult_cent(unit_cent, quantidade)
+            codigo = self._texto(prod, "cProd")
+            gtin = self._texto(prod, "cEAN") or self._texto(prod, "cEANTrib")
+            gtin = re.sub(r"\D", "", gtin) if gtin.upper() != "SEM GTIN" else ""
+            if len(gtin) > 14:
+                gtin = ""
+            achado = None
+            if gtin:
+                achado = self.banco.um("SELECT id FROM produtos WHERE cbarra = ?", (gtin,))
+            codigo_interno = codigo.zfill(13) if codigo.isdigit() and len(codigo) <= 13 else codigo
+            if achado is None and codigo_interno:
+                achado = self.banco.um("SELECT id FROM produtos WHERE codigo = ?", (codigo_interno,))
+            sugestoes = []
+            if achado is None and nome:
+                sugestoes = [dict(r) for r in self.banco.todos(
+                    """SELECT id, codigo, nome FROM produtos
+                       WHERE ativo = 1 AND nome LIKE ? COLLATE NOCASE ORDER BY nome LIMIT 10""",
+                    (f"%{nome[:30]}%",))]
+            previa.itens.append(ItemNFe(numero, codigo, nome, unidade, quantidade, unit_cent,
+                                        total_cent, gtin, achado["id"] if achado else None,
+                                        sugestoes))
+        if not previa.itens:
+            raise ErroNegocio("A NF-e não tem itens para importar.")
+        return previa
+
+    def importar(self, previa: PreviaNFe, grupo: str, associacoes: dict[int, int | None] | None = None) -> dict:
+        """Aplica a entrada em uma transação e registra a nota e o resultado de cada item."""
+        grupo = " ".join((grupo or "").split()).upper()
+        if grupo not in ("BAR", "ADEGA"):
+            raise ErroNegocio("Escolha a categoria Bar ou Adega.")
+        associacoes = associacoes or {}
+        if self.banco.um("SELECT 1 FROM importacoes_nfe WHERE chave = ?", (previa.chave,)):
+            raise ErroNegocio("Esta NF-e já foi importada.")
+        resultados = []
+        com_alerta_preco = []
+        with self.banco.transacao():
+            fornecedor = self.banco.um("SELECT id FROM fornecedores WHERE cnpj = ? AND cnpj <> ''",
+                                       (previa.cnpj,)) if previa.cnpj else None
+            if fornecedor is None:
+                fornecedor = self.banco.um("SELECT id FROM fornecedores WHERE nome = ?", (previa.emitente,))
+            fornecedor_id = fornecedor["id"] if fornecedor else self.banco.inserir(
+                "fornecedores", {"nome": previa.emitente, "cnpj": previa.cnpj or None})
+            lancamento = self.estoque.criar_lancamento(
+                "compra", data=previa.data, descricao=f"Entrada NF-e {previa.numero}",
+                documento=previa.chave, nota_fiscal=previa.numero, fornecedor_id=fornecedor_id)
+            importacao_id = self.banco.inserir("importacoes_nfe", {
+                "chave": previa.chave, "arquivo": previa.arquivo, "numero": previa.numero,
+                "emitente": previa.emitente, "cnpj": previa.cnpj, "data_emissao": previa.data or None,
+                "importado_em": fmt.agora(), "operador_id": self.operador_id,
+                "lancamento_id": lancamento, "quantidade_itens": len(previa.itens)})
+            for item in previa.itens:
+                produto_id = associacoes.get(item.numero, item.produto_id)
+                resultado = "atualizado"
+                if produto_id is not None:
+                    produto = self.banco.um("SELECT id, ativo FROM produtos WHERE id = ?", (produto_id,))
+                    if produto is None:
+                        raise ErroNegocio(f"Produto escolhido para o item {item.numero} não existe mais.")
+                    if not produto["ativo"]:
+                        self.banco.executar("UPDATE produtos SET ativo = 1 WHERE id = ?", (produto_id,))
+                else:
+                    resultado = "criado"
+                    grupo_id = self._grupo(grupo)
+                    unidade_id = self._unidade(item.unidade)
+                    produto_id = self.cad.salvar("produtos", {
+                        "codigo": self.cad.proximo_codigo_produto(), "nome": item.nome or f"Produto NF-e {item.numero}",
+                        "subgrupo_id": self._subgrupo(grupo, grupo_id), "unidade_id": unidade_id,
+                        "preco_cent": "0", "controla_estoque": "S", "venda": "S",
+                        "cbarra": item.codigo_barras or "",
+                    })
+                self.estoque.adicionar_item(lancamento, produto_id, item.quantidade, item.custo_total_cent,
+                                            ligar_controle=True, observacao=f"Importação NF-e {previa.numero}")
+                self.banco.inserir("itens_importacao_nfe", {
+                    "importacao_id": importacao_id, "produto_id": produto_id,
+                    "codigo_xml": item.codigo, "ean": item.codigo_barras,
+                    "nome_xml": item.nome, "quantidade": item.quantidade,
+                    "custo_unit_cent": item.custo_unit_cent, "custo_total_cent": item.custo_total_cent,
+                    "resultado": resultado})
+                resultados.append({"numero": item.numero, "produto_id": produto_id, "resultado": resultado})
+                produto_atual = self.banco.um("SELECT nome, preco_cent, ult_preco_cent FROM produtos WHERE id = ?",
+                                              (produto_id,))
+                minimo = self._margem_minima()
+                if minimo and produto_atual["preco_cent"] > 0:
+                    margem = ((produto_atual["preco_cent"] - produto_atual["ult_preco_cent"])
+                              * 100 / produto_atual["preco_cent"])
+                    if margem < minimo:
+                        com_alerta_preco.append({"produto_id": produto_id, "nome": produto_atual["nome"],
+                                                 "margem_pct": margem, "minima_pct": minimo})
+            self.banco.log("importacao_nfe", f"NF-e {previa.numero}: {len(resultados)} itens", self.operador_id)
+        return {"criados": sum(r["resultado"] == "criado" for r in resultados),
+                "atualizados": sum(r["resultado"] == "atualizado" for r in resultados),
+                "itens": resultados, "alertas_margem": com_alerta_preco}
+
+    def _margem_minima(self) -> float:
+        try:
+            return max(0.0, min(100.0, float(self.banco.cfg("margem_minima_pct", "0").replace(",", "."))))
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _grupo(self, nome: str) -> int:
+        registro = self.banco.um("SELECT id FROM grupos WHERE nome = ? COLLATE NOCASE", (nome,))
+        return registro["id"] if registro else self.banco.inserir("grupos", {"nome": nome})
+
+    def _subgrupo(self, nome: str, grupo_id: int) -> int:
+        registro = self.banco.um("SELECT id FROM subgrupos WHERE nome = ? COLLATE NOCASE AND grupo_id = ?",
+                                 (nome, grupo_id))
+        return registro["id"] if registro else self.banco.inserir(
+            "subgrupos", {"nome": nome, "grupo_id": grupo_id})
+
+    def _unidade(self, abreviatura: str) -> int:
+        unidade = self.banco.um("SELECT id FROM unidades WHERE abreviatura = ? COLLATE NOCASE", (abreviatura,))
+        if unidade:
+            return unidade["id"]
+        return self.banco.inserir("unidades", {"nome": abreviatura, "abreviatura": abreviatura})
