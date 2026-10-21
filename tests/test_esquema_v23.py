@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from src.database.conexao import BancoDados
+from src.database.esquema import VERSAO_ESQUEMA
 
 
 class TesteMigracaoV23(unittest.TestCase):
@@ -27,7 +28,7 @@ class TesteMigracaoV23(unittest.TestCase):
             banco = BancoDados(str(caminho))
             try:
                 colunas = {linha["name"] for linha in banco.todos("PRAGMA table_info(movimentos_estoque)")}
-                self.assertEqual(banco.valor("PRAGMA user_version"), 24)
+                self.assertEqual(banco.valor("PRAGMA user_version"), VERSAO_ESQUEMA)
                 self.assertTrue({"operador_id", "observacao"} <= colunas)
                 self.assertIn("tipo_perda", {linha["name"] for linha in banco.todos("PRAGMA table_info(lancamentos_estoque)")})
             finally:

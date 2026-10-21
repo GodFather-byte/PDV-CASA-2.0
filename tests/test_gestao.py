@@ -214,6 +214,22 @@ class TesteRelatorios(BaseCaixa):
         ultimo = r.linhas[-1]
         self.assertEqual((ultimo[0], ultimo[2], ultimo[3]), ("TOTAL DE VENDAS", "27,50", "100,00"))
 
+    def test_mais_vendidos_e_recorte_por_categoria(self):
+        grupo_bar = self.banco.inserir("grupos", {"nome": "BAR"})
+        sub_bar = self.banco.inserir("subgrupos", {"nome": "BAR", "grupo_id": grupo_bar})
+        grupo_adega = self.banco.inserir("grupos", {"nome": "ADEGA"})
+        sub_adega = self.banco.inserir("subgrupos", {"nome": "ADEGA", "grupo_id": grupo_adega})
+        self.banco.executar("UPDATE produtos SET subgrupo_id = ? WHERE id = ?", (sub_bar, self.skol))
+        self.banco.executar("UPDATE produtos SET subgrupo_id = ? WHERE id = ?", (sub_adega, self.agua))
+        todos = self.rel.mais_vendidos(self.f)
+        self.assertEqual([linha[0] for linha in todos.linhas], ["SKOL", "AGUA"])
+        bar = self.rel.mais_vendidos({**self.f, "grupo_id": grupo_bar})
+        self.assertEqual([linha[0] for linha in bar.linhas], ["SKOL"])
+        self.assertIn("Categoria: BAR", bar.criterios)
+        linhas_cmv = self.rel.cmv({**self.f, "grupo_id": grupo_adega}).linhas
+        self.assertTrue(any(linha[0].strip() == "AGUA" for linha in linhas_cmv))
+        self.assertFalse(any(linha[0].strip() == "SKOL" for linha in linhas_cmv))
+
     def test_cmv_margem(self):
         r = self.rel.cmv(self.f)
         total = r.linhas[-1]

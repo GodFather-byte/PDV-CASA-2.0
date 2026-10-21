@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.ui.contexto import Contexto
-from src.ui_qt.importar_produtos import JanelaImportarProdutos
+from src.ui_qt.importar_produtos import JanelaImportarNFe, JanelaImportarProdutos
 from tests.base import BaseTeste
 
 
@@ -156,6 +156,34 @@ class TestImportarProdutosQt(BaseTeste):
         informar.assert_called()
         self.assertIn("Produto;Preço", modelo.read_text(encoding="utf-8-sig"))
         self.assertIn("7;CAMPARI;10,25", exportado.read_text(encoding="utf-8-sig"))
+
+    def test_previa_nfe_permite_preco_manual_e_confirma_entrada(self):
+        recarregamentos = []
+        janela = self.janela(lambda: recarregamentos.append(True))
+        xml = """<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe"><NFe><infNFe Id="NFe123">
+          <ide><mod>55</mod><nNF>123</nNF><dhEmi>2026-10-03T10:00:00-03:00</dhEmi></ide>
+          <emit><CNPJ>12345678000199</CNPJ><xNome>Fornecedor UI</xNome></emit>
+          <det nItem="1"><prod><cProd>A1</cProd><cEAN>SEM GTIN</cEAN><xProd>PRODUTO SEM EAN</xProd>
+          <uCom>UN</uCom><qCom>2</qCom><vUnCom>3.50</vUnCom><vProd>7.00</vProd></prod></det>
+        </infNFe></NFe></nfeProc>"""
+        arquivo = Path(__file__).parent / f".qt-nfe-{uuid4().hex}.xml"
+        arquivo.write_text(xml, encoding="utf-8")
+        self.arquivos.append(arquivo)
+        previa = janela.imp_nfe.analisar(arquivo)
+        dialogo = JanelaImportarNFe(janela, previa)
+        self.janelas.append(dialogo)
+        dialogo.grupo.setCurrentText("ADEGA")
+        dialogo.precos_venda[0].setText("12,50")
+        with patch.object(QMessageBox, "question",
+                          return_value=QMessageBox.StandardButton.Yes), \
+             patch.object(QMessageBox, "information"):
+            self.assertTrue(dialogo.confirmar())
+        produto = self.banco.um("SELECT p.* FROM produtos p WHERE p.nome = 'PRODUTO SEM EAN'")
+        self.assertEqual((produto["preco_cent"], produto["ult_preco_cent"], produto["qt_atual"]), (1250, 350, 2))
+        self.assertEqual(self.banco.valor(
+            "SELECT g.nome FROM produtos p JOIN subgrupos s ON s.id=p.subgrupo_id "
+            "JOIN grupos g ON g.id=s.grupo_id WHERE p.id=?", (produto["id"],)), "ADEGA")
+        self.assertEqual(recarregamentos, [True])
 
     def test_exige_permissao_de_cadastro_de_produtos(self):
         self.ctx.operador = None

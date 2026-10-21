@@ -1,6 +1,7 @@
 """Importação segura de NF-e modelo 55 e bloqueio de preço zerado."""
 from pathlib import Path
 import tempfile
+from unittest.mock import patch
 
 from src.controllers.caixa_controller import CaixaController
 from src.controllers.importacao_produtos import ImportacaoNFe
@@ -64,6 +65,30 @@ class TesteImportacaoNFe(BaseTeste):
         self.arquivo.write_text(xml_nfe("65"), encoding="utf-8")
         with self.assertRaisesRegex(ErroNegocio, "modelo 55"):
             self.importador.analisar(self.arquivo)
+
+    def test_preco_novo_pode_ser_informado_manualmente_em_centavos(self):
+        previa = self.importador.analisar(self.arquivo)
+        self.importador.importar(previa, "Bar", precos_venda={2: 2599})
+        self.assertEqual(self.banco.valor(
+            "SELECT preco_cent FROM produtos WHERE nome = 'VODKA TESTE'"), 2599)
+
+    def test_usa_gtin_tributavel_e_recusa_declaracao_de_entidades(self):
+        produto = self.novo_produto("CERVEJA LATA", 500, estoque=True, cbarra="7891234567895")
+        self.arquivo.write_text(xml_nfe().replace(
+            "<cEAN>7891234567895</cEAN>", "<cEAN>SEM GTIN</cEAN><cEANTrib>7891234567895</cEANTrib>"),
+            encoding="utf-8")
+        self.assertEqual(self.importador.analisar(self.arquivo).itens[0].produto_id, produto)
+        self.arquivo.write_text("<!DOCTYPE x [<!ENTITY e 'x'>]><x>&e;</x>", encoding="utf-8")
+        with self.assertRaisesRegex(ErroNegocio, "entidades ou DTD"):
+            self.importador.analisar(self.arquivo)
+
+    def test_falha_no_meio_nao_deixa_estoque_produtos_ou_historico_parcial(self):
+        previa = self.importador.analisar(self.arquivo)
+        with patch.object(self.importador.estoque, "adicionar_item", side_effect=ErroNegocio("falhou")):
+            with self.assertRaisesRegex(ErroNegocio, "falhou"):
+                self.importador.importar(previa, "Bar")
+        for tabela in ("produtos", "importacoes_nfe", "itens_importacao_nfe", "lancamentos_estoque", "fornecedores"):
+            self.assertEqual(self.banco.valor(f"SELECT COUNT(*) FROM {tabela}"), 0, tabela)
 
     def test_preco_zerado_e_bloqueado_no_lancamento_e_no_fechamento(self):
         produto = self.novo_produto("SEM PREÇO", 0)
