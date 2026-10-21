@@ -2,50 +2,18 @@
 
 ## Último trabalho
 
-Melhorias Adega e CI pós-merge no PR #11:
-
-- Workflows automáticos somente em `push` na `main`, com execução manual mantida.
-  Nuvem mantém filtro de caminhos; tags de versão do instalador só por execução manual.
-- Pedido/lista Geral preservados; Adega combina classificação, situação, grupo e busca.
-- Estoque Tk/Qt mostra cobertura: saldo não negativo / consumo líquido médio diário
-  de vendas e estornos nos últimos 30 dias; sem consumo ou controle, indisponível.
-- Classificação normaliza famílias de grupo/subgrupo e prefixos descritivos cautelosos.
-  Grupo Adega permite inclusão explícita; o recorte continua indicativo, não fiscal.
-- Esquema v24 adiciona `itens_venda.regra_preco_json`, capturado no lançamento e
-  mantido na reprecificação. Explicação histórica usa o retrato, não o cadastro atual.
-  Itens legados sem retrato não recebem promoção/faixa inventada.
+Investigação dos checks do commit `c0c36ef`. O workflow `Testes` falhou nos dois
+jobs Windows em `test_migracao_v23_nao_inventa_regra_e_mantem_backup_reabrivel`:
+o diretório temporário não podia ser removido porque `with sqlite3.connect(...)`
+não fecha a conexão SQLite. O teste agora fecha explicitamente a conexão com
+`contextlib.closing`.
 
 ## Validação
 
-- Três workflows: YAML válido; gatilhos conferidos como `push` em `main` e manual.
-- Auditoria de preços/migração: 172 testes aprovados; regressões disponíveis ampliadas
-  chegaram a 887 aprovados e 205 ignorados, sem falhas nos módulos disponíveis.
-- Estoque e regressões de domínio: 199 aprovados, 2 pulados.
-- Massa de 5.000 produtos/movimentos: sem consultas por produto; painel, resumo e
-  lista usam 5 SELECTs no total. Resumo/lista não consultam histórico de consumo.
-- Com 305 mil movimentos, retirar consultas desnecessárias reduziu o conjunto
-  de 477 para 303 ms em SQLite em memória; medição sintética, sem renderização.
-- Índice parcial `ix_movest_consumo` instalado por `INDICES_POS_MIGRACAO`; testes
-  confirmam busca pela janela, banco novo/migrado, reabertura e idempotência.
-  Validação final do índice e regressões: 197 aprovados, 2 GUI ignorados.
-- Tk/Qt e módulos dependentes de PIL não executados neste sandbox: dependências ausentes.
-  `test_adega_cadastro` tem `NameError` preexistente ao importar sem Qt; não alterado.
-- Varredura de segredos sem achados. A revisão/CodeQL final solicitada pelo titular
-  não executou por limite de tempo da ferramenta; não equivale a aprovação final.
-
-## Migração e rollback
-
-Backup consistente antes da atualização. A abertura de banco v23 cria cópia
-`.antes-migracao-v23-*.bak` e migra para v24. Para voltar ao executável anterior,
-pare o PDV, preserve o banco atual e restaure a cópia pré-migração; não reduza
-`user_version` manualmente. Vendas posteriores ao backup exigem reconciliação.
+- Pendente: executar `python -m unittest tests.test_adega_retrato`.
+- Os jobs Linux e PostgreSQL do commit referenciado passaram; os dois jobs Windows
+  falharam somente ao limpar o arquivo de backup aberto pelo teste.
 
 ## Pendências
 
-- Homologar visualmente Tk/Qt e impressão em cópia do banco da loja.
-- Executar revisão automatizada/CodeQL final em ambiente com disponibilidade.
-- Acompanhar CI após merge; não há mais checks automáticos em PR.
-- Se a proteção da `main` exigir checks de PR antigos, administrador deve ajustar
-  a configuração para não bloquear merges aguardando execuções removidas.
-- Cobertura não muda a sugestão do dobro do mínimo nem automatiza compras;
-  não estima prazo do fornecedor ou sazonalidade.
+- Confirmar a correção em execução Windows/CI.
