@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -323,7 +324,7 @@ class TesteRetratoPrecoAdega(BaseCaixa):
             import sqlite3
             copias = list(Path(pasta).glob("*.bak"))
             self.assertEqual(len(copias), 1)
-            with sqlite3.connect(copias[0]) as backup:
+            with closing(sqlite3.connect(copias[0])) as backup:
                 self.assertEqual(backup.execute("PRAGMA user_version").fetchone()[0], 23)
                 self.assertNotIn("regra_preco_json", [r[1] for r in backup.execute("PRAGMA table_info(itens_venda)")])
             reaberto = BancoDados(str(caminho))
