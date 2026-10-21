@@ -3073,7 +3073,7 @@ class TesteImportarProdutosUI(BaseUI):
         self.assertTrue(any(isinstance(w, JanelaImportarProdutos) for w in c.winfo_children()))
         c.destroy()
 
-    def test_importar_nfe_cria_produto_com_preco_manual(self):
+    def _dialogo_nfe(self):
         from src.ui.importar_produtos_ui import JanelaImportarNFe, JanelaImportarProdutos
         arquivo = self._arquivo("""<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe"><NFe><infNFe Id="NFe321">
           <ide><mod>55</mod><nNF>321</nNF><dhEmi>2026-10-03T10:00:00-03:00</dhEmi></ide>
@@ -3082,13 +3082,72 @@ class TesteImportarProdutosUI(BaseUI):
           <uCom>UN</uCom><qCom>1</qCom><vUnCom>2.50</vUnCom><vProd>2.50</vProd></prod></det>
         </infNFe></NFe></nfeProc>""")
         tela = JanelaImportarProdutos(self.root, self.ctx)
+        self.addCleanup(tela.destroy)
         previa = tela.imp_nfe.analisar(arquivo)
         dialogo = JanelaImportarNFe(tela, previa)
+        return tela, dialogo
+
+    def test_importar_nfe_cria_produto_com_preco_manual(self):
+        tela, dialogo = self._dialogo_nfe()
         dialogo.preco_novo.set("8,00")
         with mock.patch.object(tema, "confirmar", return_value=True), \
              mock.patch.object(tema, "mensagem"):
             dialogo.confirmar()
         produto = self.banco.um("SELECT * FROM produtos WHERE nome = 'REFRIGERANTE NOVO'")
         self.assertEqual((produto["preco_cent"], produto["ult_preco_cent"]), (800, 250))
-        dialogo.destroy()
-        tela.destroy()
+
+    def test_importar_nfe_cancelada_nao_grava(self):
+        tela, dialogo = self._dialogo_nfe()
+        dialogo.preco_novo.set("8,00")
+        with mock.patch.object(tema, "confirmar", return_value=False), \
+             mock.patch.object(tela.imp_nfe, "importar") as importar:
+            dialogo.confirmar()
+        importar.assert_not_called()
+        self.assertTrue(dialogo.winfo_exists())
+
+    def test_importar_nfe_preco_invalido_nao_grava(self):
+        tela, dialogo = self._dialogo_nfe()
+        dialogo.preco_novo.set("inválido")
+        with mock.patch.object(tema, "confirmar", return_value=True), \
+             mock.patch.object(tema, "erro") as erro, \
+             mock.patch.object(tela.imp_nfe, "importar") as importar:
+            dialogo.confirmar()
+        importar.assert_not_called()
+        self.assertIn("Preço de venda inválido", erro.call_args.args[1])
+
+    def test_importar_nfe_revalida_permissao_antes_de_gravar(self):
+        tela, dialogo = self._dialogo_nfe()
+        self.banco.executar("UPDATE operadores SET nivel = 1 WHERE id = ?", (self.ctx.operador_id,))
+        self.banco.executar("UPDATE acessos SET nivel = 4 WHERE modulo = 'cad_produtos'")
+        with mock.patch.object(tema, "erro") as erro, \
+             mock.patch.object(tema, "confirmar") as confirmar, \
+             mock.patch.object(tela.imp_nfe, "importar") as importar:
+            dialogo.confirmar()
+        confirmar.assert_not_called()
+        importar.assert_not_called()
+        self.assertIn("nível de acesso", erro.call_args.args[1])
+
+    def test_escolher_nfe_valida_acesso_e_abre_previa(self):
+        from src.ui import importar_produtos_ui
+        from src.ui.importar_produtos_ui import JanelaImportarProdutos
+        tela = JanelaImportarProdutos(self.root, self.ctx)
+        self.addCleanup(tela.destroy)
+        with mock.patch.object(importar_produtos_ui.filedialog, "askopenfilename", return_value="nota.xml"), \
+             mock.patch.object(tela.imp_nfe, "analisar") as analisar, \
+             mock.patch.object(importar_produtos_ui, "JanelaImportarNFe") as janela:
+            tela.escolher_nfe()
+        analisar.assert_called_once_with("nota.xml")
+        janela.assert_called_once_with(tela, analisar.return_value)
+
+    def test_escolher_nfe_operador_inativo_nao_analisa(self):
+        from src.ui import importar_produtos_ui
+        from src.ui.importar_produtos_ui import JanelaImportarProdutos
+        tela = JanelaImportarProdutos(self.root, self.ctx)
+        self.addCleanup(tela.destroy)
+        self.banco.executar("UPDATE operadores SET ativo = 0 WHERE id = ?", (self.ctx.operador_id,))
+        with mock.patch.object(importar_produtos_ui.filedialog, "askopenfilename", return_value="nota.xml"), \
+             mock.patch.object(tela.imp_nfe, "analisar") as analisar, \
+             mock.patch.object(tema, "erro") as erro:
+            tela.escolher_nfe()
+        analisar.assert_not_called()
+        self.assertIn("Operador inativo", erro.call_args.args[1])

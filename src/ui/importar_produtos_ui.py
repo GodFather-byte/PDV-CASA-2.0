@@ -8,9 +8,10 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, ttk
 
+from src.controllers.config_controller import modulos_desligados
 from src.controllers.importacao_produtos import ImportacaoNFe, ImportacaoProdutos, Previa, ler_tabela
 from src.core import formatacao as fmt
-from src.core.erros import ErroNegocio
+from src.core.erros import ErroNegocio, ErroPermissao
 from src.ui import tema
 
 TIPOS_ARQUIVO = [("Planilhas (Excel ou CSV)", "*.xlsx *.csv *.txt"), ("Todos os arquivos", "*.*")]
@@ -105,6 +106,18 @@ class JanelaImportarProdutos(tk.Toplevel):
         caminho = filedialog.askopenfilename(parent=self, title="Planilha de produtos", filetypes=TIPOS_ARQUIVO)
         if caminho:
             self.carregar(caminho)
+
+    def _exigir_acesso(self) -> None:
+        if self.ctx.operador is None:
+            raise ErroPermissao("Entre no sistema para importar produtos.")
+        cadastro = self.ctx.cadastros.obter("operadores", self.ctx.operador_id)
+        if cadastro is None or not cadastro["ativo"]:
+            raise ErroPermissao("Operador inativo. Encerre a sessão.")
+        self.ctx.operador = self.ctx.acesso.operador(self.ctx.operador_id)
+        entidade = self.ctx.cadastros.entidade("produtos")
+        if entidade.modulo in modulos_desligados(self.ctx.banco):
+            raise ErroPermissao("O cadastro de produtos está desativado.")
+        self.ctx.acesso.exigir(self.ctx.operador, entidade.modulo)
 
     def escolher_nfe(self) -> None:
         caminho = filedialog.askopenfilename(
@@ -328,6 +341,7 @@ class JanelaImportarNFe(tk.Toplevel):
         except ErroNegocio as erro:
             tema.erro(self, str(erro))
             return
+        self._alterar_preco()
         if not tema.confirmar(self, f"Registrar {len(self.previa.itens)} item(ns) da NF-e {self.previa.numero} "
                                     "no estoque?", "Confirmar entrada", sim="Confirmar", nao="Voltar"):
             return
