@@ -1,6 +1,7 @@
 """Contratos de distribuição, comandos e relatórios da migração gradual."""
 from __future__ import annotations
 
+import io
 import subprocess
 import sys
 import tempfile
@@ -55,6 +56,9 @@ class TesteRelatorioQt(unittest.TestCase):
     def test_falha_explicita_e_relatorio_persistente(self):
         with tempfile.TemporaryDirectory() as pasta:
             saida = Path(pasta) / "resultado.txt"
-            with mock.patch("src.ui_qt.app.autoteste", side_effect=RuntimeError("falha de teste")):
+            with mock.patch("src.ui_qt.app.autoteste", side_effect=RuntimeError("falha de teste")), \
+                 mock.patch("sys.stdout", new_callable=io.StringIO) as console:
                 self.assertEqual(autoteste_qt.executar(str(saida)), 1)
-            self.assertIn("RESULTADO: COM FALHAS", saida.read_text(encoding="utf-8"))
+            texto = saida.read_text(encoding="utf-8")
+            self.assertIn("RESULTADO: COM FALHAS", texto)
+            self.assertEqual(console.getvalue(), texto)

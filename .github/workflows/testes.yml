@@ -1,8 +1,10 @@
-# Roda a suíte inteira após push na main (incluindo merge), ou por execução manual.
+# Roda a suíte inteira em PRs para main, após push na main ou por execução manual.
 # Windows é onde o PDV roda nas lojas; o Linux pega o que depende de sistema operacional sem querer.
 name: Testes
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
