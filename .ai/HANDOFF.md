@@ -25,8 +25,13 @@ Melhorias Adega e CI pós-merge no PR #11:
   lista usam 5 SELECTs no total. Resumo/lista não consultam histórico de consumo.
 - Com 305 mil movimentos, retirar consultas desnecessárias reduziu o conjunto
   de 477 para 303 ms em SQLite em memória; medição sintética, sem renderização.
+- Índice parcial `ix_movest_consumo` instalado por `INDICES_POS_MIGRACAO`; testes
+  confirmam busca pela janela, banco novo/migrado, reabertura e idempotência.
+  Validação final do índice e regressões: 197 aprovados, 2 GUI ignorados.
 - Tk/Qt e módulos dependentes de PIL não executados neste sandbox: dependências ausentes.
   `test_adega_cadastro` tem `NameError` preexistente ao importar sem Qt; não alterado.
+- Varredura de segredos sem achados. A revisão/CodeQL final solicitada pelo titular
+  não executou por limite de tempo da ferramenta; não equivale a aprovação final.
 
 ## Migração e rollback
 
@@ -38,6 +43,7 @@ pare o PDV, preserve o banco atual e restaure a cópia pré-migração; não red
 ## Pendências
 
 - Homologar visualmente Tk/Qt e impressão em cópia do banco da loja.
+- Executar revisão automatizada/CodeQL final em ambiente com disponibilidade.
 - Acompanhar CI após merge; não há mais checks automáticos em PR.
 - Se a proteção da `main` exigir checks de PR antigos, administrador deve ajustar
   a configuração para não bloquear merges aguardando execuções removidas.

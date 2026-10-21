@@ -608,6 +608,9 @@ INDICES_POS_MIGRACAO = [
     """CREATE UNIQUE INDEX IF NOT EXISTS ix_posicao_aberta ON vendas(comanda, posicao)
         WHERE modalidade = 'mesa' AND status IN ('aberta','conta_enviada')""",
     "CREATE INDEX IF NOT EXISTS ix_pagto_turno ON pagamentos_venda(turno_id)",     # v9
+    """CREATE INDEX IF NOT EXISTS ix_movest_consumo
+        ON movimentos_estoque(ref_tipo, criado_em, produto_id)
+        WHERE ref_tipo = 'venda' AND tipo IN ('venda','estorno_venda')""",
 ]
 
 # Lista positiva: campos livres, contatos, documentos e credenciais nunca viram
