@@ -86,7 +86,7 @@ class TestComposicaoQt(BaseTeste):
         antes = dict(self.banco.um("SELECT * FROM produtos WHERE id = ?", (produto,)))
         janela.insumo.setCurrentIndex(janela.insumo.findData(insumo))
         self.assertEqual(janela.rotulo_qtd.text(), "Quantidade (UN)")
-        janela.quantidade.setText("0,12345")
+        janela.quantidade.setText("0,1235")
         self.assertTrue(janela.incluir())
         composicao = self.ctx.produtos.composicao(produto)
         self.assertEqual(len(composicao), 1)
