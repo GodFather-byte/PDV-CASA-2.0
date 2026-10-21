@@ -10,6 +10,7 @@ from unittest.mock import patch
 from src.controllers.perfil_controller import PerfilController
 from src.controllers.produto_controller import ProdutoController
 from src.database.conexao import BancoDados
+from src.database.esquema import VERSAO_ESQUEMA
 from tests.test_caixa import BaseCaixa
 
 
@@ -310,7 +311,7 @@ class TesteRetratoPrecoAdega(BaseCaixa):
             antigo.fechar()
             migrado = BancoDados(str(caminho))
             try:
-                self.assertEqual(migrado.valor("PRAGMA user_version"), 24)
+                self.assertEqual(migrado.valor("PRAGMA user_version"), VERSAO_ESQUEMA)
                 self.assertEqual(migrado.valor(
                     "SELECT COUNT(*) FROM itens_venda WHERE regra_preco_json IS NOT NULL"), 0)
                 self.assertEqual([tuple(r) for r in migrado.todos(

@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 24
+VERSAO_ESQUEMA = 25
 
 PRODUTOS_HISTORICO_DDL = """CREATE TABLE IF NOT EXISTS produtos_historico (
     id INTEGER PRIMARY KEY,
@@ -297,6 +297,32 @@ TABELAS = [
         observacao TEXT
     )""",
     "CREATE INDEX IF NOT EXISTS ix_movest_prod ON movimentos_estoque(produto_id, criado_em)",
+    """CREATE TABLE IF NOT EXISTS importacoes_nfe (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chave TEXT NOT NULL UNIQUE,
+        arquivo TEXT NOT NULL,
+        numero TEXT NOT NULL,
+        emitente TEXT NOT NULL,
+        cnpj TEXT NOT NULL DEFAULT '',
+        data_emissao TEXT,
+        importado_em TEXT NOT NULL,
+        operador_id INTEGER REFERENCES operadores(id),
+        lancamento_id INTEGER NOT NULL REFERENCES lancamentos_estoque(id),
+        quantidade_itens INTEGER NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS itens_importacao_nfe (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        importacao_id INTEGER NOT NULL REFERENCES importacoes_nfe(id) ON DELETE CASCADE,
+        produto_id INTEGER NOT NULL REFERENCES produtos_historico(id),
+        codigo_xml TEXT NOT NULL DEFAULT '',
+        ean TEXT NOT NULL DEFAULT '',
+        nome_xml TEXT NOT NULL,
+        quantidade REAL NOT NULL,
+        custo_unit_cent INTEGER NOT NULL,
+        custo_total_cent INTEGER NOT NULL,
+        resultado TEXT NOT NULL CHECK (resultado IN ('criado','atualizado'))
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_itens_importacao_nfe_produto ON itens_importacao_nfe(produto_id)",
     # ------------------------------------------------------------- caixa / vendas
     """CREATE TABLE IF NOT EXISTS turnos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -750,6 +776,8 @@ AUDITORIA = [
 # (ver BancoDados._migrar). Bancos novos já nascem na VERSAO_ESQUEMA e não as executam. Cada passo é um
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 MIGRACOES = {
+    # v25: tabelas de histórico de importação NF-e criadas por TABELAS.
+    25: [],
     # Sem preenchimento retroativo: o cadastro atual não prova a regra de uma venda antiga.
     24: [
         ("coluna", "itens_venda", "regra_preco_json", "TEXT"),

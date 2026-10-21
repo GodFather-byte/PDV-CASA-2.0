@@ -1,5 +1,5 @@
 """Relatórios de vendas e de caixa (manual ADM seção 6.01 a 6.11 e versão web):
-venda no período, por grupo, entradas/saídas do caixa, fechamentos, comandas, garçons,
+venda no período, por grupo e produto mais vendido, entradas/saídas do caixa, fechamentos, comandas, garçons,
 C.M.V., comissões, informativo por dia, por hora e cancelados."""
 from __future__ import annotations
 
@@ -94,6 +94,8 @@ class RelatoriosVendas:
             if f.get(chave):
                 c.append(f"{rotulo}: {self.banco.valor(f'SELECT {col} FROM {tabela} WHERE id = ?', (f[chave],), '?')}")
         if f.get("modalidade"): c.append(f"Modalidade: {f['modalidade']}")
+        if f.get("grupo_id"):
+            c.append("Categoria: " + self.banco.valor("SELECT nome FROM grupos WHERE id = ?", (f["grupo_id"],), "?"))
         return c or ["Todos os dados disponíveis"]
 
     # ------------------------------------------------------- 6.01 cupons
@@ -197,6 +199,9 @@ class RelatoriosVendas:
     # ---------------------------------------------------- 6.02 por grupo
     def vendas_por_grupo(self, f: dict) -> Relatorio:
         onde, p = self._onde_vendas(f)
+        if f.get("grupo_id"):
+            onde += " AND g.id = ?"
+            p.append(f["grupo_id"])
         rel = Relatorio("Venda por grupo", [Coluna("Grupo / Produto", 36), Coluna("Quant", 10, "d"),
                                             Coluna("Total", 12, "d"), Coluna("%", 8, "d")], criterios=self.criterios(f))
         linhas = self.banco.todos(
@@ -216,6 +221,28 @@ class RelatoriosVendas:
             rel.add(f"Total {grupo}", Q(sum(r["qt"] for r in itens)), M(soma),
                     Q(soma * 100 / geral, 2) if geral else "0,00", estilo="subtotal")
         rel.add("TOTAL DE VENDAS", "", M(geral), "100,00" if geral else "0,00", estilo="total")
+        return rel
+
+    def mais_vendidos(self, f: dict) -> Relatorio:
+        """Produtos mais vendidos no período, opcionalmente recortados por grupo/categoria."""
+        onde, p = self._onde_vendas(f)
+        if f.get("grupo_id"):
+            onde += " AND g.id = ?"
+            p.append(f["grupo_id"])
+        rel = Relatorio("Produtos mais vendidos", [
+            Coluna("Produto", 32), Coluna("Grupo", 18), Coluna("Quantidade", 11, "d"),
+            Coluna("Faturamento", 12, "d")], criterios=self.criterios(f))
+        linhas = self.banco.todos(
+            f"""SELECT pr.nome, g.nome AS grupo, SUM(i.quantidade) AS quantidade, SUM(i.total_cent) AS total
+                FROM itens_venda i JOIN vendas v ON v.id = i.venda_id
+                JOIN produtos_historico pr ON pr.id = i.produto_id
+                JOIN subgrupos s ON s.id = pr.subgrupo_id JOIN grupos g ON g.id = s.grupo_id
+                WHERE i.cancelado = 0 AND {onde}
+                GROUP BY pr.id ORDER BY quantidade DESC, pr.nome LIMIT 100""", p)
+        for item in linhas:
+            rel.add(item["nome"], item["grupo"], Q(item["quantidade"]), M(item["total"]))
+        rel.rodape = [("Produtos listados", str(len(linhas))),
+                      ("Faturamento listado", M(sum(item["total"] for item in linhas)))]
         return rel
 
     # ----------------------------------------- 6.03 e 6.04 caixa e turnos
@@ -346,6 +373,9 @@ class RelatoriosVendas:
     def cmv(self, f: dict) -> Relatorio:
         """Custo da mercadoria vendida: custo atual (composição ou último preço de compra) x quantidade."""
         onde, p = self._onde_vendas(f)
+        if f.get("grupo_id"):
+            onde += " AND g.id = ?"
+            p.append(f["grupo_id"])
         prods = ProdutoController(self.banco)
         rel = Relatorio("Relatório C.M.V.", [Coluna("Produto", 28), Coluna("Qt.Venda", 9, "d"), Coluna("Custo Unit", 10, "d"),
                                              Coluna("Custo Total", 11, "d"), Coluna("Tot.Vendido", 11, "d"),

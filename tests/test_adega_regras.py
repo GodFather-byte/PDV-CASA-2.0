@@ -8,6 +8,7 @@ from src.controllers.perfil_controller import PerfilController
 from src.controllers.produto_controller import ProdutoController
 from src.core.erros import ErroNegocio
 from src.database.conexao import BancoDados
+from src.database.esquema import VERSAO_ESQUEMA
 from tests.test_caixa import BaseCaixa
 
 
@@ -306,7 +307,7 @@ class TesteRegrasAdega(BaseCaixa):
             antigo.fechar()
             migrado = BancoDados(str(caminho))
             try:
-                self.assertEqual(migrado.valor("PRAGMA user_version"), 24)
+                self.assertEqual(migrado.valor("PRAGMA user_version"), VERSAO_ESQUEMA)
                 self.assertIsNone(migrado.valor("SELECT regra_preco_json FROM itens_venda LIMIT 1"))
                 self.assertTrue(migrado.cfg_bool("agrupar_itens_balcao"))
                 item = migrado.um("SELECT * FROM itens_venda WHERE venda_id = ?", (self.vid,))

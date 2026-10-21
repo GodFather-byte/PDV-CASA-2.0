@@ -94,6 +94,7 @@ CONFIG_PADRAO = {
     # Mesas e comandas no caixa: desligado, o caixa vende só no balcão (adega, comércio). Nasce ligado, como sempre foi.
     "usar_mesas": "S",
     "agrupar_itens_balcao": "N",
+    "margem_minima_pct": "0",
     "api_url": "", "api_token": "", "sync_intervalo_seg": "60",
     # Painel do dono no celular: desligado até o dono pedir (as vendas só saem da loja com isto ligado).
     "painel_dono": "N",

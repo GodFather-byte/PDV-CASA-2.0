@@ -5,12 +5,12 @@ import sqlite3
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView, QCheckBox, QDialog, QFileDialog, QLineEdit,
+    QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QLineEdit,
     QHBoxLayout, QHeaderView, QLabel, QMessageBox, QPushButton, QRadioButton,
     QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
 
-from src.controllers.importacao_produtos import ImportacaoProdutos, Previa, ler_tabela
+from src.controllers.importacao_produtos import ImportacaoNFe, ImportacaoProdutos, Previa, PreviaNFe, ler_tabela
 from src.controllers.config_controller import modulos_desligados
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao
@@ -35,6 +35,7 @@ class JanelaImportarProdutos(QDialog):
         self.ao_importar = ao_importar
         self._exigir_acesso()
         self.imp = ImportacaoProdutos(ctx.banco, ctx.operador_id)
+        self.imp_nfe = ImportacaoNFe(ctx.banco, ctx.operador_id)
         self.caminho = None
         self.tabela = None
         self.previa: Previa | None = None
@@ -52,6 +53,9 @@ class JanelaImportarProdutos(QDialog):
         self.btn_escolher = QPushButton("Escolher planilha…")
         self.btn_escolher.clicked.connect(self.escolher_arquivo)
         arquivos.addWidget(self.btn_escolher)
+        self.btn_nfe = QPushButton("Importar NF-e XML…")
+        self.btn_nfe.clicked.connect(self.escolher_nfe)
+        arquivos.addWidget(self.btn_nfe)
         self.arquivo = QLabel("Nenhuma planilha escolhida")
         self.arquivo.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         arquivos.addWidget(self.arquivo, 1)
@@ -139,6 +143,19 @@ class JanelaImportarProdutos(QDialog):
             self, "Planilha de produtos", "", FILTRO_PLANILHAS)
         if caminho:
             self.carregar(caminho)
+
+    def escolher_nfe(self):
+        caminho, _ = QFileDialog.getOpenFileName(self, "Importar NF-e", "", "NF-e XML (*.xml)")
+        if not caminho:
+            return
+        try:
+            self._exigir_acesso()
+            previa = self.imp_nfe.analisar(caminho)
+        except (ErroNegocio, OSError, ValueError) as erro:
+            self.mensagem.setText(str(erro))
+            return False
+        janela = JanelaImportarNFe(self, previa)
+        return janela.exec()
 
     def carregar(self, caminho):
         try:
@@ -291,3 +308,116 @@ class JanelaImportarProdutos(QDialog):
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
             return False
+
+
+class JanelaImportarNFe(QDialog):
+    """Prévia editável das associações de uma NF-e antes da entrada no estoque."""
+
+    def __init__(self, tela_importacao, previa: PreviaNFe):
+        super().__init__(tela_importacao)
+        self.tela_importacao, self.previa = tela_importacao, previa
+        self.setWindowTitle(f"Conferir NF-e {previa.numero}")
+        self.resize(1000, 620)
+        layout = QVBoxLayout(self)
+        layout.addWidget(texto(
+            f"NF-e {previa.numero} • {previa.emitente}. O custo e o estoque serão atualizados; "
+            "o preço de venda nunca é alterado.", "titulo"))
+        categoria = QHBoxLayout()
+        categoria.addWidget(texto("Categoria para produtos novos:", "suave"))
+        self.grupo = QComboBox()
+        self.grupo.addItems(("BAR", "ADEGA"))
+        categoria.addWidget(self.grupo)
+        categoria.addStretch()
+        layout.addLayout(categoria)
+        self.grade = QTableWidget(len(previa.itens), 6)
+        self.grade.setHorizontalHeaderLabels((
+            "Produto da nota", "EAN/GTIN", "Quantidade", "Custo unitário", "Associar produto", "Preço manual (R$)"))
+        self.grade.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.grade.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.grade.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.grade.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.grade, 1)
+        layout.addWidget(texto(
+            "Preço manual é opcional e só vale para produtos novos. Sem preço, o produto fica bloqueado para venda.",
+            "aviso"))
+        botoes = QHBoxLayout()
+        botoes.addStretch()
+        self.btn_confirmar = QPushButton("Confirmar entrada")
+        self.btn_confirmar.clicked.connect(self.confirmar)
+        botoes.addWidget(self.btn_confirmar)
+        cancelar = QPushButton("Cancelar")
+        cancelar.clicked.connect(self.reject)
+        botoes.addWidget(cancelar)
+        layout.addLayout(botoes)
+        self.associacoes = []
+        self.precos_venda = []
+        for linha, item in enumerate(previa.itens):
+            for coluna, valor in enumerate((
+                    item.nome, item.codigo_barras or "—", fmt.fmt_qtd(item.quantidade),
+                    fmt.fmt_num(item.custo_unit_cent))):
+                celula = QTableWidgetItem(str(valor))
+                self.grade.setItem(linha, coluna, celula)
+            produtos = {p["id"]: p for p in item.sugestoes}
+            if item.produto_id:
+                p = self.tela_importacao.ctx.banco.um(
+                    "SELECT id, codigo, nome FROM produtos WHERE id = ?", (item.produto_id,))
+                if p:
+                    produtos[p["id"]] = dict(p)
+            associar = QComboBox()
+            associar.addItem(f"Criar novo: {item.nome}", None)
+            for produto in produtos.values():
+                associar.addItem(f"{produto['codigo']} • {produto['nome']}", produto["id"])
+            if item.produto_id:
+                indice = associar.findData(item.produto_id)
+                if indice >= 0:
+                    associar.setCurrentIndex(indice)
+            self.grade.setCellWidget(linha, 4, associar)
+            self.associacoes.append(associar)
+            preco = QLineEdit()
+            preco.setPlaceholderText("Opcional")
+            self.grade.setCellWidget(linha, 5, preco)
+            self.precos_venda.append(preco)
+
+    def confirmar(self):
+        try:
+            self.tela_importacao._exigir_acesso()
+        except ErroNegocio as erro:
+            QMessageBox.warning(self, "Acesso", str(erro))
+            return False
+        resposta = QMessageBox.question(
+            self, "Confirmar entrada",
+            f"Registrar {len(self.previa.itens)} item(ns) da NF-e {self.previa.numero} no estoque?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if resposta != QMessageBox.StandardButton.Yes:
+            return False
+        escolhas = {item.numero: combo.currentData() for item, combo in zip(self.previa.itens, self.associacoes)}
+        precos = {}
+        for item, associacao, campo in zip(self.previa.itens, self.associacoes, self.precos_venda):
+            texto_preco = campo.text().strip()
+            if associacao.currentData() is None and texto_preco:
+                try:
+                    centavos = fmt.para_centavos(texto_preco)
+                    if centavos < 0:
+                        raise ValueError
+                    precos[item.numero] = centavos
+                except ValueError:
+                    QMessageBox.warning(self, "Preço inválido", f"Informe um preço válido para '{item.nome}'.")
+                    return False
+        try:
+            resultado = self.tela_importacao.imp_nfe.importar(
+                self.previa, self.grupo.currentText(), escolhas, precos)
+        except (ErroNegocio, OSError, ValueError, sqlite3.Error) as erro:
+            QMessageBox.warning(self, "Importação não concluída", str(erro))
+            return False
+        mensagem = (f"Entrada concluída: {resultado['criados']} produto(s) criado(s), "
+                    f"{resultado['atualizados']} atualizado(s).")
+        if resultado["alertas_margem"]:
+            nomes = ", ".join(f"{p['nome']} ({p['margem_pct']:.1f}% < {p['minima_pct']:g}%)"
+                              for p in resultado["alertas_margem"])
+            mensagem += "\nMargem mínima comprometida: " + nomes
+        QMessageBox.information(self, "Importação NF-e concluída", mensagem)
+        if self.tela_importacao.ao_importar:
+            self.tela_importacao.ao_importar()
+        self.accept()
+        return True

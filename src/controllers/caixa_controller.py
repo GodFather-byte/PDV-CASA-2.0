@@ -311,6 +311,8 @@ class CaixaController:
             preco = p["preco_gelada_cent"] if temperatura == "gelada" else self.produtos.preco_vigente(p, quando)
             base = ({"tipo": "gelada", "preco_cent": preco, "avaliado_em": agora}
                     if temperatura == "gelada" else self.produtos.regra_preco_vigente(p, quando))
+        if preco <= 0:
+            raise ErroNegocio(f"'{p['nome']}' está sem preço de venda. Defina o preço no cadastro antes de vender.")
 
         retrato = {"versao": 1, "tipo": base["tipo"], "temperatura": temperatura,
                    "preco_base_cent": preco, "preco_unit_cent": preco, "base": base,
@@ -750,6 +752,13 @@ class CaixaController:
         v = self._aberta(venda_id)
         turno = self.turnos.exigir_aberto()
         itens = self.itens(venda_id)
+        sem_preco = self.banco.um(
+            """SELECT pr.nome FROM itens_venda i JOIN produtos_historico pr ON pr.id = i.produto_id
+               WHERE i.venda_id = ? AND i.cancelado = 0
+                 AND (i.preco_unit_cent <= 0 OR i.total_cent <= 0) LIMIT 1""", (venda_id,))
+        if sem_preco:
+            raise ErroNegocio(
+                f"'{sem_preco['nome']}' está sem preço de venda. Defina o preço no cadastro antes de finalizar.")
         eh_credito = v["modalidade"] == "caderneta" and not itens
         eh_debito = v["modalidade"] == "caderneta" and bool(itens)
         if not itens and not eh_credito and not v["prepago"]:       # pré-pago sem consumo fecha devolvendo a recarga

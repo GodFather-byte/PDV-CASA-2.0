@@ -1,4 +1,4 @@
-"""Catálogo Qt opt-in dos 23 relatórios genéricos de ``relatorios_ui.SPECS``.
+"""Catálogo Qt opt-in dos relatórios genéricos de ``relatorios_ui.SPECS``.
 
 Uso: ``JanelaRelatorios(ctx, chave="caixa_mov").exec()``. Sem integração ao menu.
 Filtros adicionais do Tk ficam sempre visíveis. Consulta e CSV usam os mesmos
@@ -39,6 +39,7 @@ FILTROS = {
     "vendedor_id": ("Vendedor", "lookup:operadores"),
     "entregador_id": ("Entregador", "lookup:operadores"),
     "cliente_id": ("Cliente", "lookup:clientes"),
+    "grupo_id": ("Categoria / setor", "lookup:grupos"),
     "modalidade": ("Modalidade", "escolha:balcao|mesa|comanda|caderneta|entrega"),
     "tipo_caixa": ("Movimento", "escolha:entrada|saida"),
     "tipo_estoque": ("Tipo de movimento", "escolha:compra|entrada|saida|descarte|quebra|oxidacao|devolucao|contagem|inicial|pedido|desc_acabados"),
@@ -57,6 +58,7 @@ PERIODO = ("de", "ate")
 PERIODO_TURNO = PERIODO + ("turno", "operador_id")
 VENDAS = PERIODO + ("hora_ini", "hora_fim", "cupom_ini", "cupom_fim",
                     "turno_atual", "turno", "operador_id", "modalidade")
+VENDAS_CATEGORIA = VENDAS + ("grupo_id",)
 VENDAS_MAIS = ("garcom_id", "vendedor_id", "entregador_id", "cliente_id")
 
 
@@ -84,7 +86,8 @@ class Spec:
 
 # Módulos espelham RELATORIOS de ui.app, sem importar sua dependência Tk.
 SPECS = {
-    "vendas_grupo": Spec("Venda por grupo", "rel_vendas_grupo", "vendas_por_grupo", VENDAS, mais=VENDAS_MAIS),
+    "vendas_grupo": Spec("Venda por grupo", "rel_vendas_grupo", "vendas_por_grupo", VENDAS_CATEGORIA, mais=VENDAS_MAIS),
+    "mais_vendidos": Spec("Produtos mais vendidos", "rel_vendas_grupo", "mais_vendidos", VENDAS_CATEGORIA, mais=VENDAS_MAIS),
     "informativo": Spec("Informativo de vendas por dia", "rel_informativos", "informativo_dias", PERIODO + ("operador_id",), "mes"),
     "horas": Spec("Vendas por hora", "rel_informativos", "vendas_por_hora", PERIODO + ("hora_ini", "hora_fim"), "mes"),
     "cancelados": Spec("Cancelamentos", "rel_informativos", "cancelados", PERIODO + ("operador_id",), "mes"),
@@ -94,7 +97,7 @@ SPECS = {
     "auditoria_operadores": Spec("Auditoria por operador", "rel_auditoria", "auditoria_operadores", PERIODO, "mes"),
     "garcons": Spec("Garçons", "rel_garcons", "garcons", VENDAS, mais=VENDAS_MAIS),
     "comissao_garotas": Spec("Comissão das garotas", "rel_comissao_garotas", "comissoes_garotas", PERIODO + ("turno", "garota", "situacao_comissao", "detalhar"), "mes"),
-    "cmv": Spec("C.M.V. - Custo da mercadoria vendida", "rel_cmv", "cmv", VENDAS, mais=VENDAS_MAIS),
+    "cmv": Spec("C.M.V. - Custo da mercadoria vendida", "rel_cmv", "cmv", VENDAS_CATEGORIA, mais=VENDAS_MAIS),
     "comissao_produto": Spec("Comissão por produto", "rel_comissoes", "comissoes_produto", PERIODO, "mes"),
     "comissao_venda": Spec("Comissão por venda", "rel_comissoes", "comissoes_venda", PERIODO, "mes"),
     "comissao_cliente": Spec("Vendas por cliente", "rel_comissoes", "comissoes_cliente", PERIODO + ("cliente_id",), "mes"),

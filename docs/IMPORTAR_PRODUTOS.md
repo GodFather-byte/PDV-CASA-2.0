@@ -3,6 +3,29 @@
 Cadastros > Produtos > **Importar planilha**. Serve para cadastrar de uma vez a lista de produtos de uma casa nova, atualizar
 preços em massa ou levar o cardápio de outro sistema. O PDV **não traz produtos prontos**: cada casa importa os seus.
 
+## Importar compra por NF-e XML (Bar e Adega)
+
+Na janela **Importar produtos**, escolha **Importar NF-e XML...** e selecione o XML autorizado da NF-e modelo 55. Confira
+os produtos, quantidades e custos antes de confirmar. A nota é registrada como compra e aumenta o estoque; o fornecedor é
+incluído no cadastro quando necessário.
+
+O sistema associa automaticamente primeiro pelo EAN/GTIN e depois pelo código interno numérico (`cProd`). Sem correspondência,
+selecione uma sugestão pelo nome ou mantenha **Criar novo**. Escolha **BAR** ou **ADEGA** para classificar os produtos novos.
+Cada produto novo recebe um código interno automático, mesmo sem código de barras. Produtos existentes mantêm a categoria atual.
+Uma mesma chave de NF-e não pode ser importada duas vezes; a nota e o resultado de cada item ficam no histórico.
+
+**O preço de venda nunca é calculado nem alterado pela importação da NF-e.** Na conferência, o dono pode informar manualmente o
+preço de cada produto novo; se deixar o campo em branco, ele começa com preço zero e fica bloqueado para venda até o preço ser
+definido no cadastro. Produtos sem código de barras podem ser encontrados pelo nome na busca do caixa ou pelo código interno.
+
+Para alertar quando uma compra comprometer a margem, configure **Configurações > Estoque > Margem mínima para alertar após
+atualizar custo**. Use zero para desligar. A margem é calculada como `(preço de venda - custo) / preço de venda`; o alerta aparece
+ao concluir a importação e não altera o preço.
+
+Nos relatórios **Venda por grupo**, **Produtos mais vendidos** e **C.M.V.**, use o filtro **Categoria / setor** e o período para
+separar Bar, Adega ou outra categoria. O estoque atual, movimento de estoque e posição por período já oferecem acompanhamento
+de saldo e giro.
+
 ## Passo a passo
 1. **Baixar planilha modelo** (ou **Exportar produtos atuais**, para editar preços e importar de volta). Os arquivos são CSV com ";",
    que o Excel brasileiro abre direto; também dá para importar um `.xlsx`.

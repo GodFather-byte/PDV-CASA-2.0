@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from src.controllers.estoque_controller import EstoqueController
 from src.database.conexao import BancoDados
+from src.database.esquema import VERSAO_ESQUEMA
 from tests.base import BaseTeste
 
 
@@ -25,7 +26,7 @@ class TesteIndiceConsumoV24(BaseTeste):
                 "quantidade": quantidade, "qt_apos": 0, "criado_em": quando})
 
     def verificar_indice_e_janela(self, banco):
-        self.assertEqual(banco.valor("PRAGMA user_version"), 24)
+        self.assertEqual(banco.valor("PRAGMA user_version"), VERSAO_ESQUEMA)
         indices = [dict(r) for r in banco.todos("PRAGMA index_list(movimentos_estoque)")]
         indice = next(r for r in indices if r["name"] == "ix_movest_consumo")
         self.assertEqual(indice["partial"], 1)
@@ -72,4 +73,4 @@ class TesteIndiceConsumoV24(BaseTeste):
                         self.assertEqual(banco.todos("PRAGMA foreign_key_check"), [])
                     finally:
                         banco.fechar()
-                self.assertEqual(len(list(Path(pasta).glob("*.bak"))), 1 if versao == 23 else 0)
+                self.assertEqual(len(list(Path(pasta).glob("*.bak"))), 1)

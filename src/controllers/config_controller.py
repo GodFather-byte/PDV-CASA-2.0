@@ -68,6 +68,7 @@ CAMPOS_CONFIG = [
     ("usar_desconto", "Permitir desconto no fechamento da conta", "sn", "Caixa"),
     ("agrupar_itens_balcao", "Agrupar produtos iguais e da mesma temperatura no balcão", "sn", "Caixa"),
     ("virada_dia_hora", "O dia do painel e dos relatórios de vendas vira às (hora, 0 a 23; 6 = a madrugada conta na noite anterior)", "int", "Caixa"),
+    ("margem_minima_pct", "Margem mínima para alertar após atualizar custo (0 = desligado)", "decimal", "Estoque"),
     ("exigir_senha_gaveta", "Exigir senha de supervisor para abrir a gaveta", "sn", "Caixa"),
     ("exigir_senha_sangria", "Exigir senha de supervisor para sangria", "sn", "Caixa"),
     ("exigir_senha_cancelamento", "Exigir senha de supervisor para cancelamentos", "sn", "Caixa"),

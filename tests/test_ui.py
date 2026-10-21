@@ -3072,3 +3072,23 @@ class TesteImportarProdutosUI(BaseUI):
         c._importar_planilha(); c.update()
         self.assertTrue(any(isinstance(w, JanelaImportarProdutos) for w in c.winfo_children()))
         c.destroy()
+
+    def test_importar_nfe_cria_produto_com_preco_manual(self):
+        from src.ui.importar_produtos_ui import JanelaImportarNFe, JanelaImportarProdutos
+        arquivo = self._arquivo("""<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe"><NFe><infNFe Id="NFe321">
+          <ide><mod>55</mod><nNF>321</nNF><dhEmi>2026-10-03T10:00:00-03:00</dhEmi></ide>
+          <emit><CNPJ>98765432000199</CNPJ><xNome>Fornecedor Tk</xNome></emit>
+          <det nItem="1"><prod><cProd>XX</cProd><cEAN>SEM GTIN</cEAN><xProd>REFRIGERANTE NOVO</xProd>
+          <uCom>UN</uCom><qCom>1</qCom><vUnCom>2.50</vUnCom><vProd>2.50</vProd></prod></det>
+        </infNFe></NFe></nfeProc>""")
+        tela = JanelaImportarProdutos(self.root, self.ctx)
+        previa = tela.imp_nfe.analisar(arquivo)
+        dialogo = JanelaImportarNFe(tela, previa)
+        dialogo.preco_novo.set("8,00")
+        with mock.patch.object(tema, "confirmar", return_value=True), \
+             mock.patch.object(tema, "mensagem"):
+            dialogo.confirmar()
+        produto = self.banco.um("SELECT * FROM produtos WHERE nome = 'REFRIGERANTE NOVO'")
+        self.assertEqual((produto["preco_cent"], produto["ult_preco_cent"]), (800, 250))
+        dialogo.destroy()
+        tela.destroy()
