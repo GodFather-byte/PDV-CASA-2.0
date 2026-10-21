@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 23
+VERSAO_ESQUEMA = 24
 
 PRODUTOS_HISTORICO_DDL = """CREATE TABLE IF NOT EXISTS produtos_historico (
     id INTEGER PRIMARY KEY,
@@ -369,6 +369,7 @@ TABELAS = [
         quantidade REAL NOT NULL,
         preco_unit_cent INTEGER NOT NULL,
         preco_base_cent INTEGER,
+        regra_preco_json TEXT,
         temperatura TEXT NOT NULL DEFAULT 'natural' CHECK (temperatura IN ('natural', 'gelada')),
         total_cent INTEGER NOT NULL,
         cobra_servico INTEGER NOT NULL DEFAULT 1,
@@ -607,6 +608,9 @@ INDICES_POS_MIGRACAO = [
     """CREATE UNIQUE INDEX IF NOT EXISTS ix_posicao_aberta ON vendas(comanda, posicao)
         WHERE modalidade = 'mesa' AND status IN ('aberta','conta_enviada')""",
     "CREATE INDEX IF NOT EXISTS ix_pagto_turno ON pagamentos_venda(turno_id)",     # v9
+    """CREATE INDEX IF NOT EXISTS ix_movest_consumo
+        ON movimentos_estoque(ref_tipo, criado_em, produto_id)
+        WHERE ref_tipo = 'venda' AND tipo IN ('venda','estorno_venda')""",
 ]
 
 # Lista positiva: campos livres, contatos, documentos e credenciais nunca viram
@@ -746,6 +750,10 @@ AUDITORIA = [
 # (ver BancoDados._migrar). Bancos novos já nascem na VERSAO_ESQUEMA e não as executam. Cada passo é um
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 MIGRACOES = {
+    # Sem preenchimento retroativo: o cadastro atual não prova a regra de uma venda antiga.
+    24: [
+        ("coluna", "itens_venda", "regra_preco_json", "TEXT"),
+    ],
     23: [
         ("coluna", "movimentos_estoque", "operador_id", "INTEGER REFERENCES operadores(id)"),
         ("coluna", "movimentos_estoque", "observacao", "TEXT"),

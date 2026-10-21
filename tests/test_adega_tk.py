@@ -66,11 +66,10 @@ class TesteBalcaoAdegaTk(BaseAdegaTk):
         self.assertNotIn("R$ 7,00", self.cx.lbl_oferta.cget("text"))
 
     def test_resumo_e_grade_mostram_temperatura_atacado_e_economia(self):
+        self.banco.atualizar("produtos", self.skol, {
+            "preco_gelada_cent": 950, "atacado_gelada_qtd": 6, "preco_atacado_gelada_cent": 850})
+        self.dialogos({"Temperatura da bebida": "Gelada"})
         self.digitar_codigo("6*1")
-        itens = self.ctx.caixa.itens(self.cx.venda_id)
-        itens[0].update(temperatura="gelada", preco_base_cent=950, preco_unit_cent=850, total_cent=5100)
-        with mock.patch.object(type(self.ctx.caixa), "itens", return_value=itens):
-            self.cx.recarregar()
         self.assertIn("[Gelada · Atacado]", self.linhas()[0][1])
         texto = self.cx.lbl_resumo_adega.cget("text")
         for esperado in ("Quantidade: 6", "Natural: 0", "Gelada: 6", "Economia no atacado: R$ 6,00"):
@@ -78,12 +77,16 @@ class TesteBalcaoAdegaTk(BaseAdegaTk):
 
     def test_recarrega_item_migrado_com_preco_base_nulo(self):
         self.digitar_codigo("6*1")
-        self.banco.executar("UPDATE itens_venda SET preco_base_cent = NULL WHERE venda_id = ?", (self.cx.venda_id,))
+        self.banco.executar(
+            "UPDATE itens_venda SET preco_base_cent = NULL, regra_preco_json = NULL WHERE venda_id = ?",
+            (self.cx.venda_id,))
         self.cx.recarregar()
         self.cx.update()
         item = self.ctx.caixa.itens(self.cx.venda_id)[0]
         self.assertIsNone(item["preco_base_cent"])
-        self.assertEqual(self.linhas()[0][1], "SKOL")                       # sem preço gelada, sem etiqueta de temperatura
+        self.assertEqual(self.linhas()[0][1], "SKOL  [Natural · Legado]")
+        self.assertIn("Regra histórica indisponível", self.linhas()[0][6])
+        self.assertIn("Regra histórica indisponível", self.cx.lbl_detalhe_preco.cget("text"))
         self.assertEqual(self.cx.lbl_total.cget("text"), "48,00")
         resumo = self.cx.lbl_resumo_adega.cget("text")
         self.assertIn("Quantidade: 6", resumo)
@@ -253,9 +256,26 @@ class TesteBalcaoAdegaTk(BaseAdegaTk):
         self.cx.recarregar()
         linhas = self.linhas()
         self.assertEqual([l[1] for l in linhas], ["SKOL  [Natural]", "SKOL  [Gelada]", "AGUA"])
-        self.assertEqual([l[6] for l in linhas], ["", "sem copo", ""])
+        self.assertTrue(linhas[0][6].startswith("Preço-base registrado: R$ 8,00"))
+        self.assertTrue(linhas[1][6].startswith("sem copo · Preço-base registrado: R$ 9,50"))
+        self.assertTrue(linhas[2][6].startswith("Preço-base registrado: R$ 3,50"))
+        self.assertNotIn("Gelada", linhas[1][6])
+        for linha in linhas:
+            self.assertIn("aplicado em", linha[6])
         self.assertTrue(self.ctx.caixa.itens(vid)[1]["observacao"].startswith("Gelada - "))   # no cupom continua inteira
         self.assertEqual(gelada, self.ctx.caixa.itens(vid)[1]["id"])
+
+    def test_retrato_incompleto_na_grade_usa_fallback_sem_mudar_total(self):
+        self.digitar_codigo("2*1")
+        self.banco.executar("UPDATE itens_venda SET regra_preco_json = ? WHERE venda_id = ?",
+                            ('{"versao":1,"tipo":"normal","base":{}}', self.cx.venda_id))
+        self.cx.recarregar()
+        self.cx.update()
+        self.assertEqual(self.linhas()[0][1], "SKOL  [Natural · Legado]")
+        self.assertIn("Regra histórica indisponível", self.linhas()[0][6])
+        self.assertIn("Regra histórica indisponível", self.cx.lbl_detalhe_preco.cget("text"))
+        self.assertEqual(self.cx.lbl_total.cget("text"), "16,00")
+        self.sem_travar()
 
     def test_natural_e_gelada_ficam_em_linhas_distintas(self):
         self.banco.atualizar("produtos", self.skol, {"preco_gelada_cent": 950})

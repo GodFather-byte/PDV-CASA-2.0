@@ -114,6 +114,8 @@ class JanelaEstoque(QDialog):
         self.linhas = []
         self.movimentos = []
         self.produto = None
+        self._visao_atual = False
+        self._filtros_visao = {}
         self.setWindowTitle("Estoque")
         self.resize(1200, 780)
         layout = QVBoxLayout(self)
@@ -157,11 +159,16 @@ class JanelaEstoque(QDialog):
         layout.addLayout(filtros)
         layout.addWidget(texto(
             "Adega: categorias típicas e produtos configurados. Alta = sem estoque; média = repor. "
-            "Pedidos e lista de compras são gerais.", "suave"))
+            "Pedido/lista Adega seguem os filtros; Geral mantém compras gerais.", "suave"))
+        self.aviso_cobertura = texto(
+            "Cobertura indicativa = saldo ÷ (vendas líquidas de estornos nos últimos 30 dias ÷ 30). "
+            "Sem consumo líquido: indisponível. Reposição mantém dobro do mínimo; revise antes de comprar.",
+            "suave")
+        layout.addWidget(self.aviso_cobertura)
         self.grade = self._tabela([
             "Situação", "Código", "Produto", "Grupo", "Saldo", "Mínimo",
             "Reposição sugerida", "Último custo", "Valor em estoque", "Última atualização",
-            "Categoria", "Prioridade de reposição",
+            "Categoria", "Prioridade de reposição", "Cobertura (30 dias)",
         ])
         self.grade.itemSelectionChanged.connect(self._selecionou)
         layout.addWidget(self.grade, 2)
@@ -199,7 +206,7 @@ class JanelaEstoque(QDialog):
         layout.addWidget(fechar)
         QShortcut(QKeySequence("F5"), self, activated=self.atualizar)
         QShortcut(QKeySequence("Ctrl+F"), self, activated=self.busca.setFocus)
-        self.visao.currentIndexChanged.connect(lambda _: self.atualizar())
+        self.visao.currentIndexChanged.connect(lambda _: self._trocar_visao())
         self.atualizar()
 
     @staticmethod
@@ -256,6 +263,26 @@ class JanelaEstoque(QDialog):
         self.mensagem.setText(str(erro))
         return False
 
+    def _trocar_visao(self):
+        self._filtros_visao[self._visao_atual] = (
+            self.situacao.currentData(), self.busca.text(), self.grupo.currentData())
+        self._visao_atual = self.visao.currentData()
+        situacao, busca, grupo = self._filtros_visao.get(self._visao_atual, (None, "", None))
+        self.situacao.setCurrentIndex(self.situacao.findData(situacao))
+        self.busca.setText(busca)
+        indice = self.grupo.findData(grupo)
+        if indice < 0:
+            self.grupo.addItem(grupo, grupo)
+            indice = self.grupo.count() - 1
+        self.grupo.setCurrentIndex(indice)
+        self.atualizar()
+
+    def _recorte_compras(self):
+        if not self.visao.currentData():
+            return {}
+        return {"adega": True, "situacao": self.situacao.currentData(),
+                "texto": self.busca.text(), "grupo": self.grupo.currentData()}
+
     def atualizar(self, preservar_produto=False):
         produto_id = (self.produto["id"] if preservar_produto and self.produto
                       else None)
@@ -283,6 +310,10 @@ class JanelaEstoque(QDialog):
                 indice = self.grupo.count() - 1
             self.grupo.setCurrentIndex(indice)
         self.linhas = linhas
+        self.grade.setColumnHidden(12, not adega)
+        self.aviso_cobertura.setVisible(adega)
+        self.btn_pedido.setText("Gerar pedido Adega (filtros)" if adega else "Gerar pedido do que falta")
+        self.btn_lista.setText("Lista de compras Adega (filtros)" if adega else "Lista de compras")
         self.grade.blockSignals(True)
         try:
             self._preencher(self.grade, [
@@ -293,7 +324,8 @@ class JanelaEstoque(QDialog):
                  fmt.fmt_qtd(p["repor"], fmt.CASAS_QTD),
                  fmt.fmt_brl(p["ult_preco_cent"]),
                  "—" if p["situacao"] == "livre" else fmt.fmt_brl(p["valor_cent"]),
-                 fmt.fmt_datahora(p["ult_atualizacao"]) or "—", p["categoria"], p["prioridade"])
+                 fmt.fmt_datahora(p["ult_atualizacao"]) or "—", p["categoria"], p["prioridade"],
+                 p.get("cobertura_rotulo", ""))
                 for p in linhas
             ])
         finally:
@@ -345,6 +377,10 @@ class JanelaEstoque(QDialog):
         self.detalhe.setText(
             f"{produto['nome']} • até {self.LIMITE_HISTORICO} movimentos, mais recentes primeiro "
             f"• unidade: {produto['unidade']}" +
+            (f" • Consumo líquido 30 dias: {_curta(produto['consumo_30_dias'])}; "
+             f"cobertura: {produto['cobertura_rotulo']}; "
+             f"recorte indicativo: {produto['classificacao_adega']}."
+             if "cobertura_rotulo" in produto else "") +
             (" • nenhum movimento registrado." if not movimentos else ""))
 
     def registrar(self, tipo, quantidade, observacao=None):
@@ -448,7 +484,8 @@ class JanelaEstoque(QDialog):
     def gerar_pedido(self):
         try:
             self._exigir_acesso()
-            falta = [p for p in self.ctx.estoque.painel() if p["repor"] > 0]
+            recorte = self._recorte_compras()
+            falta = self.ctx.estoque.lista_de_compras(**recorte)
             if not falta:
                 self.mensagem.setText(
                     "Nenhum produto precisa de reposição agora. "
@@ -460,15 +497,16 @@ class JanelaEstoque(QDialog):
                     "Cadastre um fornecedor primeiro (Manutenção de Cadastros > Fornecedores).")
                 return False
             rotulos = [nome for _, nome in fornecedores]
+            escopo = "Adega (filtros atuais)" if recorte else "Geral (todos os produtos a repor)"
             nome, aceitou = QInputDialog.getItem(
                 self, "Gerar pedido",
-                f"{len(falta)} produto(s) serão incluídos. Para qual fornecedor é o pedido?",
+                f"{escopo}: {len(falta)} produto(s). Para qual fornecedor é o pedido?",
                 rotulos, 0, False)
             self._exigir_acesso()
             if not aceitou:
                 return False
             fornecedor_id = next(fid for fid, rotulo in fornecedores if rotulo == nome)
-            lancamento_id = self.ctx.estoque.pedido_sugerido(fornecedor_id)
+            lancamento_id = self.ctx.estoque.pedido_sugerido(fornecedor_id, **recorte)
         except ErroNegocio as erro:
             return self._tratar_erro(erro)
         self.atualizar()
@@ -495,7 +533,8 @@ class JanelaEstoque(QDialog):
     def lista_de_compras(self):
         try:
             self._exigir_acesso()
-            itens = self.ctx.estoque.lista_de_compras()
+            recorte = self._recorte_compras()
+            itens = self.ctx.estoque.lista_de_compras(**recorte)
         except ErroNegocio as erro:
             return self._tratar_erro(erro)
         if not itens:
@@ -503,6 +542,7 @@ class JanelaEstoque(QDialog):
             return False
         linhas = [
             f"LISTA DE COMPRAS - {fmt.fmt_data(fmt.hoje())}", "-" * 64,
+            "ADEGA — filtros atuais" if recorte else "GERAL — todos os produtos a repor",
             f"{'Produto':<32}{'Tem':>9}{'Mínimo':>9}{'Comprar':>10}", "-" * 64,
         ]
         for produto in itens:

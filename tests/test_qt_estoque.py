@@ -73,8 +73,8 @@ class TestEstoqueQt(BaseTeste):
 
     def test_consulta_real_reutiliza_painel_resumo_e_grupos(self):
         self.produtos()
-        with patch.object(EstoqueController, "painel", autospec=True,
-                          side_effect=EstoqueController.painel) as painel:
+        with patch.object(EstoqueController, "_painel", autospec=True,
+                          side_effect=EstoqueController._painel) as painel:
             janela = self.janela()
         self.assertGreaterEqual(painel.call_count, 2)
         self.assertEqual(janela.linhas, self.ctx.estoque.painel())
@@ -130,6 +130,79 @@ class TestEstoqueQt(BaseTeste):
             janela.busca.setText(busca)
             janela.btn_atualizar.click()
             self.assertEqual(janela.linhas, [])
+
+    def test_adega_compras_seguem_filtros_e_geral_restaura_recorte_anterior(self):
+        sem, ponto, normal, _ = self.produtos()
+        self.banco.executar("UPDATE produtos SET preco_gelada_cent = 1000 WHERE id IN (?, ?)", (sem, ponto))
+        grupo = self.banco.inserir("grupos", {"nome": "IMPORTADAS"})
+        sub = self.banco.inserir("subgrupos", {"nome": "CERVEJAS", "grupo_id": grupo})
+        self.banco.executar("UPDATE produtos SET subgrupo_id = ? WHERE id = ?", (sub, ponto))
+        outro = self.novo_produto("BRAHMA OUTRA", estoque=True, qt=1)
+        zerado = self.novo_produto("BRAHMA SEM", estoque=True, subgrupo_id=sub)
+        self.banco.executar(
+            "UPDATE produtos SET preco_gelada_cent = 1000, estoque_minimo = 5 WHERE id IN (?, ?)",
+            (outro, zerado))
+        fornecedor = self.banco.inserir("fornecedores", {"nome": "DISTRIBUIDORA"})
+        janela = self.janela()
+        janela.busca.setText("coca")
+        self.filtrar(janela, "normal")
+        janela.visao.setCurrentIndex(janela.visao.findData(True))
+        self.assertEqual(janela.busca.text(), "")
+        self.assertFalse(janela.grade.isColumnHidden(12))
+        self.assertIn("Sem consumo", janela.grade.item(0, 12).text())
+        self.assertIn("Adega", janela.btn_pedido.text())
+        janela.grupo.setCurrentIndex(janela.grupo.findData("IMPORTADAS"))
+        janela.busca.setText("bra")
+        self.filtrar(janela, "ponto")
+        with patch.object(QMessageBox, "information") as mostrar:
+            self.assertTrue(janela.lista_de_compras())
+        saida = mostrar.call_args.args[2]
+        self.assertIn("ADEGA", saida)
+        self.assertIn("BRAHMA", saida)
+        self.assertNotIn("SKOL", saida)
+        self.assertNotIn("BRAHMA OUTRA", saida)
+        self.assertNotIn("BRAHMA SEM", saida)
+        with patch.object(QInputDialog, "getItem", return_value=("DISTRIBUIDORA", True)), \
+                patch.object(janela, "abrir_lancamentos"):
+            self.assertTrue(janela.gerar_pedido())
+        pedido = self.ctx.estoque.lancamentos("pedido")[0]
+        self.assertEqual(pedido["fornecedor_id"], fornecedor)
+        self.assertEqual([p["produto_id"] for p in self.ctx.estoque.itens(pedido["id"])], [ponto])
+        janela.visao.setCurrentIndex(janela.visao.findData(False))
+        self.assertEqual(janela.busca.text(), "coca")
+        self.assertEqual(janela.situacao.currentData(), "normal")
+        self.assertIsNone(janela.grupo.currentData())
+        self.assertEqual([p["id"] for p in janela.linhas], [normal])
+        self.assertTrue(janela.grade.isColumnHidden(12))
+        with patch.object(QMessageBox, "information") as mostrar:
+            self.assertTrue(janela.lista_de_compras())
+        self.assertIn("SKOL", mostrar.call_args.args[2])
+        self.assertIn("BRAHMA", mostrar.call_args.args[2])
+        janela.visao.setCurrentIndex(janela.visao.findData(True))
+        self.assertEqual(janela.busca.text(), "bra")
+        self.assertEqual(janela.situacao.currentData(), "ponto")
+        self.assertEqual(janela.grupo.currentData(), "IMPORTADAS")
+
+    def test_adega_recorte_vazio_nao_gera_pedido_geral(self):
+        self.produtos()
+        self.banco.inserir("fornecedores", {"nome": "DISTRIBUIDORA"})
+        janela = self.janela()
+        janela.visao.setCurrentIndex(janela.visao.findData(True))
+        with patch.object(QInputDialog, "getItem") as escolher:
+            self.assertFalse(janela.gerar_pedido())
+        escolher.assert_not_called()
+        self.assertEqual(self.ctx.estoque.lancamentos("pedido"), [])
+        self.assertFalse(janela.lista_de_compras())
+
+    def test_adega_mostra_cobertura_e_consumo_no_detalhe(self):
+        pid = self.novo_produto("CERVEJA TESTE", estoque=True, qt=45)
+        self.ctx.estoque._mover(pid, -30, "venda", "venda", 1)
+        janela = self.janela()
+        janela.visao.setCurrentIndex(janela.visao.findData(True))
+        self.assertEqual(janela.grade.item(0, 12).text(), "15,0 dias")
+        janela.grade.selectRow(0)
+        self.assertIn("Consumo líquido 30 dias: 30", janela.detalhe.text())
+        self.assertIn("Nome indicativo", janela.detalhe.text())
 
     def test_filtro_de_grupo_e_busca_combinados(self):
         self.produtos()

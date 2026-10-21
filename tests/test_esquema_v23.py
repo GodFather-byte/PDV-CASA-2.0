@@ -10,7 +10,7 @@ from src.database.conexao import BancoDados
 
 class TesteMigracaoV23(unittest.TestCase):
     def test_adiciona_rastreabilidade_a_movimentos_existentes(self):
-        with tempfile.TemporaryDirectory() as pasta:
+        with tempfile.TemporaryDirectory(dir=".") as pasta:
             caminho = Path(pasta) / "v22.db"
             banco = BancoDados(str(caminho))
             try:
@@ -27,7 +27,7 @@ class TesteMigracaoV23(unittest.TestCase):
             banco = BancoDados(str(caminho))
             try:
                 colunas = {linha["name"] for linha in banco.todos("PRAGMA table_info(movimentos_estoque)")}
-                self.assertEqual(banco.valor("PRAGMA user_version"), 23)
+                self.assertEqual(banco.valor("PRAGMA user_version"), 24)
                 self.assertTrue({"operador_id", "observacao"} <= colunas)
                 self.assertIn("tipo_perda", {linha["name"] for linha in banco.todos("PRAGMA table_info(lancamentos_estoque)")})
             finally:
