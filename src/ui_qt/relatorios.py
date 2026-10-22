@@ -84,7 +84,7 @@ class Spec:
         return metodo(filtros)
 
 
-# Espelham RELATORIOS do antigo ui.app (removido), sem importar Tk.
+# Catálogo dos relatórios por módulo.
 SPECS = {
     "vendas_grupo": Spec("Venda por grupo", "rel_vendas_grupo", "vendas_por_grupo", VENDAS_CATEGORIA, mais=VENDAS_MAIS),
     "mais_vendidos": Spec("Produtos mais vendidos", "rel_vendas_grupo", "mais_vendidos", VENDAS_CATEGORIA, mais=VENDAS_MAIS),

@@ -48,13 +48,13 @@ CREATE INDEX IF NOT EXISTS ix_pagamentos_itens_pagamento ON pagamentos_itens(pag
 
 Sem backfill. Sem a tabela (banco antigo), `pagar_itens` recusa com mensagem e o resto funciona.
 
-## Caixa Qt: paridade com o Tk
+## Caixa Qt: lacunas fechadas
 
 - Rodízio (Ctrl+R) e Recarga pré-pago (Ctrl+Shift+P) em "Operações do caixa", visíveis só com o módulo ligado
   (`usar_rodizio`/`usar_prepago`) e com mesas; usam `ativar_rodizio`/`desativar_rodizio`/`recarregar`.
 - Pré-pago: título mostra "Pré-pago"/"Sem crédito", painel mostra crédito e saldo, F12 fecha comanda sem consumo e
   confirma a devolução da sobra (recarga por Pix/cartão).
-- Pedido remoto da cozinha/bar vai ao setor do subgrupo (`setor_do_subgrupo`), como no Tk.
+- Pedido remoto da cozinha/bar vai ao setor do subgrupo (`setor_do_subgrupo`).
 
 ## Restrições conhecidas
 
@@ -63,9 +63,9 @@ Sem backfill. Sem a tabela (banco antigo), `pagar_itens` recusa com mensagem e o
   conta ou valor próprio de item já pago por item, ou deixarem a conta abaixo do pago por item. Remover o pagamento
   libera. Leitura nova nunca é agrupada em linha paga; cisão que deixa só a parte paga fica com o valor exato pago.
 - `transferir_item` não protege pagamentos por valor (comportamento anterior).
-- Lacunas Qt fechadas (só tela, reaproveitando controllers e permissões do Tk; teste `tests/test_qt_caixa_lacunas.py`):
+- Lacunas Qt fechadas (só tela, reaproveitando controllers e permissões; teste `tests/test_qt_caixa_lacunas.py`):
   F3 liga/desliga o leitor óptico (padrão vem de `config.maquina()["leitor_optico"]`; com leitor, produto sem fração
   lança 1 unidade sem perguntar); F7 abre sangria/suprimento; menu de ações ganhou "Nomear comanda" (só com mesas,
   usa `definir_apelido`), "Leitor óptico liga/desliga (F3)", "Leitura X", "Redução Z" e "Fila de impressão"
   (`JanelaFilaImpressao`, uma só janela; sem permissão mostra aviso).
-- Não verificado no Qt: ergonomia da barra fixa de botões do Tk e telas de acertos.
+- Não verificado no Qt: ergonomia da barra fixa de botões e telas de acertos.

@@ -2,7 +2,7 @@
 
 ## Resumo executivo
 
-Esta entrega incremental melhora a conferência de preços no caixa Tk e Qt, agiliza a escolha de cascos no Tk
+Esta entrega incremental melhora a conferência de preços no caixa Qt
 e acrescenta uma **Visão Adega** aos dois painéis de estoque. A evolução inclui pedido/lista por recorte,
 cobertura em dias e persistência da regra de preço aplicada, com migração do banco.
 Não muda valores cobrados, promoções, baixa de estoque, fardos ou permissões.
@@ -21,10 +21,7 @@ Referências: [implantação da Adega](ADEGA.md), [regras e movimentos de estoqu
   O limite continua sendo a parte inteira da quantidade de bebidas; não há empréstimo/saldo por cliente.
 - Fardos baixam unidades pela composição; não possuem um segundo estoque independente.
 - O estoque já tem filtros, mínimo, histórico, perdas, contagem e sugestão de compra até o dobro do mínimo.
-- Antes desta entrega, havia etiquetas de temperatura/atacado, mas sem explicação compartilhada da faixa aplicada;
-  no Tk, informações na observação podiam ficar ocultas em telas estreitas.
-- O Qt é uma interface em migração. O atalho e a prévia de cascos desta entrega são específicos do diálogo Tk;
-  o fluxo Qt de cascos existente permanece intacto.
+- Antes desta entrega, havia etiquetas de temperatura/atacado, mas sem explicação compartilhada da faixa aplicada.
 
 ## Problemas operacionais mais prováveis
 
@@ -41,14 +38,11 @@ São hipóteses operacionais, não incidentes medidos. Devem ser confirmadas na 
 
 | Item | Prioridade | Entrega | Critério de aceite |
 |---|---|---|---|
-| Explicação do preço | Alta | Implementada, Tk/Qt | Exibir modalidade quando há escolha de temperatura; atacado aplicado mostra mínimo da mesma bebida/temperatura e economia por linha. Selecionar a linha no Tk mostra detalhes mesmo em notebook; Qt também oferece dica ao passar o mouse. |
+| Explicação do preço | Alta | Implementada | Exibir modalidade quando há escolha de temperatura; atacado aplicado mostra mínimo da mesma bebida/temperatura e economia por linha. Selecionar a linha no Tk mostra detalhes mesmo em notebook; Qt também oferece dica ao passar o mouse. |
 | Compatibilidade de preços | Alta | Implementada | Entrega/caderneta não exibem economia como atacado; item antigo sem preço-base não inventa economia; cancelamento e agrupamento mantêm os cálculos existentes. |
-| Cascos rápidos | Alta | Implementada, Tk | Botões e F2 “Todas trocas” / F3 “Sem troca” preenchem sem confirmar; Enter confirma e Esc cancela. Prévia muda imediatamente com a quantidade. |
-| Validação de cascos | Alta | Implementada, Tk | Recusar vazio, negativo, fração, texto e valor acima do limite sem fechar o diálogo; permitir corrigir. Quantidade fracionada de bebida explica o limite arredondado para baixo. |
-| Recorte operacional | Alta | Implementada, Tk/Qt | Estoque > Visão > Adega combina Sem estoque/Repor, grupo e busca; destaca categoria e prioridade; voltar a Geral restaura o recorte anterior do estoque geral. |
+| Recorte operacional | Alta | Implementada | Estoque > Visão > Adega combina Sem estoque/Repor, grupo e busca; destaca categoria e prioridade; voltar a Geral restaura o recorte anterior do estoque geral. |
 | Reposição visível | Alta | Implementada | Ruptura = Alta, ponto de pedido = Média, normal = Baixa; sem controle = Definir controle. Sem mínimo continua sem quantidade sugerida, mesmo em ruptura. |
 | Reposição por giro e prazo | Média | Próxima recomendada | Comparar sugestão com consumo diário e prazo, explicar cálculo e exigir revisão antes de gerar pedido. Ver Top 1. |
-| Paridade de cascos no Qt | Média | Planejada | Prévia e atalhos equivalentes ao Tk, preservando cancelamento e lançamento transacional; testes de interface Qt. |
 | Cancelamento parcial guiado | Média | Planejada | Alterar quantidade recalcula atacado e permite conferir casco sem apagar histórico; exige decisão de produto sobre vínculo bebida/casco. |
 | Importação de atacado gelada e etiquetas | Média | Planejada | Prévia da planilha valida faixa/preço; etiqueta distingue temperaturas e unidade/fardo, com testes de importação. |
 | Saldo de cascos por cliente | Baixa | Planejada | Somente após definir empréstimo, caução, devolução e auditoria com o dono; nunca inferir dívida de trocas antigas. |
@@ -61,19 +55,10 @@ São hipóteses operacionais, não incidentes medidos. Devem ser confirmadas na 
 1. Lance a bebida, escolha natural/gelada quando solicitado e alcance o mínimo de atacado.
 2. Confira a etiqueta e a explicação: por exemplo, “Atacado gelada: a partir de 6 un da mesma bebida/temperatura;
    economia nesta linha: R$ 6,00”.
-3. No Tk, a área abaixo da grade mostra o último item ou a linha selecionada; a observação também traz a explicação.
-   O resumo mantém a economia total do atacado. No Qt, a descrição da linha e a dica das células trazem os detalhes.
+3. O resumo mantém a economia total do atacado. A descrição da linha e a dica das células trazem os detalhes.
 4. A economia compara o total da linha com o preço-base unitário registrado multiplicado pela quantidade, em centavos.
    Não inclui desconto global, taxa de entrega nem soma natural e gelada para atingir a faixa.
 
-### Cascos (Tk)
-
-1. Use **Todas trocas (F2)** para cobrar zero ou **Sem troca (F3)** para cobrar o máximo.
-2. Para troca parcial, digite apenas quantos cascos faltam. Confira “Impacto dos cascos: + R$ …”.
-   A prévia considera promoção e atacado dos cascos, inclusive a reprecificação dos cascos naturais anteriores
-   da mesma venda. Pode mostrar redução (sinal negativo) ao atingir uma faixa. Não inclui taxas/desconto global.
-3. Confirme com Enter. Entrada inválida deixa o impacto indisponível e pede um inteiro entre zero e o máximo.
-4. Em desistência, confira **as duas linhas**: cancelar bebida não cancela casco, nem o contrário.
 
 ### Estoque
 
@@ -119,7 +104,7 @@ São hipóteses operacionais, não incidentes medidos. Devem ser confirmadas na 
 
 ### Fase 1 — rápida (esta entrega)
 
-Explicação de preço compartilhada; atalhos/prévia/validação de cascos Tk; visão Adega nos dois estoques;
+Explicação de preço compartilhada; visão Adega nos dois estoques;
 testes de regressão e este guia. Aceite: todos os itens marcados como implementados na tabela funcionam sem alterar
 totais, cancelamentos ou o fluxo dos demais perfis. Homologar com operador antes de instalar.
 
@@ -176,11 +161,8 @@ insuficiente, testes de movimentos/estornos/composição e consulta agregada com
 
 - [ ] Em banco de teste, configurar bebida natural R$ 8,00, gelada R$ 10,00, atacado natural 6 por R$ 7,00
   e gelada 6 por R$ 9,00; vincular casco R$ 2,00 e habilitar agrupamento.
-- [ ] No caixa Tk e Qt, lançar cinco naturais e mais uma: conferir faixa 6 e economia R$ 6,00; repetir gelada.
+- [ ] No caixa, lançar cinco naturais e mais uma: conferir faixa 6 e economia R$ 6,00; repetir gelada.
   Cancelar abaixo do mínimo e verificar restauração do preço. Três naturais + três geladas não atingem faixa.
-- [ ] No Tk em 1180×678, selecionar a linha: explicação deve continuar legível fora da grade.
-- [ ] No diálogo Tk de seis retornáveis, F2 deve mostrar R$ 0,00; F3, R$ 12,00; digitar 2 deve mostrar R$ 4,00.
-  Digitar 7, -1 ou 1,5 deve impedir confirmação; Esc não lança nada.
 - [ ] Confirmar dois cascos, verificar total e linhas independentes; cancelar bebida e conferir casco restante.
 - [ ] Configurar promoção/atacado no casco e conferir que a prévia corresponde à variação dos itens de casco,
   inclusive quando uma nova unidade reduz o preço das anteriores. Conferir também fora do balcão.
@@ -199,7 +181,7 @@ insuficiente, testes de movimentos/estornos/composição e consulta agregada com
 - `src/ui_qt/caixa.py`: exibe rótulo, regra e economia; dica no Qt.
 - `src/controllers/estoque_controller.py`: recorte Adega, cobertura, pedido/lista filtrados e prioridade de reposição.
 - `src/ui_qt/estoque.py`: seletor Geral/Adega para compras, cobertura e identificação operacional.
-- `tests/test_adega_regras.py`, `tests/test_adega_tk.py`, `tests/test_adega_qt.py`: regressão de preço, cascos e notebook.
+- `tests/test_adega_regras.py`, `tests/test_adega_qt.py`: regressão de preço, cascos e notebook.
 - `tests/test_estoque.py`, `tests/test_qt_estoque.py`, `tests/test_ui.py`: recorte, filtros e prioridades.
 - `tests/test_estoque_adega_melhorias.py`, `tests/test_adega_retrato.py`: cobertura, compras, classificação e auditoria histórica.
 - `tests/test_esquema_v24.py`: instalação/migração/idempotência do índice e consulta pela janela de datas.

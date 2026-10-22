@@ -232,7 +232,7 @@ class TesteComandas(BaseCaixa):
 
 
 class TesteIconesDoRodape(BaseCaixa):
-    """O modelo dos ícones do caixa (sem Tk): balcão primeiro, depois mesas e comandas, cada uma no seu estado."""
+    """O modelo dos ícones do caixa (sem tela): balcão primeiro, depois mesas e comandas, cada uma no seu estado."""
 
     def setUp(self):
         super().setUp()

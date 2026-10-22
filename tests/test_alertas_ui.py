@@ -1,4 +1,4 @@
-"""Painéis de alertas Tk e Qt com banco real em memória: permissão revalidada e seções recortadas."""
+"""Painel de alertas Qt com banco real em memória: permissão revalidada e seções recortadas."""
 from __future__ import annotations
 
 import gc

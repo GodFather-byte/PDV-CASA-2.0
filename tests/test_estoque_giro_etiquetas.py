@@ -1,4 +1,4 @@
-"""Reposição pelo giro por caixa e etiquetas de produtos/preços (controllers, Tk e Qt)."""
+"""Reposição pelo giro por caixa e etiquetas de produtos/preços (controllers e Qt)."""
 import os
 import tempfile
 import unittest

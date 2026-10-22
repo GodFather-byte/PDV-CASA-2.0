@@ -1,4 +1,4 @@
-"""Catálogo Qt com banco em memória; paridade com declarações Tk sem importá-las."""
+"""Catálogo Qt com banco em memória."""
 import ast
 from datetime import datetime
 import os

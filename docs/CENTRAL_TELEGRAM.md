@@ -176,7 +176,7 @@ Não publique segredos neste documento nem no git. Os exemplos usam variáveis s
 Extrair o ZIP inteiro em pasta nova e manter o executável junto da pasta `_internal`.
 Não executar dentro do ZIP nem copiar somente o `.exe`. São pacotes portáteis,
 não instaladores Setup; o Inno Setup não está disponível na máquina de desenvolvimento.
-Os executáveis passaram nos autotestes isolados Tk/Qt e do licenciador.
+Os executáveis passaram nos autotestes isolados do Qt e do licenciador.
 
 **Não abrir o portátil sobre o banco de produção para experimentar.** Fazer backup,
 usar cópia do banco em pasta separada e definir `PDV_DB` apontando para essa cópia

@@ -1,4 +1,4 @@
-"""Caixa Qt: lacunas fechadas em relação ao Tk (leitor F3, nomear comanda, Leitura X, Redução Z, fila e sangria F7)."""
+"""Caixa Qt: lacunas fechadas (leitor F3, nomear comanda, Leitura X, Redução Z, fila e sangria F7)."""
 from unittest.mock import patch
 
 from PySide6.QtGui import QShortcut

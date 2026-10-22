@@ -1,4 +1,4 @@
-"""Regras que só eram verificadas por testes das telas Tk (removidas com o Tk) e agora são testadas direto no controlador e no Qt."""
+"""Regras de configuração e de alerta de gaveta, testadas direto no controlador e no Qt."""
 from __future__ import annotations
 
 import unittest

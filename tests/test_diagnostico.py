@@ -1,4 +1,4 @@
-"""Diagnóstico central de equipamentos (controller, Qt e Tk) com banco em memória e saídas físicas simuladas.
+"""Diagnóstico central de equipamentos (controller e Qt) com banco em memória e saídas físicas simuladas.
 
 Nenhum teste aqui fala com impressora, gaveta, balança ou leitor reais: tudo que enviaria comando é trocado por
 dublês que falham se forem chamados sem querer. Isto valida regras e telas, não homologa equipamento.

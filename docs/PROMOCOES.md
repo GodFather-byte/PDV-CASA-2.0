@@ -41,7 +41,7 @@ preservado; balcão mantém a reprecificação por quantidade já existente. A s
 
 - Qt: `src.ui_qt.promocoes.JanelaPromocoes(ctx, parent=None)`.
 - A janela expõe `exigir_acesso()` para o menu validar antes de reabrir instância.
-  Nenhuma tela importa a outra; Qt não cria raiz Tk.
+  Nenhuma tela importa a outra.
 - `PromocoesController(ctx)`: `listar(texto="")`, `obter(produto_id)`,
   `salvar(produto_id, valores)`, `simular(produto_id, quantidade="1",
   temperatura="natural", quando=None, valores=None)` e `descrever(resultado)`.

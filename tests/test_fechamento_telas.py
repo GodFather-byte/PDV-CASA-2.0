@@ -1,4 +1,4 @@
-"""Coleta real Tk/Qt: declaração explícita, motivo e revalidação sem fechar turno."""
+"""Coleta real Qt: declaração explícita, motivo e revalidação sem fechar turno."""
 from unittest import mock
 
 from src.controllers.acesso_controller import Operador

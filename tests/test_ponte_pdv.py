@@ -427,7 +427,7 @@ class TesteSolicitacao(BasePonte):
 
 
 class TesteServicoPonte(unittest.TestCase):
-    """Thread própria da ponte (antes do login, sem depender do --sync): banco em arquivo, sem Tk."""
+    """Thread própria da ponte (antes do login, sem depender do --sync): banco em arquivo, sem tela."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp()

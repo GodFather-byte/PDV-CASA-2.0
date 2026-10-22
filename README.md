@@ -534,7 +534,7 @@ cliente liga dizendo que "não entra".
 - Gerar localmente (Windows): `pip install pyinstaller` e, na raiz do repositório, `python build_licenciador.py` (gera
   `dist\WillLicencas\WillLicencas.exe` e, com o [Inno Setup 6](https://jrsoftware.org/isdl.php), o instalador em
   `instalador\saida\WillLicencas-Setup-<versão>.exe`). Para só o `.exe`: `python build_licenciador.py --sem-instalador`.
-- Rodar do código-fonte: `python -m licenciador.app` (precisa do Tkinter, que vem com o Python do Windows). Autoteste:
+- Rodar do código-fonte: `python -m licenciador.app` (precisa do Tkinter, que vem com o Python do Windows; só o gerador de licenças usa). Autoteste:
   `python -m licenciador.app --autoteste`.
 - Testes: `python -m unittest tests.test_licenciador`.
 - A versão do programa fica em `VERSAO` em [`licenciador/nucleo.py`](licenciador/nucleo.py) (hoje 1.1.0); o número do

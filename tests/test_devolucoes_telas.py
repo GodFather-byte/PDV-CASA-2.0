@@ -1,4 +1,4 @@
-"""Telas Tk e Qt de devolução: busca por cupom, registro autorizado, falha de impressão sem duplicar."""
+"""Tela Qt de devolução: busca por cupom, registro autorizado, falha de impressão sem duplicar."""
 import os
 from unittest import mock
 
