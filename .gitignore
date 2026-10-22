@@ -52,3 +52,7 @@ logs/
 
 # Saídas de delegação entre agentes (ver AGENTS.md)
 .ai/respostas/
+
+# Arquivos de execução do banco padrão
+loja_offline.db.lock
+loja_offline.db.pastas.json
