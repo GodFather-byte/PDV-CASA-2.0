@@ -174,7 +174,12 @@ class TesteFechamentoNaTela(BaseUI):
                 textos.append(rotulos(w)); clicar(w, "Sim")
         self.robo.quando("Dialogo", trocar, vezes=3)
         self.robo.quando("PainelFechamento", lambda w: w.destroy())
-        self.assertTrue(caixa_dialogos.trocar_turno(self.root, self.ctx))
+        declarados = {r["tipo_id"]: 10000 if r["dinheiro"] else 0
+                      for r in self.ctx.turnos.formas_conferencia(
+                          self.ctx.turnos.atual()["id"], self.ctx.operador_id)}
+        with mock.patch("src.ui.fechamento_ui.coletar", return_value={
+                "informados_por_forma": declarados, "justificativa": ""}):
+            self.assertTrue(caixa_dialogos.trocar_turno(self.root, self.ctx))
         self.assertIn("1 mesa(s)/comanda(s) aberta(s), R$ 8,80", textos[0])
         self.assertIn("Comanda 2", textos[0])
         self.assertIn("continuam abertas no próximo turno", textos[0])
@@ -195,7 +200,12 @@ class TesteFechamentoNaTela(BaseUI):
                 textos.append(rotulos(w)); clicar(w, "Sim")
         self.robo.quando("Dialogo", trocar, vezes=3)
         self.robo.quando("PainelFechamento", lambda w: w.destroy())
-        caixa_dialogos.trocar_turno(self.root, self.ctx)
+        declarados = {r["tipo_id"]: 10000 if r["dinheiro"] else 0
+                      for r in self.ctx.turnos.formas_conferencia(
+                          self.ctx.turnos.atual()["id"], self.ctx.operador_id)}
+        with mock.patch("src.ui.fechamento_ui.coletar", return_value={
+                "informados_por_forma": declarados, "justificativa": ""}):
+            caixa_dialogos.trocar_turno(self.root, self.ctx)
         self.assertNotIn("ATENÇÃO", textos[0])
 
     def test_painel_do_fechamento_mostra_a_conferencia(self):
@@ -262,7 +272,11 @@ class TesteConferenciaDaMaquininhaNaTela(BaseUI):
                 ordem.append("confirma"); clicar(w, "Sim")
         self.robo.quando("Dialogo", trocar, vezes=3)
         self.robo.quando("PainelFechamento", lambda w: w.destroy())
-        self.assertTrue(caixa_dialogos.trocar_turno(self.root, self.ctx))
+        declarados = {self.tipo("Dinheiro"): 10000, self.tipo("Cartão Débito"): 1600,
+                      self.tipo("Cartão Crédito"): 1300, self.tipo("Pix"): 0}
+        with mock.patch("src.ui.fechamento_ui.coletar", return_value={
+                "informados_por_forma": declarados, "justificativa": ""}):
+            self.assertTrue(caixa_dialogos.trocar_turno(self.root, self.ctx))
         self.assertEqual(ordem, ["maquininha", "gaveta", "confirma"])
         for trecho in ("Cartão Débito", "Cartão Crédito", "16,00", "13,00", "29,00"):
             self.assertIn(trecho, tela[0])

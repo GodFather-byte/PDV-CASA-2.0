@@ -2,7 +2,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView, QDialog, QHBoxLayout, QMessageBox, QPushButton,
+    QAbstractItemView, QDialog, QGridLayout, QMessageBox, QPushButton,
     QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
 
@@ -14,6 +14,7 @@ from src.ui_qt.tema import texto
 STATUS = {
     "pendente": "Aguardando", "enviado": "Enviado (sem confirmação física)",
     "erro": "Erro", "cancelado": "Cancelado",
+    "enviando": "Em envio", "incerto": "Interrompido: conferir papel",
 }
 DESTINO = {"caixa": "Caixa", "remota": "Cozinha/bar"}
 
@@ -50,20 +51,22 @@ class JanelaFilaImpressao(QDialog):
         layout.addWidget(self.grade)
         self.mensagem = texto("", "aviso")
         layout.addWidget(self.mensagem)
-        barra = QHBoxLayout()
-        for atributo, rotulo, acao in (
+        barra = QGridLayout()
+        for indice, (atributo, rotulo, acao) in enumerate((
             ("btn_atualizar", "Atualizar (F5)", self.atualizar),
             ("btn_reenviar", "Reenviar selecionado", self.reenviar),
             ("btn_reenviar_todos", "Reenviar pendentes e erros", self.reenviar_todos),
             ("btn_cancelar", "Cancelar selecionado", self.cancelar),
             ("btn_limpar", "Limpar enviados/cancelados", self.limpar),
             ("btn_teste", "Enviar página de teste", self.teste),
+            ("btn_confirmar_papel", "Confirmar papel interrompido", lambda: self.conferir(True)),
+            ("btn_autorizar_reenvio", "Autorizar reenvio interrompido", lambda: self.conferir(False)),
             ("btn_fechar", "Fechar (Esc)", self.close),
-        ):
+        )):
             botao = QPushButton(rotulo)
             botao.clicked.connect(acao)
             setattr(self, atributo, botao)
-            barra.addWidget(botao)
+            barra.addWidget(botao, indice // 3, indice % 3)
         layout.addLayout(barra)
         QShortcut(QKeySequence("F5"), self, activated=self.atualizar)
         self.atualizar()
@@ -141,11 +144,11 @@ class JanelaFilaImpressao(QDialog):
             QMessageBox.StandardButton.No,
         ) == QMessageBox.StandardButton.Yes
 
-    def _executar(self, acao, *args):
+    def _executar(self, acao, *args, **kwargs):
         if not self._autorizar():
             return
         try:
-            resultado = acao(*args)
+            resultado = acao(*args, **kwargs)
         except Exception as erro:
             detalhe = str(erro).replace(
                 "Este item já foi impresso.",
@@ -169,6 +172,17 @@ class JanelaFilaImpressao(QDialog):
                 self, "Fila de impressão",
                 f"{quantidade} registro(s) devolvido(s) à fila. "
                 "Isso não confirma a impressão física.")
+
+    def conferir(self, impresso):
+        if not self._autorizar():
+            return
+        item_id = self._selecionado()
+        mensagem = ("Confirma que este documento saiu completo no papel? Não será reenviado."
+                    if impresso else
+                    "Conferiu fisicamente e autoriza um novo envio? Se o anterior saiu, haverá duplicata.")
+        if item_id is not None and self._confirmar(mensagem):
+            self._executar(self.fila.conferir_interrompido, item_id, impresso=impresso,
+                           operador_id=self.ctx.operador_id)
 
     def cancelar(self):
         if not self._autorizar():

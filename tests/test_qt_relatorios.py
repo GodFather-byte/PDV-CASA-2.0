@@ -107,7 +107,7 @@ class TestRelatoriosQt(BaseTeste):
     def test_catalogo_filtros_padroes_e_modulos_espelham_tk_sem_importar_tk(self):
         tk = declaracoes_tk()
         self.assertEqual(set(SPECS), set(tk["SPECS"]))
-        self.assertEqual(len(SPECS), 24)
+        self.assertEqual(len(SPECS), 25)
         self.assertEqual(FILTROS, tk["FILTROS"])
         arvore = ast.parse((RAIZ / "src" / "ui" / "app.py").read_text(encoding="utf-8"))
         grupos = next(ast.literal_eval(no.value) for no in arvore.body

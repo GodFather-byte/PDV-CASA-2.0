@@ -15,7 +15,7 @@ Não precisa de servidor, de abrir porta no computador nem de número de telefon
 | Backup falhou | `⚠️ O backup automático do PDV falhou.` |
 | Produto acabando (na hora em que cruza o limite) | `🚨 SKOL ACABOU (sem estoque)` ou `⚠️ VODKA está acabando: restam 4 (mínimo 5)` |
 | Cada venda fechada (opcional, vem desligado) | `🧾 Venda — Comanda 45: R$ 132,00 · Pix R$ 132,00 · Por: ANA` |
-| Resumo da noite (todo dia, às 7h por padrão) | faturamento, vendas, ticket médio, formas de pagamento, cancelamentos, sangrias e se cada caixa bateu |
+| Resumo diário agendado (ativo, às 23h locais por padrão) | consolidado do período não enviado: faturamento, vendas, ticket médio, formas de pagamento, cancelamentos, sangrias e diferenças de caixa |
 
 No fechamento o dono vê o dinheiro **esperado** e o **contado**: o operador não vê o esperado (a conferência do PDV é cega), mas o
 dono vê no celular se sobrou ou faltou.
@@ -63,6 +63,65 @@ O bot do fornecedor é **outro bot**, sem acesso ao faturamento desta loja:
 A "noite" segue a virada do dia do PDV (Configurações > Configurações > Caixa, opção da hora em que o dia vira; 6h por padrão): a venda das 2h da manhã
 conta na noite que começou na véspera.
 
+## Resumo diário às 23h locais
+
+O agendamento nasce **ativo às 23:00, no relógio local do computador**. Isso não liga o bot:
+continua exigindo token, Telegram ligado e celular do dono explicitamente pareado.
+Em **Configurações > Telegram**, tanto Tk quanto Qt, edite o horário e a opção
+**Resumo diário**, depois use **Salvar resumo**. A aba geral Telegram também oferece
+os dois campos. Depois da aplicação inicial descrita abaixo, horário vazio ou resumo
+desativado pausam o envio. Desligar o Telegram pausa também a fila já existente.
+
+**Primeira atualização:** por decisão explícita do dono, tanto instalações novas quanto
+bancos antigos recebem **23:00 e resumo ativo uma única vez**, incluindo horários antigos
+personalizados ou vazios. A aplicação é transacional e grava a marca
+`telegram_resumo_23h_aplicado=S`, antes de abrir/salvar os campos de configuração, e não
+espera o agendador rodar. Depois disso, alterações manuais de horário e opt-out são
+preservadas em reinícios e atualizações posteriores. Essa migração **não altera
+`telegram_ativo`**, token nem pareamentos: não liga um bot sem consentimento.
+
+O automático usa um **intervalo local com datas e horas completas**, não a “noite”
+operacional dos botões Resumo/Ontem. O início é incluído, o fim é exclusivo. O primeiro
+intervalo começa à meia-noite do dia do pareamento; os seguintes começam no último corte
+confirmado e terminam no horário agendado mais recente já vencido. Assim a venda exatamente
+às 23:00 entra no próximo intervalo, sem sumir nem contar duas vezes. Cada resumo informa
+a **última atualização local** dos dados. O envio não espera o fechamento de um turno.
+
+**PC desligado por vários dias:** ao voltar, o PDV prepara **um único resumo consolidado**
+até o último horário vencido, explicando as datas cobertas, sem disparar um resumo por dia
+perdido. Se ainda não deu o horário de hoje, recupera até o corte de ontem. Dados posteriores
+ao corte ficam para o próximo agendamento. Sem internet, o resumo permanece pendente, mesmo
+após 48 horas ou reinício; novos dias vencidos ampliam esse mesmo pendente antes da primeira
+entrega. A janela mostra o período pendente e o último envio confirmado, sem pop-ups periódicos.
+
+A fila existente registra sucesso por celular. Se um dono já recebeu e outro falhou, o texto
+desse intervalo fica fixo e o primeiro não recebe de novo na retomada; dias novos ficam para
+**mais um consolidado**, não um lote por dia. Somente celulares pareados que participavam
+da criação do intervalo podem recebê-lo; chats estranhos não recebem dados. Celulares
+removidos não recebem mais. Um bloqueio do bot remove o celular; se nenhum recebeu, o período
+não é marcado como enviado. Nesse caso, pareie novamente e aguarde a retomada.
+
+Não se marca envio antes da resposta de sucesso real do Telegram. Ainda assim, a Bot API
+não oferece *exactly-once*: queda depois que o Telegram aceitou e antes de salvar o recibo
+local pode repetir uma mensagem. Na atualização de instalações antigas, a marca antiga
+não era prova de entrega (era gravada ao enfileirar): o primeiro consolidado recupera desde
+o dia do pareamento mais antigo e **pode incluir dados que já chegaram pelo agendador antigo**.
+Nenhum destes resumos financeiros vai ao fornecedor ou à central.
+
+### Devoluções e bruto histórico
+
+O diário agendado e os botões Resumo/Ontem/Gerencial mantêm o **faturamento bruto histórico**
+das vendas originais e mostram **REEMBOLSOS** separadamente, pela data local em que o
+reembolso foi registrado, não pela data da venda. O corte inclui o início e exclui o fim:
+um reembolso exatamente às 23h entra no intervalo seguinte. O **líquido gerencial do
+período** é bruto menos os reembolsos registrados no período; pode ser negativo quando
+se devolve uma venda antiga e não equivale ao saldo da gaveta nem a conciliação bancária.
+Créditos em outros modos são discriminados e não significam saída de dinheiro.
+
+Reembolso em dinheiro já gera saída de caixa. Por isso o resumo identifica que o total
+de saídas **inclui reembolsos**, sem deduzi-los novamente desse total ou da conferência.
+Reembolso externo é **declaração do operador**, nunca prova de estorno no banco.
+
 ## Alertas operacionais
 
 O botão **🚨 Alertas** (ou `alertas`, `avisos`, `pendências`) e o painel **Alertas da casa** do PDV (Tk e Qt) mostram a mesma
@@ -107,6 +166,8 @@ mensagem. Em poucos segundos a tela mostra o celular na lista e o bot responde *
 **4. Teste.**
 Toque em **Enviar mensagem de teste**. Pronto. Para escolher quais avisos receber (inclusive ligar o aviso de **cada venda**, para ver o dinheiro entrando ao vivo, e o horário do resumo):
 **Configurações > Configurações > aba Telegram**.
+O resumo diário também pode ser ativado/pausado e ter seu horário editado diretamente
+na própria janela Telegram (Tk e Qt).
 
 Quer que um sócio também receba? Repita o passo 3 com o celular dele (gere um código novo).
 

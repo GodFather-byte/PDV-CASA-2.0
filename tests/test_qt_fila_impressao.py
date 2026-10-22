@@ -33,6 +33,7 @@ class TestFilaImpressaoQt(unittest.TestCase):
         self.fila = Mock(spec=[
             "listar", "reenviar", "reenviar_todos", "cancelar",
             "limpar_antigos", "texto_indicador",
+            "conferir_interrompido",
         ])
         self.fila.listar.return_value = [
             registro(4, "pendente"), registro(3, "erro", destino="remota"),
@@ -95,6 +96,30 @@ class TestFilaImpressaoQt(unittest.TestCase):
         self.fila.limpar_antigos.assert_not_called()
         self.ctx.acesso.exigir.assert_called_with(
             self.ctx.acesso.operador.return_value, "util_fila_impressao")
+
+    def test_interrompido_requer_decisao_humana_sem_reenvio_comum(self):
+        self.fila.listar.return_value = [registro(5, "incerto")]
+        janela = self.janela()
+        janela.grade.selectRow(0)
+        self.assertIn("conferir", janela.grade.item(0, 4).text().lower())
+        self.question.return_value = QMessageBox.StandardButton.No
+        janela.conferir(False)
+        self.fila.conferir_interrompido.assert_not_called()
+        self.question.return_value = QMessageBox.StandardButton.Yes
+        janela.conferir(True)
+        self.fila.conferir_interrompido.assert_called_once_with(5, impresso=True, operador_id=7)
+        self.fila.reenviar.assert_not_called()
+
+    def test_revogacao_durante_conferencia_impede_reenvio_interrompido(self):
+        self.fila.listar.return_value = [registro(5, "incerto")]
+        janela = self.janela()
+        janela.grade.selectRow(0)
+        def revogar(*args):
+            self.ctx.acesso.exigir.side_effect = ErroPermissao("Revogado")
+            return QMessageBox.StandardButton.Yes
+        self.question.side_effect = revogar
+        janela.conferir(False)
+        self.fila.conferir_interrompido.assert_not_called()
 
     def test_atualizar_preserva_id_nao_indice_e_remove_selecao_obsoleta(self):
         janela = self.janela()

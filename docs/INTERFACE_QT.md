@@ -4,6 +4,28 @@ Esta migração mantém o Qt opt-in durante a homologação. O caminho Tk
 permanece disponível durante a homologação. Nunca mantenha dois programas abertos
 sobre o mesmo banco. Faça backup antes de homologar em uma cópia dos dados.
 
+## Confiabilidade e operação na 1.9
+
+- Visão geral com rolagem independente no menu e no conteúdo; `Ctrl+K` foca
+  a busca de módulos, que continua ignorando acentos sem ampliar permissões.
+- Verificação de backup por restauração isolada e situação do último ensaio
+  no painel. Aprovação com avisos é diferente de comprovação sem alertas.
+- Diagnóstico de impressora, gaveta, balança e leitor: abertura sem comandos
+  físicos, confirmações com padrão Não e nova autorização após o diálogo.
+  O diagnóstico foi testado com largura de 560 px e fonte aumentada.
+- Conferência de fechamento por forma, declarações explícitas e justificativa
+  obrigatória em divergências, compartilhando o controlador do Tk.
+- Devoluções e trocas por cupom no menu e nas operações do caixa. Reembolsos
+  têm relatório próprio pela data/turno do reembolso; vendas e CMV preservam
+  o bruto histórico. Consulte as restrições em [devoluções](DEVOLUCOES.md).
+- Fila com envio interrompido, conferência humana e reenvio autorizado,
+  sem retry automático do estado incerto. Botões distribuídos em linhas.
+- Telegram com agenda diária, recuperação de pendência e migração única
+  autorizada para 23h; mudanças posteriores são respeitadas.
+
+Roteiro e limitações: [melhorias 1.9](MELHORIAS_1_9.md). Estes ensaios não
+certificam todos os detalhes ergonômicos nem equipamentos físicos.
+
 ## Início
 
 Use Python 3.10+ e instale as dependências do projeto, incluindo

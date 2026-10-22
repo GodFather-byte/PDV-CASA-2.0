@@ -13,6 +13,7 @@ from unittest import mock
 from src.controllers.cadastro_controller import CadastroController
 from src.controllers.comissao_controller import ComissaoController
 from src.controllers.impressao_controller import LIMITE_MOVIMENTOS, _ESTILOS, ImpressaoController
+from src.core import formatacao as fmt
 from src.hardware.impressora_termica import TAMANHO_ALTO, TAMANHO_NORMAL, texto_para_escpos
 from tests.test_caixa import BaseCaixa
 from tests.test_fechamento_turno import rotulos
@@ -32,23 +33,23 @@ class BaseFechamento(BaseCaixa):
         self.pagar(v, "Dinheiro", 880)
         self.caixa.fechar(v)
 
-    def fechar(self, declarado, operador=None):
-        return self.turnos.fechar(self.turno, operador or self.adm, declarado)
+    def fechar(self, declarado, operador=None, justificativa=""):
+        return self.turnos.fechar(self.turno, operador or self.adm, declarado, justificativa=justificativa)
 
-    def fita(self, declarado=ESPERADO, operador=None):
+    def fita(self, declarado=ESPERADO, operador=None, justificativa=""):
         self.vender_em_dinheiro()
-        return self.imp.fechamento(self.fechar(declarado, operador))
+        return self.imp.fechamento(self.fechar(declarado, operador, justificativa))
 
 
 class TesteSobraEFalta(BaseFechamento):
     def test_sobrou_aparece_em_palavras(self):
-        texto = self.fita(ESPERADO + 120)
+        texto = self.fita(ESPERADO + 120, justificativa="Sobrou R$ 1,20 na contagem")
         self.assertIn("SOBROU R$ 1,20", texto)
         self.assertNotIn("FALTOU", texto)
         self.assertNotIn("CAIXA CONFERIDO", texto)
 
     def test_faltou_aparece_em_palavras_e_sem_sinal_de_menos(self):
-        texto = self.fita(ESPERADO - 880)
+        texto = self.fita(ESPERADO - 880, justificativa="Faltaram R$ 8,80 na contagem")
         self.assertIn("FALTOU R$ 8,80", texto)
         self.assertNotIn("SOBROU", texto)
 
@@ -59,22 +60,22 @@ class TesteSobraEFalta(BaseFechamento):
         self.assertNotIn("FALTOU", texto)
 
     def test_o_resultado_numerico_continua_na_fita(self):
-        texto = self.fita(ESPERADO + 120)
+        texto = self.fita(ESPERADO + 120, justificativa="Sobrou R$ 1,20 na contagem")
         self.assertIn("SOBROU R$ 1,20", texto)
         self.assertRegex(texto, r"ESPERADO NA GAVETA +108,80")
         self.assertRegex(texto, r"DECLARADO PELO CAIXA +110,00")
 
-    def letra_grande(self, declarado, frase):
-        dados = texto_para_escpos(self.fita(declarado), **_ESTILOS["fechamento"])
+    def letra_grande(self, declarado, frase, justificativa=""):
+        dados = texto_para_escpos(self.fita(declarado, justificativa=justificativa), **_ESTILOS["fechamento"])
         antes = dados[:dados.index(frase)].rstrip(b" ")                # a frase vem centralizada, depois dos espaços
         self.assertTrue(antes.endswith(TAMANHO_ALTO))                  # o dobro da altura vem logo antes da linha
         self.assertIn(TAMANHO_NORMAL, dados[dados.index(frase):])      # e volta ao normal depois
 
     def test_sobrou_sai_em_letra_grande_na_termica(self):
-        self.letra_grande(ESPERADO + 120, b"SOBROU")
+        self.letra_grande(ESPERADO + 120, b"SOBROU", "Sobrou R$ 1,20 na contagem")
 
     def test_faltou_sai_em_letra_grande_na_termica(self):
-        self.letra_grande(ESPERADO - 880, b"FALTOU")
+        self.letra_grande(ESPERADO - 880, b"FALTOU", "Faltaram R$ 8,80 na contagem")
 
     def test_conferido_sai_em_letra_grande_na_termica(self):
         self.letra_grande(ESPERADO, b"CAIXA CONFERIDO")
@@ -101,8 +102,9 @@ class TesteAssinaturas(BaseFechamento):
         self.assertEqual(len(self.linhas_de_assinatura(texto)), 2)             # só as duas assinaturas
 
     def justificativa(self, declarado):
-        texto = self.fita(declarado)
+        texto = self.fita(declarado, justificativa="Diferença constatada na contagem física")
         self.assertIn("Justificativa da diferença:", texto)
+        self.assertIn("Diferença constatada na contagem física", texto)
         self.assertEqual(len(self.linhas_de_assinatura(texto)), 4)     # 2 linhas de justificativa + 2 de assinatura
         self.assertLess(texto.index("Justificativa"), texto.index("Caixa responsável"))
 
@@ -170,7 +172,7 @@ class TesteLarguraDaFita(BaseFechamento):
         self.turnos.movimentar(self.turno, self.adm, "saida", 3000, "Pagamento de fornecedor com nome bem comprido aqui")
         CadastroController(self.banco).salvar("garotas", {"numero": 180, "nome": "MARIA", "ativo": "S"})
         ComissaoController(self.banco).lancar(180, 2500, self.turno, self.adm)
-        linhas = self.fita(ESPERADO - 3000 - 500).splitlines()
+        linhas = self.fita(ESPERADO - 3000 - 500, justificativa="Faltaram R$ 5,00 na contagem").splitlines()
         self.assertTrue(all(len(l) <= colunas for l in linhas), [l for l in linhas if len(l) > colunas])
         self.assertEqual(linhas[-1], "=" * colunas)
         self.assertIn("_" * colunas, linhas)
@@ -282,7 +284,13 @@ class TesteTrocaDeTurnoImprimeSozinha(BaseUI):
         self.erros = []
         self.robo.quando("Dialogo", dialogo, vezes=7)
         self.robo.quando("PainelFechamento", lambda w: (self.painel.append(rotulos(w)), w.destroy()))
-        ok = caixa_dialogos.trocar_turno(self.root, self.ctx)
+        declarados = {r["tipo_id"]: fmt.para_centavos(valor) if r["dinheiro"] else 0
+                      for r in self.ctx.turnos.formas_conferencia(
+                          self.ctx.turnos.atual()["id"], self.ctx.operador_id)}
+        with mock.patch("src.ui.fechamento_ui.coletar", return_value={
+                "informados_por_forma": declarados,
+                "justificativa": "Diferença constatada na contagem física" if valor != "100,00" else ""}):
+            ok = caixa_dialogos.trocar_turno(self.root, self.ctx)
         self.assertTrue(ok)
         self.sem_travar()
 

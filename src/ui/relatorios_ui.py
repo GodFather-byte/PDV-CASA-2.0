@@ -67,6 +67,8 @@ SPECS: dict[str, Spec] = {
     "caixa_mov": Spec("Entradas e saídas financeiras do caixa", PERIODO_TURNO + ["tipo_caixa"],
                       lambda c, f: c.relatorios.caixa_movimentos({**f, "tipo": f.get("tipo_caixa")})),
     "fechamentos": Spec("Fechamentos do caixa", PERIODO_TURNO, lambda c, f: c.relatorios.fechamentos(f), "mes"),
+    "devolucoes": Spec("Devoluções e reembolsos por cupom", PERIODO_TURNO,
+                       lambda c, f: c.relatorios.devolucoes(f), "mes"),
     "comandas": Spec("Comandas", VENDAS, lambda c, f: c.relatorios.comandas(f), mais=VENDAS_MAIS),
     "auditoria_operadores": Spec("Auditoria por operador", PERIODO, lambda c, f: c.relatorios.auditoria_operadores(f), "mes"),
     "garcons": Spec("Garçons", VENDAS, lambda c, f: c.relatorios.garcons(f), mais=VENDAS_MAIS),

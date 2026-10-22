@@ -172,6 +172,12 @@ class AlertasController:
                                 detalhe=f"A mais antiga foi pedida há {e['mais_antiga_min']} min"))
         f = self.filas()
         imp = f["impressao"]
+        incertos = self.banco.valor("SELECT COUNT(*) FROM fila_impressao WHERE status = 'incerto'", padrao=0)
+        if incertos:
+            lista.append(Alerta(categoria="impressao", nivel="critico",
+                                titulo=f"{incertos} envio(s) de impressão interrompido(s)",
+                                detalhe="Confira fisicamente o papel e confirme ou autorize o reenvio na Fila de impressão. "
+                                        "Não entram no reenvio automático."))
         if imp["erros"]:
             lista.append(Alerta(categoria="impressao", nivel="critico", titulo=f"{imp['erros']} documento(s) com erro na impressão",
                                 detalhe="Confira a impressora e reenvie em Utilitários > Fila de impressão"))

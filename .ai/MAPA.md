@@ -11,6 +11,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `python -m src.app` | PDV (`--sync`: segundo plano com a nuvem; `--autoteste`: autoteste) |
 | `python -m src.app --qt` / `--tk` | Prévia PySide6/Qt ou interface Tk completa; mesma base SQLite |
 | `python -m src.app --autoteste-qt [arquivo]` | Autoteste Qt isolado, sem dados reais |
+| `python -m src.app --homologacao [arquivo.json]` | Cinco cenários de recuperação em banco fictício descartável; sem rede ou hardware |
 | `python -m licenciador.app` | Gerador de licenças |
 | `python -m licenciador.app --central` | Central Telegram do fornecedor: configuração local e bot; somente no PC exclusivo |
 | `python -m licenciador.central_cli` | Administração local da central (subcomando obrigatório; `--help` lista opções) |
@@ -49,6 +50,8 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 |---|---|
 | Venda, itens, pagamento, mesas e comandas | `caixa_controller.py` |
 | Turno, numeração de cupom, fechamento | `turno_controller.py`, `conferencia_turno.py` |
+| Conferência por forma e justificativa | `ui/fechamento_ui.py`, `ui_qt/fechamento.py`; contrato em `docs/FECHAMENTO_EXPLICATIVO.md` |
+| Devolução por cupom e troca auditadas | API única em `caixa_controller.py`, ledger em `devolucoes_controller.py`; `ui/devolucoes_ui.py`, `ui_qt/devolucoes.py`; `docs/DEVOLUCOES.md` |
 | Comissão das garotas | `comissao_controller.py`, `relatorio_comissoes.py` |
 | Estoque (baixa, estorno, composição) | `estoque_controller.py` |
 | Reposição por giro de 30 dias, cobertura de 7 dias e etiquetas | `estoque_controller.py`, `etiqueta_controller.py`; telas de estoque e etiquetas Tk/Qt |
@@ -70,9 +73,13 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Cozinha/Bar (setores de impressão, status de preparo por item) | `preparo_controller.py`, `impressao_controller.py` (`setor_do_subgrupo`) · UI `cozinha_ui.py` |
 | Cozinha/Bar em PySide6 | `ui_qt/cozinha.py`; setores em Mais cadastros; navegação por busca em `ui_qt/app.py` |
 | Impressão e fila | `impressao_controller.py`, `fila_impressao_controller.py`, `impressao_assistente.py` |
+| Recuperação após interrupção e roteiro isolado | `fila_impressao_controller.py` (`enviando`/`incerto`, conferência humana), `src/homologacao.py`; guia `docs/MELHORIAS_1_9.md` |
 | Relatórios | `relatorio_controller.py`, `relatorio_vendas.py`, `relatorio_gestao.py` |
+| Devoluções por data/turno do reembolso | `relatorio_vendas.py` (`devolucoes`), menus Relatórios > Caixa Tk/Qt; bruto histórico preservado |
 | Telegram do dono | `telegram_controller.py`, `telegram_textos.py`, `notificacoes.py` |
 | Backup, limpeza e utilitários | `utilitario_controller.py` |
+| Teste de restauração isolada | `protecao.py` (`testar_restauracao_isolada`), `utilitario_controller.py` (`testar_recuperacao`), `ui/utilitarios_ui.py`, `ui_qt/restaurar_backup.py` |
+| Diagnóstico de impressora/gaveta/balança/leitor | `diagnostico_controller.py`, `ui/diagnostico_ui.py`, `ui_qt/diagnostico.py`; sem teste físico na abertura |
 | Backup externo criptografado e cofre DPAPI | `utilitario_controller.py`, `src/core/backup_seguro.py` |
 | Auditoria estruturada e consulta protegida | `auditoria_controller.py`, triggers/migração em `src/database/esquema.py` |
 

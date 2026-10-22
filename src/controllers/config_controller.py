@@ -7,7 +7,7 @@ import re
 
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroValidacao
-from src.database.sementes import CONFIG_PADRAO
+from src.database.sementes import CONFIG_PADRAO, aplicar_padrao_telegram_23h
 
 # (chave, rótulo, tipo[texto|int|decimal|sn|escolha], seção, opções)
 CAMPOS_LOJA = [
@@ -142,7 +142,8 @@ CAMPOS_CONFIG = [
     ("telegram_avisa_backup", "Avisar se o backup automático falhar", "sn", "Telegram"),
     ("telegram_avisa_estoque", "Avisar na hora quando um produto acabar ou chegar no ponto de pedido", "sn", "Telegram"),
     ("telegram_avisa_venda", "Avisar CADA venda fechada, em tempo real (em noite cheia são muitas mensagens)", "sn", "Telegram"),
-    ("telegram_resumo_hora", "Resumo da noite que acabou, enviado todo dia neste horário (ex.: 07:00; vazio = não enviar)",
+    ("telegram_resumo_ativo", "Enviar resumo diário consolidado ao dono (pendente sai quando o PC voltar)", "sn", "Telegram"),
+    ("telegram_resumo_hora", "Resumo diário neste horário LOCAL (padrão 23:00; vazio = não enviar)",
      "texto", "Telegram"),
 ]
 _TIPO_CONFIG = {c[0]: c[2] for c in CAMPOS_CONFIG}
@@ -192,6 +193,7 @@ def modulos_desligados(banco) -> set[str]:
 class ConfigController:
     def __init__(self, banco):
         self.banco = banco
+        aplicar_padrao_telegram_23h(banco)
 
     # --------------------------------------------------------------- loja
     def loja(self) -> dict:
@@ -347,7 +349,7 @@ class ConfigController:
                     try:
                         v = fmt.para_hora(v) or ""
                     except ValueError:
-                        raise ErroValidacao("Horário do resumo inválido (use hh:mm, por exemplo 07:00).", {chave: "inválido"}) from None
+                        raise ErroValidacao("Horário do resumo inválido (use hh:mm, por exemplo 23:00).", {chave: "inválido"}) from None
                 if chave == "num_mesas" and not 1 <= int(v) <= 999:
                     raise ErroValidacao("O número de mesas deve ficar entre 1 e 999.", {chave: "inválido"})
                 if chave == "num_comandas" and not 0 <= int(v) <= 10000:

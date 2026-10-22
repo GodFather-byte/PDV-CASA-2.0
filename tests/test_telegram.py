@@ -222,7 +222,7 @@ class TesteRespostas(BaseTelegram):
         self.assertIn("Dinheiro que deveria estar na gaveta: R$ 116,00", r)      # fundo 100 + venda 16
 
     def test_caixa_fechado_mostra_o_ultimo_fechamento(self):
-        self.turnos.fechar(self.turno, self.adm, 9000)
+        self.turnos.fechar(self.turno, self.adm, 9000, justificativa="Diferença simulada no teste do aviso")
         r = self.pergunta("💵 Caixa")
         self.assertIn("Nenhum caixa aberto", r)
         self.assertIn("faltou R$ 10,00", r)
@@ -305,7 +305,7 @@ class TesteAvisosDoCaixa(BaseTelegram):
         self.parear()
         t = self.turnos.abrir(self.adm, 2, 5000)
         self.venda_fechada()
-        self.turnos.fechar(t, self.adm, 6000)                       # esperado 50 + 16 = 66; contou 60
+        self.turnos.fechar(t, self.adm, 6000, justificativa="Diferença simulada no teste do aviso")
         abertura, fechamento = self.fila()
         self.assertIn("Caixa aberto — turno 2", abertura)
         self.assertIn("Fundo de caixa: R$ 50,00", abertura)
@@ -460,34 +460,40 @@ class TesteFilaDeEnvio(BaseTelegram):
             self.tg.testar()
 
 
-class TesteResumoDaManha(BaseTelegram):
+class TesteResumoAgendado(BaseTelegram):
     def setUp(self):
         super().setUp()
         self.parear()
-        self.venda_fechada()                                  # sábado 03/10 21:00: noite de 03/10
+        self.venda_fechada()
 
     def passar_para(self, dia_hora):
         self.avancar(seconds=(dia_hora - self._hora["t"]).total_seconds())
 
     def test_envia_uma_vez_por_dia_no_horario(self):
         from datetime import datetime
-        self.banco.cfg_set("telegram_ultimo_resumo", "2026-10-02")
-        self.passar_para(datetime(2026, 10, 4, 6, 59))
-        self.assertFalse(self.tg.resumo_agendado())            # ainda não deu 07:00
-        self.passar_para(datetime(2026, 10, 4, 7, 0))
+        self.passar_para(datetime(2026, 10, 3, 22, 59, 59))
+        self.assertFalse(self.tg.resumo_agendado())
+        self.passar_para(datetime(2026, 10, 3, 23, 0))
         self.assertTrue(self.tg.resumo_agendado())
         self.assertFalse(self.tg.resumo_agendado())            # de novo no mesmo dia: não
         (texto,) = self.fila()
-        self.assertIn("Resumo da noite — sáb 03/10", texto)
+        self.assertIn("2026-10-03 00:00:00 até 2026-10-03 23:00:00", texto)
+        self.assertIn("Última atualização local: 2026-10-03 23:00:00", texto)
         self.assertIn("Faturamento: R$ 16,00", texto)
+        self.assertEqual(self.banco.cfg("telegram_ultimo_resumo"), "")
+        self.assertEqual(self.tg.processar_fila(), 1)
+        self.assertEqual(self.banco.cfg("telegram_ultimo_resumo"), "2026-10-03 23:00:00")
+        self.assertEqual(self.tg.processar_fila(), 0)
 
-    def test_nunca_antes_da_virada_do_dia(self):
+    def test_horario_local_independe_da_virada_do_dia(self):
         from datetime import datetime
-        self.banco.cfg_set("telegram_ultimo_resumo", "2026-10-02")
-        self.banco.cfg_set("telegram_resumo_hora", "03:00")        # a noite ainda não acabou às 3h (a virada é às 6h)
-        self.passar_para(datetime(2026, 10, 4, 3, 30))
+        self.tg.salvar_agendamento(True, "03:00")
+        self.passar_para(datetime(2026, 10, 4, 2, 59, 59))
+        # O corte anterior (03/10 às 03h) também está vencido e deve ser recuperado.
+        self.assertTrue(self.tg.resumo_agendado())
+        self.tg.processar_fila()
         self.assertFalse(self.tg.resumo_agendado())
-        self.passar_para(datetime(2026, 10, 4, 6, 0))
+        self.passar_para(datetime(2026, 10, 4, 3, 0))
         self.assertTrue(self.tg.resumo_agendado())
 
     def test_horario_vazio_desliga(self):
@@ -496,10 +502,10 @@ class TesteResumoDaManha(BaseTelegram):
         self.passar_para(datetime(2026, 10, 4, 9, 0))
         self.assertFalse(self.tg.resumo_agendado())
 
-    def test_primeiro_resumo_depois_do_pareamento_e_o_da_proxima_manha(self):
+    def test_pareamento_nao_marca_como_enviado(self):
         from datetime import datetime
-        self.assertEqual(self.banco.cfg("telegram_ultimo_resumo"), "2026-10-02")   # pareou no dia 03: já conta 02 como enviado
-        self.passar_para(datetime(2026, 10, 3, 15, 0))
+        self.assertEqual(self.banco.cfg("telegram_ultimo_resumo"), "")
+        self.passar_para(datetime(2026, 10, 3, 22, 0))
         self.assertFalse(self.tg.resumo_agendado())
 
     def test_horario_da_configuracao_e_validado(self):
@@ -514,8 +520,363 @@ class TesteResumoDaManha(BaseTelegram):
         self.novo_produto("GIN", 3000, estoque=True, qt=0)
         self.assertIn("Produtos sem estoque: 1", self.tg.responder_comando("ontem"))
 
+    def test_pc_dias_desligado_um_intervalo_sem_lote_por_dia(self):
+        self.avancar(days=8, hours=4)
+        self.assertTrue(self.tg.resumo_agendado())
+        self.assertEqual(len(self.fila()), 1)
+        self.assertIn("2026-10-03 00:00:00 até 2026-10-11 23:00:00", self.fila()[0])
+        reiniciado = TelegramController(self.banco, self.tg_http)
+        self.assertFalse(reiniciado.resumo_agendado())
+        self.assertEqual(reiniciado.processar_fila(), 1)
+        self.assertFalse(reiniciado.resumo_agendado())
+        self.assertEqual(reiniciado.processar_fila(), 0)
+        self.assertEqual(len(self.tg_http.textos()), 1)
+
+    def test_falha_nao_marca_envio_pendente_nao_expira_e_consolida(self):
+        self.avancar(hours=2)
+        self.tg.resumo_agendado()
+        self.tg_http.falha = ErroTelegram("Sem conexão.")
+        with self.assertRaises(ErroTelegram):
+            self.tg.processar_fila()
+        self.assertEqual(self.banco.cfg("telegram_ultimo_resumo"), "")
+        self.assertTrue(self.tg.estado_agendamento()["pendente"])
+        self.avancar(days=6)
+        self.tg_http.falha = None
+        reiniciado = TelegramController(self.banco, self.tg_http)
+        self.assertEqual(reiniciado.processar_fila(), 1)
+        self.assertEqual(len(self.fila()), 1)
+        self.assertIn("até 2026-10-09 23:00:00", self.tg_http.textos()[0])
+        self.assertFalse(reiniciado.estado_agendamento()["pendente"])
+
+    def test_optout_e_telegram_desligado_preservam_pendente_sem_envio(self):
+        self.avancar(hours=2)
+        self.tg.resumo_agendado()
+        for chave in ("telegram_resumo_ativo", "telegram_ativo"):
+            self.banco.cfg_set(chave, "N")
+            self.assertEqual(self.tg.processar_fila(), 0)
+            self.assertTrue(self.tg.estado_agendamento()["pendente"])
+            self.banco.cfg_set(chave, "S")
+        self.assertEqual(self.tg_http.textos(), [])
+        self.assertEqual(self.tg.processar_fila(), 1)
+
+    def test_sem_token_pareamento_ou_consentimento_nao_ativa(self):
+        self.avancar(hours=2)
+        self.banco.cfg_set("telegram_ativo", "N")
+        self.assertFalse(self.tg.resumo_agendado())
+        self.assertEqual(self.tg.processar_fila(), 0)
+        self.banco.cfg_set("telegram_ativo", "S")
+        self.banco.cfg_set("telegram_token", "")
+        self.assertFalse(self.tg.resumo_agendado())
+        self.banco.cfg_set("telegram_token", TOKEN)
+        self.tg.remover_chat(DONO)
+        self.assertFalse(self.tg.resumo_agendado())
+        self.assertEqual(self.tg_http.textos(), [])
+
+    def test_reinicio_apos_sucesso_de_um_chat_nao_repete(self):
+        self.banco.executar("INSERT INTO telegram_chats(chat_id,nome,criado_em) VALUES (?,?,?)",
+                            (3003, "Sócio", "2026-10-03 21:01:00"))
+        self.avancar(hours=2)
+        self.tg.resumo_agendado()
+        self.tg_http.falha_chat[3003] = {"ok": False, "error_code": 502, "description": "Falha"}
+        with self.assertRaises(ErroTelegram):
+            self.tg.processar_fila()
+        self.assertEqual(len(self.tg_http.textos(DONO)), 1)
+        self.assertEqual(self.banco.cfg("telegram_ultimo_resumo"), "")
+        self.avancar(days=4)
+        self.tg_http.falha_chat.clear()
+        reiniciado = TelegramController(self.banco, self.tg_http)
+        self.assertEqual(reiniciado.processar_fila(), 1)
+        self.assertEqual(len(self.tg_http.textos(DONO)), 1)
+        self.assertEqual(len(self.tg_http.textos(3003)), 1)
+        self.assertEqual(self.tg_http.textos(ESTRANHO), [])
+        self.assertTrue(reiniciado.resumo_agendado())
+        self.assertEqual(reiniciado.processar_fila(), 1)  # próximo intervalo consolidado
+        self.assertEqual(reiniciado.processar_fila(), 0)
+
+    def test_fronteira_intervalo_inclui_inicio_e_exclui_fim(self):
+        from src.controllers import telegram_textos
+        texto = telegram_textos.resumo_agendado(self.banco, "2026-10-03 21:00:00", "2026-10-03 23:00:00")
+        self.assertIn("R$ 16,00", texto)
+        texto = telegram_textos.resumo_agendado(self.banco, "2026-10-03 00:00:00", "2026-10-03 21:00:00")
+        self.assertIn("Nenhuma venda fechada", texto)
+
+    def test_erro_definitivo_resumo_continua_recuperavel(self):
+        self.avancar(hours=2)
+        self.tg.resumo_agendado()
+        self.tg_http.falha = {"ok": False, "error_code": 401, "description": "Unauthorized"}
+        with self.assertRaises(ErroTelegram):
+            self.tg.processar_fila()
+        self.assertEqual(self.banco.valor("SELECT status FROM telegram_fila"), "pendente")
+        self.tg_http.falha = None
+        self.assertEqual(self.tg.processar_fila(), 1)
+
+    def test_recibo_salvo_antes_de_falhar_confirmacao_nao_repete(self):
+        self.avancar(hours=2)
+        self.tg.resumo_agendado()
+        with mock.patch.object(self.tg, "_salvar_agendamento", side_effect=RuntimeError("queda ao confirmar")):
+            with self.assertRaises(RuntimeError):
+                self.tg.processar_fila()
+        self.assertEqual(len(self.tg_http.textos()), 1)
+        self.assertEqual(self.banco.cfg("telegram_ultimo_resumo"), "")
+        self.assertEqual(self.banco.valor("SELECT status FROM telegram_fila"), "pendente")
+        reiniciado = TelegramController(self.banco, self.tg_http)
+        self.assertEqual(reiniciado.processar_fila(), 1)
+        self.assertEqual(len(self.tg_http.textos()), 1)
+        self.assertFalse(reiniciado.estado_agendamento()["pendente"])
+
+    def test_queda_antes_de_gravar_recibo_pode_repetir_sem_perder_pendente(self):
+        self.avancar(hours=2)
+        self.tg.resumo_agendado()
+        with mock.patch.object(self.banco, "atualizar", side_effect=RuntimeError("queda antes do recibo")):
+            with self.assertRaises(RuntimeError):
+                self.tg.processar_fila()
+        self.assertEqual(len(self.tg_http.textos()), 1)
+        self.assertEqual(self.banco.cfg("telegram_ultimo_resumo"), "")
+        self.assertTrue(self.tg.estado_agendamento()["pendente"])
+        self.tg.processar_fila()
+        self.assertEqual(len(self.tg_http.textos()), 2)
+        self.assertFalse(self.tg.estado_agendamento()["pendente"])
+
+    def test_falha_na_inclusao_reverte_fila_e_estado_juntos(self):
+        self.avancar(hours=2)
+        original = notificacoes.enfileirar
+        def falhar(*args):
+            original(*args)
+            raise RuntimeError("queda ao enfileirar")
+        with mock.patch.object(notificacoes, "enfileirar", side_effect=falhar):
+            with self.assertRaises(RuntimeError):
+                self.tg.resumo_agendado()
+        self.assertEqual(self.fila(), [])
+        self.assertFalse(self.tg.estado_agendamento()["pendente"])
+        self.assertTrue(self.tg.resumo_agendado())
+
+    def test_reabre_banco_com_pendente_sem_marcar_envio_antecipado(self):
+        from pathlib import Path
+        from uuid import uuid4
+        caminho = Path("tests") / f"_telegram_reinicio_{uuid4().hex}.db"
+        self.avancar(hours=2)
+        self.tg.resumo_agendado()
+        banco = None
+        try:
+            banco = BancoDados(str(caminho), semear=False)
+            self.banco.conexao.backup(banco.conexao)
+            banco.fechar()
+            banco = BancoDados(str(caminho), semear=False)
+            reiniciado = TelegramController(banco, self.tg_http)
+            self.assertTrue(reiniciado.estado_agendamento()["pendente"])
+            self.assertEqual(banco.cfg("telegram_ultimo_resumo"), "")
+            self.assertFalse(reiniciado.resumo_agendado())
+            self.assertEqual(reiniciado.processar_fila(), 1)
+            banco.fechar()
+            banco = BancoDados(str(caminho), semear=False)
+            reiniciado = TelegramController(banco, self.tg_http)
+            self.assertFalse(reiniciado.resumo_agendado())
+            self.assertEqual(reiniciado.processar_fila(), 0)
+            self.assertEqual(len(self.tg_http.textos()), 1)
+        finally:
+            if banco:
+                banco.fechar()
+            for sufixo in ("", "-wal", "-shm"):
+                Path(str(caminho) + sufixo).unlink(missing_ok=True)
+
+    def test_migracao_consolida_fila_antiga_sem_confiar_na_marca(self):
+        from src.controllers.telegram_controller import CHAVE_AGENDAMENTO
+        self.banco.cfg_set(CHAVE_AGENDAMENTO, "")
+        self.banco.cfg_set("telegram_ultimo_resumo", "2026-10-02")
+        for i in range(5):
+            notificacoes.enfileirar(self.banco, "resumo", f"resumo antigo {i}")
+        self.avancar(days=5, hours=2)
+        self.assertTrue(self.tg.resumo_agendado())
+        self.assertEqual(self.tg.processar_fila(), 1)
+        self.assertEqual(len(self.tg_http.textos()), 1)
+        self.assertIn("consolidado", self.tg_http.textos()[0])
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM telegram_fila WHERE status = 'pendente'"), 0)
+
+    def test_sem_recipiente_nao_confirma_envio_e_novo_pareamento_recupera(self):
+        self.avancar(hours=2)
+        self.tg.resumo_agendado()
+        self.tg_http.falha_chat[DONO] = {"ok": False, "error_code": 403, "description": "Forbidden"}
+        self.assertEqual(self.tg.processar_fila(), 0)
+        self.assertEqual(self.banco.cfg("telegram_ultimo_resumo"), "")
+        self.assertTrue(self.tg.estado_agendamento()["pendente"])
+        self.tg._parear(3003, "Novo celular do dono")
+        self.assertTrue(self.tg.resumo_agendado())
+        self.assertEqual(self.tg.processar_fila(), 1)
+        self.assertEqual(self.tg_http.textos(DONO), [])
+        self.assertEqual(len(self.tg_http.textos(3003)), 1)
+
+
+class TesteReembolsosNoResumo(BaseTelegram):
+    def devolver(self, venda_id, modo="dinheiro_gaveta", **kw):
+        from uuid import uuid4
+        from src.controllers.devolucoes_controller import DevolucoesController
+        item = self.caixa.itens(venda_id)[0]["id"]
+        return DevolucoesController(self.banco, self.adm, caixa=self.caixa).registrar(
+            venda_id, [{"item_id": item, "quantidade": 1}], "Devolução de teste", self.adm,
+            modo, str(uuid4()), **kw)
+
+    def test_diario_preserva_bruto_e_nao_subtrai_gaveta_duas_vezes(self):
+        self.parear()
+        venda = self.venda_fechada()
+        self.devolver(venda)
+        self.avancar(hours=2)
+        self.tg.resumo_agendado()
+        self.assertGreaterEqual(self.tg.processar_fila(), 1)
+        texto = next(t for t in self.tg_http.textos() if "Resumo agendado consolidado" in t)
+        self.assertIn("Faturamento: R$ 16,00 (bruto histórico", texto)
+        self.assertIn("REEMBOLSOS no período: R$ 8,00", texto)
+        self.assertIn("Líquido gerencial do período: R$ 8,00", texto)
+        self.assertIn("Saídas da gaveta (incluem reembolsos): R$ 8,00", texto)
+        self.assertIn("não deduzir de novo", texto)
+        self.assertEqual(self.caixa.obter(venda)["total_cent"], 1600)
+        self.assertEqual(self.turnos.resumo(self.turno)["esperado"], 10800)
+
+    def test_gerencial_devolucao_antiga_pela_data_reembolso(self):
+        venda = self.venda_fechada()
+        self.avancar(days=2)
+        self.devolver(venda)
+        texto = self.tg.responder_comando("gerencial")
+        self.assertIn("Nenhuma venda fechada ainda.", texto)
+        self.assertIn("REEMBOLSOS no período: R$ 8,00", texto)
+        self.assertIn("Líquido gerencial do período: -R$ 8,00", texto)
+        self.assertIn("inclusive vendas de dias anteriores", texto)
+        self.assertIn("REEMBOLSOS no período: R$ 0,00", self.tg.responder_comando("ontem"))
+        self.assertEqual(self.caixa.obter(venda)["total_cent"], 1600)
+
+    def test_corte_reembolso_exclui_fim_e_inclui_inicio(self):
+        from src.controllers import telegram_textos
+        venda = self.venda_fechada()
+        self.avancar(hours=2)
+        self.devolver(venda)
+        antes = telegram_textos.resumo_agendado(self.banco, "2026-10-03 00:00:00", "2026-10-03 23:00:00")
+        depois = telegram_textos.resumo_agendado(self.banco, "2026-10-03 23:00:00", "2026-10-04 23:00:00")
+        self.assertIn("REEMBOLSOS no período: R$ 0,00", antes)
+        self.assertIn("REEMBOLSOS no período: R$ 8,00", depois)
+
+    def test_externo_apenas_declaracao_sem_movimento_dinheiro(self):
+        venda = self.vender((self.skol, 2))
+        self.pagar(venda, "Pix", 1600)
+        self.caixa.fechar(venda)
+        self.devolver(venda, "externo", tipo_pagamento_id=self.tipo("Pix"), referencia_externa="referencia teste")
+        texto = self.tg.responder_comando("gerencial")
+        self.assertIn("Externo declarado: R$ 8,00", texto)
+        self.assertIn("não comprova estorno bancário", texto)
+        self.assertNotIn("Saídas da gaveta", texto)
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM movimentos_caixa WHERE tipo = 'saida'"), 0)
+
+
+class TesteResumoAgendadoTk(BaseTelegram):
+    def test_tela_tk_edita_e_exibe_pendente_sem_rede(self):
+        import tkinter as tk
+        from types import SimpleNamespace
+        from src.ui.telegram_ui import JanelaTelegram
+        self.parear()
+        self.avancar(hours=2)
+        self.tg.resumo_agendado()
+        raiz = tk.Tk()
+        raiz.withdraw()
+        janela = None
+        try:
+            janela = JanelaTelegram(raiz, SimpleNamespace(banco=self.banco, telegram=self.tg))
+            self.assertTrue(janela.var_resumo_ativo.get())
+            self.assertEqual(janela.var_resumo_hora.get(), "23:00")
+            self.assertIn("Pendente: 2026-10-03", janela.lbl_agendamento.cget("text"))
+            janela.var_resumo_ativo.set(False)
+            janela.var_resumo_hora.set("22:15")
+            janela.salvar_resumo()
+            self.assertEqual(self.banco.cfg("telegram_resumo_ativo"), "N")
+            self.assertEqual(self.banco.cfg("telegram_resumo_hora"), "22:15")
+            self.assertIn("pausado", janela.lbl_agendamento.cget("text"))
+            self.assertEqual(self.tg_http.textos(), [])
+        finally:
+            if janela:
+                janela.destroy()
+            raiz.destroy()
+
 
 class TesteConfiguracaoDoTelegram(BaseTelegram):
+    def test_primeira_atualizacao_aplica_23h_ativo_sem_ligar_bot(self):
+        from src.controllers.config_controller import ConfigController
+        from src.database.sementes import CHAVE_RESUMO_23H_APLICADO
+        for hora in ("07:00", "19:45", "", "00:00"):
+            with self.subTest(hora=hora):
+                self.banco.executar("DELETE FROM config WHERE chave = ?", (CHAVE_RESUMO_23H_APLICADO,))
+                self.banco.cfg_set("telegram_resumo_hora", hora)
+                self.banco.cfg_set("telegram_resumo_ativo", "N")
+                self.banco.cfg_set("telegram_ativo", "N")
+                cfg = ConfigController(self.banco)
+                self.assertEqual(cfg.todas()["telegram_resumo_hora"], "23:00")
+                self.assertEqual(self.banco.cfg("telegram_resumo_ativo"), "S")
+                self.assertEqual(self.banco.cfg(CHAVE_RESUMO_23H_APLICADO), "S")
+                self.assertEqual(self.banco.cfg("telegram_ativo"), "N")
+                self.assertEqual(self.banco.cfg("telegram_token"), "")
+                self.assertEqual(self.tg.chats(), [])
+
+    def test_edicao_antes_do_primeiro_scheduler_preservada(self):
+        from src.controllers.config_controller import ConfigController
+        from src.database.sementes import CHAVE_RESUMO_23H_APLICADO, aplicar
+        self.banco.executar("DELETE FROM config WHERE chave = ?", (CHAVE_RESUMO_23H_APLICADO,))
+        self.banco.cfg_set("telegram_resumo_hora", "07:00")
+        cfg = ConfigController(self.banco)
+        cfg.salvar_config({"telegram_resumo_hora": "20:15", "telegram_resumo_ativo": "N"})
+        aplicar(self.banco)
+        ConfigController(self.banco)
+        reiniciado = TelegramController(self.banco, self.tg_http)
+        self.assertEqual(reiniciado.estado_agendamento()["hora"], "20:15")
+        self.assertFalse(reiniciado.estado_agendamento()["ativo"])
+        self.assertEqual(self.tg_http.textos(), [])
+        cfg.salvar_config({"telegram_resumo_hora": ""})
+        TelegramController(self.banco, self.tg_http)
+        self.assertEqual(self.banco.cfg("telegram_resumo_hora"), "")
+
+    def test_migracao_e_edicao_sobrevivem_reabertura_do_banco(self):
+        from pathlib import Path
+        from uuid import uuid4
+        from src.controllers.config_controller import ConfigController
+        from src.database.sementes import CHAVE_RESUMO_23H_APLICADO
+        caminho = Path("tests") / f"_telegram_upgrade_{uuid4().hex}.db"
+        self.banco.executar("DELETE FROM config WHERE chave = ?", (CHAVE_RESUMO_23H_APLICADO,))
+        self.banco.cfg_set("telegram_resumo_hora", "07:00")
+        banco = None
+        try:
+            banco = BancoDados(str(caminho), semear=False)
+            self.banco.conexao.backup(banco.conexao)
+            banco.fechar()
+            banco = BancoDados(str(caminho))
+            self.assertEqual(banco.cfg("telegram_resumo_hora"), "23:00")
+            self.assertEqual(banco.cfg("telegram_resumo_ativo"), "S")
+            cfg = ConfigController(banco)
+            cfg.salvar_config({"telegram_resumo_hora": "18:30", "telegram_resumo_ativo": "N"})
+            banco.fechar()
+            banco = BancoDados(str(caminho))
+            ConfigController(banco)
+            TelegramController(banco, self.tg_http)
+            self.assertEqual(banco.cfg("telegram_resumo_hora"), "18:30")
+            self.assertEqual(banco.cfg("telegram_resumo_ativo"), "N")
+            self.assertEqual(banco.cfg("telegram_ativo"), "N")
+        finally:
+            if banco:
+                banco.fechar()
+            for sufixo in ("", "-wal", "-shm"):
+                Path(str(caminho) + sufixo).unlink(missing_ok=True)
+
+    def test_migracao_e_atomica_se_gravacao_falhar(self):
+        from src.database.sementes import CHAVE_RESUMO_23H_APLICADO, aplicar_padrao_telegram_23h
+        self.banco.executar("DELETE FROM config WHERE chave = ?", (CHAVE_RESUMO_23H_APLICADO,))
+        self.banco.cfg_set("telegram_resumo_hora", "07:00")
+        self.banco.cfg_set("telegram_resumo_ativo", "N")
+        original = self.banco.cfg_set
+        def falhar(chave, valor):
+            if chave == CHAVE_RESUMO_23H_APLICADO:
+                raise RuntimeError("falha simulada")
+            original(chave, valor)
+        with mock.patch.object(self.banco, "cfg_set", side_effect=falhar):
+            with self.assertRaises(RuntimeError):
+                aplicar_padrao_telegram_23h(self.banco)
+        self.assertEqual(self.banco.cfg("telegram_resumo_hora"), "07:00")
+        self.assertEqual(self.banco.cfg("telegram_resumo_ativo"), "N")
+        self.assertEqual(self.banco.cfg(CHAVE_RESUMO_23H_APLICADO), "")
+
     def test_token_nao_aparece_no_formulario_geral(self):
         self.assertNotIn("telegram_token", [c[0] for c in CAMPOS_CONFIG])
         self.assertIn("telegram_ativo", [c[0] for c in CAMPOS_CONFIG])

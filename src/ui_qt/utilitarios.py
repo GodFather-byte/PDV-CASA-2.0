@@ -13,7 +13,8 @@ from src.ui_qt.tema import texto
 class JanelaUtilitarios(QDialog):
     """Usa o Contexto da sessão; ações devolvem True só quando concluídas.
 
-    Não abre restauração, fila nem configuração de backup externo. Erros das
+    Não abre restauração, fila nem configuração de backup externo; `verificar_backup`
+    abre `JanelaVerificarBackup` (ensaio isolado, sem tocar o banco em uso). Erros das
     ações aparecem em ``mensagem``; resultados e caminhos ficam em ``status``.
     A construção exige sessão ativa; cada ação exige sua permissão Tk.
     """
@@ -24,6 +25,7 @@ class JanelaUtilitarios(QDialog):
         ("limpeza", "Limpeza do movimento…", "util_limpeza"),
         ("excluir_produtos", "Excluir todos os produtos…", "util_excluir_produtos"),
         ("comunicacao", "Programa de comunicação", "util_comunicacao"),
+        ("verificar_backup", "Verificar backup (teste de restauração)…", "util_backup"),
     )
 
     def __init__(self, ctx, parent=None):
@@ -96,6 +98,16 @@ class JanelaUtilitarios(QDialog):
             caminho = self._controlador("util_backup").backup()
             _, situacao = self._controlador("util_backup").situacao_backup()
             self.status.setText(f"Backup local gerado:\n{caminho}\n\n{situacao}")
+            return True
+        return self._executar(acao)
+
+    def verificar_backup(self):
+        def acao():
+            self._controlador("util_backup")
+            from src.ui_qt.restaurar_backup import JanelaVerificarBackup
+            self.janela_verificacao = JanelaVerificarBackup(self.ctx, self)
+            self.janela_verificacao.open()
+            self.status.setText(self.ctx.utilitarios.situacao_teste_restauracao()[1])
             return True
         return self._executar(acao)
 

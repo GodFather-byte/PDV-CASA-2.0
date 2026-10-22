@@ -119,6 +119,23 @@ class JanelaTelegram(QDialog):
         caixa_codigo.addWidget(self.lbl_instrucao)
         layout.addLayout(caixa_codigo)
 
+        agenda = QHBoxLayout()
+        self.var_resumo_ativo = QCheckBox("Resumo diário")
+        self.var_resumo_ativo.setChecked(self.ctx.banco.cfg_bool("telegram_resumo_ativo", True))
+        self.ent_resumo_hora = QLineEdit(self.ctx.banco.cfg("telegram_resumo_hora", "23:00"))
+        self.ent_resumo_hora.setMaximumWidth(80)
+        self.ent_resumo_hora.setPlaceholderText("hh:mm")
+        self.btn_salvar_resumo = QPushButton("Salvar resumo")
+        self.btn_salvar_resumo.clicked.connect(self.salvar_resumo)
+        agenda.addWidget(self.var_resumo_ativo)
+        agenda.addWidget(self.ent_resumo_hora)
+        agenda.addWidget(texto("horário local (hh:mm)", "suave"))
+        agenda.addWidget(self.btn_salvar_resumo)
+        layout.addLayout(agenda)
+        self.lbl_agendamento = texto("", "suave")
+        self.lbl_agendamento.setWordWrap(True)
+        layout.addWidget(self.lbl_agendamento)
+
         layout.addWidget(texto("3. Celulares conectados", "subtitulo"))
         self.grade = QTableWidget(0, 2)
         self.grade.setHorizontalHeaderLabels(("Quem", "Conectado em"))
@@ -193,11 +210,13 @@ class JanelaTelegram(QDialog):
         self.lbl_bot.clear()
         self.lbl_codigo.clear()
         self.lbl_instrucao.clear()
+        self.lbl_agendamento.clear()
         self.lbl_status.setText(self._mensagem_segura(mensagem))
         for widget in (
             self.var_ativo, self.ent_token, self.var_mostrar, self.btn_conectar,
             self.btn_botfather, self.btn_codigo, self.btn_abrir_bot,
-            self.btn_testar, self.btn_remover,
+            self.btn_testar, self.btn_remover, self.var_resumo_ativo,
+            self.ent_resumo_hora, self.btn_salvar_resumo,
         ):
             widget.setEnabled(False)
 
@@ -205,7 +224,8 @@ class JanelaTelegram(QDialog):
         for widget in (
             self.var_ativo, self.ent_token, self.var_mostrar, self.btn_conectar,
             self.btn_botfather, self.btn_codigo, self.btn_abrir_bot,
-            self.btn_testar, self.btn_remover,
+            self.btn_testar, self.btn_remover, self.var_resumo_ativo,
+            self.ent_resumo_hora, self.btn_salvar_resumo,
         ):
             widget.setEnabled(True)
 
@@ -229,6 +249,17 @@ class JanelaTelegram(QDialog):
         except Exception as erro:
             self.lbl_status.setText(self._mensagem_segura(erro))
             self.atualizar()
+
+    def salvar_resumo(self):
+        if not self._autorizar_acao():
+            return False
+        try:
+            self.tg.salvar_agendamento(self.var_resumo_ativo.isChecked(), self.ent_resumo_hora.text())
+        except ErroNegocio as erro:
+            QMessageBox.warning(self, "Telegram", str(erro))
+            return False
+        self.atualizar()
+        return True
 
     def conectar(self):
         if self._fechado or not self._autorizar_acao() or self._solicitacao is not None:
@@ -418,6 +449,7 @@ class JanelaTelegram(QDialog):
         self.var_ativo.blockSignals(True)
         self.var_ativo.setChecked(tg.ligado())
         self.var_ativo.blockSignals(False)
+        self.lbl_agendamento.setText(tg.texto_agendamento())
         self.btn_remover.setEnabled(bool(chats))
         self.btn_testar.setEnabled(bool(chats) and self._solicitacao is None)
         erro = self._erro_rede or tg.ultimo_erro()

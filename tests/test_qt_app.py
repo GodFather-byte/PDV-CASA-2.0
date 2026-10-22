@@ -605,7 +605,7 @@ class TestBackupExternoQt(BaseQt):
     def test_verificacao_incorreta_nao_mostra_sucesso(self):
         with patch("src.ui_qt.app.QFileDialog.getOpenFileName", return_value=("copia.pdvbkp", "")), \
                 patch("src.ui_qt.app.QInputDialog.getText", return_value=("Recuperacao123!", True)), \
-                patch("src.controllers.utilitario_controller.UtilitarioController.verificar_backup_externo",
+                patch("src.controllers.utilitario_controller.UtilitarioController.testar_recuperacao",
                       side_effect=ErroNegocio("Senha inválida.")):
             self.backup.verificar()
         self.assertEqual(self.backup.mensagem.text(), "Senha inválida.")

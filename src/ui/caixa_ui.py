@@ -400,6 +400,7 @@ class JanelaCaixa(tk.Toplevel):
         venda = [("Nomear comanda", self.nomear_comanda), ("Delivery (F6)", self.entrega), ("Caderneta (F5)", self.caderneta),
                  ("Rodízio", self.rodizio), ("Recarga", self.recarga)]
         caixa = [("Impressora", self.impressora), ("Balança (F2)", self.balanca), ("Leitor (F3)", self.alternar_leitor),
+                 ("Devoluções e trocas", self.abrir_devolucoes),
                  ("Fecha Turno", self.fechar_turno)]
         sair = [("Sair", self.sair)]                       # fica no canto do cabeçalho, longe dos botões de uso diário
         if not self.com_mesas:          # só balcão: sem as ações de mesa e comanda
@@ -519,6 +520,18 @@ class JanelaCaixa(tk.Toplevel):
 
     def abrir_fila(self) -> None:
         JanelaFilaImpressao(self, self.ctx)
+
+    def abrir_devolucoes(self) -> None:
+        from src.ui.devolucoes_ui import abrir
+        ok, janela = tema.tratar(self, abrir, self, self.ctx)
+        if not ok:
+            return
+        janela.grab_set()
+        self.wait_window(janela)
+        if self.venda_id is None:
+            balcao = self.ctx.caixa.balcao_aberto()
+            self.venda_id = balcao["id"] if balcao else None
+        self.recarregar()
 
     def _atualizar_painel(self) -> None:
         """Com os ícones sempre à vista, a mesa parada precisa ganhar o relógio sozinha, sem o operador agir."""

@@ -29,6 +29,7 @@ CADASTROS = [("unidades", "Unidades"), ("grupos", "Grupos"), ("subgrupos", "Subg
 MODULO_CADASTRO = {"planos_contas": "cad_plano_contas"}   # os demais seguem o padrão cad_<chave>
 
 LANCAMENTOS = [("contas", "Contas", "lanc_contas"), ("estoque", "Estoque", "lanc_estoque"),
+              ("devolucoes", "Devoluções e trocas por cupom", "caixa_cancelamento"),
               ("retornaveis", "Retornáveis por cliente", "lanc_estoque")]
 
 RELATORIOS = [
@@ -37,6 +38,7 @@ RELATORIOS = [
                 ("informativo", "Informativo por dia", "rel_informativos"), ("horas", "Vendas por hora", "rel_informativos"),
                 ("cancelados", "Cancelamentos", "rel_informativos")]),
     ("Caixa", [("caixa_mov", "Entradas e saídas financeiras", "rel_caixa"), ("fechamentos", "Fechamentos do caixa", "rel_caixa"),
+               ("devolucoes", "Devoluções e reembolsos por cupom", "rel_caixa"),
                ("comandas", "Comandas", "rel_comandas"), ("garcons", "Garçons", "rel_garcons"),
                ("auditoria_operadores", "Auditoria por operador", "rel_auditoria"),
                ("auditoria_eventos", "Alterações e auditoria detalhada", "rel_auditoria"),
@@ -55,9 +57,11 @@ UTILITARIOS = [("limpeza", "Limpeza do movimento", "util_limpeza"),
                ("excluir_produtos", "Excluir todos os produtos", "util_excluir_produtos"),
                ("comunicacao", "Programa de comunicação", "util_comunicacao"),
                ("backup", "Backup de dados", "util_backup"), ("restaurar", "Restaurar backup", "util_backup"),
+               ("verificar_backup", "Verificar backup (restauração isolada)", "util_backup"),
                ("backup_externo", "Backup externo criptografado", "util_backup"),
                ("suporte", "Pacote de suporte (log de erros)", "util_backup"),
                ("fila_impressao", "Fila de impressão", "util_fila_impressao"),
+               ("diagnostico", "Diagnóstico de equipamentos", "cfg_maquinas"),
                ("cozinha", "Painel da Cozinha/Bar", "util_cozinha")]
 CONFIGURACOES = [("acessos", "Acessos", "cfg_acessos"), ("loja", "Loja", "cfg_loja"),
                  ("configuracoes", "Configurações", "cfg_configuracoes"), ("maquinas", "Máquinas", "cfg_maquinas"),
@@ -362,6 +366,8 @@ class App:
         self.aviso_backup = Aviso(avisos, wraplength=600)
         self.aviso_backup.pack(anchor="w")
         self.lbl_backup = self.aviso_backup.texto
+        self.aviso_recuperacao = Aviso(
+            avisos, clique=lambda: self.utilitario("fila_impressao"), wraplength=600)
         self.aviso_licenca = Aviso(avisos, wraplength=600)
         self.aviso_licenca.pack(anchor="w")
         self.aviso_versao = Aviso(avisos, clique=self.abrir_aviso_versao, wraplength=500)
@@ -511,7 +517,17 @@ class App:
             self.lbl_barra.configure(text="Nenhum produto com controle de estoque ligado.")
         self.lbl_atualiz.configure(text=f"Última atualização:  {fmt.fmt_datahora(p['atualizado_em'])}")
         nivel, texto = self.ctx.utilitarios.situacao_backup()
+        nivel_teste, teste = self.ctx.utilitarios.situacao_teste_restauracao()
+        texto += "\n" + teste
+        if nivel_teste != "ok":
+            nivel = "aviso"
         self.aviso_backup.definir(texto, PAL["verde"] if nivel == "ok" else PAL["vermelho"])
+        texto_impressao, nivel_impressao = self.ctx.impressao.fila.texto_indicador()
+        if nivel_impressao == "erro" and "util_fila_impressao" in self._permitidos:
+            self.aviso_recuperacao.definir(texto_impressao + ". Clique para conferir.", PAL["vermelho"])
+            self.aviso_recuperacao.pack(anchor="w")
+        else:
+            self.aviso_recuperacao.pack_forget()
         self.mostrar_situacao_licenca()
         self.mostrar_aviso_versao()
         self._relogio_id = self.root.after(30_000, self.atualizar_painel)
@@ -664,6 +680,8 @@ class App:
         self._unica("cad_" + chave, lambda: JanelaCadastro(self.root, self.ctx, chave))
 
     def abrir_lancamento(self, chave: str) -> None:
+        if chave == "devolucoes":
+            return self.abrir_devolucoes()
         if chave == "retornaveis":
             return self.abrir_retornaveis()
         if chave == "estoque":
@@ -693,6 +711,19 @@ class App:
         from src.ui.alertas_ui import abrir
         return self._abrir_painel_operacional("alertas", lambda: abrir(self.root, self.ctx))
 
+    def abrir_diagnostico(self):
+        from src.ui.diagnostico_ui import abrir
+        return self._abrir_painel_operacional("diagnostico", lambda: abrir(self.root, self.ctx))
+
+    def abrir_devolucoes(self):
+        from src.ui.devolucoes_ui import abrir
+        return self._abrir_painel_operacional("devolucoes", lambda: abrir(self.root, self.ctx))
+
+    def abrir_verificar_backup(self):
+        from src.ui.utilitarios_ui import JanelaVerificarBackup
+        return self._abrir_painel_operacional(
+            "verificar_backup", lambda: JanelaVerificarBackup(self.root, self.ctx))
+
     def abrir_estoque(self, filtro: str = "todos") -> None:
         """Painel de Estoque (visão geral). Já aberta, a janela só troca o filtro e vem para a frente."""
         from src.ui.estoque_ui import PainelEstoque
@@ -717,6 +748,10 @@ class App:
         self._unica("cfg_" + chave, lambda: config_ui.abrir(self.root, self.ctx, chave))
 
     def utilitario(self, chave: str) -> None:
+        if chave == "diagnostico":
+            return self.abrir_diagnostico()
+        if chave == "verificar_backup":
+            return self.abrir_verificar_backup()
         from src.ui import utilitarios_ui
         utilitarios_ui.executar(self.root, self.ctx, chave)
         self.atualizar_painel()

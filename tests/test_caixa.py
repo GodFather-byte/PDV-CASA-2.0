@@ -65,7 +65,8 @@ class TesteTurno(BaseCaixa):
         self.caixa.fechar(vid)
         # esperado = 100,00 (fundo) + 16,00 (venda)
         self.assertEqual(self.turnos.resumo(self.turno)["esperado"], 11600)
-        res = self.turnos.fechar(self.turno, self.adm, 11000)     # entregou R$ 6,00 a menos
+        res = self.turnos.fechar(self.turno, self.adm, 11000,
+                                 justificativa="Faltaram R$ 6,00 na contagem")  # entregou R$ 6,00 a menos
         self.assertEqual(res["resultado"], -600)
         t = self.turnos.obter(self.turno)
         self.assertEqual((t["status"], t["resultado_cent"], t["esperado_cent"]), ("fechado", -600, 11600))

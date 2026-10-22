@@ -3,6 +3,9 @@ venda no período, por grupo e produto mais vendido, entradas/saídas do caixa, 
 C.M.V., comissões, informativo por dia, por hora e cancelados."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
+from src.controllers.devolucoes_controller import DevolucoesController
 from src.controllers.produto_controller import ProdutoController
 from src.controllers.turno_controller import TurnoController
 from src.core import formatacao as fmt
@@ -194,6 +197,7 @@ class RelatoriosVendas:
         rel.rodape += [(f"Recebido em {x['tipo']}", M(x["valor"])) for x in t["formas"]]
         rel.rodape += [("Cupons (TC)", str(t["tc"])), ("Ticket médio (TM)", M(t["tm"])),
                        ("Pessoas atendidas", str(t["pessoas"])), ("Venda por pessoa", M(t["por_pessoa"]))]
+        rel.criterios.append("Bruto histórico; devoluções constam no relatório próprio pela data do reembolso.")
         return rel
 
     # ---------------------------------------------------- 6.02 por grupo
@@ -221,6 +225,7 @@ class RelatoriosVendas:
             rel.add(f"Total {grupo}", Q(sum(r["qt"] for r in itens)), M(soma),
                     Q(soma * 100 / geral, 2) if geral else "0,00", estilo="subtotal")
         rel.add("TOTAL DE VENDAS", "", M(geral), "100,00" if geral else "0,00", estilo="total")
+        rel.criterios.append("Vendas brutas; quantidades devolvidas não reescrevem as vendas originais.")
         return rel
 
     def mais_vendidos(self, f: dict) -> Relatorio:
@@ -243,6 +248,47 @@ class RelatoriosVendas:
             rel.add(item["nome"], item["grupo"], Q(item["quantidade"]), M(item["total"]))
         rel.rodape = [("Produtos listados", str(len(linhas))),
                       ("Faturamento listado", M(sum(item["total"] for item in linhas)))]
+        rel.criterios.append("Vendas brutas; consulte devoluções e movimentos de estoque para os retornos.")
+        return rel
+
+    def _devolucoes_periodo(self, f: dict) -> list[dict]:
+        virada = self._virada()
+        inicio = fmt.faixa_dia_operacional(f["de"], virada)[0] if f.get("de") else None
+        fim = None
+        if f.get("ate"):
+            limite = fmt.faixa_dia_operacional(f["ate"], virada)[1]
+            fim = (datetime.fromisoformat(limite) - timedelta(seconds=1)).strftime("%Y-%m-%d %H:%M:%S")
+        linhas = DevolucoesController(self.banco).listar(de=inicio, ate=fim)
+        if f.get("turno"):
+            turnos = {r["id"] for r in self.banco.todos(
+                "SELECT id FROM turnos WHERE numero = ?", (int(f["turno"]),))}
+            linhas = [r for r in linhas if r["turno_id"] in turnos]
+        if f.get("operador_id"):
+            linhas = [r for r in linhas if r["operador_id"] == int(f["operador_id"])]
+        return linhas
+
+    def devolucoes(self, f: dict) -> Relatorio:
+        linhas = self._devolucoes_periodo(f)
+        rel = Relatorio("Devoluções e reembolsos por cupom", [
+            Coluna("Reembolsado em", 19), Coluna("Cupom", 7, "d"), Coluna("Turno", 5, "d"),
+            Coluna("Operador", 14), Coluna("Modo", 16), Coluna("Forma", 14),
+            Coluna("Valor", 11, "d"), Coluna("Motivo", 24), Coluna("Referência declarada", 20)],
+            criterios=self.criterios(f) + [
+                "Período e turno são do REEMBOLSO, não da venda original.",
+                "Venda original preservada. Externo é declarado, sem comprovação bancária."])
+        modos = {"dinheiro_gaveta": "Dinheiro/gaveta", "externo": "Externo declarado", "caderneta": "Abatimento dívida"}
+        numeros = {r["id"]: r["numero"] for r in self.banco.todos("SELECT id, numero FROM turnos")}
+        totais = {modo: 0 for modo in modos}
+        for r in linhas:
+            modo = r["reembolso_modo"]
+            rel.add(fmt.fmt_datahora(r["criado_em"]), r["cupom_original"], numeros[r["turno_id"]],
+                    r["operador"], modos[modo], r["forma"] or "", M(r["valor_cent"]),
+                    r["motivo"], r["referencia_externa"] or "")
+            totais[modo] += r["valor_cent"]
+        rel.rodape = [("Devoluções", str(len(linhas))), ("Total devolvido/abatido", M(sum(totais.values()))),
+                      ("Dinheiro da gaveta (já registrado em saídas)", M(totais["dinheiro_gaveta"])),
+                      ("Externo declarado, sem comprovação bancária", M(totais["externo"])),
+                      ("Caderneta: dívida abatida (não é saída da gaveta)", M(totais["caderneta"]))]
         return rel
 
     # ----------------------------------------- 6.03 e 6.04 caixa e turnos
@@ -256,15 +302,19 @@ class RelatoriosVendas:
                         [Coluna("Data/hora", 19), Coluna("Turno", 5, "d"), Coluna("Tipo", 8), Coluna("Operador", 14),
                          Coluna("Descrição", 24), Coluna("Valor", 11, "d")], criterios=self.criterios(f))
         ent = sai = 0
+        reembolsos = {r["movimento_caixa_id"] for r in self._devolucoes_periodo(f)
+                     if r["movimento_caixa_id"] is not None}
         for r in self.banco.todos(
                 f"""SELECT m.*, t.numero AS turno, o.nome AS operador FROM movimentos_caixa m
                     JOIN turnos t ON t.id = m.turno_id LEFT JOIN operadores o ON o.id = m.operador_id
                     WHERE {' AND '.join(onde)} ORDER BY m.id""", p):
-            rel.add(fmt.fmt_datahora(r["criado_em"]), r["turno"], "Entrada" if r["tipo"] == "entrada" else "Sangria",
+            tipo = "Reembolso" if r["id"] in reembolsos else "Entrada" if r["tipo"] == "entrada" else "Sangria"
+            rel.add(fmt.fmt_datahora(r["criado_em"]), r["turno"], tipo,
                     r["operador"], r["descricao"], M(r["valor_cent"]))
             if r["tipo"] == "entrada": ent += r["valor_cent"]
             else: sai += r["valor_cent"]
-        rel.rodape = [("Total de entradas", M(ent)), ("Total de saídas (sangrias)", M(sai))]
+        rotulo_saidas = "Total de saídas (sangrias/reembolsos)" if reembolsos else "Total de saídas (sangrias)"
+        rel.rodape = [("Total de entradas", M(ent)), (rotulo_saidas, M(sai))]
         return rel
 
     def fechamentos(self, f: dict) -> Relatorio:
@@ -404,6 +454,7 @@ class RelatoriosVendas:
             linha(f"Total do grupo {grupo}", None, c, v, None, "subtotal")
             gc += c; gv += v
         linha("TOTAL GERAL", None, gc, gv, None, "total")
+        rel.criterios.append("CMV bruto das vendas originais; retornos de estoque e reembolsos são apresentados à parte.")
         return rel
 
     # ----------------------------------------------------------- comissões

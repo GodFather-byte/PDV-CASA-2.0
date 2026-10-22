@@ -425,7 +425,8 @@ class TesteLimpezaDoMovimentoComComissoes(BaseComissao):
         return self.turnos.abrir(self.adm, 2, 0)
 
     def voltar_ao_presente(self, antigo, dias=10):
-        self.turnos.fechar(antigo, self.adm, 0)
+        self.turnos.fechar(antigo, self.adm, 0,
+                           justificativa="Cenário de teste: a comissão paga em dinheiro deixou a gaveta zerada abaixo do esperado")
         self.avancar(days=dias)
         self.turno = self.turnos.abrir(self.adm, 3, 0)
 
@@ -478,7 +479,8 @@ class TesteMarcadasNaComanda(BaseComissao):
     def test_pendente_de_turno_anterior_aparece_mas_a_paga_de_turno_anterior_nao(self):
         self.lancar(180, 25); self.lancar(156, 40)
         self.com.pagar(180, self.turno, self.adm)
-        self.turnos.fechar(self.turno, self.adm, 10000)
+        self.turnos.fechar(self.turno, self.adm, 10000,
+                           justificativa="Cenário de teste: contagem fixa da gaveta, diferente do esperado após a comissão paga")
         turno2 = self.turnos.abrir(self.adm, 2, 0)
         self.assertEqual(self.com.marcadas(180, turno2), [])                              # paga no turno 1
         self.assertEqual([c["valor_cent"] for c in self.com.marcadas(156, turno2)], [4000])   # pendente atravessa o turno
@@ -511,7 +513,8 @@ class TesteLimpezaDeComissaoPagaEmOutroTurno(BaseComissao):
         self.avancar(days=2)
         b = self.turnos.abrir(self.adm, 3, 0)
         self.com.pagar(180, b, self.adm)                          # paga em B: sangria e pago_turno_id apontam para B
-        self.turnos.fechar(b, self.adm, 0)
+        self.turnos.fechar(b, self.adm, 0,
+                           justificativa="Cenário de teste: a sangria da comissão deixou o esperado negativo e a gaveta zerada")
         self.avancar(days=8)
         self.turno = self.turnos.abrir(self.adm, 4, 0)
         res = self.util.limpar_movimento(fmt.fmt_data(fmt.somar_dias(fmt.hoje(), -2)))

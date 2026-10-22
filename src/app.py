@@ -4,6 +4,7 @@ Com `--sync` roda só a verificação de licença e de versão nova na nuvem (se
 python -m src.app --sync   ou   WillPDV.exe --sync
 
 Com `--autoteste [arquivo] [--rede]` confere se o programa instalado está inteiro (ver src/autoteste.py) e encerra.
+Com `--homologacao [arquivo.json]` exercita retomada e fechamento em banco descartável, sem hardware.
 Com `--qt` abre a interface Qt em migração; `--tk` abre explicitamente a interface completa atual (padrão).
 """
 import sys
@@ -11,6 +12,10 @@ import sys
 if __name__ == "__main__":
     if "--qt" in sys.argv[1:] and "--tk" in sys.argv[1:]:
         sys.exit("Escolha apenas uma interface: --qt ou --tk.")
+    if "--homologacao" in sys.argv[1:]:
+        from src.homologacao import executar
+        resto = [a for a in sys.argv[1:] if not a.startswith("--")]
+        sys.exit(executar(resto[0] if resto else None))
     if "--autoteste-qt" in sys.argv[1:]:
         from src.autoteste_qt import executar
         resto = [a for a in sys.argv[1:] if not a.startswith("--")]

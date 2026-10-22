@@ -533,6 +533,18 @@ class TestOperacoesQt(BaseCaixaQt):
         self.j.btn_chamar.click()
         self.assertFalse(self.j._em_cancelamento())
 
+    def test_devolucoes_nao_abrem_sem_turno_ou_durante_gravacao(self):
+        with patch("src.ui_qt.devolucoes.JanelaDevolucoes") as janela:
+            self.j._ocupado = True
+            self.j.abrir_devolucoes()
+            self.j._ocupado = False
+            self.j._fechando_venda = True
+            self.j.abrir_devolucoes()
+            self.j._fechando_venda = False
+            self.ctx.turnos.fechar(self.turno_id, self.ctx.operador_id, 10000)
+            self.j.abrir_devolucoes()
+            janela.assert_not_called()
+
     def test_operacoes_nao_executam_sem_turno_ou_durante_gravacao(self):
         self.j._ocupado = True
         for chave in self.j.acoes:

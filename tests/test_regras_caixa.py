@@ -118,7 +118,8 @@ class TesteConferenciaDaGaveta(BaseRegras):
         skol = self.novo_produto("SKOL", 1000)
         self.vender(skol, 2, [("Dinheiro", 2000)])
         self.vender(skol, 1, [("Cartão Débito", 1000)])
-        self.assertEqual(self.turnos.fechar(self.turno, self.adm, 12000 - 500)["resultado"], -500)
+        self.assertEqual(self.turnos.fechar(self.turno, self.adm, 12000 - 500,
+                                           justificativa="Faltaram R$ 5,00 na gaveta")["resultado"], -500)
 
     def test_sementes_marcam_cartao_e_pix_fora_da_gaveta(self):
         formas = {r["tipo"]: r["na_gaveta"] for r in self.banco.todos("SELECT tipo, na_gaveta FROM tipos_pagamento")}

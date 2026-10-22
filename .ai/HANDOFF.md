@@ -1,90 +1,101 @@
 # HANDOFF
 
-## Escopo autorizado
+## Entrega e decisões
 
-- Retomadas as oito melhorias operacionais para **todos os perfis, Tk e Qt**.
-  O titular também pediu completar a modernização PySide6 mantendo Tk disponível.
-- Regras preservadas: cancelamento parcial só de quantidade não paga com motivo;
-  reposição por caixa com giro de 30 dias e cobertura de 7; retornáveis sem caução;
-  promoções sem acúmulo. Sem ativar cobrança nem integrações fiscais.
-- PDV **1.8.0**, licenciador permanece **1.2.0**, esquema **27**.
-- Base publicada anteriormente: `df0864f`, main local/remota sincronizadas ao começar.
-  Entrega operacional commitada em `7fb7cb1`. Titular autorizou integrar a
-  main remota `e3484dd` (PR #15); merge preserva ambas as linhas de trabalho.
-  Não houve push novo nesta etapa.
+- PDV **1.9.0**, licenciador **1.2.0**, esquema **29**. Recursos gerais para
+  todos os perfis, nas interfaces Tk e Qt/PySide6; Tk permanece disponível.
+- Base publicada: `1962a69` (1.8 e merge do PR #15). Esta entrega é integrada
+  diretamente na `main`; usuário autorizou commit, integração e push normal,
+  sem force. Não criar merge artificial quando não houver divergência.
+- Preservados PBKDF2 de 600 mil iterações com atualização de hashes legados,
+  validação de identificadores SQL e cálculo Decimal do serviço.
+- Decisões do usuário: devolução parcial/total por cupom, autorização e motivo,
+  retorno opcional ao estoque e reembolso explícito; troca é nova venda.
+  Fechamento divergente exige justificativa, mas permite fechamento autorizado.
+- Telegram: resumo ativo às **23h locais**. Aplicar 23h uma única vez também
+  em instalações antigas, preservando alterações posteriores e sem ligar o bot.
 
-## Endurecimento remoto preservado (PR #15)
+## Oito frentes implementadas
 
-- PBKDF2 de senha de operador com 600 mil iterações; hashes antigos (60 mil) seguem válidos e
-  são regravados no login correto (`seguranca.precisa_atualizar`, `AcessoController.autenticar`).
-- `BancoDados.inserir/atualizar` recusam tabela/coluna fora de `[A-Za-z0-9_]`.
-- `servico_pct` vai direto a `Decimal` (sem `float`). Zip duplicado removido da raiz.
-- Testes: `tests/test_seguranca_auditoria.py` (inclui vetores RFC 8032 do Ed25519).
-- Pendências sugeridas: lint/tipos/cobertura no CI; piloto em loja real (impressora, balança, queda de energia).
+1. **Homologação isolada:** `python -m src.app --homologacao [arquivo.json]`,
+   também disponível em `python -m src.homologacao`. Banco fictício descartável,
+   ignora `PDV_DB`, não usa hardware/rede. Relatório novo, sem sobrescrita.
+2. **Recuperação:** mesma venda/UUID e pagamentos confirmados após reabrir;
+   rollback transacional comprovado, inclusive encerrando processo filho.
+   Fila persiste `enviando` antes do I/O; envio abandonado vira `incerto`,
+   bloqueia seu destino e exige conferência humana auditada antes de reenviar.
+3. **Backup verificável:** restauração de cópia em pasta temporária, integridade,
+   esquema, vínculos e contagens. Reprovação e avisos explícitos e persistidos;
+   aprovação com avisos não atualiza a comprovação do backup externo.
+   Estado/data do último ensaio nas telas e no painel.
+4. **Qt/notebook/teclado:** rolagem de menu e conteúdo, busca `Ctrl+K`,
+   ações da fila distribuídas em linhas, telas novas integradas e revalidação
+   de acesso ao reabrir. Operação de devolução no caixa exige turno e estado
+   pronto, inclusive durante fechamento/gravação.
+5. **Fechamento explicativo:** declaração explícita de todas as formas,
+   comparação esperado/informado, justificativa de divergências, snapshot e fita.
+   Cancelar conferência preserva turno, sem imprimir nem gerar backup.
+6. **Devoluções/trocas:** ledger auditado por cupom via `CaixaController`;
+   idempotência por UUID, estoque opcional, dinheiro/gaveta, externo declarado
+   ou abatimento de caderneta. Relatório por data/turno do reembolso nas duas UIs.
+7. **Diagnóstico:** impressora, gaveta, balança e leitor, sem acionar hardware
+   na abertura; confirmação explícita, auditoria, permissões revalidadas,
+   resultado do comando separado da confirmação física.
+8. **Telegram agendado:** pendência persistente, recibos por chat, recuperação
+   offline e horário editável Tk/Qt. Resumos incluem reembolsos por sua data,
+   preservando bruto original e separando líquido gerencial.
 
-## Implementação
+## Esquema, integração e documentação
 
-- Caixa: cancelamento parcial com histórico e divisão por item/valor pelo
-  `CaixaController`, interfaces Tk/Qt e testes novos. Migração 27 registra vínculo
-  pagamento/item; sem inventar atribuições para pagamentos antigos.
-- Alertas operacionais: estoque, comandas sem lançamento, entregas, filas e
-  integrações; acesso por seção e revalidação. Telegram do dono ganhou Alertas
-  e Gerencial, sem mandar faturamento à central do fornecedor.
-- Reposição por giro: escolha do caixa, sugestão revisável e confirmação para
-  criar pedido. Etiquetas naturais/geladas e fardo, prévia textual/impressão
-  existente e CSV; não é driver de impressora de etiquetas.
-- Retornáveis: ledger explícito por cliente/produto com saída/devolução, saldo
-  não negativo, motivo, operador e auditoria. Migração 26; não altera estoque,
-  vendas ou caução e não converte trocas históricas em dívidas.
-- Promoções: gestão e simulação Tk/Qt sobre as três regras temporais existentes
-  e uma faixa por temperatura. Menor preço elegível, sem somar promoções/faixas.
-- PySide6: cozinha/bar com preparo e timer, setores no menu de cadastros,
-  extras de cadastro e busca lateral sem acentos. Cadastros ganharam filtros
-  estruturados e ordenação. Caixa Qt inclui pré-pago/rodízio, leitor F3,
-  sangria F7, nome de comanda, Leitura X/Redução Z e acesso à fila de impressão.
-  Não certifica paridade de cada detalhe ergonômico com o Tk.
-- Menus Tk/Qt conectados; os recursos gerais não dependem do perfil Adega.
-  Novos módulos incluídos no inventário e na abertura de telas do autoteste.
-- Guias: `docs/MELHORIAS_1_8.md`, `CAIXA_MELHORIAS.md`, `PROMOCOES.md`,
-  `RETORNAVEIS.md`, seções de Estoque, Telegram e Interface Qt.
+- Migração **28** cria devoluções, itens e vínculos de trocas, com proteção
+  do histórico; **29** reconstrói o CHECK da fila para `enviando`/`incerto`,
+  preservando linhas, IDs e sequência. A versão final não é 28.
+- Menus principais, operações do caixa, relatórios, alertas e inventário do
+  autoteste conectados. Abertura de devoluções no caixa é modal; ao voltar,
+  recarrega o balcão para a troca. Novas telas mantêm controle de acesso.
+- Guias: [melhorias 1.9](../docs/MELHORIAS_1_9.md),
+  [devoluções](../docs/DEVOLUCOES.md),
+  [fechamento](../docs/FECHAMENTO_EXPLICATIVO.md); atualizados backup externo,
+  impressão, Telegram, interface Qt e mapa de localização.
 
-## Validação
+## Validação final
 
-- Menus/ciclo Qt: 75 casos passaram, incluindo 7 novos Tk/Qt de permissões,
-  reabertura, busca e todos os seis perfis.
-- Autoteste integrado: 128 módulos carregam e novas telas abrem em Tk/Qt.
-- Frentes independentes passaram em testes focados; a suíte geral preliminar
-  executou 2614 casos durante a implementação, com 1 falha de inventário
-  (já corrigida) e 8 erros de fixtures/compatibilidade enviados aos responsáveis.
-- Após ajustes: **2628 casos, 10 ignorados, sem falhas** na suíte completa
-  (Windows/Python 3.15, 1244 s). Últimas seis funções Qt também cobertas por
-  rodada focada de 101 casos; complemento final do titular com 30 casos passou.
-- `compileall` e `git diff --check` passaram. Pylance expirou nesta rodada;
-  validação sintática foi feita pelo Python, sem alegar type-check Pylance.
-- Log da suíte contém exceções simuladas de propósito e avisos Tk de callbacks
-  destruídos; resultado final do unittest foi OK. Não foram ocultados.
-- Após integrar PR #15: **154 testes direcionados passaram** (segurança,
-  acesso, caixa, cancelamento parcial, divisão por item, retornáveis, promoções
-  e menus Tk/Qt). Não repetida a suíte inteira após este merge.
+- Inventário completo coberto **em etapas**: **2821 casos distintos,
+  2811 aprovados e 10 ignorados; nenhuma pendência**.
+- Primeira tentativa bloqueou numa fixture Tk antiga de fechamento. Corrigida.
+  A execução seguinte concluiu 1955 casos antes de o watchdog identificar
+  devoluções Qt abrindo sem turno: corrigido o guard e adicionado teste específico.
+- Continuação: 979 casos (incluindo regressões repetidas), inicialmente com
+  duas fixtures antigas: versão do esquema fixada em 27 e dinheiro de fechamento
+  sem descontar comissão paga. Corrigidas para versão atual e R$ 75,00 reais.
+- Regressão final: **87 casos, zero erros/falhas**; cobertura dos IDs de todo o
+  inventário consolidada com as etapas anteriores. Não alegar uma única execução
+  ininterrupta de 2821 casos. Três regressões específicas adicionais passaram.
+- CLI público de homologação: cinco cenários aprovados, `ok: true`, saída zero.
+  Autoteste inclui **137 módulos** e abertura das novas telas.
+- Ambiente: Windows, Python 3.15, Tk 9, SQLite 3.53.4. `compileall` e
+  `git diff --check` passaram. Pylance expirou; não alegar type-check completo.
+- Logs incluem erros simulados de backup/Telegram e avisos de descarte de
+  callbacks Tk; não foram ocultados. Evidências ficam na pasta da sessão,
+  fora do repositório; nenhum banco de produção ou segredo real foi utilizado.
 
-## Homologação e pendências
+## Limites e pendências para produção
 
-- Não há binário/Setup novo desta entrega. Os ZIPs portáteis 1.7.0 são anteriores
-  inclusive à mesclagem e **não incluem** as melhorias 1.8.0.
-- Validar primeiro uma **cópia** do banco com `PDV_DB`; extrair o programa em
-  outra pasta não isola `%LOCALAPPDATA%\WILL-PDV`. Uma interface por vez.
-- Homologar periféricos reais, teclado e escala. Paridade de menus não certifica
-  cada detalhe ergonômico nem impressão/gaveta/balança reais.
-- Merge do PR #15 validado e concluído na main local. Não usar force push.
-  Publicação e novos pacotes permanecem pendentes.
-- Divisão por item não atende caderneta, pré-pago ou itens inclusos no rodízio.
-  Alteração que reprecifica item pago é recusada até remover o pagamento;
-  pagamentos legados por valor não recebem atribuição automática a itens.
-- Telegram/central entregues anteriormente continuam sem homologação real:
-  configurar bot separado no PC exclusivo, importar chave existente, aprovar
-  caixa de teste, conferir pedido/publicação/aplicação e backup/restauração.
-  Preservar Render/Neon. PC desligado não oferece disponibilidade do bot local.
-- Cobrança automática excluída; Asaas não ativado. iFood/NFC-e SP seguem
-  base interna desativada, sem homologação fiscal.
-- Nuvem: validar caixa/celular; trocar credenciais anteriormente expostas.
-  Nenhuma chave real, cobrança ou banco de produção usado nesta implementação.
+- **Não foi gerado novo Setup/ZIP 1.9 nesta entrega.** Portáteis 1.7 são antigos.
+  Antes do piloto, empacotar a versão atual e validar uma cópia do banco.
+  Outra pasta de instalação não isola `%LOCALAPPDATA%\WILL-PDV`; usar `PDV_DB`
+  apontando à cópia e uma interface/instância por banco.
+- Devolução não atende pré-pago nem cobrança/itens inclusos de rodízio.
+  Externo é declaração, não estorno bancário. Sem crédito de troca automático;
+  reembolso mais nova venda. Não verifica saldo físico da gaveta.
+- Bruto, CMV e comissões históricos não são estornados automaticamente;
+  relatórios deixam isso explícito e não contam duas vezes a saída da gaveta.
+- Impressão física não tem garantia exactly-once. Mesmo envio aceito exige
+  papel conferido; falhas de transporte comuns ainda podem ser ambíguas.
+- Homologar hardware, falta de papel, gaveta, balança, leitor, teclado/escala e
+  interrupção controlada na cópia. Automação não certifica queda elétrica real.
+- Bot precisa ativo, token e dono pareado; PC desligado não oferece serviço local.
+  Central/licenças ainda requerem ensaio real. Preservar a ponte Render/Neon.
+- Cobrança automática, Asaas e integrações fiscais não foram ativadas.
+  iFood/NFC-e SP seguem sem homologação. Validar nuvem/caixa/celular e
+  substituir credenciais anteriormente expostas.

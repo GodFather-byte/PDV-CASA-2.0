@@ -28,9 +28,31 @@ class TesteMenusMelhoriasQt(BaseQt):
         self.assertTrue(all(not botao.isHidden() for botao in janela.botoes.values()))
         self.assertEqual(estados, {chave: botao.isEnabled() for chave, botao in janela.botoes.items()})
 
+    def test_notebook_tem_rolagem_e_busca_por_teclado(self):
+        janela = self.principal()
+        janela.resize(1024, 680)
+        janela.show()
+        self.aplicacao.processEvents()
+        self.assertIsNotNone(janela.conteudo_scroll.widget())
+        self.assertTrue(janela.conteudo_scroll.widgetResizable())
+        self.assertTrue(janela.lateral_scroll.widgetResizable())
+        janela.busca_modulos.setText("estoque")
+        janela.focar_busca()
+        self.assertEqual(janela.busca_modulos.selectedText(), "estoque")
+        self.assertLessEqual(janela.minimumWidth(), 1024)
+        self.assertLessEqual(janela.minimumHeight(), 680)
+
+    def test_inicio_mostra_envio_interrompido_sem_automaticamente_reenviar(self):
+        janela = self.principal()
+        item_id = self.ctx.impressao.fila.enfileirar("caixa", "teste", b"x")
+        self.banco.executar("UPDATE fila_impressao SET status = 'incerto' WHERE id = ?", (item_id,))
+        janela.atualizar()
+        self.assertIn("interrompido", janela.indicadores["impressao"].text())
+        self.assertEqual(self.banco.valor("SELECT status FROM fila_impressao WHERE id = ?", (item_id,)), "incerto")
+
     def test_novos_paineis_reutilizados_e_fechados_com_sessao(self):
         janela = self.principal()
-        for nome in ("retornaveis", "promocoes", "alertas"):
+        for nome in ("retornaveis", "promocoes", "alertas", "devolucoes", "diagnostico", "verificar_backup"):
             abrir = getattr(janela, "abrir_" + nome)
             painel = abrir()
             self.assertIsNotNone(painel, janela.mensagem.text())
@@ -40,10 +62,10 @@ class TesteMenusMelhoriasQt(BaseQt):
 
     def test_reabrir_paineis_revalida_operador_inativo(self):
         janela = self.principal()
-        for nome in ("retornaveis", "promocoes", "alertas"):
+        for nome in ("retornaveis", "promocoes", "alertas", "devolucoes", "diagnostico", "verificar_backup"):
             self.assertIsNotNone(getattr(janela, "abrir_" + nome)())
         self.banco.executar("UPDATE operadores SET ativo = 0 WHERE id = ?", (self.ctx.operador_id,))
-        for nome in ("retornaveis", "promocoes", "alertas"):
+        for nome in ("retornaveis", "promocoes", "alertas", "devolucoes", "diagnostico", "verificar_backup"):
             self.assertIsNone(getattr(janela, "abrir_" + nome)())
             self.assertTrue(janela.mensagem.text())
 
@@ -54,7 +76,7 @@ class TesteMenusMelhoriasQt(BaseQt):
             with self.subTest(perfil=perfil):
                 self.ctx.perfil.aplicar(perfil)
                 janela.atualizar()
-                for nome in ("retornaveis", "promocoes", "alertas"):
+                for nome in ("retornaveis", "promocoes", "alertas", "devolucoes", "diagnostico", "verificar_backup"):
                     self.assertTrue(janela.botoes[nome].isEnabled())
                     self.assertIsNotNone(getattr(janela, "abrir_" + nome)())
 
@@ -83,7 +105,7 @@ class TesteMenusMelhoriasTk(BaseUI):
 
     def test_novos_paineis_abrem_pelas_acoes_do_menu(self):
         app = self.principal()
-        for nome in ("retornaveis", "promocoes", "alertas"):
+        for nome in ("retornaveis", "promocoes", "alertas", "devolucoes", "diagnostico", "verificar_backup"):
             with self.subTest(painel=nome):
                 painel = getattr(app, "abrir_" + nome)()
                 self.assertIsNotNone(painel)
@@ -94,10 +116,10 @@ class TesteMenusMelhoriasTk(BaseUI):
         from src.ui import tema
         app = self.principal()
         paineis = [getattr(app, "abrir_" + nome)()
-                   for nome in ("retornaveis", "promocoes", "alertas")]
+                   for nome in ("retornaveis", "promocoes", "alertas", "devolucoes", "diagnostico", "verificar_backup")]
         self.banco.executar("UPDATE operadores SET ativo = 0 WHERE id = ?", (self.ctx.operador_id,))
         with patch.object(tema, "erro"):
-            for nome in ("retornaveis", "promocoes", "alertas"):
+            for nome in ("retornaveis", "promocoes", "alertas", "devolucoes", "diagnostico", "verificar_backup"):
                 self.assertIsNone(getattr(app, "abrir_" + nome)())
         for painel in paineis:
             painel.destroy()

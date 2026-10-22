@@ -84,6 +84,38 @@ A restauração usa o mecanismo local já existente de troca validada do banco.
 Faça um exercício em **outro computador de teste**, com uma cópia dos dados,
 antes de depender deste procedimento numa emergência.
 
+## Verificar backup (teste de restauração isolado)
+
+Gerar a cópia não basta: é preciso provar que ela volta. Em **Utilitários >
+Verificar backup (teste de restauração)** (Tk e Qt) o dono escolhe o backup
+local mais recente, um da lista ou um `.pdvbkp` (com a senha de recuperação).
+No backup externo, **Testar recuperação de um arquivo** faz o mesmo ensaio.
+
+O que o PDV faz:
+
+1. Copia o arquivo para uma pasta temporária (`.pdvbkp` é descriptografado e
+   autenticado lá, com a senha só em memória; ela nunca é gravada).
+2. Confere a integridade do backup, restaura uma cópia nessa pasta pelo mesmo
+   mecanismo da restauração real e roda `integrity_check` na cópia restaurada.
+3. Confere o esquema (tabelas do PDV e versão não futura) e compara contagens
+   e vendas fechadas (quantidade, total e data da última) entre o backup e a
+   cópia restaurada. Qualquer diferença reprova.
+4. Confere os vínculos entre tabelas (`foreign_key_check`, que o
+   `integrity_check` não cobre). Registro sem vínculo **não reprova**, porque a
+   restauração real copia o banco igual e ele abre do mesmo jeito; mas o
+   resultado vira **APROVADO COM AVISOS**, com tabela e quantidade, na tela, no
+   registro do último teste e na situação mostrada ao dono. Backup novo não
+   deveria ter avisos (o PDV grava com chaves estrangeiras ligadas e guarda o
+   histórico de produtos excluídos); aviso indica banco antigo/legado ou dado
+   alterado por fora. Não confie nele sem conferir com o suporte.
+5. Apaga a pasta temporária. O banco em uso **não é aberto, trocado nem
+   marcado para restauração**; escolher o próprio banco em uso é recusado.
+
+O resultado (data, aprovado/aprovado com avisos/reprovado, nome do arquivo e
+erro ou avisos sem caminhos nem senha) fica nas chaves `backup_teste_restauracao_*` de `config`, e a janela
+mostra a data do último teste. Teste reprovado, aprovado com avisos ou com mais de
+30 dias aparece como aviso. Sem rede: tudo acontece neste computador. Se reprovar, gere um
+backup novo e confira o disco/pendrive antes de confiar nele.
 ## Formato e limitações
 
 - Criptografia autenticada AES-256-GCM com sal e nonce aleatórios por arquivo.

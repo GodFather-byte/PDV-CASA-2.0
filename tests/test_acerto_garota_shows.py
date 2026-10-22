@@ -143,7 +143,8 @@ class TesteAcertoComShows(BaseComissao):
         self.acertar(10, 5000)
         res = self.turnos.resumo(self.turno)
         self.assertEqual((res["shows"]["quantidade"], res["shows"]["total_cent"]), (10, 50000))
-        res = self.turnos.fechar(self.turno, self.adm, 0)
+        res = self.turnos.fechar(self.turno, self.adm, 0,
+                                 justificativa="Contagem zerada após o acerto dos shows")
         fita = ImpressaoController(self.banco).fechamento(res)
         self.assertIn("SHOWS PAGOS ÀS GAROTAS (1)", fita)
         self.assertIn("180 MARIA (10x)", fita)
@@ -152,7 +153,8 @@ class TesteAcertoComShows(BaseComissao):
     def test_limpeza_do_movimento_leva_o_acerto_junto_com_o_turno(self):
         self.lancar(180, 25)
         self.acertar(2, 5000)
-        self.turnos.fechar(self.turno, self.adm, 0)
+        self.turnos.fechar(self.turno, self.adm, 0,
+                          justificativa="Contagem zerada após o acerto dos shows")
         self.banco.executar("UPDATE turnos SET aberto_em = '2020-01-01 10:00:00', fechado_em = '2020-01-02 04:00:00'")
         UtilitarioController(self.banco, self.adm).limpar_movimento("01/01/2021")
         self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM acertos_garotas"), 0)

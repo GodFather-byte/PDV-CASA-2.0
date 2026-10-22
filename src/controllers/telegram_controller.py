@@ -12,6 +12,7 @@ Sem internet o PDV segue vendendo normalmente; os avisos ficam na fila e saem qu
 from __future__ import annotations
 
 import importlib
+import json
 import logging
 import re
 import secrets
@@ -19,10 +20,10 @@ import threading
 from datetime import timedelta
 
 from src.controllers import notificacoes, telegram_textos as textos
-from src.controllers.relatorio_vendas import virada_dia
 from src.core import formatacao as fmt
 from src.core import licenca
 from src.core.erros import ErroNegocio
+from src.database.sementes import aplicar_padrao_telegram_23h
 from src.sync.telegram_api import ClienteTelegram, ErroTelegram
 
 log = logging.getLogger("pdv.telegram")
@@ -31,6 +32,8 @@ CODIGO_VALIDADE_MIN = 10
 CODIGO_MAX_ERROS = 5
 FILA_VALIDADE_HORAS = 48          # aviso mais velho que isto não é mais notícia: vira 'erro' em vez de chegar atrasado
 ESPERAS = (5, 10, 20, 40, 60)     # segundos entre tentativas quando o Telegram não responde; a última se repete
+TIPO_RESUMO = "resumo_agendado"
+CHAVE_AGENDAMENTO = "telegram_resumo_agendamento"
 
 # Os botões do teclado do bot: (texto do botão, comando interno). Quem digitar "/resumo" ou "resumo" também funciona.
 BOTOES = [("📊 Resumo", "resumo"), ("📅 Ontem", "ontem"), ("💵 Caixa", "caixa"), ("🍺 Mais vendidos", "top"),
@@ -85,6 +88,7 @@ def interpretar(texto: str) -> tuple[str, str] | None:
 class TelegramController:
     def __init__(self, banco, http=None):
         self.banco = banco
+        aplicar_padrao_telegram_23h(banco)
         self._http = http          # nos testes, um falso: http(url, dados, timeout) -> dict
         self.chave_publica = None  # nos testes, a chave pública de teste; None = a chave real embutida no PDV
         self.http_ponte = None     # repassado à ponte com o fornecedor (None = HTTP real dela)
@@ -130,6 +134,9 @@ class TelegramController:
         token = (token or "").strip()
         if token != self.token:                                 # outro bot: os pareamentos do anterior não valem
             self.banco.executar("DELETE FROM telegram_chats")
+            self.banco.executar("DELETE FROM telegram_fila WHERE tipo = ?", (TIPO_RESUMO,))
+            if self.banco.cfg(CHAVE_AGENDAMENTO):
+                self.banco.cfg_set(CHAVE_AGENDAMENTO, "")
             self.banco.cfg_set("telegram_offset", "0")
         self.banco.cfg_set("telegram_token", token)
         self.banco.cfg_set("telegram_bot_usuario", bot.get("username") or "")
@@ -179,8 +186,16 @@ class TelegramController:
         self.banco.executar("INSERT OR REPLACE INTO telegram_chats(chat_id, nome, criado_em) VALUES (?,?,?)",
                             (chat_id, nome, fmt.agora()))
         self.banco.cfg_set("telegram_ativo", "S")
-        if not self.banco.cfg("telegram_ultimo_resumo"):      # o primeiro resumo automático é o da próxima manhã
-            self.banco.cfg_set("telegram_ultimo_resumo", textos.dia_anterior(self.banco))
+        estado = self._agendamento()
+        if estado.get("fila_id"):
+            item = self.banco.um("SELECT entregue_a FROM telegram_fila WHERE id = ?", (estado["fila_id"],))
+            anteriores = set(estado["chats"]) & {c["chat_id"] for c in self.chats()}
+            if item and not item["entregue_a"] and not anteriores:
+                with self.banco.transacao():
+                    self.banco.atualizar("telegram_fila", estado["fila_id"], {
+                        "status": "erro", "ultimo_erro": "substituído após novo pareamento autorizado"})
+                    self._salvar_agendamento({"inicio": estado["inicio"],
+                                              "ultimo_envio": estado.get("ultimo_envio", "")})
         self.banco.log("telegram_pareado", f"chat {chat_id} {nome}")
 
     # ------------------------------------------------------------- envio
@@ -204,15 +219,27 @@ class TelegramController:
 
     def processar_fila(self) -> int:
         """Envia os avisos pendentes, na ordem. Levanta ErroTelegram (transitório) para a thread esperar e tentar de novo."""
+        if not self.ligado():
+            return 0
+        if self.banco.cfg(CHAVE_AGENDAMENTO) and self._agendamento().get("fila_id"):
+            self.resumo_agendado()
         pendentes = self.banco.todos("SELECT * FROM telegram_fila WHERE status = 'pendente' ORDER BY id LIMIT 30")
         enviados = 0
         limite = (fmt.agora_dt() - timedelta(hours=FILA_VALIDADE_HORAS)).strftime("%Y-%m-%d %H:%M:%S")
         for item in pendentes:
-            if item["criado_em"] < limite:
+            agendado = item["tipo"] == TIPO_RESUMO
+            estado = self._agendamento() if agendado else {}
+            if agendado and (not self._resumo_ativo() or estado.get("fila_id") != item["id"]):
+                continue
+            if not agendado and item["criado_em"] < limite:
                 self.banco.atualizar("telegram_fila", item["id"], {"status": "erro", "ultimo_erro": "vencido (sem conexão por muito tempo)"})
                 continue
             chats = self.chats()
+            if agendado:
+                chats = [c for c in chats if c["chat_id"] in estado["chats"]]
             if not chats:
+                if agendado:
+                    continue
                 self.banco.atualizar("telegram_fila", item["id"], {"status": "erro", "ultimo_erro": "nenhum celular pareado"})
                 continue
             entregues = {int(x) for x in item["entregue_a"].split(",") if x}
@@ -228,16 +255,25 @@ class TelegramController:
                             continue
                         raise
                     entregues.add(chat["chat_id"])
+                    # Persistir cada sucesso reduz repetição se o processo cair entre dois celulares.
+                    self.banco.atualizar("telegram_fila", item["id"], {
+                        "entregue_a": ",".join(map(str, sorted(entregues)))})
             except ErroTelegram as e:
                 self.banco.atualizar("telegram_fila", item["id"], {
                     "tentativas": item["tentativas"] + 1, "entregue_a": ",".join(map(str, sorted(entregues))),
                     "ultimo_erro": str(e)[:200]})
                 self._erro(str(e))
-                if e.definitivo:                                 # token errado: não adianta insistir neste aviso
+                if e.definitivo and not agendado:
                     self.banco.atualizar("telegram_fila", item["id"], {"status": "erro"})
                 raise
-            self.banco.atualizar("telegram_fila", item["id"], {
-                "status": "enviado", "enviado_em": fmt.agora(), "entregue_a": ",".join(map(str, sorted(entregues)))})
+            if agendado and not entregues:
+                continue
+            with self.banco.transacao():
+                self.banco.atualizar("telegram_fila", item["id"], {
+                    "status": "enviado", "enviado_em": fmt.agora(), "entregue_a": ",".join(map(str, sorted(entregues)))})
+                if agendado:
+                    self._salvar_agendamento({"inicio": estado["fim"], "ultimo_envio": fmt.agora()})
+                    self.banco.cfg_set("telegram_ultimo_resumo", estado["fim"])
             enviados += 1
         if enviados:
             self._erro("")
@@ -247,24 +283,99 @@ class TelegramController:
         corte = (fmt.agora_dt() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
         self.banco.executar("DELETE FROM telegram_fila WHERE status <> 'pendente' AND criado_em < ?", (corte,))
 
-    def resumo_agendado(self) -> bool:
-        """Enfileira o resumo da noite que acabou, uma vez por dia, no horário configurado (nunca antes da virada do dia)."""
-        hora = self.banco.cfg("telegram_resumo_hora").strip()
-        if not hora or not notificacoes.ligado(self.banco, "resumo"):
-            return False
+    def _salvar_agendamento(self, estado: dict) -> None:
+        self.banco.cfg_set(CHAVE_AGENDAMENTO, json.dumps(estado, ensure_ascii=False))
+
+    def _agendamento(self) -> dict:
+        gravado = self.banco.cfg(CHAVE_AGENDAMENTO)
+        if gravado:
+            return json.loads(gravado)
+        # A marca antiga era gravada ANTES do envio: não é prova de entrega.
+        # Começar no dia do pareamento mais antigo recupera o que não foi confirmado.
+        desde = self.banco.valor("SELECT MIN(criado_em) FROM telegram_chats")
+        estado = {"inicio": (desde or fmt.agora())[:10] + " 00:00:00", "ultimo_envio": ""}
+        if desde:
+            with self.banco.transacao():
+                self.banco.executar(
+                    "UPDATE telegram_fila SET status = 'erro', ultimo_erro = ? "
+                    "WHERE tipo = 'resumo' AND status = 'pendente'",
+                    ("substituído pelo resumo consolidado; período preservado no agendamento",))
+                self._salvar_agendamento(estado)
+        return estado
+
+    def _resumo_ativo(self) -> bool:
+        return (self.banco.cfg_bool("telegram_resumo_ativo", True)
+                and bool(self.banco.cfg("telegram_resumo_hora", "23:00").strip()))
+
+    def salvar_agendamento(self, ativo: bool, hora: str) -> None:
         try:
             h, m = (int(x) for x in (fmt.para_hora(hora) or "").split(":"))
+        except (ValueError, TypeError):
+            raise ErroNegocio("Horário do resumo inválido. Use hh:mm, por exemplo 23:00.") from None
+        with self.banco.transacao():
+            self.banco.cfg_set("telegram_resumo_ativo", "S" if ativo else "N")
+            self.banco.cfg_set("telegram_resumo_hora", f"{h:02d}:{m:02d}")
+        notificacoes.ACORDAR.set()
+
+    def estado_agendamento(self) -> dict:
+        """Estado público local, sem rede nem credenciais; pendência sobrevive a falhas/reinício."""
+        estado = self._agendamento()
+        item = (self.banco.um("SELECT status, ultimo_erro, entregue_a FROM telegram_fila WHERE id = ?",
+                             (estado["fila_id"],)) if estado.get("fila_id") else None)
+        return {**estado, "ativo": self._resumo_ativo(),
+                "hora": self.banco.cfg("telegram_resumo_hora", "23:00"),
+                "pendente": bool(estado.get("fila_id")), "telegram_ligado": self.ligado(),
+                "erro_pendente": item["ultimo_erro"] if item else ""}
+
+    def texto_agendamento(self) -> str:
+        estado = self.estado_agendamento()
+        situacao = "ativo" if estado["ativo"] else "pausado"
+        mensagem = f"Resumo {situacao}, diariamente às {estado['hora'] or '—'} (horário local)."
+        if estado["pendente"]:
+            mensagem += f" Pendente: {estado['inicio']} até {estado['fim']}; nova tentativa automática quando ligado."
+        elif estado.get("ultimo_envio"):
+            mensagem += f" Último envio confirmado: {estado['ultimo_envio']}."
+        else:
+            mensagem += f" Período acompanhado desde {estado['inicio']}."
+        return mensagem
+
+    def resumo_agendado(self) -> bool:
+        """Um intervalo pendente, consolidado até o último horário local vencido."""
+        if not self._resumo_ativo() or not notificacoes.ligado(self.banco, "resumo"):
+            return False
+        try:
+            h, m = (int(x) for x in (fmt.para_hora(self.banco.cfg("telegram_resumo_hora", "23:00")) or "").split(":"))
         except ValueError:
             return False
         agora = fmt.agora_dt()
-        if (agora.hour, agora.minute) < max((h, m), (virada_dia(self.banco), 0)):
-            return False
-        dia = textos.dia_anterior(self.banco)
-        if self.banco.cfg("telegram_ultimo_resumo") == dia:
-            return False
-        self.banco.cfg_set("telegram_ultimo_resumo", dia)
-        notificacoes.enfileirar(self.banco, "resumo", textos.resumo(self.banco, dia, fechado=True))
-        return True
+        vencido = agora.replace(hour=h, minute=m, second=0, microsecond=0)
+        if agora < vencido:
+            vencido -= timedelta(days=1)
+        fim = vencido.strftime("%Y-%m-%d %H:%M:%S")
+        with self.banco.transacao():
+            estado = self._agendamento()
+            if fim <= estado["inicio"]:
+                return False
+            if estado.get("fila_id"):
+                item = self.banco.um("SELECT * FROM telegram_fila WHERE id = ?", (estado["fila_id"],))
+                if not item:
+                    # Remoção manual da fila não deve apagar o intervalo recuperável.
+                    estado["fila_id"] = notificacoes.enfileirar(
+                        self.banco, TIPO_RESUMO,
+                        textos.resumo_agendado(self.banco, estado["inicio"], estado["fim"]))
+                    self._salvar_agendamento(estado)
+                    return True
+                if item and not item["entregue_a"] and fim > estado["fim"]:
+                    estado["fim"] = fim
+                    self.banco.atualizar("telegram_fila", item["id"], {
+                        "texto": textos.resumo_agendado(self.banco, estado["inicio"], fim)})
+                    self._salvar_agendamento(estado)
+                return False
+            estado.update(fim=fim, chats=[c["chat_id"] for c in self.chats()])
+            estado["fila_id"] = notificacoes.enfileirar(
+                self.banco, TIPO_RESUMO, textos.resumo_agendado(self.banco, estado["inicio"], fim))
+            self._salvar_agendamento(estado)
+            return True
 
     # ----------------------------------------------------- receber e responder
     def responder_comando(self, comando: str, argumento: str = "") -> str:

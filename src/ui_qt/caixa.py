@@ -395,6 +395,7 @@ class JanelaCaixa(QMainWindow):
                 ("leitura_x", "Leitura X (parcial do turno - gerencial)", self.leitura_x),
                 ("reducao_z", "Redução Z (fechamento do dia - gerencial)", self.reducao_z),
                 ("fila", "Fila de impressão (ver, reenviar, cancelar)", self.abrir_fila),
+                ("devolucoes", "Devoluções e trocas por cupom", self.abrir_devolucoes),
                 ("consultar_comanda", "Consultar comanda", self.consultar_comanda),
                 ("rodizio", "Rodízio da mesa (Ctrl+R)", self.rodizio),
                 ("recarga", "Recarga pré-pago (Ctrl+Shift+P)", self.recarga),
@@ -1365,6 +1366,16 @@ class JanelaCaixa(QMainWindow):
             self.dialogos.aviso("Fila de impressão", str(e))
             return
         self.janela_fila.show()
+
+    def abrir_devolucoes(self) -> None:
+        if not self._pode_operar():
+            return
+        from src.ui_qt.devolucoes import JanelaDevolucoes
+        ok, janela = self._executar(JanelaDevolucoes, self.ctx, self)
+        if not ok:
+            return
+        janela.exec()
+        self.recarregar_tudo()
 
     def reimprimir(self) -> None:
         if not self._pode_operar():
@@ -2430,7 +2441,11 @@ class JanelaCaixa(QMainWindow):
                                        "Depois de confirmar o turno é encerrado e não pode ser acertado."
                                        + self._avisos_turno(), padrao_sim=False):
             return
-        ok, res = self._executar(self.ctx.turnos.fechar, turno["id"], self.ctx.operador_id, valor)
+        from src.ui_qt.fechamento import coletar
+        ok, conferencia = self._executar(coletar, self.ctx, turno["id"], valor, parent=self)
+        if not ok or conferencia is None:
+            return
+        ok, res = self._executar(self.ctx.turnos.fechar, turno["id"], self.ctx.operador_id, valor, **conferencia)
         if not ok:
             return
         if self.ctx.utilitarios.backup_automatico("troca de turno") is None:

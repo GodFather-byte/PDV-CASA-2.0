@@ -11,14 +11,54 @@ from __future__ import annotations
 
 import json
 import re
+import textwrap
 
 from src.core import formatacao as fmt
+from src.core.erros import ErroNegocio
 from src.core.posicao import nome as nome_posicao
 from src.core.posicao import rotulo as rotulo_posicao
 
 LIMITE_FITA = 40      # linhas por seção na fita; o resto vira "e mais N"
 LIMITE_PRODUTOS = 300  # o fechamento lista todos os produtos vendidos (o cardápio de uma casa cabe com folga)
 M, Q = fmt.fmt_num, fmt.fmt_qtd
+
+
+def comparar_fechamento(resumo: dict, formas: list[dict], valor_final_cent: int,
+                       informados_por_forma: dict[int, int] | None = None) -> dict:
+    """Compara valores em centavos, sem atribuir contagens ausentes a formas legadas."""
+    if type(valor_final_cent) is not int or valor_final_cent < 0:
+        raise ErroNegocio("O valor final deve ser inteiro em centavos e não pode ser negativo.")
+    recebidos = {r["tipo_id"]: r["valor"] for r in resumo["recebimentos"]}
+    if informados_por_forma is not None:
+        if (not isinstance(informados_por_forma, dict)
+                or any(type(k) is not int or type(v) is not int or v < 0
+                       for k, v in informados_por_forma.items())):
+            raise ErroNegocio("Informe por forma valores inteiros em centavos, não negativos.")
+        if set(informados_por_forma) != {f["tipo_id"] for f in formas}:
+            raise ErroNegocio("Informe o valor de todas as formas da conferência, sem formas desconhecidas.")
+        if sum(informados_por_forma[f["tipo_id"]] for f in formas if f["na_gaveta"]) != valor_final_cent:
+            raise ErroNegocio("A soma das formas físicas deve ser igual ao valor informado na gaveta.")
+    dinheiro = next((f["tipo_id"] for f in formas if f.get("dinheiro")), None)
+    ajustes = resumo["valor_inicial"] + resumo["entradas"] - resumo["saidas"]
+    if ajustes and dinheiro is None:
+        raise ErroNegocio("Não foi possível identificar a forma Dinheiro para o fundo e movimentos da gaveta.")
+    linhas = []
+    for forma in formas:
+        esperado = recebidos.get(forma["tipo_id"], 0) + (ajustes if forma["tipo_id"] == dinheiro else 0)
+        informado = informados_por_forma[forma["tipo_id"]] if informados_por_forma is not None else None
+        linhas.append({**forma, "esperado_cent": esperado, "informado_cent": informado,
+                       "diferenca_cent": informado - esperado if informado is not None else None})
+    diferenca = valor_final_cent - resumo["esperado"]
+    return {"linhas": linhas,
+            "estornos_informados": resumo.get("devolucoes", {}).get("externos", []),
+            "gaveta": {"esperado_cent": resumo["esperado"], "informado_cent": valor_final_cent,
+                       "diferenca_cent": diferenca},
+            "por_forma_informada": informados_por_forma is not None,
+            "tem_diferenca": bool(diferenca or any(l["diferenca_cent"] for l in linhas)),
+            "composicao": {"fundo_cent": resumo["valor_inicial"], "suprimentos_cent": resumo["entradas"],
+                          "sangrias_cent": resumo["saidas"], "troco_cent": resumo["troco"],
+                          "acrescimo_cent": resumo["acrescimo"],
+                          "recebido_turno_anterior_cent": resumo["recebido_turno_anterior"]}}
 
 
 def registrar_transferencia(banco, operador_id: int | None, tipo: str, origem: str, destino: str, valor_cent: int,
@@ -182,6 +222,34 @@ def linhas_fita(res: dict, w: int = 40) -> list[str]:
     """As seções da conferência para a fita de `w` colunas. Só aparecem as que têm algo; a linha das posições abertas
     aparece sempre (um 'nenhuma' mostra que foi conferido)."""
     saida: list[str] = []
+    fechamento = res.get("conferencia_fechamento")
+    if fechamento:
+        saida += ["", faixa("ESPERADO / INFORMADO POR FORMA", w)]
+        for linha in fechamento["linhas"]:
+            saida += [linha["tipo"][:w],
+                      _lr("  Esperado", M(linha["esperado_cent"]), w)]
+            if linha["informado_cent"] is None:
+                saida.append("  Não informado por forma"[:w])
+            else:
+                saida += [_lr("  Informado", M(linha["informado_cent"]), w),
+                          _lr("  Diferença", M(linha["diferenca_cent"]), w)]
+        saida += ["  Dinheiro inclui fundo e movimentos."[:w],
+                  "  Recebimentos já líquidos de troco."[:w],
+                  "  Cartão/Pix não compõem a gaveta."[:w]]
+        motivo = fechamento.get("justificativa")
+        if motivo:
+            saida += ["Justificativa da diferença:"[:w], *textwrap.wrap(motivo, width=w)]
+    devolucoes = res.get("devolucoes")
+    if devolucoes and devolucoes["quantidade"]:
+        saida += ["", faixa("DEVOLUÇÕES DO TURNO", w),
+                  _lr("  Total devolvido", M(devolucoes["valor_cent"]), w),
+                  "  Dinheiro já incluído nas sangrias."[:w],
+                  _lr("  Estornos externos informados",
+                      M(devolucoes["por_modo"].get("externo", {}).get("valor_cent", 0)), w),
+                  "  Externo não comprova estorno bancário."[:w]]
+        for forma in devolucoes["por_forma"]:
+            if forma["modo"] == "externo":
+                saida.append(_lr(f"  {forma['tipo']}", M(forma["valor_cent"]), w))
     if res.get("vendas_por_tipo"):
         saida += _secao("VENDAS POR TIPO", res["vendas_por_tipo"],
                         lambda t: [_lr(f"  {t['tipo']} ({t['cupons']} cupons)", M(t["total_cent"]), w)], w)

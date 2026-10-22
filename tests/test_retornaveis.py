@@ -200,7 +200,7 @@ class TestRetornaveis(BaseTeste):
         self.banco.executar("DROP TABLE pagamentos_itens")
         self.banco.executar("PRAGMA user_version = 26")
         self.banco._migrar(26)
-        self.assertEqual(self.banco.valor("PRAGMA user_version"), 27)
+        self.assertEqual(self.banco.valor("PRAGMA user_version"), esquema.VERSAO_ESQUEMA)
         self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM pagamentos_itens"), 0)
         self.assertEqual(self.controle.saldo(self.cliente_id, self.produto_id), 2)
         indices = {r["name"] for r in self.banco.todos("PRAGMA index_list(pagamentos_itens)")}

@@ -1053,7 +1053,13 @@ class TesteFluxosCaixa(BaseUI):
                 clicar(w, "Sim")
         self.robo.quando("Dialogo", trocar, vezes=3)
         self.robo.quando("PainelFechamento", lambda w: w.destroy())
-        self.cx.fechar_turno(); self.cx.update()
+        from unittest.mock import patch
+        declarados = {r["tipo_id"]: 8800 if r["dinheiro"] else 0
+                      for r in self.ctx.turnos.formas_conferencia(
+                          self.ctx.turnos.atual()["id"], self.ctx.operador_id)}
+        with patch("src.ui.fechamento_ui.coletar", return_value={
+                "informados_por_forma": declarados, "justificativa": ""}):
+            self.cx.fechar_turno(); self.cx.update()
         t = self.banco.um("SELECT status, resultado_cent FROM turnos")
         self.assertEqual((t["status"], t["resultado_cent"]), ("fechado", 0))
         self.sem_travar()
@@ -2487,7 +2493,13 @@ class TesteComissaoDasGarotasNoCaixa(BaseUI):
         vistos = []
         self.robo.quando("PainelFechamento", lambda w: (vistos.append(self.textos(w)), w.destroy()))
         self.dialogos({"Conferir maquininha": "Continuar", "Troca de turno": self.trocando_o_turno([], "Sim")})
-        self.cx.fechar_turno(); self.cx.update()
+        from unittest.mock import patch
+        declarados = {r["tipo_id"]: 10000 if r["dinheiro"] else 0
+                      for r in self.ctx.turnos.formas_conferencia(
+                          self.ctx.turnos.atual()["id"], self.ctx.operador_id)}
+        with patch("src.ui.fechamento_ui.coletar", return_value={
+                "informados_por_forma": declarados, "justificativa": ""}):
+            self.cx.fechar_turno(); self.cx.update()
         self.assertIn("Comissões das garotas", vistos[0])
         self.assertIn("55,00", vistos[0])
         self.assertEqual(self.banco.valor("SELECT status FROM turnos"), "fechado")
@@ -2604,7 +2616,7 @@ class TesteComissaoDasGarotasNoCaixa(BaseUI):
         self.assertIn("Paga neste turno: R$ 25,00", self.cx.faixa.cget("text"))
         self.dar(156, 10)                                                             # pendente do turno que vai fechar
         self.posicao("0")
-        self.ctx.turnos.fechar(self.turno, self.ctx.operador_id, 10000)
+        self.ctx.turnos.fechar(self.turno, self.ctx.operador_id, 7500)
         self.turno = self.ctx.turnos.abrir(self.ctx.operador_id, 2, 0)
         self.posicao("180")
         self.assertEqual(self.linhas(), [])                                           # a paga do turno anterior saiu da tela

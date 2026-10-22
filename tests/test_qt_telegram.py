@@ -98,6 +98,31 @@ class TestTelegramQt(BaseTeste):
         self.assertEqual(reaberta.ent_token.text(), TOKEN)
         self.assertEqual(reaberta.grade.rowCount(), 1)
 
+    def test_agendamento_editavel_sem_rede_ou_ativacao_do_bot(self):
+        janela = self.janela()
+        self.assertTrue(janela.var_resumo_ativo.isChecked())
+        self.assertEqual(janela.ent_resumo_hora.text(), "23:00")
+        janela.ent_resumo_hora.setText("22:15")
+        janela.var_resumo_ativo.setChecked(False)
+        self.assertTrue(janela.salvar_resumo())
+        self.assertEqual(self.banco.cfg("telegram_resumo_hora"), "22:15")
+        self.assertEqual(self.banco.cfg("telegram_resumo_ativo"), "N")
+        self.assertIn("pausado", janela.lbl_agendamento.text())
+        self.assertEqual(self.chamadas_http, [])
+        self.assertEqual(self.banco.cfg("telegram_ativo"), "N")
+        janela.ent_resumo_hora.setText("99:00")
+        self.assertFalse(janela.salvar_resumo())
+        self.assertEqual(self.banco.cfg("telegram_resumo_hora"), "22:15")
+
+    def test_pendente_visivel_na_tela(self):
+        self._configurar_pareamento()
+        self.avancar(hours=2)
+        self.ctx.telegram.resumo_agendado()
+        janela = self.janela()
+        self.assertIn("Pendente: 2026-10-03 00:00:00 até 2026-10-03 23:00:00",
+                      janela.lbl_agendamento.text())
+        self.assertEqual(self.chamadas_http, [])
+
     def test_conectar_salva_token_validado_na_thread_da_gui(self):
         janela = self.janela()
         janela.ent_token.setText(TOKEN)

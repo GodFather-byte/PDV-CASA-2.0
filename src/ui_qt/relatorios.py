@@ -93,6 +93,7 @@ SPECS = {
     "cancelados": Spec("Cancelamentos", "rel_informativos", "cancelados", PERIODO + ("operador_id",), "mes"),
     "caixa_mov": Spec("Entradas e saídas financeiras do caixa", "rel_caixa", "caixa_movimentos", PERIODO_TURNO + ("tipo_caixa",), tipo="tipo_caixa"),
     "fechamentos": Spec("Fechamentos do caixa", "rel_caixa", "fechamentos", PERIODO_TURNO, "mes"),
+    "devolucoes": Spec("Devoluções e reembolsos por cupom", "rel_caixa", "devolucoes", PERIODO_TURNO, "mes"),
     "comandas": Spec("Comandas", "rel_comandas", "comandas", VENDAS, mais=VENDAS_MAIS),
     "auditoria_operadores": Spec("Auditoria por operador", "rel_auditoria", "auditoria_operadores", PERIODO, "mes"),
     "garcons": Spec("Garçons", "rel_garcons", "garcons", VENDAS, mais=VENDAS_MAIS),

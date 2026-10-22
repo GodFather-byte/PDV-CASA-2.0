@@ -59,3 +59,26 @@ a impressão. Veja configuração, remoção e limitações de backup em [ADEGA.
 
 Em Configurações > Máquinas dá para usar também **rede** (IP:9100), **serial** (COM) e **arquivo**. O guia de testes do
 instalador está em `INSTALAR_E_TESTAR.md`.
+
+## Diagnóstico de equipamentos (impressora, gaveta, balança e leitor)
+
+Uma tela só para conferir os quatro equipamentos do caixa (Tk e Qt). Exige a permissão de
+configurar máquinas, conferida de novo no banco antes de cada teste.
+
+- **Abrir a tela não aciona nada.** Ela só mostra a configuração. "Verificar impressora (sem
+  imprimir)" apenas consulta o Windows.
+- **Testes ativos pedem confirmação, e o padrão é "Não".** São eles: imprimir página de teste,
+  abrir gaveta e ler peso. Depois da pergunta o PDV confere de novo o operador e a permissão; se
+  algo mudou, nada é enviado.
+- **Enviado não quer dizer que funcionou.** A tela mostra "Comando enviado" e pergunta se o papel
+  saiu ou se a gaveta abriu. Só a sua resposta vira "Confirmado pelo operador" ou "Não confirmado".
+- **Leitor de código:** bipe no campo da tela. O PDV confere o dígito verificador, avisa se o
+  leitor manda TAB ou espaço no fim e diz se o código é de um produto cadastrado. Nenhuma venda é
+  lançada.
+- **Balança:** a leitura só mostra o peso; nenhum item entra em venda.
+- **Gaveta:** o teste não registra sangria, suprimento nem movimento de caixa, e não mexe no estoque.
+- Erros reais (porta ocupada, pyserial ausente, impressora desligada) aparecem na tela.
+  Envios, leituras, confirmações e erros ficam registrados no log de eventos como `diagnostico_*`.
+- O diagnóstico ajuda a achar o problema, mas não certifica nenhum modelo de equipamento.
+- Atalhos: **F5** atualiza, **Esc** fecha, **Enter** no campo do leitor confere o código e **Tab**
+  percorre os botões. A janela rola em telas pequenas (mínimo de 560×420).

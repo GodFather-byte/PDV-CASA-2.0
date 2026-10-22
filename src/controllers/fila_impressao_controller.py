@@ -79,6 +79,12 @@ class FilaImpressao:
 
     def texto_indicador(self) -> tuple[str, str]:
         """(texto, nivel) com nivel em 'ok' | 'aviso' | 'erro' para pintar o indicador na tela."""
+        incertos = self.banco.valor("SELECT COUNT(*) FROM fila_impressao WHERE status = 'incerto'", padrao=0)
+        if incertos:
+            return f"Impressora: {incertos} envio(s) interrompido(s); confira o papel", "erro"
+        enviando = self.banco.valor("SELECT COUNT(*) FROM fila_impressao WHERE status = 'enviando'", padrao=0)
+        if enviando:
+            return f"Impressora: {enviando} documento(s) em envio", "aviso"
         c = self.contagem()
         if c["erros"]:
             return f"Impressora: {c['erros']} com erro (reenviar)", "erro"
@@ -86,7 +92,7 @@ class FilaImpressao:
             return f"Impressora fora? {c['pendentes']} na fila", "aviso"
         if c["pendentes"]:
             return f"Imprimindo ({c['pendentes']})", "aviso"
-        return "Impressora: ok", "ok"
+        return "Impressora: sem pendências (confira o papel)", "ok"
 
     def listar(self, limite: int = 200) -> list[dict]:
         return [dict(r) for r in self.banco.todos(
@@ -106,11 +112,20 @@ class FilaImpressao:
             for _ in range(limite):
                 agora = fmt.agora()
                 item = self.banco.um(
-                    "SELECT * FROM fila_impressao WHERE status = 'pendente' AND destino = ? ORDER BY id LIMIT 1",
+                    "SELECT * FROM fila_impressao WHERE status IN ('pendente','enviando','incerto') "
+                    "AND destino = ? ORDER BY id LIMIT 1",
                     (destino,))
-                if item is None or (item["proxima_tentativa"] and item["proxima_tentativa"] > agora):
+                if (item is None or item["status"] != "pendente"
+                        or (item["proxima_tentativa"] and item["proxima_tentativa"] > agora)):
                     break
                 item = dict(item)
+                if self.banco.conexao.in_transaction:
+                    raise ErroNegocio("Não envie impressão dentro de uma transação de venda.")
+                reservado = self.banco.executar(
+                    "UPDATE fila_impressao SET status = 'enviando' WHERE id = ? AND status = 'pendente'",
+                    (item["id"],)).rowcount
+                if not reservado:
+                    break
                 try:
                     self.enviador(item, maquina)
                 except Exception as e:  # ErroImpressao, OSError... a thread nunca pode morrer por causa de um item
@@ -123,6 +138,39 @@ class FilaImpressao:
                 resultado["enviados"] += 1
         return resultado
 
+    def recuperar_interrompidos(self) -> int:
+        """Só no início do serviço, com instância única: o papel pode ter saído antes da interrupção."""
+        quantidade = self.banco.executar(
+            "UPDATE fila_impressao SET status = 'incerto', proxima_tentativa = NULL, "
+            "ultimo_erro = ? WHERE status = 'enviando'",
+            ("Envio interrompido. Confira fisicamente o papel antes de confirmar ou reenviar.",)).rowcount
+        if quantidade:
+            self.banco.log("impressao_interrompida", f"{quantidade} documento(s) exigem conferência física.")
+        return quantidade
+
+    def conferir_interrompido(self, item_id: int, *, impresso: bool, operador_id: int) -> None:
+        """Decisão humana explícita; um envio incerto nunca entra no reenvio em lote."""
+        if type(impresso) is not bool:
+            raise ErroNegocio("Informe se o documento saiu fisicamente.")
+        from src.controllers.acesso_controller import AcessoController
+        cadastro = self.banco.um("SELECT ativo FROM operadores WHERE id = ?", (operador_id,))
+        if cadastro is None or not cadastro["ativo"]:
+            raise ErroNegocio("Operador inativo ou inexistente.")
+        acesso = AcessoController(self.banco)
+        acesso.exigir(acesso.operador(operador_id), "util_fila_impressao")
+        with self.banco.transacao():
+            quantidade = self.banco.executar(
+                "UPDATE fila_impressao SET status = ?, enviado_em = ?, ultimo_erro = NULL, "
+                "tentativas = 0, proxima_tentativa = NULL WHERE id = ? AND status = 'incerto'",
+                ("enviado" if impresso else "pendente", fmt.agora() if impresso else None, item_id)).rowcount
+            if not quantidade:
+                raise ErroNegocio("Selecione um envio interrompido que ainda aguarda conferência.")
+            self.banco.log("impressao_conferida",
+                           f"documento {item_id}: " + ("papel confirmado" if impresso else "reenvio autorizado"),
+                           operador_id)
+        if not impresso:
+            _ACORDAR.set()
+
     def _falhou(self, item: dict, erro: str) -> None:
         tentativas = item["tentativas"] + 1
         if tentativas >= MAX_TENTATIVAS:
@@ -134,7 +182,8 @@ class FilaImpressao:
         espera = ESPERAS[min(tentativas - 1, len(ESPERAS) - 1)]
         proxima = (fmt.agora_dt() + timedelta(seconds=espera)).strftime("%Y-%m-%d %H:%M:%S")
         self.banco.executar(
-            "UPDATE fila_impressao SET tentativas = ?, ultimo_erro = ?, proxima_tentativa = ? WHERE id = ?",
+            "UPDATE fila_impressao SET status = 'pendente', tentativas = ?, ultimo_erro = ?, "
+            "proxima_tentativa = ? WHERE id = ?",
             (tentativas, erro[:300], proxima, item["id"]))
 
     # --------------------------------------------------- ações do operador
@@ -144,7 +193,7 @@ class FilaImpressao:
             "UPDATE fila_impressao SET status = 'pendente', tentativas = 0, proxima_tentativa = NULL "
             "WHERE id = ? AND status IN ('pendente','erro','cancelado')", (item_id,)).rowcount
         if not n:
-            raise ErroNegocio("Este item já foi impresso.")
+            raise ErroNegocio("Este item não pode ser reenviado. Se interrompido, use a conferência do papel.")
         _ACORDAR.set()
 
     def reenviar_todos(self) -> int:
@@ -214,6 +263,7 @@ class ServicoFilaImpressao:
         fila = FilaImpressao(banco, self.enviador)
         ultima_limpeza = 0.0
         try:
+            fila.recuperar_interrompidos()
             while not self._parar.is_set():
                 try:
                     fila.processar()
@@ -225,5 +275,7 @@ class ServicoFilaImpressao:
                     self.ultimo_erro = str(e)
                 _ACORDAR.wait(self.intervalo)
                 _ACORDAR.clear()
+        except Exception as erro:
+            self.ultimo_erro = f"Falha ao recuperar a fila de impressão: {erro}"
         finally:
             banco.fechar()

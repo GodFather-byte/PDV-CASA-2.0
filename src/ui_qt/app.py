@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import sys
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
     QLineEdit, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget,
@@ -71,7 +73,9 @@ class JanelaBackupExterno(QDialog):
         ultimo = banco.cfg("backup_externo_ultimo") or "Nenhuma cópia registrada"
         verificado = banco.cfg("backup_externo_verificado_em") or "Sem verificação registrada"
         erro = banco.cfg("backup_externo_erro")
+        _, teste = self.ctx.utilitarios.situacao_teste_restauracao()
         self.situacao.setText(f"Pasta: {pasta}\nÚltima cópia: {ultimo}\nVerificação: {verificado}"
+                             + f"\n{teste}"
                              + (f"\nAtenção: {erro}" if erro else ""))
 
     def _senha(self, confirmar=False):
@@ -97,7 +101,7 @@ class JanelaBackupExterno(QDialog):
             self.exigir_acesso()
             acao()
             self.atualizar()
-        except (ErroNegocio, OSError, ValueError) as erro:
+        except (ErroNegocio, OSError, ValueError, sqlite3.Error) as erro:
             self.mensagem.setText(str(erro))
 
     def configurar(self):
@@ -130,8 +134,10 @@ class JanelaBackupExterno(QDialog):
             senha = self._senha()
             if senha is None:
                 return
-            self.ctx.utilitarios.verificar_backup_externo(caminho, senha)
-            self.mensagem.setText("Cópia verificada com a senha informada. Upload não foi verificado.")
+            self.exigir_acesso()
+            resultado = self.ctx.utilitarios.testar_recuperacao(caminho, senha=senha)
+            self.mensagem.setText(self.ctx.utilitarios.texto_teste_restauracao(resultado)
+                                  + "\nUpload não foi verificado.")
         self._executar(acao)
 
     def restaurar(self):
@@ -209,6 +215,7 @@ class JanelaPrincipal(QMainWindow):
             ("relatorio_vendas", "Vendas • relatório", self.abrir_relatorio_vendas),
             ("relatorios", "Mais relatórios", self.abrir_relatorios),
             ("contas", "Contas a pagar / receber", self.abrir_contas),
+            ("devolucoes", "Devoluções e trocas por cupom", self.abrir_devolucoes),
             ("operadores", "Operadores", lambda: self.abrir_cadastro("operadores")),
             ("mais_cadastros", "Mais cadastros", self.escolher_cadastro_adicional),
             ("configuracoes", "Configurações gerais", self.abrir_configuracoes),
@@ -221,6 +228,8 @@ class JanelaPrincipal(QMainWindow):
             ("auditoria", "Auditoria • somente leitura", self.abrir_auditoria),
             ("backup", "Backup externo cifrado", self.abrir_backup),
             ("restaurar", "Restaurar backup local", self.abrir_restaurar_backup),
+            ("verificar_backup", "Verificar recuperação do backup", self.abrir_verificar_backup),
+            ("diagnostico", "Diagnóstico de equipamentos", self.abrir_diagnostico),
             ("impressora", "Assistente de impressora", self.abrir_assistente_impressora),
             ("fila_impressao", "Fila de impressão", self.abrir_fila_impressao),
             ("composicao", "Composição / ficha técnica", self.abrir_composicao),
@@ -243,6 +252,8 @@ class JanelaPrincipal(QMainWindow):
         self.lateral_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.lateral_scroll.setWidgetResizable(True)
         self.lateral_scroll.setWidget(lateral_widget)
+        self.lateral_scroll.setMinimumWidth(275)
+        self.lateral_scroll.setMaximumWidth(360)
         layout.addWidget(self.lateral_scroll, 1)
         conteudo = QVBoxLayout()
         conteudo.setContentsMargins(24, 12, 12, 12)
@@ -251,7 +262,8 @@ class JanelaPrincipal(QMainWindow):
             "Validação gradual: Qt e Tk compartilham as regras, não as janelas.", "suave"))
         self.indicadores = {}
         for chave, titulo in (("turno", "CAIXA"), ("licenca", "LICENÇA"),
-                              ("backup", "PROTEÇÃO DOS DADOS"), ("sync", "NUVEM E SERVIÇOS")):
+                              ("backup", "PROTEÇÃO DOS DADOS"), ("impressao", "RECUPERAÇÃO DA IMPRESSÃO"),
+                              ("sync", "NUVEM E SERVIÇOS")):
             cartao = QFrame()
             cartao.setObjectName("cartao")
             caixa = QVBoxLayout(cartao)
@@ -270,7 +282,14 @@ class JanelaPrincipal(QMainWindow):
         self.aviso_atualizacao = tema.texto("", "aviso")
         conteudo.addWidget(self.aviso_atualizacao)
         conteudo.addStretch()
-        layout.addLayout(conteudo, 3)
+        painel = QWidget()
+        painel.setLayout(conteudo)
+        self.conteudo_scroll = QScrollArea()
+        self.conteudo_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.conteudo_scroll.setWidgetResizable(True)
+        self.conteudo_scroll.setWidget(painel)
+        layout.addWidget(self.conteudo_scroll, 3)
+        QShortcut(QKeySequence("Ctrl+K"), self, activated=self.focar_busca)
         self._timer = QTimer(self)
         self._timer.setInterval(15000)
         self._timer.timeout.connect(self.atualizar)
@@ -323,6 +342,8 @@ class JanelaPrincipal(QMainWindow):
             "cad_produtos" not in desligados and self.ctx.pode("cad_produtos"))
         self.botoes["backup"].setEnabled(self.ctx.pode("util_backup"))
         self.botoes["restaurar"].setEnabled(self.ctx.pode("util_backup"))
+        self.botoes["verificar_backup"].setEnabled(self.ctx.pode("util_backup"))
+        self.botoes["diagnostico"].setEnabled(self.ctx.pode("cfg_maquinas"))
         self.botoes["impressora"].setEnabled(self.ctx.pode("cfg_maquinas"))
         self.botoes["fila_impressao"].setEnabled(self.ctx.pode("util_fila_impressao"))
         self.botoes["composicao"].setEnabled(
@@ -342,7 +363,9 @@ class JanelaPrincipal(QMainWindow):
             backup = "Banco em memória: backup e serviços de arquivo não iniciados."
         else:
             _, backup = self.ctx.utilitarios.situacao_backup()
-        self.indicadores["backup"].setText(backup)
+        _, teste = self.ctx.utilitarios.situacao_teste_restauracao()
+        self.indicadores["backup"].setText(backup + "\n" + teste)
+        self.indicadores["impressao"].setText(self.ctx.impressao.fila.texto_indicador()[0])
         banco = self.ctx.banco
         from src.sync import ponte
         estado_ponte = ponte.estado(banco)
@@ -366,6 +389,11 @@ class JanelaPrincipal(QMainWindow):
         busca = normalizar(texto.strip())
         for botao in self.botoes.values():
             botao.setVisible(not busca or busca in normalizar(botao.text()))
+
+    def focar_busca(self):
+        self.busca_modulos.setFocus()
+        self.busca_modulos.selectAll()
+        self.lateral_scroll.ensureWidgetVisible(self.busca_modulos)
 
     def mostrar_limites(self):
         self.mensagem.setText(
@@ -437,6 +465,21 @@ class JanelaPrincipal(QMainWindow):
         from src.ui_qt.cozinha import JanelaCozinha
         return self._abrir_painel_operacional(
             "cozinha", lambda: JanelaCozinha(self.ctx, self))
+
+    def abrir_diagnostico(self):
+        from src.ui_qt.diagnostico import JanelaDiagnostico
+        return self._abrir_painel_operacional(
+            "diagnostico", lambda: JanelaDiagnostico(self.ctx, self))
+
+    def abrir_devolucoes(self):
+        from src.ui_qt.devolucoes import JanelaDevolucoes
+        return self._abrir_painel_operacional(
+            "devolucoes", lambda: JanelaDevolucoes(self.ctx, self))
+
+    def abrir_verificar_backup(self):
+        from src.ui_qt.restaurar_backup import JanelaVerificarBackup
+        return self._abrir_painel_operacional(
+            "verificar_backup", lambda: JanelaVerificarBackup(self.ctx, self))
 
     def abrir_contas(self):
         try:
@@ -957,6 +1000,8 @@ def autoteste(pasta: Path) -> list[str]:
             app.principal.abrir_estoque,
             app.principal.abrir_alertas, app.principal.abrir_promocoes,
             app.principal.abrir_retornaveis,
+            app.principal.abrir_devolucoes, app.principal.abrir_diagnostico,
+            app.principal.abrir_verificar_backup,
         )
         for abrir in telas_administrativas:
             janela = abrir()
@@ -972,6 +1017,15 @@ def autoteste(pasta: Path) -> list[str]:
         banco.inserir("turnos", {"numero": 1, "terminal": app.ctx.turnos.terminal,
                                 "operador_id": app.ctx.operador_id, "aberto_em": agora(),
                                 "valor_inicial_cent": 10000, "status": "aberto"})
+        from src.ui_qt.fechamento import DialogoFechamento
+        conferencia = DialogoFechamento(
+            app.ctx, app.ctx.turnos.atual()["id"], 10000, app.principal)
+        conferencia.show()
+        aplicacao.processEvents()
+        if not conferencia.isVisible():
+            raise RuntimeError("A conferência de fechamento Qt não abriu.")
+        conferencia.close()
+        conferencia.deleteLater()
         caixa = app.principal.abrir_caixa()
         if caixa is None or not caixa.isVisible():
             raise RuntimeError("O caixa Qt não abriu.")

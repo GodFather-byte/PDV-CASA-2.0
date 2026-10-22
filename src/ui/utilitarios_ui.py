@@ -2,14 +2,18 @@
 from __future__ import annotations
 
 import os
+import sqlite3
+import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, ttk
 
 from src.core import formatacao as fmt
+from src.core.erros import ErroNegocio, ErroPermissao
 from src.ui import tema
 
 
-def executar(master, ctx, chave: str) -> None:
+def executar(master, ctx, chave: str):
+    """Executa a ação do menu Utilitários. Em "verificar_backup" devolve a janela aberta (ou None)."""
     if chave == "backup":
         ok, caminho = tema.tratar(master, ctx.utilitarios.backup)
         if ok:
@@ -19,6 +23,8 @@ def executar(master, ctx, chave: str) -> None:
         backup_externo(master, ctx)
     elif chave == "restaurar":
         restaurar(master, ctx)
+    elif chave == "verificar_backup":
+        return verificar_backup(master, ctx)
     elif chave == "suporte":
         ok, caminho = tema.tratar(master, ctx.utilitarios.pacote_suporte)
         if ok:
@@ -118,10 +124,16 @@ def restaurar(master, ctx) -> None:
         tema.mensagem(master, "Restauração marcada. FECHE o programa e abra de novo para concluir.", "Restaurar backup")
 
 
+def verificar_backup(master, ctx):
+    """Abre o teste de restauração isolado; sem acesso `util_backup`, mostra o motivo e não abre."""
+    ok, janela = tema.tratar(master, JanelaVerificarBackup, master, ctx)
+    return janela if ok else None
+
+
 def backup_externo(master, ctx) -> None:
     acoes = [("configurar", "Configurar pasta e senha de recuperação"),
              ("gerar", "Gerar cópia criptografada agora"),
-             ("verificar", "Testar recuperação de um arquivo"),
+             ("verificar", "Testar recuperação de um arquivo (restauração isolada)"),
              ("recuperar", "Restaurar arquivo criptografado"),
              ("desativar", "Desativar cópias externas automáticas")]
     acao = tema.escolher(master, "Backup externo criptografado", acoes,
@@ -163,9 +175,13 @@ def backup_externo(master, ctx) -> None:
         if senha is None:
             return
         if acao == "verificar":
-            ok, _ = tema.tratar(master, ctx.utilitarios.verificar_backup_externo, arquivo, senha)
+            ok, resultado = tema.tratar(master, ctx.utilitarios.testar_recuperacao, arquivo, senha)
             if ok:
-                tema.mensagem(master, "Senha e integridade conferidas. O banco atual não foi alterado.", "Recuperação verificada")
+                tema.mensagem(master, ctx.utilitarios.texto_teste_restauracao(resultado),
+                              "Recuperação REPROVADA" if not resultado["ok"] else
+                              "Recuperação verificada COM AVISOS" if resultado.get("avisos") else
+                              "Recuperação verificada",
+                              "info" if resultado["ok"] and not resultado.get("avisos") else "aviso")
         elif tema.confirmar(master, "Tudo lançado depois do backup será perdido.\n"
                                     "Uma cópia local do estado atual será guardada antes.\n"
                                     "Marcar a restauração para a próxima abertura?", "Restaurar", padrao_sim=False):
@@ -176,3 +192,132 @@ def backup_externo(master, ctx) -> None:
             master, "Desativar as próximas cópias externas? Os arquivos já gerados não serão apagados.",
             "Backup externo", padrao_sim=False):
         tema.tratar(master, ctx.utilitarios.desativar_backup_externo)
+
+
+class JanelaVerificarBackup(tk.Toplevel):
+    """Teste de restauração ISOLADO (Tk). ``exigir_acesso()`` revalida sessão, operador ativo e ``util_backup``
+    na abertura e antes de cada ação; não troca nem marca restauração; senha de ``.pdvbkp`` só em memória."""
+
+    def __init__(self, master, ctx):
+        self.ctx = ctx
+        self.exigir_acesso()
+        super().__init__(master)
+        self.title("Verificar backup (teste de restauração)")
+        self.geometry("920x660")
+        corpo = ttk.Frame(self, padding=12)
+        corpo.pack(fill="both", expand=True)
+        ttk.Label(corpo, wraplength=880, text=(
+            "O backup escolhido é copiado para uma pasta temporária, restaurado ali e conferido (integridade, "
+            "esquema e contagens). O banco em uso NÃO é alterado e nenhuma restauração é marcada.")).pack(fill="x")
+        self.ultima = ttk.Label(corpo, text="", wraplength=880)
+        self.ultima.pack(fill="x", pady=(8, 4))
+        quadro = ttk.Frame(corpo)
+        quadro.pack(fill="both", expand=True)
+        self.grade = ttk.Treeview(quadro, columns=("arquivo", "pasta"), show="headings", height=8,
+                                  selectmode="browse")
+        self.grade.heading("arquivo", text="Backup local")
+        self.grade.heading("pasta", text="Pasta")
+        self.grade.column("arquivo", width=300)
+        self.grade.column("pasta", width=560)
+        rolagem = ttk.Scrollbar(quadro, orient="vertical", command=self.grade.yview)
+        self.grade.configure(yscrollcommand=rolagem.set)
+        self.grade.pack(side="left", fill="both", expand=True)
+        rolagem.pack(side="right", fill="y")
+        self.resultado = tk.Text(corpo, height=12, wrap="word")
+        self.resultado.pack(fill="both", expand=True, pady=6)
+        self.resultado.configure(state="disabled")
+        self.mensagem = ttk.Label(corpo, text="", wraplength=880)
+        self.mensagem.pack(fill="x")
+        acoes = ttk.Frame(corpo)
+        acoes.pack(fill="x", pady=(6, 0))
+        self.btn_recente = ttk.Button(acoes, text="Verificar o mais recente", command=self.verificar)
+        self.btn_recente.pack(side="left")
+        ttk.Button(acoes, text="Verificar selecionado", command=self.verificar_selecionado).pack(side="left", padx=6)
+        ttk.Button(acoes, text="Verificar arquivo criptografado…",
+                   command=self.verificar_externo).pack(side="left")
+        ttk.Button(acoes, text="Atualizar lista", command=self.carregar).pack(side="left", padx=6)
+        ttk.Button(acoes, text="Fechar", command=self.destroy).pack(side="right")
+        self.caminhos: dict[str, str] = {}
+        self.carregar()
+
+    def exigir_acesso(self):
+        if self.ctx.operador is None:
+            raise ErroPermissao("Entre no sistema para verificar backups.")
+        cadastro = self.ctx.cadastros.obter("operadores", self.ctx.operador_id)
+        if cadastro is None or not cadastro["ativo"]:
+            raise ErroPermissao("Operador inativo. Encerre a sessão.")
+        self.ctx.operador = self.ctx.acesso.operador(self.ctx.operador_id)
+        self.ctx.acesso.exigir(self.ctx.operador, "util_backup")
+        return True
+
+    def _controlador(self):
+        self.exigir_acesso()
+        return self.ctx.utilitarios
+
+    def _texto(self, conteudo: str) -> None:
+        self.resultado.configure(state="normal")
+        self.resultado.delete("1.0", "end")
+        self.resultado.insert("1.0", conteudo)
+        self.resultado.configure(state="disabled")
+
+    def texto_resultado(self) -> str:
+        return self.resultado.get("1.0", "end-1c")
+
+    def carregar(self) -> bool:
+        try:
+            controlador = self._controlador()
+            atual = None if self.ctx.banco.caminho == ":memory:" else Path(self.ctx.banco.caminho).resolve()
+            backups = [p for p in controlador.listar_backups() if p.resolve() != atual][:60]
+        except (ErroNegocio, OSError, ValueError, sqlite3.Error) as erro:
+            self.mensagem.configure(text=str(erro))
+            return False
+        self.grade.delete(*self.grade.get_children())
+        self.caminhos = {}
+        for caminho in backups:
+            iid = self.grade.insert("", "end", values=(caminho.name, str(caminho.parent)))
+            self.caminhos[iid] = str(caminho)
+        self.btn_recente.state(["!disabled"] if backups else ["disabled"])
+        self.ultima.configure(text=self.ctx.utilitarios.situacao_teste_restauracao()[1])
+        self.mensagem.configure(text="" if backups else "Não há backups locais nas pastas configuradas.")
+        return True
+
+    def verificar(self, caminho: str | None = None, senha: str | None = None) -> bool:
+        """Executa o ensaio; True só quando aprovado. O diagnóstico aparece na caixa de resultado."""
+        self.mensagem.configure(text="")
+        try:
+            resultado = self._controlador().testar_recuperacao(caminho, senha)
+        except (ErroNegocio, OSError, ValueError, sqlite3.Error) as erro:
+            self.mensagem.configure(text=str(erro))
+            return False
+        self._texto(self.ctx.utilitarios.texto_teste_restauracao(resultado))
+        self.ultima.configure(text=self.ctx.utilitarios.situacao_teste_restauracao()[1])
+        if not resultado["ok"]:
+            self.mensagem.configure(
+                text="Backup REPROVADO no teste de restauração. Gere um novo backup e confira o disco.")
+        elif resultado.get("avisos"):
+            self.mensagem.configure(text="Backup APROVADO COM AVISOS: restaura, mas há registros sem vínculo. "
+                                         "Confira os avisos e chame o suporte antes de depender dele.")
+        return resultado["ok"]
+
+    def verificar_selecionado(self) -> bool:
+        selecao = self.grade.selection()
+        if not selecao:
+            self.mensagem.configure(text="Selecione um backup da lista.")
+            return False
+        return self.verificar(self.caminhos[selecao[0]])
+
+    def verificar_externo(self) -> bool:
+        try:
+            self._controlador()
+        except ErroNegocio as erro:
+            self.mensagem.configure(text=str(erro))
+            return False
+        arquivo = filedialog.askopenfilename(parent=self, title="Escolha o backup criptografado",
+                                             initialdir=self.ctx.banco.cfg("backup_externo_pasta") or None,
+                                             filetypes=[("Backup seguro WillPDV", "*.pdvbkp")])
+        if not arquivo:
+            return False
+        senha = tema.pedir_texto(self, "Senha de recuperação", "Informe a senha usada neste arquivo:", senha=True)
+        if senha is None:
+            return False
+        return self.verificar(arquivo, senha)

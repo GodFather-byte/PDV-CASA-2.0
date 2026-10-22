@@ -7,6 +7,7 @@ telefone ou endereço de cliente: só nomes, números de comanda e nomes de oper
 from __future__ import annotations
 
 from src.controllers.estoque_controller import EstoqueController
+from src.controllers.devolucoes_controller import DevolucoesController
 from src.controllers.relatorio_vendas import virada_dia
 from src.controllers.turno_controller import TurnoController
 from src.core import formatacao as fmt
@@ -59,6 +60,19 @@ def resumo(banco, dia: str | None = None, fechado: bool = False) -> str:
     `fechado`: a noite já acabou (resumo automático da manhã); senão é 'até agora'."""
     dia = dia or dia_atual(banco)
     ini, fim = _faixa(banco, dia)
+    titulo = "Resumo da noite" if fechado else "Resumo até agora"
+    return _resumo_intervalo(banco, ini, fim, f"📊 {titulo} — {_dia_rotulo(dia)}", fechado)
+
+
+def resumo_agendado(banco, inicio: str, fim: str) -> str:
+    """Um único consolidado; intervalo local semiaberto, independente da virada operacional."""
+    cabecalho = (f"📊 Resumo agendado consolidado\n"
+                 f"Período local: {inicio} até {fim} (fim exclusivo).\n"
+                 "Reúne o período pendente em uma mensagem, não um envio por dia perdido.")
+    return _resumo_intervalo(banco, inicio, fim, cabecalho, False)
+
+
+def _resumo_intervalo(banco, ini: str, fim: str, cabecalho: str, fechado: bool) -> str:
     base = ("FROM vendas v WHERE v.status = 'fechada' AND v.fechada_em >= ? AND v.fechada_em < ? AND v.subtotal_cent > 0 "
             "AND EXISTS (SELECT 1 FROM itens_venda i WHERE i.venda_id = v.id AND i.cancelado = 0)")
     r = banco.um(f"SELECT COUNT(*) AS n, COALESCE(SUM(v.total_cent),0) AS total, COALESCE(SUM(v.pessoas),0) AS pessoas {base}",
@@ -78,29 +92,47 @@ def resumo(banco, dia: str | None = None, fechado: bool = False) -> str:
                            "AND criado_em >= ? AND criado_em < ?", (ini, fim), 0)
     turnos = banco.todos("SELECT numero, resultado_cent, o.nome AS operador FROM turnos t LEFT JOIN operadores o ON o.id = t.operador_id "
                          "WHERE t.status = 'fechado' AND t.fechado_em >= ? AND t.fechado_em < ? ORDER BY t.id", (ini, fim))
+    # listar inclui o fim; o resumo usa [início, fim), inclusive no corte diário de 23h.
+    devolucoes = [d for d in DevolucoesController(banco).listar(de=ini, ate=fim) if d["criado_em"] < fim]
+    reembolsado = sum(d["valor_cent"] for d in devolucoes)
+    gaveta = sum(d["valor_cent"] for d in devolucoes if d["reembolso_modo"] == "dinheiro_gaveta")
+    externo = sum(d["valor_cent"] for d in devolucoes if d["reembolso_modo"] == "externo")
 
-    titulo = "Resumo da noite" if fechado else "Resumo até agora"
-    linhas = [f"📊 {titulo} — {_dia_rotulo(dia)}", ""]
+    linhas = [cabecalho, f"Última atualização local: {fmt.agora()}", ""]
     if not r["n"]:
         linhas.append("Nenhuma venda fechada ainda.")
     else:
-        linhas += [f"💰 Faturamento: {_brl(r['total'])}",
+        linhas += [f"💰 Faturamento: {_brl(r['total'])} (bruto histórico, sem deduzir devoluções)",
                    f"🧾 Vendas: {r['n']}  ·  Ticket médio: {_brl(fmt.dividir_cent(r['total'], r['n']))}"]
         if r["pessoas"]:
             linhas.append(f"👥 Pessoas: {r['pessoas']}  ·  {_brl(fmt.dividir_cent(r['total'], r['pessoas']))} por pessoa")
         if formas:
             linhas += ["", "Recebido por forma:"] + [f" • {f['tipo']}: {_brl(f['valor'])}" for f in formas]
+    linhas += ["", f"↩ REEMBOLSOS no período: {_brl(reembolsado)} · {len(devolucoes)} devolução(ões)",
+               f"📉 Líquido gerencial do período: {_brl(r['total'] - reembolsado)} (bruto menos reembolsos)"]
+    if devolucoes:
+        linhas.append("Pela data do reembolso, inclusive vendas de dias anteriores; não altera a venda original.")
+        if gaveta:
+            linhas.append(f" • Dinheiro da gaveta: {_brl(gaveta)} (já incluído nas saídas abaixo; não deduzir de novo).")
+        if externo:
+            linhas.append(f" • Externo declarado: {_brl(externo)} (declaração do operador; não comprova estorno bancário).")
+        outros = reembolsado - gaveta - externo
+        if outros:
+            linhas.append(f" • Demais modos registrados: {_brl(outros)} (incluem créditos; não representam saída de dinheiro).")
     avisos = []
     if canc["n"]:
         avisos.append(f"❌ Cupons cancelados: {canc['n']} ({_brl(canc['total'])})")
     if itens_canc["n"]:
         avisos.append(f"❌ Itens cancelados: {itens_canc['n']} ({_brl(itens_canc['total'])})")
     if sangrias:
-        avisos.append(f"💸 Sangrias: {_brl(sangrias)}")
+        rotulo = "Saídas da gaveta (incluem reembolsos)" if gaveta else "Sangrias"
+        avisos.append(f"💸 {rotulo}: {_brl(sangrias)}")
     if avisos:
         linhas += [""] + avisos
-    for t in turnos:
+    for t in turnos[:LIMITE_LISTA]:
         linhas.append(f"⚖️ Turno {t['numero']} ({t['operador'] or '?'}): {_diferenca(t['resultado_cent'])}")
+    if len(turnos) > LIMITE_LISTA:
+        linhas.append(f"... e mais {len(turnos) - LIMITE_LISTA} turnos fechados no período.")
     if fechado:
         sem = banco.valor("SELECT COUNT(*) FROM produtos WHERE controla_estoque = 1 AND ativo = 1 AND qt_atual <= 0", (), 0)
         if sem:
@@ -408,9 +440,9 @@ def semana(banco) -> str:
     total = sum(por_dia.get(d, (0, 0))[1] for d in dias)
     vendas = sum(por_dia.get(d, (0, 0))[0] for d in dias)
     if not vendas:
-        return "📈 Últimos 7 dias\n\nNenhuma venda nesse período."
+        return f"📈 Últimos 7 dias\nÚltima atualização local: {fmt.agora()}\n\nNenhuma venda nesse período."
     melhor = max(dias, key=lambda d: por_dia.get(d, (0, 0))[1])
-    linhas = ["📈 Últimos 7 dias", ""]
+    linhas = ["📈 Últimos 7 dias", f"Última atualização local: {fmt.agora()}", ""]
     for d in dias:
         n, v = por_dia.get(d, (0, 0))
         marca = " 🏆" if d == melhor else ""
@@ -436,10 +468,10 @@ def mes(banco) -> str:
     nome_mes = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro",
                 "dezembro"][d.month - 1]
     if not n:
-        return f"🗓️ {nome_mes.capitalize()}\n\nNenhuma venda neste mês ainda."
+        return f"🗓️ {nome_mes.capitalize()}\nÚltima atualização local: {fmt.agora()}\n\nNenhuma venda neste mês ainda."
     total_ant = sum(v[1] for v in anterior.values())
     melhor = max(atual, key=lambda k: atual[k][1])
-    linhas = [f"🗓️ {nome_mes.capitalize()} até hoje", "",
+    linhas = [f"🗓️ {nome_mes.capitalize()} até hoje", f"Última atualização local: {fmt.agora()}", "",
               f"💰 Faturamento: {_brl(total)}", f"🧾 Vendas: {n}  ·  Ticket médio: {_brl(fmt.dividir_cent(total, n))}",
               f"📊 Média por dia com venda: {_brl(fmt.dividir_cent(total, len(atual)))} ({len(atual)} dias)",
               f"🏆 Melhor dia: {_dia_rotulo(melhor)} com {_brl(atual[melhor][1])}"]

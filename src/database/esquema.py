@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 27
+VERSAO_ESQUEMA = 29
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -43,6 +43,78 @@ RETORNAVEIS_DDL = [
         BEFORE DELETE ON retornaveis_movimentos BEGIN
         SELECT RAISE(ABORT, 'Histórico de retornáveis não pode ser excluído.'); END""",
 ]
+
+_IMUTAVEL = "Histórico de devoluções não pode ser {}."
+_QTD_4 = ("quantidade > 0 AND quantidade <= 1.7976931348623157e308 "
+          "AND quantidade = ROUND(quantidade, 4)")
+
+# Devoluções de venda FECHADA (v28). Registro imutável: a venda original, os pagamentos e o bruto histórico
+# nunca são alterados; o reembolso fica na data/turno em que foi feito. `uuid` é a chave de idempotência.
+DEVOLUCOES_DDL = [
+    """CREATE TABLE IF NOT EXISTS devolucoes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT NOT NULL UNIQUE CHECK (length(uuid) = 36),
+        venda_id INTEGER NOT NULL REFERENCES vendas(id),
+        venda_uuid TEXT NOT NULL,
+        cupom_original INTEGER,
+        turno_id INTEGER NOT NULL REFERENCES turnos(id),
+        criado_em TEXT NOT NULL,
+        operador_id INTEGER NOT NULL REFERENCES operadores(id),
+        autorizado_por INTEGER NOT NULL REFERENCES operadores(id),
+        motivo TEXT NOT NULL CHECK (length(trim(motivo)) > 0),
+        completa INTEGER NOT NULL DEFAULT 0 CHECK (completa IN (0, 1)),
+        troca INTEGER NOT NULL DEFAULT 0 CHECK (troca IN (0, 1)),
+        itens_bruto_cent INTEGER NOT NULL CHECK (itens_bruto_cent >= 0),
+        desconto_rateado_cent INTEGER NOT NULL CHECK (desconto_rateado_cent >= 0),
+        servico_rateado_cent INTEGER NOT NULL CHECK (servico_rateado_cent >= 0),
+        extras_cent INTEGER NOT NULL DEFAULT 0 CHECK (extras_cent >= 0),
+        valor_cent INTEGER NOT NULL CHECK (valor_cent >= 0 AND valor_cent =
+            itens_bruto_cent - desconto_rateado_cent + servico_rateado_cent + extras_cent),
+        reembolso_modo TEXT NOT NULL CHECK (reembolso_modo IN ('dinheiro_gaveta', 'externo', 'caderneta')),
+        tipo_pagamento_id INTEGER REFERENCES tipos_pagamento(id),
+        referencia_externa TEXT,
+        movimento_caixa_id INTEGER UNIQUE REFERENCES movimentos_caixa(id),
+        caderneta_id INTEGER UNIQUE REFERENCES caderneta(id),
+        cliente_id INTEGER REFERENCES clientes(id),
+        CHECK ((reembolso_modo = 'dinheiro_gaveta' AND tipo_pagamento_id IS NOT NULL AND caderneta_id IS NULL
+                AND (valor_cent = 0 OR movimento_caixa_id IS NOT NULL))
+            OR (reembolso_modo = 'externo' AND tipo_pagamento_id IS NOT NULL AND movimento_caixa_id IS NULL
+                AND caderneta_id IS NULL AND length(trim(COALESCE(referencia_externa, ''))) > 0)
+            OR (reembolso_modo = 'caderneta' AND cliente_id IS NOT NULL AND movimento_caixa_id IS NULL
+                AND (valor_cent = 0 OR caderneta_id IS NOT NULL)))
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_devolucoes_venda ON devolucoes(venda_id, id)",
+    "CREATE INDEX IF NOT EXISTS ix_devolucoes_turno ON devolucoes(turno_id, id)",
+    "CREATE INDEX IF NOT EXISTS ix_devolucoes_criado ON devolucoes(criado_em, id)",
+    f"""CREATE TABLE IF NOT EXISTS devolucoes_itens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        devolucao_id INTEGER NOT NULL REFERENCES devolucoes(id),
+        item_id INTEGER NOT NULL REFERENCES itens_venda(id),
+        produto_id INTEGER NOT NULL REFERENCES produtos_historico(id),
+        quantidade REAL NOT NULL CHECK ({_QTD_4}),
+        bruto_cent INTEGER NOT NULL CHECK (bruto_cent >= 0),
+        desconto_cent INTEGER NOT NULL CHECK (desconto_cent >= 0),
+        servico_cent INTEGER NOT NULL CHECK (servico_cent >= 0),
+        valor_cent INTEGER NOT NULL CHECK (valor_cent = bruto_cent - desconto_cent + servico_cent AND valor_cent >= 0),
+        retorna_estoque INTEGER NOT NULL DEFAULT 0 CHECK (retorna_estoque IN (0, 1)),
+        UNIQUE (devolucao_id, item_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_devolucoes_itens_item ON devolucoes_itens(item_id)",
+    """CREATE TABLE IF NOT EXISTS devolucoes_trocas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        devolucao_id INTEGER NOT NULL UNIQUE REFERENCES devolucoes(id),
+        venda_id INTEGER NOT NULL UNIQUE REFERENCES vendas(id),
+        operador_id INTEGER REFERENCES operadores(id),
+        criado_em TEXT NOT NULL
+    )""",
+    *[f"""CREATE TRIGGER IF NOT EXISTS {tabela}_sem_{nome}
+        BEFORE {operacao} ON {tabela} BEGIN
+        SELECT RAISE(ABORT, '{_IMUTAVEL.format(verbo)}'); END"""
+      for tabela in ("devolucoes", "devolucoes_itens", "devolucoes_trocas")
+      for operacao, nome, verbo in (("UPDATE", "alteracao", "alterado"), ("DELETE", "exclusao", "excluído"))],
+]
+
+FILA_IMPRESSAO_STATUS = ("pendente", "enviando", "enviado", "erro", "incerto", "cancelado")
 
 PRODUTOS_HISTORICO_DDL = """CREATE TABLE IF NOT EXISTS produtos_historico (
     id INTEGER PRIMARY KEY,
@@ -94,6 +166,7 @@ MAQUINAS_DDL = """CREATE TABLE IF NOT EXISTS maquinas (
 TABELAS = [
     *PAGAMENTOS_ITENS_DDL,
     *RETORNAVEIS_DDL,
+    *DEVOLUCOES_DDL,
     PRODUTOS_HISTORICO_DDL,
     # ------------------------------------------------------------ infraestrutura
     """CREATE TABLE IF NOT EXISTS config (
@@ -517,7 +590,7 @@ TABELAS = [
         tipo TEXT,
         nome TEXT NOT NULL,
         dados BLOB NOT NULL,
-        status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente','enviado','erro','cancelado')),
+        status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente','enviando','enviado','erro','incerto','cancelado')),
         tentativas INTEGER NOT NULL DEFAULT 0,
         proxima_tentativa TEXT,
         ultimo_erro TEXT,
@@ -666,6 +739,25 @@ def _migracao_historico_produtos() -> list[str]:
     comandos += [sql for sql in TABELAS if sql.startswith("CREATE INDEX") or sql.startswith("CREATE UNIQUE INDEX")]
     return comandos
 
+def _migracao_fila_impressao_v29() -> list[str]:
+    ddl = next(sql for sql in TABELAS if sql.startswith("CREATE TABLE IF NOT EXISTS fila_impressao ("))
+    colunas = ("id, criado_em, destino, tipo, nome, dados, status, tentativas, proxima_tentativa, ultimo_erro, "
+               "enviado_em, venda_id, setor_id")
+    return [
+        "CREATE TEMP TABLE _seq_fila_v29 AS SELECT seq FROM sqlite_sequence WHERE name = 'fila_impressao'",
+        ddl.replace("IF NOT EXISTS fila_impressao (", "_fila_impressao_v29 (", 1),
+        f"INSERT INTO _fila_impressao_v29 ({colunas}) SELECT {colunas} FROM fila_impressao",
+        "DROP TABLE fila_impressao",
+        "ALTER TABLE _fila_impressao_v29 RENAME TO fila_impressao",
+        "INSERT INTO sqlite_sequence(name, seq) SELECT 'fila_impressao', 0 "
+        "WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = 'fila_impressao')",
+        "UPDATE sqlite_sequence SET seq = MAX(seq, COALESCE((SELECT MAX(seq) FROM _seq_fila_v29), 0), "
+        "COALESCE((SELECT MAX(id) FROM fila_impressao), 0)) WHERE name = 'fila_impressao'",
+        "DROP TABLE _seq_fila_v29",
+        next(sql for sql in TABELAS if "ix_fila_status" in sql),
+    ]
+
+
 # Índices que dependem de colunas criadas por migrações: rodam DEPOIS delas (ver BancoDados._criar_esquema),
 # senão um banco antigo falharia ao criar o índice de uma coluna que ainda não existe.
 INDICES_POS_MIGRACAO = [
@@ -715,6 +807,11 @@ _AUDITORIA_CAMPOS = {
     "movimentos_estoque": "id produto_id tipo quantidade qt_apos ref_tipo ref_id criado_em operador_id".split(),
     "retornaveis_movimentos": (
         "id cliente_id produto_id tipo quantidade saldo_apos operador_id criado_em").split(),
+    "devolucoes": ("id uuid venda_id venda_uuid cupom_original turno_id criado_em operador_id autorizado_por "
+                   "completa troca itens_bruto_cent desconto_rateado_cent servico_rateado_cent extras_cent valor_cent "
+                   "reembolso_modo tipo_pagamento_id movimento_caixa_id caderneta_id cliente_id").split(),
+    "devolucoes_itens": ("id devolucao_id item_id produto_id quantidade bruto_cent desconto_cent servico_cent "
+                         "valor_cent retorna_estoque").split(),
 }
 _AUDITORIA_OMITIDOS = {
     "produtos": ("atalho cbarra usa_observacao texto_sugestao para_ser_montado manual compoe "
@@ -732,13 +829,14 @@ _AUDITORIA_OMITIDOS = {
     "planos_contas": ["nome"],
     "subplanos": ["nome"],
     "retornaveis_movimentos": ["motivo"],
+    "devolucoes": ["motivo", "referencia_externa"],
 }
 
 
 def _gatilhos_auditoria() -> list[str]:
     comandos = []
     for tabela, campos in _AUDITORIA_CAMPOS.items():
-        chave = "modulo" if tabela == "acessos" else "uuid" if tabela == "vendas" else "id"
+        chave = "modulo" if tabela == "acessos" else "uuid" if tabela in ("vendas", "devolucoes") else "id"
         def retrato(prefixo):
             pares = ", ".join(f"'{c}', {prefixo}.{c}" for c in campos)
             return f"auditoria_json({pares})"
@@ -776,6 +874,8 @@ def _gatilhos_auditoria() -> list[str]:
             if tabela == "movimentos_estoque":
                 evento = (f"CASE WHEN {prefixo}.tipo IN ('quebra','oxidacao','devolucao') "
                           "THEN 'perda_registrada' ELSE 'estoque_movimentado' END")
+            elif tabela in ("devolucoes", "devolucoes_itens") and operacao == "INSERT":
+                evento = "'devolucao_registrada'" if tabela == "devolucoes" else "'devolucao_item'"
             elif tabela == "retornaveis_movimentos":
                 evento = (f"CASE WHEN {prefixo}.tipo = 'emprestimo' "
                           "THEN 'retornavel_emprestado' ELSE 'retornavel_devolvido' END")
@@ -823,6 +923,11 @@ AUDITORIA = [
 # (ver BancoDados._migrar). Bancos novos já nascem na VERSAO_ESQUEMA e não as executam. Cada passo é um
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 MIGRACOES = {
+    # Fila de impressão: 'enviando' gravado antes do envio e 'incerto' após interrupção (conferir o papel; sem
+    # reenvio cego). O SQLite não altera CHECK: a tabela é refeita com os mesmos dados, ids e sequência.
+    29: _migracao_fila_impressao_v29(),
+    # Devoluções imutáveis de venda fechada; nenhuma venda antiga ganha devolução retroativa.
+    28: DEVOLUCOES_DDL,
     # Quantidades explicitamente vinculadas aos pagamentos; sem inferência retroativa.
     27: PAGAMENTOS_ITENS_DDL,
     # Somente registros explícitos; cascos/trocas antigos não comprovam empréstimos.

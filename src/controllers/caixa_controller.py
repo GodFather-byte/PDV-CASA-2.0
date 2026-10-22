@@ -1138,6 +1138,27 @@ class CaixaController:
             "cliente_id": cliente_id, "venda_id": venda_id, "tipo": "credito", "valor_cent": valor,
             "descricao": "Pagamento / crédito", "criado_em": fmt.agora()})
 
+    # ========================================================== devoluções
+    def devolucoes(self):
+        """Devolução/troca de venda FECHADA (docs/DEVOLUCOES.md). A gravação passa sempre por este controller."""
+        from src.controllers.devolucoes_controller import DevolucoesController
+        return DevolucoesController(self.banco, self.operador_id, caixa=self)
+
+    def situacao_devolucao(self, venda_id: int) -> dict:
+        return self.devolucoes().situacao(venda_id)
+
+    def previa_devolucao(self, venda_id: int, selecao, reembolsar_extras: bool = True) -> dict:
+        return self.devolucoes().previa(venda_id, selecao, reembolsar_extras)
+
+    def devolver(self, venda_id: int, selecao, motivo: str, autorizado_por: int, reembolso_modo: str, uuid: str,
+                 tipo_pagamento_id: int | None = None, referencia_externa: str | None = None, troca: bool = False,
+                 reembolsar_extras: bool = True) -> dict:
+        return self.devolucoes().registrar(venda_id, selecao, motivo, autorizado_por, reembolso_modo, uuid,
+                                           tipo_pagamento_id, referencia_externa, troca, reembolsar_extras)
+
+    def abrir_troca(self, devolucao_id: int) -> int:
+        return self.devolucoes().abrir_troca(devolucao_id)
+
     # ============================================================ cancelar
     def cancelar_venda(self, venda_id: int, motivo: str = "") -> None:
         motivo = (motivo or "").strip()
@@ -1167,6 +1188,9 @@ class CaixaController:
                 self.banco.executar("DELETE FROM pagamentos_venda WHERE venda_id = ? AND (turno_id IS NULL OR turno_id = ?)",
                                     (venda_id, turno["id"]))
             elif v["status"] == "fechada":
+                if self.banco.valor("SELECT 1 FROM devolucoes WHERE venda_id = ? LIMIT 1", (venda_id,)) is not None:
+                    raise ErroNegocio("Este cupom já tem devolução registrada: não pode ser cancelado. "
+                                      "Devolva o saldo restante pela tela de devoluções.")
                 turno = self.turnos.atual()
                 if turno is None or v["turno_id"] != turno["id"]:
                     raise ErroNegocio("Só é possível cancelar cupons do turno atual. Este turno já foi fechado.")

@@ -154,7 +154,7 @@ class TesteFila(BaseTeste):
             self.fila.enfileirar("caixa", "x", b"")
 
     def test_indicador_do_caixa(self):
-        self.assertEqual(self.fila.texto_indicador(), ("Impressora: ok", "ok"))
+        self.assertEqual(self.fila.texto_indicador(), ("Impressora: sem pendências (confira o papel)", "ok"))
         self.novo()
         self.assertEqual(self.fila.texto_indicador()[1], "aviso")
         self.falhar = True

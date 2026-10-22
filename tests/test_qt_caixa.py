@@ -172,8 +172,13 @@ class TestTurnoQt(BaseCaixaQt):
         j.btn_confirmar_turno.click()
         self.assertIsNotNone(self.ctx.turnos.atual())
         j.dialogos.confirmacoes = [True]
-        with patch("src.controllers.utilitario_controller.UtilitarioController.backup_automatico", return_value="ok"):
+        declarados = {self.tipo("Dinheiro"): 10800, self.tipo("Cartão Débito"): 0,
+                      self.tipo("Cartão Crédito"): 0, self.tipo("Pix"): 0}
+        with patch("src.controllers.utilitario_controller.UtilitarioController.backup_automatico", return_value="ok"), \
+                patch("src.ui_qt.fechamento.coletar", return_value={
+                    "informados_por_forma": declarados, "justificativa": ""}) as conferencia:
             j.btn_confirmar_turno.click()
+        conferencia.assert_called_once_with(self.ctx, self.banco.valor("SELECT id FROM turnos"), 10800, parent=j)
         self.assertIsNone(self.ctx.turnos.atual())
         self.assertEqual(self.banco.valor("SELECT valor_final_cent FROM turnos"), 10800)
         self.assertEqual(j.paginas.currentIndex(), PAGINA_ABERTURA)

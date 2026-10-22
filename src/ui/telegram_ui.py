@@ -46,6 +46,8 @@ class JanelaTelegram(tk.Toplevel):
         rodape.pack(side="bottom", fill="x")
         self.lbl_status = ttk.Label(rodape, text="", wraplength=700, justify="left")
         self.lbl_status.pack(anchor="w", pady=(8, 0))
+        self.lbl_agendamento = ttk.Label(rodape, text="", wraplength=700, justify="left")
+        self.lbl_agendamento.pack(anchor="w")
         ttk.Label(rodape, wraplength=700, justify="left", foreground=COR["suave"],
                   text="O PDV precisa estar ligado e com internet para responder; sem internet os avisos esperam na fila. As "
                        "mensagens passam pelos servidores do Telegram: pareie só quem pode ver o faturamento. Escolha os avisos em "
@@ -89,6 +91,15 @@ class JanelaTelegram(tk.Toplevel):
         self.lbl_instrucao = ttk.Label(self.quadro_codigo, text="", wraplength=680, justify="left")
         self.lbl_instrucao.pack(anchor="w")
 
+        agenda = ttk.Frame(corpo)
+        agenda.pack(fill="x", pady=4)
+        self.var_resumo_ativo = tk.BooleanVar(value=self.ctx.banco.cfg_bool("telegram_resumo_ativo", True))
+        ttk.Checkbutton(agenda, text="Resumo diário", variable=self.var_resumo_ativo).pack(side="left")
+        self.var_resumo_hora = tk.StringVar(value=self.ctx.banco.cfg("telegram_resumo_hora", "23:00"))
+        ttk.Entry(agenda, textvariable=self.var_resumo_hora, width=7).pack(side="left", padx=6)
+        ttk.Label(agenda, text="horário local (hh:mm)").pack(side="left")
+        ttk.Button(agenda, text="Salvar resumo", command=self.salvar_resumo).pack(side="left", padx=6)
+
         # Celulares conectados
         p3 = ttk.LabelFrame(corpo, text=" 3. Celulares conectados ", padding=10)
         p3.pack(fill="both", expand=True, pady=4)
@@ -102,6 +113,12 @@ class JanelaTelegram(tk.Toplevel):
         self._atualizar()
 
     # ----------------------------------------------------------- ações
+    def salvar_resumo(self) -> None:
+        ok, _ = tema.tratar(self, self.tg.salvar_agendamento,
+                           self.var_resumo_ativo.get(), self.var_resumo_hora.get())
+        if ok:
+            self._atualizar()
+
     def conectar(self) -> None:
         ok, bot = tema.tratar(self, self.tg.salvar_token, self.var_token.get())
         if ok:
@@ -165,6 +182,7 @@ class JanelaTelegram(tk.Toplevel):
                                  ids=[c["chat_id"] for c in chats])
             self.grade.selecionar(selecionado)
             self.var_ativo.set(tg.ligado())
+            self.lbl_agendamento.configure(text=tg.texto_agendamento())
             erro = tg.ultimo_erro()
             if erro:
                 self.lbl_status.configure(text=f"⚠ {erro}", foreground=COR["perigo"])

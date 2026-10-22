@@ -2,6 +2,7 @@
 troca de turno (fechamento) com sobra ou falta (manual do Caixa)."""
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timedelta
 
@@ -115,6 +116,8 @@ class TurnoController:
         sangria; o valor em si não é mostrado ao operador, para não derrubar a conferência cega do fechamento."""
         b = self.banco
         t = self.obter(turno_id)
+        if t["status"] == "fechado" and t["esperado_cent"] is not None:
+            return t["esperado_cent"]
         na_gaveta = b.valor(
             f"""SELECT COALESCE(SUM(p.valor_cent - p.troco_cent), 0) FROM pagamentos_venda p
                 JOIN vendas v ON v.id = p.venda_id JOIN tipos_pagamento t ON t.id = p.tipo_pagamento_id
@@ -180,6 +183,13 @@ class TurnoController:
         """Todos os números da tela de troca de turno. Valores em centavos."""
         b = self.banco
         t = self.obter(turno_id)
+        if t["status"] == "fechado":
+            evento = b.um(
+                "SELECT depois FROM auditoria_eventos WHERE entidade = 'turnos' AND entidade_id = ? "
+                "AND acao = 'fechamento_conferido' ORDER BY id DESC LIMIT 1", (str(turno_id),))
+            if evento:
+                registrado = json.loads(evento["depois"])["resumo"]
+                return {**registrado, "turno": t}
         fechadas = "turno_id = ? AND status = 'fechada'"
         com_itens = f"{fechadas} AND EXISTS (SELECT 1 FROM itens_venda i WHERE i.venda_id = vendas.id AND i.cancelado = 0)"
 
@@ -248,32 +258,79 @@ class TurnoController:
         r["esperado"] = t["valor_inicial_cent"] + na_gaveta + entradas - saidas
         r["fora_da_gaveta"] = total_recebido - na_gaveta
         r["maquininha"] = self.maquininha(turno_id)
+        from src.controllers.devolucoes_controller import DevolucoesController
+        r["devolucoes"] = DevolucoesController(b).resumo_turno(turno_id)
         r.update(conferencia_turno.conferencia(b, t))      # posições abertas, cancelamentos e transferências do turno
+        if t["status"] == "fechado":
+            r.update(esperado=t["esperado_cent"], valor_final=t["valor_final_cent"], resultado=t["resultado_cent"])
         return r
 
     def posicoes_abertas(self) -> list[dict]:
         """Mesas e comandas com consumo ainda abertas: o caixa avisa ao trocar o turno."""
         return conferencia_turno.posicoes_abertas(self.banco)
 
-    def fechar(self, turno_id: int, operador_id: int, valor_final_cent: int) -> dict:
+    def _exigir_operador_conferencia(self, operador_id: int) -> None:
+        if type(operador_id) is not int:
+            raise ErroNegocio("Informe um operador ativo para conferir e fechar o turno.")
+        linha = self.banco.um("SELECT * FROM operadores WHERE id = ? AND ativo = 1", (operador_id,))
+        if linha is None:
+            raise ErroNegocio("Informe um operador ativo para conferir e fechar o turno.")
+
+    def formas_conferencia(self, turno_id: int, operador_id: int) -> list[dict]:
+        """Formas a contar; não revela valores esperados antes da declaração."""
+        self._exigir_operador_conferencia(operador_id)
+        self._exigir_turno_aberto(turno_id)
+        recebidas = {r["tipo_pagamento_id"] for r in self.banco.todos(
+            "SELECT DISTINCT p.tipo_pagamento_id FROM pagamentos_venda p JOIN vendas v ON v.id = p.venda_id "
+            f"WHERE {RECEBIDO_NO_TURNO}", (turno_id,))}
+        formas = []
+        tipos = self.banco.todos(
+            "SELECT id, tipo, na_gaveta, caixa, permite_troco FROM tipos_pagamento ORDER BY ordem, tipo")
+        dinheiro_id = next((r["id"] for r in tipos if r["na_gaveta"] and r["tipo"].strip().casefold() == "dinheiro"),
+                           next((r["id"] for r in tipos if r["na_gaveta"] and r["permite_troco"]), None))
+        for r in tipos:
+            dinheiro = r["id"] == dinheiro_id
+            if dinheiro or r["id"] in recebidas or (r["caixa"] and not r["na_gaveta"]):
+                formas.append({"tipo_id": r["id"], "tipo": r["tipo"], "na_gaveta": bool(r["na_gaveta"]),
+                               "dinheiro": dinheiro})
+        return formas
+
+    def conferencia_fechamento(self, turno_id: int, operador_id: int, valor_final_cent: int, *,
+                              informados_por_forma: dict[int, int] | None = None) -> dict:
+        """Prévia sem escrita: não fecha nem altera a contagem informada."""
+        formas = self.formas_conferencia(turno_id, operador_id)
+        return conferencia_turno.comparar_fechamento(
+            self.resumo(turno_id), formas, valor_final_cent, informados_por_forma)
+
+    def fechar(self, turno_id: int, operador_id: int, valor_final_cent: int, *,
+               informados_por_forma: dict[int, int] | None = None, justificativa: str = "") -> dict:
         """Troca de turno. O operador declara o que entrega ANTES de ver o esperado
         (o sistema não permite 'acertar' o caixa depois)."""
-        if valor_final_cent < 0:
-            raise ErroNegocio("O valor final não pode ser negativo.")
-        self._exigir_turno_aberto(turno_id)
-        em_andamento = self.banco.valor(
-            "SELECT COUNT(*) FROM vendas WHERE modalidade IN ('balcao','caderneta') AND status = 'aberta' "
-            "AND EXISTS (SELECT 1 FROM itens_venda i WHERE i.venda_id = vendas.id AND i.cancelado = 0)", (), 0)
-        if em_andamento:
-            raise ErroNegocio("Há uma venda em andamento no caixa. Conclua ou cancele antes de trocar o turno.")
         with self.banco.transacao():
+            formas = self.formas_conferencia(turno_id, operador_id)
+            em_andamento = self.banco.valor(
+                "SELECT COUNT(*) FROM vendas WHERE modalidade IN ('balcao','caderneta') AND status = 'aberta' "
+                "AND EXISTS (SELECT 1 FROM itens_venda i WHERE i.venda_id = vendas.id AND i.cancelado = 0)", (), 0)
+            if em_andamento:
+                raise ErroNegocio("Há uma venda em andamento no caixa. Conclua ou cancele antes de trocar o turno.")
             res = self.resumo(turno_id)
+            conferencia = conferencia_turno.comparar_fechamento(res, formas, valor_final_cent, informados_por_forma)
+            if not isinstance(justificativa, str):
+                raise ErroNegocio("Informe a justificativa da diferença em texto.")
+            motivo = justificativa.strip()
+            if conferencia["tem_diferenca"] and not motivo:
+                raise ErroNegocio("Há diferença entre esperado e informado. Informe a justificativa obrigatória.")
+            conferencia["justificativa"] = motivo
+            res["conferencia_fechamento"] = conferencia
             resultado = valor_final_cent - res["esperado"]
+            res.update(valor_final=valor_final_cent, resultado=resultado)
             self.banco.atualizar("turnos", turno_id, {
                 "fechado_em": fmt.agora(), "valor_final_cent": valor_final_cent,
                 "cupom_final": res["cupom_final"], "esperado_cent": res["esperado"],
                 "resultado_cent": resultado, "fechado_por": operador_id, "status": "fechado"})
             self.banco.log("turno_fechado", f"turno {res['turno']['numero']} resultado {fmt.fmt_brl(resultado)}", operador_id)
+            self.banco.registrar_auditoria("turnos", str(turno_id), "fechamento_conferido",
+                                          depois={"resumo": res}, operador_id=operador_id)
             if licenca.exigida(self.banco):
                 licenca.registrar_uso(self.banco)
         res = self.resumo(turno_id)

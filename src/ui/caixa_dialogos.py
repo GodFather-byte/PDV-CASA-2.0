@@ -84,7 +84,11 @@ def trocar_turno(master, ctx) -> bool:
     if not tema.confirmar(master, f"Confirma {fmt.fmt_brl(valor)} como valor final?\n"
                                   "Depois de confirmar o turno é encerrado e não pode ser acertado." + aviso, "Troca de turno"):
         return False
-    ok, res = tema.tratar(master, ctx.turnos.fechar, turno["id"], ctx.operador_id, valor)
+    from src.ui.fechamento_ui import coletar
+    ok, conferencia = tema.tratar(master, coletar, master, ctx, turno["id"], valor)
+    if not ok or conferencia is None:
+        return False
+    ok, res = tema.tratar(master, ctx.turnos.fechar, turno["id"], ctx.operador_id, valor, **conferencia)
     if ok:
         if ctx.utilitarios.backup_automatico("troca de turno") is None:
             tema.aviso(master, "O turno foi fechado, mas o BACKUP automático falhou.\n"
