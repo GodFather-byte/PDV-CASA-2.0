@@ -51,6 +51,9 @@ class AcessoController:
             self._registrar_falha(chave)
             raise ErroNegocio("Senha Incorreta")
         self._limpar_falhas(chave)
+        if seguranca.precisa_atualizar(linha["senha"]):      # hash antigo: regrava com o número atual de iterações
+            self.banco.executar("UPDATE operadores SET senha = ? WHERE id = ?", (seguranca.gerar_hash(senha), linha["id"]))
+            linha = self.banco.um("SELECT * FROM operadores WHERE id = ?", (linha["id"],))
         return self._operador(linha)
 
     # ------------------------------------------------------- senha fraca

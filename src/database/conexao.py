@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import json
+import re
 import sqlite3
 import sys
 import unicodedata
@@ -13,6 +14,16 @@ from uuid import uuid4
 
 from src.core import formatacao as fmt
 from src.database import esquema, sementes
+
+
+_IDENTIFICADOR = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _identificadores(*nomes: str) -> None:
+    """Tabela e colunas entram no SQL por texto (só os valores usam `?`): recusa qualquer nome fora de [A-Za-z0-9_]."""
+    for nome in nomes:
+        if not _IDENTIFICADOR.fullmatch(nome):
+            raise ValueError(f"identificador SQL inválido: {nome!r}")
 
 
 def normalizar(texto) -> str | None:
@@ -217,6 +228,7 @@ class BancoDados:
         return linha[0] if linha is not None and linha[0] is not None else padrao
 
     def inserir(self, tabela: str, dados: dict) -> int:
+        _identificadores(tabela, *dados)
         colunas = ", ".join(dados)
         marcas = ", ".join("?" for _ in dados)
         cur = self.conexao.execute(f"INSERT INTO {tabela} ({colunas}) VALUES ({marcas})", tuple(dados.values()))
@@ -225,6 +237,7 @@ class BancoDados:
     def atualizar(self, tabela: str, id_: int, dados: dict) -> None:
         if not dados:
             return
+        _identificadores(tabela, *dados)
         sets = ", ".join(f"{c} = ?" for c in dados)
         self.conexao.execute(f"UPDATE {tabela} SET {sets} WHERE id = ?", (*dados.values(), id_))
 

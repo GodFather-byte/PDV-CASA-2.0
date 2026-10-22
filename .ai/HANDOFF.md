@@ -11,6 +11,15 @@
   seleção/preview de logotipo, proteção dos campos secretos e botão de pendências.
   Handoff reescrito com o estado integrado, sem descartar mudanças remotas.
 
+## Endurecimento pós-auditoria (branch claude/confident-planck-lq4tgm)
+
+- PBKDF2 de senha de operador com 600 mil iterações; hashes antigos (60 mil) seguem válidos e
+  são regravados no login correto (`seguranca.precisa_atualizar`, `AcessoController.autenticar`).
+- `BancoDados.inserir/atualizar` recusam tabela/coluna fora de `[A-Za-z0-9_]`.
+- `servico_pct` vai direto a `Decimal` (sem `float`). Zip duplicado removido da raiz.
+- Testes: `tests/test_seguranca_auditoria.py` (inclui vetores RFC 8032 do Ed25519).
+- Pendências sugeridas: lint/tipos/cobertura no CI; piloto em loja real (impressora, balança, queda de energia).
+
 ## Entregue e preservado
 
 - Telegram do dono consulta somente sua loja: licença, suporte, renovação e ajuda.
