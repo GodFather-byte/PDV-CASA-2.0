@@ -1,7 +1,6 @@
 """Indicador de licença: validade e falhas visíveis, sem depender de consulta HTTP."""
 from __future__ import annotations
 
-import unittest
 from datetime import date
 from types import SimpleNamespace
 from unittest import mock
@@ -9,13 +8,14 @@ from unittest import mock
 from src.core.licenca import Estado
 from src.ui.app import App
 from src.ui.menu_widgets import PAL
+from tests.base import BaseTeste
 
 
-class TestePainelLicenca(unittest.TestCase):
+class TestePainelLicenca(BaseTeste):
     def painel(self, estado, configuracao=None):
-        cfg = configuracao or {}
-        painel = SimpleNamespace(banco=mock.Mock(), aviso_licenca=mock.Mock())
-        painel.banco.cfg.side_effect = lambda chave: cfg.get(chave, "")
+        for chave, valor in (configuracao or {}).items():
+            self.banco.cfg_set(chave, valor)
+        painel = SimpleNamespace(banco=self.banco, aviso_licenca=mock.Mock())
         with mock.patch("src.core.licenca.estado", return_value=estado):
             App.mostrar_situacao_licenca(painel)
         return painel.aviso_licenca
@@ -44,3 +44,26 @@ class TestePainelLicenca(unittest.TestCase):
         texto, cor = aviso.definir.call_args.args
         self.assertIn("Renove sua licença.", texto)
         self.assertEqual(cor, PAL["vermelho"])
+
+    def test_ponte_ativa_mostra_contato_proprio_em_vez_da_nuvem_legada(self):
+        aviso = self.painel(Estado("ok", date(2026, 11, 16), 31), {
+            "central_ponte_ativa": "S",
+            "central_ponte_sucesso_em": "2026-10-17 15:00:00",
+            "licenca_nuvem_sucesso_em": "2026-10-16 15:00:00",
+            "licenca_nuvem_erro": "Falha antiga da nuvem.",
+        })
+        texto, cor = aviso.definir.call_args.args
+        self.assertIn("17/10/2026", texto)
+        self.assertNotIn("16/10/2026", texto)
+        self.assertNotIn("Falha antiga", texto)
+        self.assertEqual(cor, PAL["verde"])
+
+    def test_erro_da_ponte_ativa_orienta_suporte_sem_expor_detalhes(self):
+        aviso = self.painel(Estado("ok", date(2026, 11, 16), 31), {
+            "central_ponte_ativa": "S",
+            "central_ponte_erro": "Detalhe técnico da conexão.",
+        })
+        texto, cor = aviso.definir.call_args.args
+        self.assertIn("Ponte: consulte Configurações ou Suporte no Telegram.", texto)
+        self.assertNotIn("Detalhe técnico", texto)
+        self.assertEqual(cor, PAL["ambar"])

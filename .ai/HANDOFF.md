@@ -1,115 +1,65 @@
 # HANDOFF
 
-## Trabalho concluído
+## Estado do trabalho
 
-Mesclagem da main remota com a central local autorizada pelo titular: preservar os
-dois trabalhos, validar e publicar sem force. Configurações Tk/Qt combinam preview
-de logotipo, campos secretos e pendências das integrações. Validação desta mesclagem
-será registrada abaixo antes do commit.
+- Titular autorizou resolver a mesclagem, validar, commitar na `main` e publicar no
+  GitHub sem force. Trabalho local da central em `9951e3c`, integrado com a main
+  remota `730fd76` (PR #14). Publicação será confirmada após o push.
+- PDV **1.7.0**, licenciador **1.2.0**, esquema SQLite **25**.
+- Conflitos resolvidos preservando os dois trabalhos: configurações Tk/Qt mantêm
+  seleção/preview de logotipo, proteção dos campos secretos e botão de pendências.
+  Handoff reescrito com o estado integrado, sem descartar mudanças remotas.
 
-**Implementação da central Telegram e ponte de licenças (21/10/2026).**
-PDV **1.7.0**; licenciador **1.2.0**. Código implementado, ainda sem deploy/homologação real.
+## Entregue e preservado
 
-### Escopo confirmado pelo titular
+- Telegram do dono consulta somente sua loja: licença, suporte, renovação e ajuda.
+  Renovar solicita; não cobra nem emite. Avisos locais persistentes sem credenciais.
+- Central do fornecedor em PC exclusivo, outro bot e banco separado:
+  `licenciador/central.py`, `central_bot.py`, `central_cli.py`, `central_tela.py`.
+  Entrada: `python -m licenciador.app --central`. Administradores autorizados
+  localmente; emissão Ed25519 com confirmação temporária e recuperação idempotente.
+- API Render/Neon continua como ponte HTTPS, sem faturamento na central.
+  `PDV_CENTRAL_TOKEN` exclusivo e token revogável por caixa; assinatura no fornecedor.
+  Cliente em `src/sync/ponte.py`, opt-in, iniciado antes do login Tk/Qt.
+  Publicação não equivale a aplicação: confirmação é vinculada ao caixa.
+- Meses de calendário sobre o maior entre hoje e validade atual. Permanente não
+  renova automaticamente. Licença mantém aviso de 7 dias, carência de 5 e proteção
+  de turno. Restauração da central exige reconciliar com a ponte antes de emitir.
+- Main remota preservada: melhorias de adega/estoque, importação NF-e, identidade
+  visual, migrações e CI. NF-e Tk reconsulta operador/permissão antes da prévia e
+  gravação, preservando preço manual sem depender do teclado.
+- Guia operacional: `docs/CENTRAL_TELEGRAM.md`; melhorias remotas:
+  `docs/ADEGA_MELHORIAS.md`. Não substituir a nuvem por mensagens de bots.
 
-- Dois painéis: dono consulta apenas a própria loja; fornecedor gerencia lojas, licenças e
-  estado técnico, **sem faturamento**, em **outro PC exclusivo**.
-- API atual Render/Neon preservada como ponte mínima; assinatura no PC do fornecedor.
-- **Cobrança expressamente excluída desta entrega**, assim como as oito melhorias operacionais.
-  Não ativar Asaas, cobrar clientes, contratar serviços ou remover a nuvem.
-- Emissão mensal autorizada manualmente: meses de calendário a partir do maior entre hoje e
-  validade atual. Permanente não é estendida automaticamente. Para cobrança futura, o titular
-  aprovou aviso/suspensão de novas renovações em estorno, sem revogação automática do código.
+## Validação e pacotes
 
-### Entregue
+- Antes da mesclagem: suíte local com 2333 casos (10 ignorados), depois 192
+  direcionados; autotestes dos binários PDV Tk/Qt e licenciador passaram.
+- Primeira rodada da mesclagem: 108 casos, uma falha de importação por Pillow
+  ausente. Instalado Pillow 12.3 conforme `requirements.txt`; sem alteração do manifesto.
+- Suíte completa pós-mesclagem em execução; registrar resultado antes do commit.
+- Os ZIPs `dist\WillPDV-1.7.0-portatil.zip` e
+  `dist\WillLicencas-1.2.0-central-portatil.zip` são **anteriores à mesclagem**:
+  não contêm as melhorias remotas agora integradas. Não anunciar novos binários.
+  Sem Setup novo (Inno Setup indisponível).
+- Nenhum deploy, bot real, chave real, cobrança ou banco de produção usado nesta etapa.
 
-- Telegram do dono: Licença, Suporte, Renovar e Ajuda; estado local sem códigos/credenciais;
-  avisos persistentes de vencimento e renovação efetivamente aplicada, sem repetição diária.
-  Renovar somente solicita; não cobra nem emite.
-- Central em `licenciador/central.py`, `central_bot.py`, `central_cli.py`, `central_tela.py`.
-  Botão **Central Telegram** no licenciador; `python -m licenciador.app --central`.
-  Banco separado em `%LOCALAPPDATA%\WillPDV-Central\central.db`; administradores cadastrados
-  localmente, consultas paginadas, cadastro de lojas, aprovação/revogação de caixas,
-  importação validada do histórico, backup e restauração para arquivo novo.
-- Emissão Ed25519 local com confirmação vinculada ao administrador, prazo de 5 minutos e
-  identificação idempotente persistente. Publicação não equivale a aplicação.
-  Histórico importado só é publicado após autorização local explícita.
-  Restauração bloqueia novas emissões até reconciliar cadastros/licenças na ponte.
-- `backend/ponte.py`: credencial exclusiva `PDV_CENTRAL_TOKEN` (>=32 caracteres e diferente
-  das demais), token individual revogável por caixa, contato técnico e pedidos idempotentes.
-  A primeira publicação migra a loja: a rota legada entrega código publicado, sem assinatura
-  remota/fallback. Lojas não migradas preservam o comportamento anterior.
-- `src/sync/ponte.py`: cliente opt-in, HTTPS salvo loopback, aplicação pelo validador existente,
-  confirmação por caixa e dois ciclos de pedido (`pendente`, `enviada`, `atendida`).
-  Tk/Qt configuram UUID e credencial mascarada; gerar outro ID limpa token e exige reaprovação.
-  Serviço próprio iniciado antes do login em Tk/Qt: não depende de `--sync`, não faz rede
-  desligado. O processo separado existente continua compatível.
-- Nenhuma mudança no formato de licença, nos 7 dias de aviso, 5 dias de carência, proteção
-  do turno ou estoque por caixa. Novas preferências via semeadura. A main remota acrescenta
-  migrações até a versão 24, preservadas nesta mesclagem.
-- Guia de instalação, privacidade, recuperação e rotas em `docs/CENTRAL_TELEGRAM.md`;
-  guias de Telegram, nuvem, licenciador e mapa atualizados.
+## Pendências e homologação
 
-### Validação
-
-- Suíte completa: **2333 casos, sem falhas, 10 ignorados** (Windows/Python 3.15).
-  Depois dos ajustes finais de serviço antes do login e recuperação, rodada dirigida
-  de **192 testes passou**, incluindo Tk/Qt, cliente, central, backend real via TestClient,
-  solicitação, assinatura, aplicação e isolamento de dados.
-- Teste integrado usa central e cliente PDV reais com API real por TestClient, bancos e
-  chave temporários; valida ausência de envio de vendas/faturamento.
-- Pylance sem erros de sintaxe/diagnósticos nos arquivos centrais verificados;
-  `git diff --check` passou.
-- Executáveis finais compilados com PyInstaller em ambiente temporário isolado, sem instalar
-  dependências globalmente. **Autotestes dos binários PDV Tk, PDV Qt e licenciador passaram.**
-- ZIPs portáteis criados e integridade verificada:
-  - `dist\WillPDV-1.7.0-portatil.zip`;
-  - `dist\WillLicencas-1.2.0-central-portatil.zip` (somente fornecedor).
-- **Não há instalador Setup novo:** Inno Setup indisponível. Builds em diretórios existentes
-  do OneDrive sofreram bloqueios; os ZIPs acima foram feitos dos builds finais isolados
-  validados, não de saídas incompletas anteriores.
-- Nenhum deploy, bot real, chave real, emissão real, cobrança ou dado de produção foi usado.
-### Trabalho remoto preservado (CI e importação)
-
-- Corrigida a falha do run `39661204613`: a importação NF-e Tk chamava `_exigir_acesso`, que não existia. A validação agora segue o Qt e reconsulta operador ativo e permissão antes da prévia e da gravação.
-- A confirmação da NF-e preserva o preço manual do campo sem depender do evento de teclado.
-- `ModuleNotFoundError: xyz` no Telegram e `RuntimeError: falha de teste` eram simulações intencionais dos autotestes, não dependências ausentes. Esses testes agora capturam e conferem a saída sem poluir o log do CI; falhas reais continuam sendo reportadas.
-- O workflow `testes.yml` também roda em PRs contra `main`, com as mesmas dependências e matriz existentes.
-
-### Validação informada pelo trabalho remoto
-
-- Passaram 39 testes direcionados de importação Tk/Qt, NF-e e autotestes.
-- Suíte completa em Linux/Python 3.12 com Xvfb e dependências Tk/Qt: 2.291 testes, 15 pulados, sem falhas.
-- `python -m src.app --autoteste`: 113 módulos carregados e telas abertas, incluindo Telegram.
-- CodeQL (Python e Actions): zero alertas. Revisão cruzada do diff: sem bugs encontrados. Verificação de segredos: sem achados.
-
-## Próximo passo: homologar antes de produção
-
-1. Publicar backend atualizado e configurar segredo exclusivo da central, sem chave privada
-   na ponte para novas lojas. Não desativar Render/Neon.
-2. Configurar bot administrativo separado no PC exclusivo, autorizar ID localmente e importar
-   a chave já existente. Nunca gerar outro par de chaves para esta migração.
-3. Loja/caixa de teste, UUID aprovado, código assinado publicado, token configurado no PDV,
-   solicitação pelo dono e aplicação confirmada na central.
-4. Validar interrupções/reinício e backup/restauração no segundo computador.
-5. Testar **cópia do banco via `PDV_DB`**. Extrair ZIP em pasta nova NÃO isola o banco padrão
-   do executável (`%LOCALAPPDATA%\WILL-PDV`). Não abrir duas interfaces sobre o mesmo banco.
-6. Só depois piloto opt-in. Não remover chave de servidor legado sem migrar suas lojas,
-   não eliminar histórico hospedado sem autorização e não prometer disponibilidade com PC desligado.
-
-## Pendências preservadas
-
-- Oito melhorias operacionais pausadas: cancelamento parcial não pago, alertas gerais,
-  reposição 30/7 por caixa, etiquetas, retornáveis sem cobrança, divisão por item/valor,
-  promoções/faixas sem acúmulo e evolução do painel. Push ficou fora.
-- iFood/NFC-e SP continuam **somente base interna desativada**, sem integração externa,
-  homologação fiscal, certificado ou provedor contratado; cupom NÃO FISCAL.
-- Publicação da versão na nuvem/release/instalador é pendente, sem tag ou push nesta entrega.
-- Nuvem: validar caixa/celular reais; configurar deploy hook se necessário.
-  **Trocar `PDV_API_TOKEN` e senha do Neon** que apareceram em conversa anterior.
-- Painel web existente continua independente e opcional; retenção/histórico antigos preservados.
-- Alinhamento Qt fora da adega (pré-pago, rodízio, setores, divisão, balança, acertos e tipografia)
-  e evoluções específicas da adega seguem pendentes; ver documentação por assunto.
-- Cobrança automática só em nova etapa: provedor, custos, conciliação, idempotência e homologação.
-  O Asaas preexistente não foi ativado nem alterado para cobrar nesta entrega.
-- Acompanhar a matriz Windows/Linux e Python 3.10/3.12 no PR #14. O run `39664316577` foi acionado pelo novo gatilho de PR.
+1. Conferir CI após o push; publicação de código não comprova deploy/homologação.
+2. Recompilar pacotes integrados antes de instalar esta versão; usar cópia do banco
+   via `PDV_DB`. Extrair ZIP em outra pasta não isola `%LOCALAPPDATA%\WILL-PDV`.
+3. Publicar backend e configurar segredo exclusivo; preservar Render/Neon.
+   Configurar bot administrativo no PC exclusivo, autorizar ID localmente e importar
+   a chave existente, sem gerar outro par para a migração.
+4. Homologar loja/caixa de teste: aprovação, publicação, pedido e aplicação confirmada;
+   testar reinício, interrupção, backup/restauração. Piloto opt-in só depois disso.
+5. Não remover chave/rota legada antes de migrar as lojas; não eliminar histórico.
+   PC desligado não oferece disponibilidade do bot local.
+- Cobrança automática excluída; Asaas não ativado. Estorno futuro só avisa/suspende
+  novas renovações, sem revogar automaticamente código emitido.
+- As oito melhorias operacionais inicialmente propostas não foram implementadas
+  nesta linha local; a main remota já traz melhorias próprias, preservadas no merge.
+- iFood/NFC-e SP seguem base interna desativada, sem homologação fiscal.
+- Nuvem: validar caixa/celular reais; trocar `PDV_API_TOKEN` e senha do Neon
+  anteriormente expostos. Painel web opcional e histórico existentes preservados.
