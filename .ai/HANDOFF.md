@@ -2,6 +2,46 @@
 
 ## Último trabalho
 
+**Planejamento de Telegram e central do fornecedor — prioridade atual (21/10/2026).**
+
+- O titular pediu oito melhorias para todos os perfis, Tk/Qt e uso de agentes. Depois mudou a prioridade:
+  **planejar a substituição da nuvem e a gestão de licenças pelo Telegram antes de implementar novas funções**.
+  As oito melhorias estão pausadas; não considerar esta conversa autorização para removê-las ou para desativar a nuvem atual.
+- Dois painéis distintos: o dono consulta apenas sua loja; o fornecedor administra lojas, licenças e estado técnico,
+  **sem faturamento das lojas**. Central em **outro computador exclusivo do fornecedor**.
+- O titular quer cobrança e renovação automáticas, mas autorizou **planejar a integração de pagamento separadamente**.
+  Não foi escolhido provedor nem autorizado ativar Asaas, contratar serviços ou emitir licenças reais.
+- **Conexão aprovada na continuação:** reaproveitar a API atual como ponte mínima na primeira etapa, com cadastro central
+  e assinatura no PC exclusivo. Central consulta a ponte por HTTPS de saída, sem porta/túnel de entrada no PC.
+  Plano de entregas, privacidade, contratos propostos e homologação em `docs/CENTRAL_TELEGRAM.md`; nada implementado.
+- Arquitetura proposta, ainda não implementada: manter validação Ed25519 offline e chave privada exclusivamente no
+  licenciador/central do fornecedor; Telegram como interface, nunca como autoridade de pagamento ou assinatura.
+  Bots não recebem mensagens de outros bots: não existe comunicação automática loja-central só por juntar os bots atuais.
+  Uma central automática precisa de canal autenticado próprio entre PDVs e computador central (por exemplo API HTTPS,
+  com conectividade a definir). Hospedar no PC reduz dependência de Render/Neon, mas exige disponibilidade, proteção,
+  backup e manutenção; Telegram sozinho não substitui banco, servidor e confirmação de pagamento.
+- Migração deve ser opt-in, preservar licenças e dados existentes e não interromper venda por indisponibilidade da rede.
+  Preservar avisos de 7 dias, carência de 5 dias e proteção do turno aberto; nenhuma mudança de regra autorizada.
+- Agentes de reposição/etiquetas e retornáveis receberam ordem de parar. Os dois rascunhos novos de controllers,
+  sem testes/integração, foram removidos; a conferência do git mostrou apenas este handoff alterado.
+  Nenhuma nova funcionalidade deve ser anunciada como pronta.
+- Escopo previamente aprovado das oito melhorias: cancelamento parcial somente de quantidade não paga, com motivo
+  e permissões; divisão por quantidade/valor sem perder centavos; reposição por caixa (30 dias, cobertura 7 dias e
+  estoque mínimo, com aviso de histórico insuficiente); etiquetas; saldo de retornáveis sem cobrança automática;
+  promoções sem acúmulo automático, aplicando preço mais vantajoso; central de alertas e Telegram, **sem push nesta etapa**.
+
+### Próximas decisões do titular
+
+- Implementar a ponte mínima sobre a API atual em etapas, sem prometer central automática exclusivamente pela Bot API
+  nem expor tokens administrativos nos PDVs. Não desativar Render/Neon.
+- Detalhar cadastro/vínculo de loja e caixa, autorização do administrador, revogação e recuperação de acesso.
+- Planejar cobrança: provedor, custos, conciliação confiável, idempotência e homologação; comprovante enviado no chat
+  não comprova pagamento. Bloqueio remoto imediato e mudança da data-base de renovação não foram aprovados.
+- Implementar e testar primeiro consultas/alertas, depois central/entrega de licenças e só depois cobrança automática.
+  Validar em cópia do banco antes de instalar em produção. Nenhuma mudança funcional foi validada nesta etapa de planejamento.
+
+## Base anterior preservada
+
 **Preparação local de iFood e NFC-e SP**, autorizada pelo titular depois de esclarecer os pré-requisitos:
 
 - Escopo: módulos opcionais por loja para adega, bar, restaurante, churrascaria e comércio; boate fora desta etapa.

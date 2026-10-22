@@ -77,6 +77,7 @@ implantação da adega), `IMPORTAR_PRODUTOS.md`, `PILOTO.md`,
 `COBRANCA_LICENCAS_ASAAS.md` (cobrança e renovação mensal), `PAINEL_DONO.md` (painel do dono no celular),
 `COORDENACAO.md` (histórico de pedidos entre agentes).
 `BACKUP_EXTERNO.md` (pasta sincronizada, senha e recuperação), `AUDITORIA.md`,
+`CENTRAL_TELEGRAM.md` (plano aprovado de conexão: dois painéis Telegram e central local com API como ponte; não implementado),
 `INTERFACE_QT.md` (prévia e homologação), `TERCEIROS_QT.md` (licenças das dependências).
 
 ## Dados
