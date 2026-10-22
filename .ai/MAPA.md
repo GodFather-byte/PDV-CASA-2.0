@@ -51,6 +51,10 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Turno, numeração de cupom, fechamento | `turno_controller.py`, `conferencia_turno.py` |
 | Comissão das garotas | `comissao_controller.py`, `relatorio_comissoes.py` |
 | Estoque (baixa, estorno, composição) | `estoque_controller.py` |
+| Reposição por giro de 30 dias, cobertura de 7 dias e etiquetas | `estoque_controller.py`, `etiqueta_controller.py`; telas de estoque e etiquetas Tk/Qt |
+| Retornáveis por cliente (sem caução automática) | `retornaveis_controller.py`; `ui/retornaveis_ui.py`, `ui_qt/retornaveis.py` |
+| Promoções e simulação de faixas sem acumular | `promocoes_controller.py`, regras em `produto_controller.py`; `ui/promocoes_ui.py`, `ui_qt/promocoes.py` |
+| Alertas operacionais e painel do dono | `alertas_controller.py`, `telegram_controller.py`; `ui/alertas_ui.py`, `ui_qt/alertas.py` |
 | Produtos e importação por planilha | `produto_controller.py`, `importacao_produtos.py` |
 | Cadastros e entidades | `cadastro_controller.py`, `entidades.py` |
 | Operadores e níveis de acesso | `acesso_controller.py` |
@@ -64,6 +68,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Adega: balcão Tk/Qt, cadastro pelo leitor, "6*", fardo/caixa, natural/gelada, atacado por temperatura, cascos e agrupamento | `caixa_controller.py` (`adicionar_item`, `_reprecificar_balcao`), `entidades.py` (seção Adega e `_validar_adega`), `produto_controller.py` (`cadastrar_rapido`, `criar_embalagem`, `embalagem`), `estoque_controller.py` (fardo vira unidades); UI `caixa_ui.py`, `adega_dialogos.py`, `cadastro_rapido_ui.py`, `ui_qt/caixa.py`, `ui_qt/cadastros.py`; guia em `docs/ESTOQUE.md` |
 | Pré-pago (recarga, crédito, devolução da sobra) | `caixa_controller.py` (`recarregar`, `saldo_prepago`, `_conferir_credito`, `liquidar`/`fechar`) · UI `caixa_ui.recarga` |
 | Cozinha/Bar (setores de impressão, status de preparo por item) | `preparo_controller.py`, `impressao_controller.py` (`setor_do_subgrupo`) · UI `cozinha_ui.py` |
+| Cozinha/Bar em PySide6 | `ui_qt/cozinha.py`; setores em Mais cadastros; navegação por busca em `ui_qt/app.py` |
 | Impressão e fila | `impressao_controller.py`, `fila_impressao_controller.py`, `impressao_assistente.py` |
 | Relatórios | `relatorio_controller.py`, `relatorio_vendas.py`, `relatorio_gestao.py` |
 | Telegram do dono | `telegram_controller.py`, `telegram_textos.py`, `notificacoes.py` |

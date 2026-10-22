@@ -5,7 +5,44 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 25
+VERSAO_ESQUEMA = 27
+
+PAGAMENTOS_ITENS_DDL = [
+    """CREATE TABLE IF NOT EXISTS pagamentos_itens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pagamento_id INTEGER NOT NULL REFERENCES pagamentos_venda(id) ON DELETE CASCADE,
+        item_id INTEGER NOT NULL REFERENCES itens_venda(id) ON DELETE CASCADE,
+        quantidade REAL NOT NULL CHECK (quantidade > 0),
+        valor_cent INTEGER NOT NULL CHECK (valor_cent >= 0),
+        criado_em TEXT NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_pagamentos_itens_item ON pagamentos_itens(item_id)",
+    "CREATE INDEX IF NOT EXISTS ix_pagamentos_itens_pagamento ON pagamentos_itens(pagamento_id)",
+]
+
+RETORNAVEIS_DDL = [
+    """CREATE TABLE IF NOT EXISTS retornaveis_movimentos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cliente_id INTEGER NOT NULL REFERENCES clientes(id),
+        produto_id INTEGER NOT NULL REFERENCES produtos_historico(id),
+        tipo TEXT NOT NULL CHECK (tipo IN ('emprestimo', 'devolucao')),
+        quantidade REAL NOT NULL CHECK (quantidade > 0 AND quantidade <= 1.7976931348623157e308
+                                       AND quantidade = ROUND(quantidade, 4)),
+        saldo_apos REAL NOT NULL CHECK (saldo_apos >= 0 AND saldo_apos <= 1.7976931348623157e308
+                                       AND saldo_apos = ROUND(saldo_apos, 4)),
+        motivo TEXT NOT NULL CHECK (length(trim(motivo)) > 0),
+        operador_id INTEGER NOT NULL REFERENCES operadores(id),
+        criado_em TEXT NOT NULL
+    )""",
+    """CREATE INDEX IF NOT EXISTS ix_retornaveis_cliente_produto
+        ON retornaveis_movimentos(cliente_id, produto_id, id)""",
+    """CREATE TRIGGER IF NOT EXISTS retornaveis_sem_alteracao
+        BEFORE UPDATE ON retornaveis_movimentos BEGIN
+        SELECT RAISE(ABORT, 'Histórico de retornáveis não pode ser alterado.'); END""",
+    """CREATE TRIGGER IF NOT EXISTS retornaveis_sem_exclusao
+        BEFORE DELETE ON retornaveis_movimentos BEGIN
+        SELECT RAISE(ABORT, 'Histórico de retornáveis não pode ser excluído.'); END""",
+]
 
 PRODUTOS_HISTORICO_DDL = """CREATE TABLE IF NOT EXISTS produtos_historico (
     id INTEGER PRIMARY KEY,
@@ -55,6 +92,8 @@ MAQUINAS_DDL = """CREATE TABLE IF NOT EXISTS maquinas (
 )"""
 
 TABELAS = [
+    *PAGAMENTOS_ITENS_DDL,
+    *RETORNAVEIS_DDL,
     PRODUTOS_HISTORICO_DDL,
     # ------------------------------------------------------------ infraestrutura
     """CREATE TABLE IF NOT EXISTS config (
@@ -674,6 +713,8 @@ _AUDITORIA_CAMPOS = {
     "itens_estoque": ("id lancamento_id produto_id quantidade preco_unit_cent desconto_cent valor_cent "
                       "qt_anterior diferenca aplicado").split(),
     "movimentos_estoque": "id produto_id tipo quantidade qt_apos ref_tipo ref_id criado_em operador_id".split(),
+    "retornaveis_movimentos": (
+        "id cliente_id produto_id tipo quantidade saldo_apos operador_id criado_em").split(),
 }
 _AUDITORIA_OMITIDOS = {
     "produtos": ("atalho cbarra usa_observacao texto_sugestao para_ser_montado manual compoe "
@@ -690,6 +731,7 @@ _AUDITORIA_OMITIDOS = {
     "tipos_pagamento": "vias tipo_tef aciona_tef cheque_tef mais_info".split(),
     "planos_contas": ["nome"],
     "subplanos": ["nome"],
+    "retornaveis_movimentos": ["motivo"],
 }
 
 
@@ -734,6 +776,9 @@ def _gatilhos_auditoria() -> list[str]:
             if tabela == "movimentos_estoque":
                 evento = (f"CASE WHEN {prefixo}.tipo IN ('quebra','oxidacao','devolucao') "
                           "THEN 'perda_registrada' ELSE 'estoque_movimentado' END")
+            elif tabela == "retornaveis_movimentos":
+                evento = (f"CASE WHEN {prefixo}.tipo = 'emprestimo' "
+                          "THEN 'retornavel_emprestado' ELSE 'retornavel_devolvido' END")
             condicao = "auditoria_ativa() = 1"
             if operacao == "UPDATE":
                 condicao += f" AND ({alterados})"
@@ -745,6 +790,8 @@ def _gatilhos_auditoria() -> list[str]:
                              " AND OLD.qt_atual IS NOT NEW.qt_atual")
             ator = (f"COALESCE(auditoria_operador(), {prefixo}.operador_id)"
                     if tabela == "movimentos_estoque" else "auditoria_operador()")
+            if tabela == "retornaveis_movimentos":
+                ator = f"{prefixo}.operador_id"
             comandos.append(
                 f"CREATE TRIGGER IF NOT EXISTS auditoria_{tabela}_{operacao.lower()} "
                 f"AFTER {operacao} ON {tabela} WHEN {condicao} BEGIN "
@@ -776,6 +823,10 @@ AUDITORIA = [
 # (ver BancoDados._migrar). Bancos novos já nascem na VERSAO_ESQUEMA e não as executam. Cada passo é um
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 MIGRACOES = {
+    # Quantidades explicitamente vinculadas aos pagamentos; sem inferência retroativa.
+    27: PAGAMENTOS_ITENS_DDL,
+    # Somente registros explícitos; cascos/trocas antigos não comprovam empréstimos.
+    26: RETORNAVEIS_DDL,
     # v25: tabelas de histórico de importação NF-e criadas por TABELAS.
     25: [],
     # Sem preenchimento retroativo: o cadastro atual não prova a regra de uma venda antiga.

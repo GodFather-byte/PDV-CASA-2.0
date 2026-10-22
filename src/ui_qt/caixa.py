@@ -36,6 +36,7 @@ from src.core.posicao import exemplos, parece_posicao, rotulo_do_campo
 from src.core.posicao import nome as nome_posicao
 from src.hardware.impressora_termica import ErroImpressao
 from src.hardware.dispositivos import DispositivoIndisponivel
+from src.controllers.caixa_controller import LIMITE_PARTES_DIVISAO
 from src.ui.caixa_pagamento import LIMITE_TROCO_CENT, ler_valor_pagamento
 from src.ui_qt import comissao
 
@@ -187,13 +188,22 @@ class JanelaCaixa(QMainWindow):
         self.modo_comissao = False                 # a linha de entrada está lançando comissão (garota nº + valor), não produto
         self._cancelamento_autorizado = None
         self.comissao_marcada: list[dict] = []     # as comissões da comanda da garota que está na tela
+        self._divisao: tuple[int, list[int], int] | None = None    # (venda, partes, parte atual) do "Dividir conta"
         self.janela_comissoes = None
+        self.janela_fila = None
+        self.leitor = self._leitor_da_maquina()     # modo leitor óptico (F3): item sem fração entra com quantidade 1
         self.setWindowTitle(f"Caixa - {self._nome_loja()}")
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         self.setStyleSheet(ESTILO)
         self.resize(1240, 760)
         self._montar()
         self.recarregar_tudo()
+
+    def _leitor_da_maquina(self) -> bool:
+        try:
+            return bool(self.ctx.config.maquina()["leitor_optico"])
+        except Exception:  # noqa: BLE001 - configuração da máquina ausente: começa sem o modo leitor
+            return False
 
     def _nome_loja(self) -> str:
         try:
@@ -216,6 +226,8 @@ class JanelaCaixa(QMainWindow):
             self.logo_loja.setPixmap(imagem)
             cabecalho.addWidget(self.logo_loja)
         cabecalho.addWidget(self.lbl_cabecalho, 1)
+        self.lbl_leitor = _rotulo("LEITOR ÓPTICO ATIVO" if self.leitor else "", "mudo")
+        cabecalho.addWidget(self.lbl_leitor)
         geral.addLayout(cabecalho)
         self.paginas = QStackedWidget()
         self.paginas.addWidget(self._pagina_sem_operador())
@@ -232,7 +244,9 @@ class JanelaCaixa(QMainWindow):
         esc.activated.connect(self.cancelar_modo_comissao)
         for tecla, acao in (("F4", self.foco_posicao), ("F5", self.caderneta), ("F6", self.entrega),
                             ("F8", self.pre_conta), ("F9", self.repique),
-                            ("F10", self.transferir_mesa), ("F2", self.balanca), ("F11", self.gaveta)):
+                            ("F10", self.transferir_mesa), ("F2", self.balanca), ("F11", self.gaveta),
+                            ("Ctrl+R", self.rodizio), ("Ctrl+Shift+P", self.recarga),
+                            ("F3", self.alternar_leitor), ("F7", self.sangria)):
             atalho = QShortcut(QKeySequence(tecla), self)
             atalho.activated.connect(acao)
 
@@ -373,17 +387,24 @@ class JanelaCaixa(QMainWindow):
                 ("pre_conta", "Pré-conta / emitir entrega (F8)", self.pre_conta),
                 ("caderneta", "Caderneta (F5)", self.caderneta), ("entrega", "Entrega (F6)", self.entrega),
                 ("troco_entrega", "Liberar troco da entrega", self.liberar_troco),
-                ("sangria", "Sangria / suprimento", self.sangria), ("repique", "Repique", self.repique),
+                ("sangria", "Sangria / suprimento (F7)", self.sangria), ("repique", "Repique", self.repique),
                 ("gaveta", "Abrir gaveta", self.gaveta), ("balanca", "Capturar peso", self.balanca),
                 ("reimpressao", "Reimprimir cupom", self.reimprimir),
+                ("nomear", "Nomear comanda", self.nomear_comanda),
+                ("leitor", "Leitor óptico liga/desliga (F3)", self.alternar_leitor),
+                ("leitura_x", "Leitura X (parcial do turno - gerencial)", self.leitura_x),
+                ("reducao_z", "Redução Z (fechamento do dia - gerencial)", self.reducao_z),
+                ("fila", "Fila de impressão (ver, reenviar, cancelar)", self.abrir_fila),
                 ("consultar_comanda", "Consultar comanda", self.consultar_comanda),
+                ("rodizio", "Rodízio da mesa (Ctrl+R)", self.rodizio),
+                ("recarga", "Recarga pré-pago (Ctrl+Shift+P)", self.recarga),
                 ("modo_cancelar", "Cancelar linhas (Enter; Esc retorna)", self.iniciar_cancelamento)):
             self.acoes[chave] = menu.addAction(titulo)
             self.acoes[chave].triggered.connect(acao)
         self.btn_operacoes.setMenu(menu)
         if not self.com_mesas:
             for chave in ("servico", "transferir_mesa", "transferir_varias", "transferir_item",
-                          "repique", "consultar_comanda"):
+                          "repique", "consultar_comanda", "rodizio", "recarga", "nomear"):
                 self.acoes[chave].setVisible(False)
             self.acoes["pre_conta"].setText("Emitir pedido de entrega (F8)")
         c_cen.addWidget(self.btn_operacoes)
@@ -418,6 +439,16 @@ class JanelaCaixa(QMainWindow):
         self.btn_remover_pag = QPushButton("Remover pagamento")
         self.btn_remover_pag.clicked.connect(self.remover_pagamento)
         c_dir.addWidget(self.btn_remover_pag)
+        divisao = QHBoxLayout()
+        self.btn_dividir = QPushButton("Dividir conta")
+        self.btn_dividir.setToolTip("Divide o que falta em partes iguais (centavos exatos)")
+        self.btn_dividir.clicked.connect(self.dividir_conta)
+        divisao.addWidget(self.btn_dividir)
+        self.btn_pagar_itens = QPushButton("Pagar itens")
+        self.btn_pagar_itens.setToolTip("Recebe só os itens escolhidos, vinculando o pagamento a eles")
+        self.btn_pagar_itens.clicked.connect(self.pagar_itens)
+        divisao.addWidget(self.btn_pagar_itens)
+        c_dir.addLayout(divisao)
         self.lbl_msg_pag = _rotulo("", "mudo")
         c_dir.addWidget(self.lbl_msg_pag)
         c_dir.addStretch(1)
@@ -640,6 +671,8 @@ class JanelaCaixa(QMainWindow):
                                    f" · {cliente['nome'] if cliente else 'Cliente indisponível'} · {v['status']}")
         else:
             situacao = "Conta enviada" if v["status"] == "conta_enviada" else "Aberta"
+            if v["prepago"]:
+                situacao += "  ·  " + ("Pré-pago" if caixa.saldo_prepago(v["id"])["saldo"] > 0 else "Sem crédito")
             self.lbl_venda.setText(f"{caixa.rotular_posicao(v['comanda'], v['posicao'])}  ·  "
                                    f"{nome_posicao(v['comanda'], v['posicao'])}  ·  {situacao}")
         self.lbl_total.setText(fmt.fmt_num(total))
@@ -659,6 +692,11 @@ class JanelaCaixa(QMainWindow):
             self.lbl_falta_rotulo.setText("Troco (R$)")
             self.lbl_troco.setText("0,00")
             self.lbl_msg_pag.setText("")
+        if v and v["prepago"]:                          # pré-pago: o que importa é o saldo do crédito carregado
+            s = caixa.saldo_prepago(v["id"])
+            self.lbl_falta_rotulo.setText("Saldo do crédito (R$)")
+            self.lbl_troco.setText(fmt.fmt_num(s["saldo"]))
+            self.lbl_msg_pag.setText(f"Crédito: {fmt.fmt_brl(s['credito'])}\nSaldo: {fmt.fmt_brl(s['saldo'])}")
         if v and v["modalidade"] == "caderneta":
             cliente = self.ctx.caderneta.obter(v["cliente_id"])
             self.lbl_msg_pag.setText(f"Saldo do cliente: {fmt.fmt_brl(cliente['saldo_cent'])}\n"
@@ -680,14 +718,22 @@ class JanelaCaixa(QMainWindow):
         caderneta = bool(v and v["modalidade"] == "caderneta")
         self.btn_receber.setEnabled(not caderneta if tem_itens else caderneta)
         self.btn_remover_pag.setEnabled(bool(pags))
-        self.btn_fechar_venda.setEnabled(tem_itens or caderneta)
+        self.btn_fechar_venda.setEnabled(tem_itens or caderneta or bool(v and v["prepago"]))
         self._sugerir_valor()
         self.carregar_mesas()
+        self._modulos_visiveis()
+
+    def _modulos_visiveis(self) -> None:
+        """Rodízio e pré-pago só aparecem quando a casa liga o módulo (Configurações > Módulos), como no caixa clássico."""
+        for chave, config in (("rodizio", "usar_rodizio"), ("recarga", "usar_prepago")):
+            self.acoes[chave].setVisible(self.com_mesas and self.ctx.banco.cfg_bool(config, False))
 
     def _detalhe_total(self, v: dict | None) -> str:
         if not v:
             return ""
         partes = []
+        if v.get("rodizio"):
+            partes.append(f"Rodízio: {v['pessoas']} pessoa(s)")
         if v["desconto_cent"]:
             partes.append(f"Desconto: - {fmt.fmt_brl(v['desconto_cent'])}")
         if v["servico_cent"]:
@@ -747,6 +793,11 @@ class JanelaCaixa(QMainWindow):
             self.ent_valor.setText(fmt.fmt_num(falta) if falta else "")
             return
         falta = max(v["total_cent"] - pago, 0)
+        if self._divisao and self._divisao[0] == v["id"] and falta:
+            _, partes, atual = self._divisao
+            self.ent_valor.setText(fmt.fmt_num(partes[atual]))
+            self.avisar(f"Dividir conta: parte {atual + 1} de {len(partes)} — {fmt.fmt_brl(partes[atual])}", VERDE)
+            return
         forma = self.cmb_forma.currentData()
         if falta and forma is not None:
             falta += self.ctx.caixa.acrescimo_da_forma(v["id"], int(forma))
@@ -1214,6 +1265,107 @@ class JanelaCaixa(QMainWindow):
         self.ent_qtd.setFocus()
         self.ent_qtd.selectAll()
 
+    def rodizio(self) -> None:
+        """Liga (ou desliga, com 0 pessoas) o rodízio da mesa/comanda na tela, pelo CaixaController."""
+        if not self.com_mesas or not self._pode_operar() or not self.ctx.banco.cfg_bool("usar_rodizio", False):
+            return
+        v = self.venda()
+        if not v or v["modalidade"] != "mesa":
+            self.dialogos.aviso("Rodízio", "Chame uma mesa ou comanda antes de ligar o rodízio.")
+            return
+        ligado = bool(v.get("rodizio"))
+        minimo = 0 if ligado else 1
+        def numero(texto: str) -> int:
+            if not texto.strip().isdigit() or not minimo <= int(texto) <= 999:
+                raise ValueError(f"Informe de {minimo} a 999 pessoas.")
+            return int(texto)
+        rotulo = "Quantas pessoas estão no rodízio? (0 desliga o rodízio)" if ligado else \
+            "Quantas pessoas estão no rodízio desta mesa?"
+        pessoas = self._pedir_convertido("Rodízio", rotulo, numero, str(v["pessoas"] or 1))
+        if pessoas is None:
+            return
+        if pessoas == 0:
+            ok, _ = self._executar(self.ctx.caixa.desativar_rodizio, v["id"])
+        else:
+            ok, _ = self._executar(self.ctx.caixa.ativar_rodizio, v["id"], pessoas)
+        self.recarregar()
+        if ok:
+            self.avisar("Rodízio desligado." if pessoas == 0 else f"Rodízio: {pessoas} pessoa(s).")
+
+    def recarga(self) -> None:
+        """Pré-pago: carrega crédito na comanda (ou mesa) da tela, pelo CaixaController; a sobra volta ao cliente no F12."""
+        if not self.com_mesas or not self._pode_operar() or not self.ctx.banco.cfg_bool("usar_prepago", False):
+            return
+        v = self.venda()
+        if not v or v["modalidade"] != "mesa":
+            self.dialogos.aviso("Recarga", "Chame a comanda do cliente antes de carregar o crédito.")
+            return
+        onde = nome_posicao(v["comanda"], v["posicao"]).lower()
+        valor = self._pedir_convertido("Recarga", f"Crédito a carregar na {onde} (R$):", ler_dinheiro)
+        if valor is None:
+            return
+        forma = self.dialogos.escolher("Recarga", f"Como o cliente pagou os {fmt.fmt_brl(valor)}?",
+                                       [(int(f["id"]), f["tipo"]) for f in self.ctx.caixa.formas_pagamento()])
+        if forma is None:
+            return
+        ok, _ = self._executar(self.ctx.caixa.recarregar, v["id"], forma, valor)
+        self.recarregar()
+        if ok:
+            saldo = self.ctx.caixa.saldo_prepago(v["id"])["saldo"]
+            self.avisar(f"Crédito de {fmt.fmt_brl(valor)} carregado na {onde}. Saldo: {fmt.fmt_brl(saldo)}.")
+
+    def alternar_leitor(self) -> None:
+        """F3: liga/desliga o modo leitor óptico desta tela (como no caixa clássico)."""
+        self.leitor = not self.leitor
+        self.lbl_leitor.setText("LEITOR ÓPTICO ATIVO" if self.leitor else "")
+        self.avisar("Leitor óptico " + ("ativado: cada item entra com quantidade 1." if self.leitor else "desativado."))
+
+    def nomear_comanda(self) -> None:
+        """Dá nome à comanda ou mesa da tela (aparece no painel), pelo CaixaController.definir_apelido."""
+        if not self.com_mesas or not self._pode_operar():
+            return
+        v = self.venda()
+        if not v or v["modalidade"] != "mesa":
+            self.dialogos.aviso("Nome da comanda", "Escolha uma comanda ou mesa para dar nome a ela.")
+            return
+        texto = self.dialogos.pedir_texto(
+            "Nome da comanda", f"Nome de {nome_posicao(v['comanda'], v['posicao']).lower()} "
+            "(ex.: Carlos, Aniversário). Vazio tira o nome:", padrao=v["apelido"] or "")
+        if texto is None:
+            return
+        ok, _ = self._executar(self.ctx.caixa.definir_apelido, v["id"], texto)
+        self.recarregar()
+        if ok:
+            self.avisar("Nome da comanda gravado." if texto.strip() else "Nome da comanda removido.")
+
+    def leitura_x(self) -> None:
+        """Parcial gerencial do turno aberto (não fiscal), como em Impressora > Leitura X do caixa clássico."""
+        turno = self._turno() if self._pode_operar() else None
+        if turno is None:
+            return
+        self._documento_operacao("Leitura X", lambda: self.ctx.impressao.leitura_x(turno["id"]), "leitura_x", "fechamento")
+
+    def reducao_z(self) -> None:
+        """Fechamento gerencial do dia (não fiscal), como em Impressora > Redução Z do caixa clássico."""
+        if not self._pode_operar():
+            return
+        self._documento_operacao("Redução Z", self.ctx.impressao.reducao_z, "reducao_z", "relatorio")
+
+    def abrir_fila(self) -> None:
+        """Fila de impressão (ver, reenviar, cancelar); a própria janela confere a permissão do operador."""
+        from src.core.erros import ErroPermissao
+        from src.ui_qt.fila_impressao import JanelaFilaImpressao
+        if self.janela_fila is not None and _vivo(self.janela_fila) and self.janela_fila.isVisible():
+            self.janela_fila.raise_()
+            self.janela_fila.activateWindow()
+            return
+        try:
+            self.janela_fila = JanelaFilaImpressao(self.ctx, self)
+        except ErroPermissao as e:
+            self.dialogos.aviso("Fila de impressão", str(e))
+            return
+        self.janela_fila.show()
+
     def reimprimir(self) -> None:
         if not self._pode_operar():
             return
@@ -1389,6 +1541,8 @@ class JanelaCaixa(QMainWindow):
             self.ent_qtd.setFocus()
             self.ent_qtd.selectAll()
             return
+        if self.leitor and not quantidade_codigo and not p["aceita_decimal"] and p["partes"] <= 1:
+            qtd = 1                                   # modo leitor: cada leitura é uma unidade (6*código continua valendo)
         partes = None
         if p["partes"] > 1 and (p["composto"] or self.ctx.banco.valor(
                 "SELECT COUNT(*) FROM produtos WHERE montagem = 1 AND ativo = 1")):
@@ -1456,7 +1610,8 @@ class JanelaCaixa(QMainWindow):
         """Manda os itens para a cozinha/bar. Falha da impressora remota não bloqueia a venda."""
         try:
             for sub, texto in self.ctx.impressao.pedido_remoto(self.venda_id, item_ids).items():
-                self.ctx.impressao.enviar_remoto(texto, f"pedido_{sub}")
+                setor = self.ctx.impressao.setor_do_subgrupo(sub)
+                self.ctx.impressao.enviar_remoto(texto, f"pedido_{sub}", setor=setor)
         except ErroImpressao as e:
             self.avisar(f"Impressora da cozinha/bar indisponível: {e}", VERMELHO)
 
@@ -1496,13 +1651,49 @@ class JanelaCaixa(QMainWindow):
             return
         if not self.dialogos.confirmar("Cancela item", f"Cancelar o item '{nome}'?", padrao_sim=False):
             return
-        motivo = self._pedir_motivo("Cancela item", f"Motivo do cancelamento de '{nome}':", "")
+        ok, info = self._executar(self.ctx.caixa.info_cancelamento, item_id)
+        if not ok:
+            self.recarregar()
+            return
+        qtd = self._pedir_qtd_cancelar(nome, info)
+        if qtd is None:
+            return
+        parcial = qtd < info["quantidade"]
+        if parcial:
+            motivo = self._pedir_motivo_obrigatorio("Cancela item", f"Motivo do cancelamento parcial de '{nome}' (obrigatório):")
+        else:
+            motivo = self._pedir_motivo("Cancela item", f"Motivo do cancelamento de '{nome}':", "")
         if motivo is None:
             return
-        ok, _ = self._executar(self.ctx.caixa.cancelar_item, item_id, motivo)
+        ok, _ = self._executar(self.ctx.caixa.cancelar_item, item_id, motivo, qtd if parcial else None)
         self.recarregar()
         if ok:
-            self.avisar("Item cancelado.", AMBAR)
+            self.avisar(f"Cancelado {_fmt_qtd(qtd)} de '{nome}'." if parcial else "Item cancelado.", AMBAR)
+
+    def _pedir_qtd_cancelar(self, nome: str, info: dict) -> float | None:
+        """Quanto cancelar: só pergunta com mais de uma unidade ou produto fracionado; sugere a parte ainda não paga."""
+        if not info["pergunta_qtd"]:
+            return info["quantidade"]
+        def converter(texto: str) -> float:
+            q = fmt.validar_qtd(fmt.para_qtd(texto))
+            if q <= 0 or q > info["quantidade"]:
+                raise ValueError(f"Informe de 0 a {_fmt_qtd(info['quantidade'])}.")
+            if not info["aceita_decimal"] and q != int(q):
+                raise ValueError("Este produto não aceita quantidade fracionada.")
+            return q
+        pago = f"\nJá pago por item: {_fmt_qtd(info['qtd_paga'])}." if info["qtd_paga"] else ""
+        return self._pedir_convertido("Cancela item", f"Quantidade a cancelar de '{nome}' (lançado "
+                                      f"{_fmt_qtd(info['quantidade'])}):{pago}", converter,
+                                      _fmt_qtd(info["qtd_livre"] if info["qtd_paga"] else info["quantidade"]))
+
+    def _pedir_motivo_obrigatorio(self, titulo: str, rotulo: str) -> str | None:
+        while True:
+            texto = self.dialogos.pedir_texto(titulo, rotulo)
+            if texto is None:
+                return None
+            if texto.strip():
+                return texto.strip()
+            self.dialogos.aviso(titulo, "Informe o motivo.")
 
     def cancelar_venda(self) -> None:
         if not self._pronto() or self._ocupado:
@@ -1661,6 +1852,9 @@ class JanelaCaixa(QMainWindow):
             self._executar(self.ctx.caixa.remover_pagamento, pid)
             self.recarregar()
             return
+        if self._divisao and self._divisao[0] == v["id"]:
+            _, partes, atual = self._divisao
+            self._divisao = None if atual + 1 >= len(partes) or liq.get("falta", 0) <= 0 else (v["id"], partes, atual + 1)
         self.recarregar()
         if liq.get("falta", 0) == 0:
             self.avisar(f"Pagamento completo. Troco {fmt.fmt_brl(liq.get('troco', 0))}. Feche a venda (F12).")
@@ -1676,9 +1870,114 @@ class JanelaCaixa(QMainWindow):
             self.avisar("Não há pagamento lançado para remover.", AMBAR)
             return
         ok, _ = self._executar(self.ctx.caixa.remover_pagamento, int(item.data(Qt.UserRole)))
+        if ok:
+            self._divisao = None           # removeu no meio da divisão: recomeça do zero se precisar
         self.recarregar()
         if ok:
             self.avisar("Pagamento removido.", AMBAR)
+
+    def _venda_para_dividir(self, titulo: str) -> dict | None:
+        v = self.venda()
+        if v is None or not self.ctx.caixa.itens(v["id"]):
+            self.dialogos.aviso(titulo, "Lance ao menos um item antes de dividir a conta.")
+            return None
+        if v["modalidade"] == "caderneta":
+            self.dialogos.aviso(titulo, "Venda em caderneta não recebe pagamento: o valor fica na conta do cliente.")
+            return None
+        return v
+
+    def dividir_conta(self) -> None:
+        """Divisão por valor: o que falta em N partes iguais (a diferença de centavos vai para as primeiras). Cada
+        Receber lança a parte da vez; a sugestão volta ao normal ao terminar ou ao remover um pagamento."""
+        if not self._pode_operar():
+            return
+        v = self._venda_para_dividir("Dividir conta")
+        if v is None:
+            return
+        def numero(texto: str) -> int:
+            if not texto.strip().isdigit() or not 2 <= int(texto) <= LIMITE_PARTES_DIVISAO:
+                raise ValueError(f"Digite um número de 2 a {LIMITE_PARTES_DIVISAO}.")
+            return int(texto)
+        n = self._pedir_convertido("Dividir conta", "Dividir o restante em quantas partes?", numero, "2")
+        if n is None:
+            return
+        ok, partes = self._executar(self.ctx.caixa.dividir_restante, v["id"], n)
+        if not ok:
+            return
+        self._divisao = (v["id"], partes, 0)
+        self.recarregar()
+        self.ent_valor.setFocus()
+        self.ent_valor.selectAll()
+
+    def pagar_itens(self) -> None:
+        """Divisão por item: escolhe os itens (e quanto de cada) e recebe exatamente o valor deles na forma escolhida,
+        vinculando o pagamento aos itens (não se paga o mesmo item duas vezes; remover o pagamento libera os itens)."""
+        if not self._pode_operar():
+            return
+        v = self._venda_para_dividir("Pagar itens")
+        if v is None:
+            return
+        forma = self.cmb_forma.currentData()
+        if forma is None:
+            self.dialogos.aviso("Pagar itens", "Escolha a forma de pagamento.")
+            return
+        ok, livres = self._executar(self.ctx.caixa.itens_para_divisao, v["id"])
+        if not ok:
+            return
+        livres = [d for d in livres if d["qtd_livre"] > 0 and d["valor_livre_cent"] > 0]
+        if not livres:
+            self.dialogos.aviso("Pagar itens", "Não há itens a pagar: todos já foram pagos por item ou não têm valor próprio.")
+            return
+        escolhidos: dict[int, float] = {}
+        while True:
+            opcoes = [("ok", f"Concluir ({len(escolhidos)} item(ns) escolhido(s))")] if escolhidos else []
+            for d in livres:
+                resta = fmt.arred_qtd(d["qtd_livre"] - escolhidos.get(d["item_id"], 0))
+                if resta > 0:
+                    opcoes.append((d["item_id"], f"{d['nome']}  -  a pagar: {_fmt_qtd(resta)} "
+                                                 f"({fmt.fmt_brl(d['valor_livre_cent'])})  #{d['item_id']}"))
+            if len(opcoes) == (1 if escolhidos else 0):
+                break
+            op = self.dialogos.escolher("Pagar itens", "Escolha o item:", opcoes)
+            if op is None:
+                return
+            if op == "ok":
+                break
+            d = next(x for x in livres if x["item_id"] == op)
+            resta = fmt.arred_qtd(d["qtd_livre"] - escolhidos.get(op, 0))
+            if resta == 1 and not escolhidos.get(op):
+                q = 1.0
+            else:
+                def converter(texto: str, resta=resta) -> float:
+                    q = fmt.validar_qtd(fmt.para_qtd(texto))
+                    if q <= 0 or q > resta:
+                        raise ValueError(f"Informe de 0 a {_fmt_qtd(resta)}.")
+                    return q
+                q = self._pedir_convertido("Pagar itens", f"Quantidade de '{d['nome']}' a pagar:", converter,
+                                           _fmt_qtd(resta))
+                if q is None:
+                    continue
+            escolhidos[op] = fmt.arred_qtd(escolhidos.get(op, 0) + q)
+        selecao = list(escolhidos.items())
+        ok, previa = self._executar(self.ctx.caixa.previa_pagamento_itens, v["id"], selecao)
+        if not ok:
+            return
+        acrescimo = self.ctx.caixa.acrescimo_da_forma(v["id"], int(forma))
+        valor = previa["valor_cent"] + acrescimo
+        texto = "\n".join(f"{_fmt_qtd(ln['quantidade'])} x {ln['nome']}: {fmt.fmt_brl(ln['valor_cent'])}"
+                          for ln in previa["itens"])
+        if acrescimo:
+            texto += f"\nTaxa da forma: {fmt.fmt_brl(acrescimo)}"
+        if not self.dialogos.confirmar("Pagar itens", f"{texto}\n\nReceber {fmt.fmt_brl(valor)} em "
+                                                      f"{self.cmb_forma.currentText()}?"):
+            return
+        ok, _ = self._executar(self.ctx.caixa.pagar_itens, v["id"], int(forma), selecao, valor_esperado_cent=valor)
+        self._divisao = None
+        self.recarregar()
+        if ok:
+            falta = self.ctx.caixa.liquidar(v["id"])["falta"]
+            self.avisar(f"Itens pagos: {fmt.fmt_brl(valor)}." + (" Feche a venda (F12)." if falta <= 0 else
+                                                                  f" Falta {fmt.fmt_brl(falta)}."))
     # ========================================================= fechamento da venda
     def fechar_venda(self) -> None:
         if self._fechando_venda or self._ocupado or not self._pronto():   # duas teclas F12 seguidas não gravam duas vezes
@@ -1692,7 +1991,7 @@ class JanelaCaixa(QMainWindow):
     def _fechar_venda(self) -> None:
         v = self.venda()
         itens = self.ctx.caixa.itens(v["id"]) if v else []
-        if v is None or (not itens and v["modalidade"] != "caderneta"):
+        if v is None or (not itens and v["modalidade"] != "caderneta" and not v["prepago"]):
             so_comissao = v is not None and self._a_pagar_na_comanda()
             if so_comissao and self._comissao_na_linha():
                 self.pagar_comissao(v["posicao"])     # comanda da garota só com comissão: F12 paga a ela
@@ -1723,6 +2022,14 @@ class JanelaCaixa(QMainWindow):
                 pessoas = self._pedir_pessoas("Mesa")
                 if pessoas is None:
                     return
+        if v["prepago"]:
+            ok, liq = self._executar(self.ctx.caixa.liquidar, v["id"])
+            if not ok:
+                return
+            if liq["devolucao"] and not self.dialogos.confirmar(
+                    "Pré-pago", f"Sobra do crédito pré-pago: devolva {fmt.fmt_brl(liq['troco'] + liq['devolucao'])} "
+                                "em dinheiro ao cliente.\nFechar a comanda?"):
+                return
         credito = None
         if v["modalidade"] == "caderneta":
             if itens:

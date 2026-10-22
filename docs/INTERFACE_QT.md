@@ -51,6 +51,22 @@ sincronização contínua pelo painel Qt.
   alíquotas usam o formulário genérico Qt e o `CadastroController`; a lista só
   oferece entidades habilitadas e autorizadas. Composição continua exigindo sua
   tela especializada Qt.
+- Setores de impressão usam o mesmo cadastro genérico Qt: nome, conexão, pasta,
+  endereço, ordem e ativo; o subgrupo permite vincular o setor. O recurso depende
+  de `usar_cozinha_bar` e de `cad_setores_impressao`. Salvar um setor não imprime,
+  instala driver ou confirma disponibilidade do destino.
+- Cadastros oferecem pré-visualização/impressão textual e exportação CSV da
+  pesquisa atual, sem incluir campos de senha. Produtos também oferecem tabela
+  de preços e acesso às observações; clientes geram o arquivo de mala direta
+  com os mesmos campos e separador do Tk, no destino escolhido explicitamente.
+  Salvar/imprimir revalida a sessão e a permissão, inclusive após a confirmação.
+- Cadastros também oferecem filtros pelos campos de relacionamento definidos nos
+  metadados e “Somente ativos” quando aplicável, combinados à pesquisa textual.
+  “Ordenar” alterna a ordem padrão da entidade e a ordem de cadastramento (`id`),
+  preservando a seleção quando o registro continua visível. Visualização e CSV
+  respeitam esses filtros e a ordem; cancelar o diálogo não altera a consulta.
+  Aplicar filtros revalida o acesso após o diálogo. A mala direta continua
+  exportando todos os clientes por nome, como no Tk.
 - Composição/ficha técnica: busca de produto, consulta da composição e inclusão/
   exclusão de insumos pelas APIs de produto existentes, com acesso `cad_composicao`.
   Quantidades usam a unidade cadastrada do insumo; não há conversão nem alteração
@@ -112,6 +128,15 @@ sincronização contínua pelo painel Qt.
   cancelamento e limpeza de enviados/cancelados com confirmação e acesso
   `util_fila_impressao`. Página de teste requer confirmação. A interface não
   processa a fila em background e status de envio não comprova saída física.
+- Painel da Cozinha/Bar (`src.ui_qt.cozinha.JanelaCozinha(ctx, parent=None)`):
+  acompanha a fila real de `PreparoController`, filtra por setor ativo, mostra
+  posição, produto, quantidade, observação, minutos e situação. Iniciar preparo,
+  marcar pronto e avançar usam os mesmos estados do Tk. Atualiza a cada dois
+  segundos na thread principal; timer para ao ocultar/fechar. Cada consulta e
+  alteração revalida operador ativo, `util_cozinha` e módulo habilitado;
+  `exigir_acesso()` público também protege a reabertura pelo menu.
+  Preparo não dispara impressão: pedidos continuam pelo fluxo de venda e a
+  consulta/reenvio fica na Fila de impressão, sem duplicar pedidos no painel.
 - Caixa aberto por `JanelaCaixa(ctx, parent)` em janela Qt não bloqueante,
   com referência conservada pelo menu. Seu escopo operacional é incremental;
   consulte os avisos da própria tela durante a homologação.
@@ -268,6 +293,11 @@ gaveta indisponível, captura/manual de peso, segunda via, consulta com comissã
 modo cancelar e recusa das operações sem turno/durante gravação.
 `test_qt_contas` cobre os fluxos financeiros e `test_qt_app` cobre a integração
 da janela ao menu, janela única e revalidação do acesso.
+`test_qt_cozinha` cobre filtro por setor, transições, auditoria de operador,
+seleção obsoleta, cancelamento, revogação e encerramento do timer.
+`test_qt_cadastros_extras` cobre setores/vínculo de subgrupo, CSV filtrado,
+tabela sem envio automático, mala direta, cancelamento e revalidação após
+diálogos de destino/exclusão. Todos usam banco em memória e saídas simuladas.
 Configurações completas cobrem máscaras de token, preservação de campos não
 alterados, rollback de parâmetros inválidos e aparência clara/escura.
 Homologue também teclado, escala de tela, leitores, impressoras e os fluxos

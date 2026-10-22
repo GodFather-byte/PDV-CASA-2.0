@@ -1,0 +1,103 @@
+"""Novos painéis entram nos dois menus sem contornar a sessão."""
+import os
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from unittest.mock import patch
+
+from tests.test_qt_app import BaseQt
+from tests.test_ui import BaseUI
+
+
+class TesteMenusMelhoriasQt(BaseQt):
+    def principal(self):
+        from src.ui_qt.app import JanelaPrincipal
+        app = self.app()
+        self.ctx = app.ctx
+        self.admin()
+        janela = self.janela(JanelaPrincipal(app))
+        app.principal = janela
+        return janela
+
+    def test_busca_modulos_ignora_acentos_sem_alterar_permissoes(self):
+        janela = self.principal()
+        estados = {chave: botao.isEnabled() for chave, botao in janela.botoes.items()}
+        janela.busca_modulos.setText("promocoes")
+        self.assertFalse(janela.botoes["promocoes"].isHidden())
+        self.assertTrue(janela.botoes["estoque"].isHidden())
+        janela.busca_modulos.clear()
+        self.assertTrue(all(not botao.isHidden() for botao in janela.botoes.values()))
+        self.assertEqual(estados, {chave: botao.isEnabled() for chave, botao in janela.botoes.items()})
+
+    def test_novos_paineis_reutilizados_e_fechados_com_sessao(self):
+        janela = self.principal()
+        for nome in ("retornaveis", "promocoes", "alertas"):
+            abrir = getattr(janela, "abrir_" + nome)
+            painel = abrir()
+            self.assertIsNotNone(painel, janela.mensagem.text())
+            self.assertIs(painel, abrir())
+            self.assertIs(painel, janela.janelas[nome])
+        self.assertTrue(janela.fechar_filhos())
+
+    def test_reabrir_paineis_revalida_operador_inativo(self):
+        janela = self.principal()
+        for nome in ("retornaveis", "promocoes", "alertas"):
+            self.assertIsNotNone(getattr(janela, "abrir_" + nome)())
+        self.banco.executar("UPDATE operadores SET ativo = 0 WHERE id = ?", (self.ctx.operador_id,))
+        for nome in ("retornaveis", "promocoes", "alertas"):
+            self.assertIsNone(getattr(janela, "abrir_" + nome)())
+            self.assertTrue(janela.mensagem.text())
+
+    def test_recursos_gerais_disponiveis_em_todos_os_perfis(self):
+        from src.controllers.perfil_controller import PERFIS
+        janela = self.principal()
+        for perfil in PERFIS:
+            with self.subTest(perfil=perfil):
+                self.ctx.perfil.aplicar(perfil)
+                janela.atualizar()
+                for nome in ("retornaveis", "promocoes", "alertas"):
+                    self.assertTrue(janela.botoes[nome].isEnabled())
+                    self.assertIsNotNone(getattr(janela, "abrir_" + nome)())
+
+    def test_cozinha_e_setores_respeitam_modulo_opcional(self):
+        janela = self.principal()
+        self.assertFalse(janela.botoes["cozinha"].isEnabled())
+        self.assertNotIn("setores_impressao", dict(janela._cadastros_disponiveis()))
+        self.banco.cfg_set("usar_cozinha_bar", "S")
+        janela.atualizar()
+        self.assertTrue(janela.botoes["cozinha"].isEnabled())
+        self.assertIn("setores_impressao", dict(janela._cadastros_disponiveis()))
+        cozinha = janela.abrir_cozinha()
+        self.assertIsNotNone(cozinha, janela.mensagem.text())
+        self.assertIs(cozinha, janela.abrir_cozinha())
+        self.banco.cfg_set("usar_cozinha_bar", "N")
+        self.assertIsNone(janela.abrir_cozinha())
+
+
+class TesteMenusMelhoriasTk(BaseUI):
+    def principal(self):
+        from src.ui.app import App
+        app = object.__new__(App)
+        app.root, app.ctx, app.banco = self.root, self.ctx, self.banco
+        app.janelas = {}
+        return app
+
+    def test_novos_paineis_abrem_pelas_acoes_do_menu(self):
+        app = self.principal()
+        for nome in ("retornaveis", "promocoes", "alertas"):
+            with self.subTest(painel=nome):
+                painel = getattr(app, "abrir_" + nome)()
+                self.assertIsNotNone(painel)
+                self.assertIs(painel, getattr(app, "abrir_" + nome)())
+                painel.destroy()
+
+    def test_reabertura_revalida_operador_inativo(self):
+        from src.ui import tema
+        app = self.principal()
+        paineis = [getattr(app, "abrir_" + nome)()
+                   for nome in ("retornaveis", "promocoes", "alertas")]
+        self.banco.executar("UPDATE operadores SET ativo = 0 WHERE id = ?", (self.ctx.operador_id,))
+        with patch.object(tema, "erro"):
+            for nome in ("retornaveis", "promocoes", "alertas"):
+                self.assertIsNone(getattr(app, "abrir_" + nome)())
+        for painel in paineis:
+            painel.destroy()

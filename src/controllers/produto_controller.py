@@ -206,6 +206,8 @@ class ProdutoController:
                                "preco_cent": produto["hora_preco_cent"]})
         regra = min(promos, key=lambda r: r["preco_cent"]) if promos else {
             "tipo": "normal", "preco_cent": produto["preco_cent"]}
+        if regra["preco_cent"] > produto["preco_cent"]:
+            regra = {"tipo": "normal", "preco_cent": produto["preco_cent"]}
         return {**regra, "preco_cadastro_cent": produto["preco_cent"],
                 "avaliado_em": q.strftime("%Y-%m-%d %H:%M:%S")}
 

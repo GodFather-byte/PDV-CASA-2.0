@@ -35,6 +35,7 @@ ESPERAS = (5, 10, 20, 40, 60)     # segundos entre tentativas quando o Telegram 
 # Os botões do teclado do bot: (texto do botão, comando interno). Quem digitar "/resumo" ou "resumo" também funciona.
 BOTOES = [("📊 Resumo", "resumo"), ("📅 Ontem", "ontem"), ("💵 Caixa", "caixa"), ("🍺 Mais vendidos", "top"),
           ("📦 Estoque", "estoque"), ("🛒 Comprar", "comprar"), ("🪑 Abertas", "abertas"), ("❌ Cancelamentos", "cancelamentos"),
+          ("🧭 Gerencial", "gerencial"), ("🚨 Alertas", "alertas"),
           ("📈 Semana", "semana"), ("🗓️ Mês", "mes"), ("🕐 Por hora", "horas"), ("👥 Equipe", "equipe"),
           ("💳 Contas", "contas"), ("📒 Caderneta", "caderneta"), ("🔎 Produto", "produto"),
           ("🔐 Licença", "licenca"), ("🛟 Suporte", "suporte"), ("🔄 Renovar", "renovar"), ("❓ Ajuda", "ajuda")]
@@ -47,7 +48,9 @@ _COMANDOS.update({"mais vendidos": "top", "cancelamentos": "cancelamentos", "aju
                   "vendas da semana": "semana", "semanal": "semana", "mensal": "mes", "garçons": "equipe", "garcons": "equipe",
                   "devedores": "caderneta", "mesas": "abertas", "produtos": "produto", "mesa": "mesa", "comanda": "mesa",
                   "licença": "licenca", "saude": "suporte", "saúde": "suporte", "central": "suporte",
-                  "status": "suporte", "renovação": "renovar", "renovacao": "renovar"})
+                  "status": "suporte", "renovação": "renovar", "renovacao": "renovar",
+                  "alerta": "alertas", "avisos": "alertas", "pendências": "alertas", "pendencias": "alertas",
+                  "painel": "gerencial", "gestão": "gerencial", "gestao": "gerencial"})
 CHAVE_AVISO_LICENCA = "telegram_licenca_aviso"   # 'dia|validade|situação' do último aviso de licença (não repetir)
 # Comandos que levam um argumento depois do nome: "produto skol", "mesa 12", "comanda 5".
 _COM_ARGUMENTO = {"produto": "produto", "produtos": "produto", "preço": "produto", "preco": "produto", "buscar": "produto",
@@ -280,6 +283,10 @@ class TelegramController:
             return textos.abertas(b)
         if comando == "cancelamentos":
             return textos.cancelamentos(b)
+        if comando == "alertas":
+            return textos.alertas(b)
+        if comando == "gerencial":
+            return textos.gerencial(b)
         if comando == "semana":
             return textos.semana(b)
         if comando == "mes":

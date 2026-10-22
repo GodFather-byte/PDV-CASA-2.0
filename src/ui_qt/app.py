@@ -173,6 +173,7 @@ class JanelaPrincipal(QMainWindow):
         ("clientes", "Clientes"), ("garotas", "Garotas"), ("bairros", "Bairros e taxas de entrega"),
         ("tipos_pagamento", "Tipos de pagamento"), ("planos_contas", "Plano de contas"),
         ("subplanos", "Subplanos"), ("aliquotas", "Alíquotas"),
+        ("setores_impressao", "Setores de impressão"),
     )
 
     def __init__(self, app):
@@ -190,12 +191,21 @@ class JanelaPrincipal(QMainWindow):
         lateral = QVBoxLayout()
         lateral.addWidget(tema.texto("WILLPDV", "marca"))
         lateral.addWidget(tema.texto(f"Versão {VERSAO}\nInterface Qt • piloto", "suave"))
+        self.busca_modulos = QLineEdit()
+        self.busca_modulos.setPlaceholderText("Buscar módulo…")
+        self.busca_modulos.setClearButtonEnabled(True)
+        self.busca_modulos.setAccessibleName("Buscar módulo do PDV")
+        lateral.addWidget(self.busca_modulos)
         self.botoes = {}
         for chave, titulo, acao in (
             ("inicio", "Visão geral", self.atualizar),
             ("caixa", "Abrir caixa", self.abrir_caixa),
             ("produtos", "Produtos", lambda: self.abrir_cadastro("produtos")),
             ("estoque", "Estoque", self.abrir_estoque),
+            ("retornaveis", "Retornáveis por cliente", self.abrir_retornaveis),
+            ("promocoes", "Promoções e faixas", self.abrir_promocoes),
+            ("alertas", "Alertas da operação", self.abrir_alertas),
+            ("cozinha", "Cozinha / Bar", self.abrir_cozinha),
             ("relatorio_vendas", "Vendas • relatório", self.abrir_relatorio_vendas),
             ("relatorios", "Mais relatórios", self.abrir_relatorios),
             ("contas", "Contas a pagar / receber", self.abrir_contas),
@@ -220,6 +230,7 @@ class JanelaPrincipal(QMainWindow):
             botao.clicked.connect(acao)
             self.botoes[chave] = botao
             lateral.addWidget(botao)
+        self.busca_modulos.textChanged.connect(self.filtrar_modulos)
         lateral.addStretch()
         self.sessao = tema.texto("", "suave")
         lateral.addWidget(self.sessao)
@@ -288,6 +299,13 @@ class JanelaPrincipal(QMainWindow):
             self.botoes[chave].setEnabled(modulo not in desligados and self.ctx.pode(modulo))
         self.botoes["mais_cadastros"].setEnabled(bool(self._cadastros_disponiveis()))
         self.botoes["estoque"].setEnabled(self.ctx.pode("lanc_estoque"))
+        self.botoes["retornaveis"].setEnabled(self.ctx.pode("lanc_estoque"))
+        self.botoes["promocoes"].setEnabled(
+            "cad_produtos" not in desligados and self.ctx.pode("cad_produtos"))
+        self.botoes["alertas"].setEnabled(
+            self.ctx.pode("rel_estoque") or self.ctx.pode("rel_informativos"))
+        self.botoes["cozinha"].setEnabled(
+            "util_cozinha" not in desligados and self.ctx.pode("util_cozinha"))
         self.botoes["relatorio_vendas"].setEnabled(self.ctx.pode("rel_vendas"))
         self.botoes["contas"].setEnabled(self.ctx.pode("lanc_contas"))
         self.botoes["relatorios"].setEnabled(any(
@@ -343,10 +361,17 @@ class JanelaPrincipal(QMainWindow):
             nuvem += "\n" + " | ".join(self.app.estado_servicos)
         self.indicadores["sync"].setText(nuvem)
 
+    def filtrar_modulos(self, texto):
+        from src.database.conexao import normalizar
+        busca = normalizar(texto.strip())
+        for botao in self.botoes.values():
+            botao.setVisible(not busca or busca in normalizar(botao.text()))
+
     def mostrar_limites(self):
         self.mensagem.setText(
             "Disponível conforme acesso: caixa, cadastros, estoque, relatórios, configurações, máquinas, acessos, "
-            "Telegram, utilitários, importação, ficha técnica, impressão, backup e restauração. "
+            "Telegram, alertas, retornáveis, promoções, cozinha/bar, utilitários, importação, ficha técnica, "
+            "impressão, backup e restauração. Use a busca lateral para localizar os módulos. "
             "Valide em cópia dos dados. Serviços externos e periféricos indisponíveis não são simulados. "
             "Encerre antes de usar --tk; não há fallback para Tk nem duas instâncias no mesmo banco.")
 
@@ -383,6 +408,35 @@ class JanelaPrincipal(QMainWindow):
             return self._unica("estoque", lambda: JanelaEstoque(self.ctx, self))
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
+
+    def _abrir_painel_operacional(self, chave, criar):
+        try:
+            janela = self.janelas.get(chave)
+            if janela is not None:
+                janela.exigir_acesso()
+            return self._unica(chave, criar)
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+
+    def abrir_retornaveis(self):
+        from src.ui_qt.retornaveis import JanelaRetornaveis
+        return self._abrir_painel_operacional(
+            "retornaveis", lambda: JanelaRetornaveis(self.ctx, self))
+
+    def abrir_promocoes(self):
+        from src.ui_qt.promocoes import JanelaPromocoes
+        return self._abrir_painel_operacional(
+            "promocoes", lambda: JanelaPromocoes(self.ctx, self))
+
+    def abrir_alertas(self):
+        from src.ui_qt.alertas import JanelaAlertas
+        return self._abrir_painel_operacional(
+            "alertas", lambda: JanelaAlertas(self.ctx, self))
+
+    def abrir_cozinha(self):
+        from src.ui_qt.cozinha import JanelaCozinha
+        return self._abrir_painel_operacional(
+            "cozinha", lambda: JanelaCozinha(self.ctx, self))
 
     def abrir_contas(self):
         try:
@@ -901,6 +955,8 @@ def autoteste(pasta: Path) -> list[str]:
             app.principal.abrir_acessos, app.principal.abrir_telegram,
             app.principal.abrir_utilitarios, app.principal.abrir_atualizacoes,
             app.principal.abrir_estoque,
+            app.principal.abrir_alertas, app.principal.abrir_promocoes,
+            app.principal.abrir_retornaveis,
         )
         for abrir in telas_administrativas:
             janela = abrir()

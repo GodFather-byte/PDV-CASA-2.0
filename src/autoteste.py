@@ -41,11 +41,14 @@ MODULOS = [
     "src.sync.atualizacoes", "src.sync.licenca_nuvem", "src.sync.painel_envio", "src.sync.sincronizador", "src.sync.telegram_api",
     "src.sync.ponte",
     "src.controllers.integracoes_controller",
+    "src.controllers.alertas_controller", "src.controllers.etiqueta_controller",
+    "src.controllers.promocoes_controller", "src.controllers.retornaveis_controller",
     "src.ui.adega_dialogos", "src.ui.app", "src.ui.assistente_impressora_ui", "src.ui.atualizacao_ui", "src.ui.auditoria_ui", "src.ui.cadastro_loja_ui", "src.ui.cadastro_rapido_ui", "src.ui.cadastros_tk", "src.ui.caixa_dialogos",
     "src.ui.caixa_pagamento", "src.ui.caixa_tema", "src.ui.caixa_ui", "src.ui.clientes_ui", "src.ui.comissao_ui", "src.ui.composicao_ui",
     "src.ui.config_ui", "src.ui.contexto", "src.ui.cozinha_ui", "src.ui.escolher_impressora_ui", "src.ui.fila_impressao_ui", "src.ui.icone",
     "src.ui.estoque_ui", "src.ui.importar_produtos_ui", "src.ui.inicializacao", "src.ui.lancamentos_ui", "src.ui.login", "src.ui.menu_widgets", "src.ui.paleta", "src.ui.painel_mesas",
     "src.ui.relatorios_ui", "src.ui.telegram_ui", "src.ui.tema", "src.ui.utilitarios_ui", "src.ui.visualizador",
+    "src.ui.alertas_ui", "src.ui.etiquetas_ui", "src.ui.promocoes_ui", "src.ui.retornaveis_ui",
     "src.ui_qt.app", "src.ui_qt.tema", "src.ui_qt.login", "src.ui_qt.cadastros", "src.ui_qt.caixa", "src.ui_qt.auditoria",
     "src.ui_qt.comissao", "src.ui_qt.assistente_impressora", "src.ui_qt.composicao",
     "src.ui_qt.configuracoes", "src.ui_qt.estoque", "src.ui_qt.fila_impressao",
@@ -53,6 +56,8 @@ MODULOS = [
     "src.ui_qt.restaurar_backup", "src.ui_qt.contas",
     "src.ui_qt.maquinas", "src.ui_qt.acessos", "src.ui_qt.telegram", "src.ui_qt.utilitarios",
     "src.ui_qt.atualizacoes", "src.ui_qt.visualizador", "src.ui_qt.estoque_lancamentos",
+    "src.ui_qt.alertas", "src.ui_qt.etiquetas", "src.ui_qt.promocoes", "src.ui_qt.retornaveis",
+    "src.ui_qt.cozinha",
 ]
 
 
@@ -105,7 +110,8 @@ def _banco_e_telas(pasta: Path) -> list[str]:
             for abrir in (lambda: JanelaCadastro(app.root, app.ctx, "produtos"),
                           lambda: JanelaAuditoria(app.root, app.ctx),
                           lambda: config_ui.abrir(app.root, app.ctx, "configuracoes"),
-                          lambda: config_ui.abrir(app.root, app.ctx, "telegram")):
+                          lambda: config_ui.abrir(app.root, app.ctx, "telegram"),
+                          app.abrir_alertas, app.abrir_promocoes, app.abrir_retornaveis):
                 janela = abrir()
                 janela.update()
                 janela.destroy()
@@ -115,7 +121,8 @@ def _banco_e_telas(pasta: Path) -> list[str]:
             app.root.destroy()
     finally:
         banco.fechar()
-    return ["banco novo, menu principal e telas de cadastro, auditoria, configurações e Telegram abrem"]
+    return ["banco novo, menu principal e telas de cadastro, auditoria, configurações, Telegram, "
+            "alertas, promoções e retornáveis abrem"]
 
 
 def _rede() -> list[str]:

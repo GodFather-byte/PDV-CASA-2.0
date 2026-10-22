@@ -132,6 +132,12 @@ class JanelaEstoque(QDialog):
         self.btn_lista = QPushButton("Lista de compras")
         self.btn_lista.clicked.connect(self.lista_de_compras)
         acoes.addWidget(self.btn_lista)
+        self.btn_giro = QPushButton("Reposição pelo giro")
+        self.btn_giro.clicked.connect(lambda: self.reposicao_giro())
+        acoes.addWidget(self.btn_giro)
+        self.btn_etiquetas = QPushButton("Etiquetas")
+        self.btn_etiquetas.clicked.connect(lambda: self.etiquetas())
+        acoes.addWidget(self.btn_etiquetas)
         self.btn_lancamentos = QPushButton("Lançamentos de estoque")
         self.btn_lancamentos.clicked.connect(self.abrir_lancamentos)
         acoes.addWidget(self.btn_lancamentos)
@@ -553,3 +559,72 @@ class JanelaEstoque(QDialog):
                 f"{_curta(produto['repor']):>10}")
         QMessageBox.information(self, "Lista de compras", "\n".join(linhas))
         return True
+
+    def reposicao_giro(self):
+        """Sugestão pelo giro (30 dias, cobertura de 7) por caixa; o pedido só sai com confirmação."""
+        from src.ui_qt.visualizador import JanelaVisualizador
+        try:
+            self._exigir_acesso()
+            estoque = self.ctx.estoque
+            terminais = estoque.terminais()
+            caixas = ["Todos os caixas"] + [f"Caixa {t}" for t in terminais]
+            escolha, aceitou = QInputDialog.getItem(
+                self, "Reposição pelo giro", "Qual caixa? (vendas dos últimos 30 dias, cobertura de 7 dias)",
+                caixas, 0, False)
+            self._exigir_acesso()
+            if not aceitou:
+                return False
+            indice = caixas.index(escolha)
+            terminal = terminais[indice - 1] if indice else None
+            recorte = self._recorte_compras()
+            itens = estoque.reposicao_giro(terminal, **recorte)
+            if not itens:
+                self.mensagem.setText(
+                    "Nenhum produto precisa de reposição pelo giro agora (ou não houve venda no período).")
+                return False
+            JanelaVisualizador(
+                self.ctx, "Reposição pelo giro", estoque.texto_reposicao_giro(itens, terminal), parent=self,
+                modulo="lanc_estoque", nome="reposicao_giro", tipo="lista_de_compras").exec()
+            self._exigir_acesso()
+            resposta = QMessageBox.question(
+                self, "Pedido pelo giro",
+                f"Criar um PEDIDO com {len(itens)} produto(s) sugerido(s)?\n"
+                "O saldo só muda quando a entrega for confirmada.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No)
+            if resposta != QMessageBox.StandardButton.Yes:
+                return True
+            fornecedores = self.ctx.cadastros.opcoes("fornecedores")
+            if not fornecedores:
+                self.mensagem.setText(
+                    "Cadastre um fornecedor primeiro (Manutenção de Cadastros > Fornecedores).")
+                return False
+            nome, aceitou = QInputDialog.getItem(
+                self, "Pedido pelo giro", "Para qual fornecedor é o pedido?",
+                [rotulo for _, rotulo in fornecedores], 0, False)
+            self._exigir_acesso()
+            if not aceitou:
+                return True
+            fornecedor_id = next(fid for fid, rotulo in fornecedores if rotulo == nome)
+            lancamento_id = estoque.pedido_por_giro(fornecedor_id, None, terminal, **recorte)
+        except ErroNegocio as erro:
+            return self._tratar_erro(erro)
+        self.atualizar()
+        self.mensagem.setText(
+            f"Pedido {lancamento_id} criado pelo giro. O estoque só muda quando a entrega for confirmada.")
+        self.abrir_lancamentos(lancamento_id)
+        return True
+
+    def etiquetas(self):
+        try:
+            self._exigir_acesso()
+            from src.ui_qt.etiquetas import JanelaEtiquetas
+            janela = JanelaEtiquetas(
+                self.ctx, self.linhas, [self.produto["id"]] if self.produto else [], parent=self)
+        except ErroNegocio as erro:
+            return self._tratar_erro(erro)
+        self._janela_etiquetas = janela
+        janela.show()
+        janela.raise_()
+        janela.activateWindow()
+        return janela

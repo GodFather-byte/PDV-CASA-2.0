@@ -191,6 +191,52 @@ def abertas(banco) -> str:
     return "\n".join(linhas)
 
 
+_ICONE_NIVEL = {"critico": "🚨", "aviso": "⚠️", "info": "ℹ️"}
+
+
+def alertas(banco) -> str:
+    """Alertas operacionais da loja (estoque, mesas paradas, entregas, filas e integrações), só do banco local e sem valores."""
+    from src.controllers.alertas_controller import CATEGORIAS, AlertasController
+    ctl = AlertasController(banco)
+    lista = ctl.alertas()
+    if not lista:
+        return "🚨 Alertas da casa\n\n✅ Nenhum alerta agora: estoque, mesas, entregas e filas em dia."
+    c = ctl.contagem(lista)
+    linhas = [f"🚨 Alertas da casa — {c['critico']} crítico(s), {c['aviso']} de atenção, {c['info']} informativo(s)"]
+    for categoria, rotulo in CATEGORIAS.items():
+        da_categoria = [a for a in lista if a["categoria"] == categoria]
+        if da_categoria:
+            linhas += ["", f"{rotulo} ({len(da_categoria)}):"] + _recortar(
+                [f" {_ICONE_NIVEL[a['nivel']]} {a['titulo']}" for a in da_categoria])
+    return "\n".join(linhas)
+
+
+def gerencial(banco) -> str:
+    """Resumo gerencial: o resumo da noite que já existe + o que está em aberto e o placar dos alertas, sem duplicar telas."""
+    from src.controllers.alertas_controller import CATEGORIAS, AlertasController
+    ctl = AlertasController(banco)
+    lista = ctl.alertas()
+    c = ctl.contagem(lista)
+    linhas = [resumo(banco), "", "🧭 Situação da casa agora"]
+    mesas = ctl.mesas()
+    if mesas["ligado"]:
+        linhas.append(f" • Mesas/comandas abertas: {mesas['abertas']}"
+                      + (f" ({len(mesas['paradas'])} parada(s))" if mesas["paradas"] else ""))
+    entregas = ctl.entregas()
+    if entregas["ligado"]:
+        linhas.append(f" • Entregas em aberto: {entregas['abertas']}")
+    if not lista:
+        linhas.append(" • ✅ Nenhum alerta pendente.")
+    else:
+        por_categoria: dict[str, int] = {}
+        for a in lista:
+            por_categoria[a["categoria"]] = por_categoria.get(a["categoria"], 0) + 1
+        linhas.append(f" • Alertas: {c['critico']} crítico(s), {c['aviso']} de atenção, {c['info']} informativo(s)")
+        linhas += [f"   {CATEGORIAS[k]}: {n}" for k, n in por_categoria.items()]
+        linhas.append("Toque em 🚨 Alertas para ver a lista.")
+    texto = "\n".join(linhas)
+    return texto if len(texto) <= 4000 else texto[:3990].rstrip() + "\n…"
+
 def cancelamentos(banco, dia: str | None = None) -> str:
     dia = dia or dia_atual(banco)
     ini, fim = _faixa(banco, dia)
@@ -224,7 +270,9 @@ def ajuda() -> str:
             "🗓️ Mês — mês até hoje e comparação com o anterior\n🕐 Por hora — como a noite está andando\n"
             "👥 Equipe — vendas por garçom/vendedor\n\n"
             "Operação\n💵 Caixa — turno aberto, vendido e dinheiro esperado\n🪑 Abertas — mesas e comandas em aberto\n"
-            "❌ Cancelamentos — cupons e itens cancelados\n\n"
+            "❌ Cancelamentos — cupons e itens cancelados\n"
+            "🧭 Gerencial — resumo da noite com a situação da casa e o placar dos alertas\n"
+            "🚨 Alertas — estoque, mesas paradas, entregas e filas pendentes\n\n"
             "Estoque\n📦 Estoque — o que zerou ou está acabando\n🛒 Comprar — lista do que repor\n"
             "🔎 Produto — preço, estoque e últimos movimentos\n\n"
             "Financeiro\n💳 Contas — contas a pagar vencidas e próximas\n📒 Caderneta — quem está devendo\n\n"

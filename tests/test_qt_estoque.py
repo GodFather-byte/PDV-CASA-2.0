@@ -578,7 +578,7 @@ class TestEstoqueQt(BaseTeste):
             self.assertEqual(tabela.editTriggers(), QAbstractItemView.EditTrigger.NoEditTriggers)
         self.assertEqual(
             [b.text() for b in janela.findChildren(QPushButton)],
-            ["Gerar pedido do que falta", "Lista de compras",
+            ["Gerar pedido do que falta", "Lista de compras", "Reposição pelo giro", "Etiquetas",
              "Lançamentos de estoque",
              "Consultar / atualizar (F5)", "＋ Entrada", "－ Saída",
              "Perda / quebra", "Quebra", "Oxidação", "Devolução",

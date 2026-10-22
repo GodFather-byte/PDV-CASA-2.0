@@ -39,10 +39,10 @@ class TesteIndiceConsumoV24(BaseTeste):
         self.assertEqual(consulta.call_count, 1)
         sql, parametros = consulta.call_args.args
         plano = " ".join(r["detail"] for r in banco.todos("EXPLAIN QUERY PLAN " + sql, parametros))
-        self.assertIn("SEARCH movimentos_estoque USING INDEX ix_movest_consumo", plano)
+        self.assertRegex(plano, r"SEARCH (?:movimentos_estoque|m) USING INDEX ix_movest_consumo\b")
         self.assertIn("criado_em>?", plano)
         self.assertIn("criado_em<?", plano)
-        self.assertNotIn("SCAN movimentos_estoque", plano)
+        self.assertNotRegex(plano, r"\bSCAN (?:movimentos_estoque|m)\b")
 
     def test_banco_novo_tem_indice_parcial_e_plano_por_janela(self):
         self.verificar_indice_e_janela(self.banco)

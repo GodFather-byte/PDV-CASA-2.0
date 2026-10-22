@@ -137,7 +137,9 @@ class PainelEstoque(tk.Toplevel):
         self.b_novo = Botao(acoes, "Novo lançamento  (Ctrl+N)", PAL["azul"], self.novo_lancamento)
         self.b_pedido = Botao(acoes, "Gerar pedido do que falta", PAL["ambar"], self.gerar_pedido)
         self.b_lista = Botao(acoes, "Lista de compras", PAL["turquesa"], self.lista_de_compras)
-        for b in (self.b_novo, self.b_pedido, self.b_lista):
+        self.b_giro = Botao(acoes, "Reposição pelo giro", PAL["violeta"], self.reposicao_giro)
+        self.b_etiquetas = Botao(acoes, "Etiquetas", PAL["azul"], self.etiquetas)
+        for b in (self.b_novo, self.b_pedido, self.b_lista, self.b_giro, self.b_etiquetas):
             b.configure(padx=14)
             b.pack(side="left", padx=(8, 0))
 
@@ -583,3 +585,41 @@ class PainelEstoque(tk.Toplevel):
             linhas.append(f"{p['nome'][:31]:<32}{curta(p['qt_atual']):>9}{curta(p['estoque_minimo']):>9}"
                           f"{curta(p['repor']):>10}")
         Visualizador(self, self.ctx, "Lista de compras", "\n".join(linhas), "lista_de_compras")
+
+    def reposicao_giro(self) -> None:
+        """Sugestão pelo giro dos últimos 30 dias para 7 dias de cobertura, por caixa; o pedido só sai se o operador confirmar."""
+        caixas = [(0, "Todos os caixas")] + [(t, f"Caixa {t}") for t in self.est.terminais()]
+        escolha = tema.escolher(self, "Reposição pelo giro", caixas,
+                                "Qual caixa? (vendas dos últimos 30 dias, cobertura de 7 dias)")
+        if escolha is None:
+            return
+        terminal = escolha or None
+        ok, itens = tema.tratar(self, self.est.reposicao_giro, terminal, **self._recorte_compras())
+        if not ok:
+            return
+        if not itens:
+            tema.aviso(self, "Nenhum produto precisa de reposição pelo giro agora (ou não houve venda no período).")
+            return
+        Visualizador(self, self.ctx, "Reposição pelo giro", self.est.texto_reposicao_giro(itens, terminal),
+                     "reposicao_giro", tipo="lista_de_compras")
+        if not tema.confirmar(self, f"Criar um PEDIDO com {len(itens)} produto(s) sugerido(s)?\n"
+                                    "O saldo só muda quando a entrega for confirmada.", "Pedido pelo giro",
+                              padrao_sim=False):
+            return
+        forn = self.ctx.cadastros.opcoes("fornecedores")
+        if not forn:
+            tema.aviso(self, "Cadastre um fornecedor primeiro (Manutenção de Cadastros > Fornecedores).")
+            return
+        fid = tema.escolher(self, "Pedido pelo giro", forn, "Para qual fornecedor é o pedido?")
+        if fid is None:
+            return
+        ok, lanc = tema.tratar(self, self.est.pedido_por_giro, fid, None, terminal, **self._recorte_compras())
+        if ok:
+            self.atualizar()
+            self.novo_lancamento(lanc)
+
+    def etiquetas(self):
+        """Abre a seleção de etiquetas com os produtos listados e o produto atual já marcado."""
+        from src.ui.etiquetas_ui import DialogoEtiquetas
+        return DialogoEtiquetas(self, self.ctx, list(self.linhas),
+                                [self.produto["id"]] if self.produto else [])

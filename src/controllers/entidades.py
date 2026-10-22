@@ -122,11 +122,30 @@ def _antes_produto(banco, d, id_):
         raise ErroValidacao("Código de barras deve conter apenas números.", {"cbarra": "inválido"})
     if "partes" in d and not (1 <= d["partes"] <= 55):
         raise ErroValidacao("'Dividir em' deve estar entre 1 e 55.", {"partes": "inválido"})
-    if d.get("promo_de") and d.get("promo_ate") and d["promo_de"] > d["promo_ate"]:
-        raise ErroValidacao("Promoção: a data inicial é posterior à final.", {"promo_de": "inválido"})
+    _validar_promocoes(banco, d, id_)
     _validar_adega(banco, d, id_)
     _liberar_produtos_guardados(banco, d, id_)          # por último: só cede o número se o cadastro novo for valer
     return d
+
+
+def _validar_promocoes(banco, dados, id_):
+    atual = banco.um("SELECT * FROM produtos WHERE id = ?", (id_,)) if id_ is not None else None
+    produto = dict(atual) if atual else {}
+    produto.update(dados)
+    if produto.get("promo_de") and produto.get("promo_ate") and produto["promo_de"] > produto["promo_ate"]:
+        raise ErroValidacao("Promoção: a data inicial é posterior à final.", {"promo_de": "inválido"})
+    for preco, inicio, fim in (
+        ("promo_preco_cent", "promo_de", "promo_ate"),
+        ("sem_preco_cent", "sem_inicial", "sem_final"),
+        ("hora_preco_cent", "hora_ini", "hora_fim"),
+    ):
+        valor = produto.get(preco, 0)
+        if type(valor) is not int or valor < 0 or valor > produto.get("preco_cent", 0):
+            raise ErroValidacao("Promoção: preço deve ser não negativo e não superar o preço natural.",
+                                {preco: "inválido"})
+        if valor > 0 and (not produto.get(inicio) or not produto.get(fim)):
+            raise ErroValidacao("Promoção: informe início e fim, ou preço zero para desligar.",
+                                {inicio: "obrigatório", fim: "obrigatório"})
 
 
 def _validar_adega(banco, dados, id_):

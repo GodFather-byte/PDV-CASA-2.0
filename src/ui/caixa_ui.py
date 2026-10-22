@@ -47,6 +47,11 @@ LARGURA_MINIMA_CENTRO = {3: 560, 2: 540, 1: 380}   # o que a venda atual precisa
 QTD_ANTES_DO_CODIGO = re.compile(r"(\d+(?:[.,]\d+)?)\s*\*\s*(\S.*)")   # "6*7891234567890": a quantidade vem antes do código
 
 
+def _qtd_curta(q) -> str:
+    """Quantidade sem zeros sobrando: 5 -> "5", 0,25 -> "0,25"."""
+    return fmt.fmt_qtd(q, 3).rstrip("0").rstrip(",")
+
+
 class _RotuloComDica(ttk.Label):
     """Rótulo que mostra um texto-guia apagado enquanto o texto dele está vazio (o `text` real continua sendo '')."""
 
@@ -1103,15 +1108,51 @@ class JanelaCaixa(tk.Toplevel):
             return
         nome = self.grade.valores(s)[1]
         if tema.confirmar(self, f"Cancelar o item '{nome}'?", "Cancela Item", padrao_sim=False):
-            motivo = self._pedir_motivo("Cancela Item", f"Motivo do cancelamento de '{nome}':", "")
+            ok, info = tema.tratar(self, self.ctx.caixa.info_cancelamento, int(s))
+            if not ok:
+                return
+            qtd = self._pedir_qtd_cancelar(nome, info)
+            if qtd is None:
+                return
+            if qtd < info["quantidade"]:
+                motivo = tema.pedir_texto(self, "Cancela Item", f"Motivo do cancelamento parcial de '{nome}' (obrigatório):",
+                                          validar=self._motivo_obrigatorio)
+            else:
+                motivo = self._pedir_motivo("Cancela Item", f"Motivo do cancelamento de '{nome}':", "")
             if motivo is None:
                 return
-            ok, _ = tema.tratar(self, self.ctx.caixa.cancelar_item, int(s), motivo)
+            ok, _ = tema.tratar(self, self.ctx.caixa.cancelar_item, int(s), motivo,
+                                qtd if qtd < info["quantidade"] else None)
             if ok:
                 self.modo_cancelar = False
                 self.recarregar()
-                self.avisar("Item cancelado.", tema.COR["aviso"])
+                self.avisar("Item cancelado." if qtd >= info["quantidade"] else
+                            f"Cancelado {_qtd_curta(qtd)} de '{nome}'.", tema.COR["aviso"])
                 self.ent_codigo.focus_set()
+
+    @staticmethod
+    def _motivo_obrigatorio(v: str) -> str:
+        if not v:
+            raise ValueError("Informe o motivo.")
+        return v
+
+    def _pedir_qtd_cancelar(self, nome: str, info: dict) -> float | None:
+        """Quantidade a cancelar: só pergunta quando há mais de uma unidade ou o produto é fracionado. Sugere a parte
+        ainda não paga (a já paga na divisão por item é protegida pelo controlador)."""
+        if not info["pergunta_qtd"]:
+            return info["quantidade"]
+        def validar(v: str) -> float:
+            q = fmt.validar_qtd(fmt.para_qtd(v))
+            if q <= 0 or q > info["quantidade"]:
+                raise ValueError(f"Informe de 0 a {_qtd_curta(info['quantidade'])}.")
+            if not info["aceita_decimal"] and q != int(q):
+                raise ValueError("Este produto não aceita quantidade fracionada.")
+            return q
+        pago = f"\nJá pago por item: {_qtd_curta(info['qtd_paga'])}." if info["qtd_paga"] else ""
+        return tema.pedir_texto(self, "Cancela Item",
+                                f"Quantidade a cancelar de '{nome}' (lançado {_qtd_curta(info['quantidade'])}):{pago}",
+                                _qtd_curta(info["qtd_livre"] if info["qtd_paga"] else info["quantidade"]),
+                                validar=validar)
 
     def _sair_modo_cancelar(self) -> None:
         self.modo_cancelar = False

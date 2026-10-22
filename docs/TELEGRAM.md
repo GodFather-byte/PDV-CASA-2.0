@@ -31,6 +31,8 @@ dono vê no celular se sobrou ou faltou.
 | 📦 Estoque | produtos zerados e no ponto de pedido |
 | 🪑 Abertas | mesas e comandas em aberto e o total na rua |
 | ❌ Cancelamentos | cupons e itens cancelados na noite, com motivo e quem cancelou |
+| 🧭 Gerencial | o resumo da noite mais a situação da casa agora: mesas abertas e paradas, entregas e alertas por área |
+| 🚨 Alertas | o que pede atenção agora (veja "Alertas operacionais" abaixo) |
 | 🛒 Comprar | lista do que repor (sem estoque e no ponto de pedido), com a quantidade sugerida |
 | 📈 Semana | faturamento dos últimos 7 dias, dia a dia, com o melhor dia |
 | 🗓️ Mês | o mês até hoje (faturamento, ticket, média, melhor dia) e a comparação com o mês anterior |
@@ -60,6 +62,32 @@ O bot do fornecedor é **outro bot**, sem acesso ao faturamento desta loja:
 
 A "noite" segue a virada do dia do PDV (Configurações > Configurações > Caixa, opção da hora em que o dia vira; 6h por padrão): a venda das 2h da manhã
 conta na noite que começou na véspera.
+
+## Alertas operacionais
+
+O botão **🚨 Alertas** (ou `alertas`, `avisos`, `pendências`) e o painel **Alertas da casa** do PDV (Tk e Qt) mostram a mesma
+lista, montada só com o banco deste caixa, sem rede e sem gravar nada. Atualiza quando o dono pede (botão ou F5); o
+bot **não** manda esses alertas sozinho, para não virar spam. Os avisos automáticos continuam só os de sempre (estoque
+que cruzou o mínimo, cancelamento, fechamento, licença), pela fila com repetição controlada.
+
+| Área | Quando aparece | Nível |
+| --- | --- | --- |
+| Estoque | produto controlado zerado (ruptura) | crítico |
+| Estoque | saldo até o mínimo cadastrado (ponto de pedido), com a reposição sugerida | atenção |
+| Mesas/comandas | aberta sem lançamento há mais que `tempo_inatividade_min` (o mesmo do painel de mesas; 0 desliga; só com mesas ligadas) | atenção |
+| Entregas | entregas em aberto e há quanto tempo a mais antiga foi pedida (só com delivery ligado) | informativo |
+| Impressão | documento com erro / impressora sem responder / fila aguardando | crítico / atenção / informativo |
+| Telegram | aviso não entregue ou fila parada por falta de conexão | atenção / informativo |
+| Painel na nuvem | último envio falhou ou vendas aguardando envio (só com o painel ligado) | atenção / informativo |
+| Integrações | iFood/NFC-e em preparação (nunca operam nesta versão) ou com configuração inválida | informativo / atenção |
+
+Não há limite novo inventado: cada regra usa a configuração que a tela correspondente já usa, e nenhuma bloqueia venda.
+Os alertas não trazem valores em dinheiro nem o texto técnico dos erros, e nada disso vai para a central do fornecedor.
+
+No PDV, o painel respeita o acesso de quem está logado, por seção: **Relatórios de estoque** (`rel_estoque`) mostra a
+área de estoque e **Relatórios informativos** (`rel_informativos`) mostra o resto. Quem não tem nenhum dos dois não abre o
+painel; com só um, vê só aquela parte. A permissão é conferida de novo no banco a cada atualização e ao reabrir a janela.
+No Telegram, só o chat pareado do dono recebe; outro chat ouve "Este bot é privado".
 
 ## Passo a passo
 

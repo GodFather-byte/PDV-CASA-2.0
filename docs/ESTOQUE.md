@@ -69,6 +69,26 @@ principal (o cartão "Sem estoque" já abre a lista só com os produtos zerados)
   É uma classificação operacional **indicativa, não fiscal**: pode incluir atacado de
   outras áreas ou omitir cadastros personalizados. Confira o cadastro ou use Geral.
 
+## Reposição pelo giro, por caixa
+
+Botão **Reposição pelo giro** (Tk e Qt). Escolha um caixa (terminal) ou "Todos". Para cada produto que
+controla estoque e vendeu nos últimos 30 dias: média diária = consumo líquido (vendas menos estornos) ÷ 30;
+alvo = média × 7 dias de cobertura; **sugerido = alvo − saldo** (saldo negativo conta como zero), com 4 casas.
+O recorte por caixa usa o terminal da venda (`vendas.terminal`).
+
+A sugestão só é mostrada no Visualizador (imprimir/salvar). Um pedido é criado somente se você confirmar
+(padrão "Não") e escolher o fornecedor; ele nasce como lançamento do tipo pedido e **não altera o saldo** até a entrega.
+API: `EstoqueController.reposicao_giro(terminal, cobertura_dias=7)`, `pedido_por_giro(fornecedor_id, produtos, terminal)`,
+`texto_reposicao_giro`, `terminais()`, `terminal_atual()`.
+
+## Etiquetas de produtos e preços
+
+Botão **Etiquetas** (Tk e Qt): selecione produtos, informe cópias (1 a 99 por produto, até 500 no total) e a
+temperatura (natural, gelada ou ambas; gelada exige preço gelado). A prévia usa o Visualizador (imprimir pela
+impressão existente, texto de 40 colunas); a janela também exporta CSV (`;`, UTF-8). O preço é o vigente (promoção
+inclusa); mostra preço de atacado e "Fardo com N un" quando o produto é composto de um único insumo com quantidade inteira.
+API: `EtiquetaController(banco).etiquetas / texto / csv`.
+Limites: não há impressora de etiquetas dedicada nem leiaute adesivo; fardo não é campo do cadastro.
 ## Novo lançamento (completo)
 
 A janela de lançamento continua com todos os tipos (compra com nota e conta a pagar, entrada, saída, descarte, contagem,

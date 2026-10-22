@@ -8,7 +8,7 @@
 ; do usuário do Windows. Por isso atualizar ou desinstalar o programa não apaga as vendas.
 
 #ifndef Versao
-  #define Versao "1.7.0"          ; o build_pdv.py passa a versão de src\versao.py (/DVersao=...)
+  #define Versao "1.8.0"          ; o build_pdv.py passa a versão de src\versao.py (/DVersao=...)
 #endif
 #define Nome "WillPDV"
 #define Exe "WillPDV.exe"

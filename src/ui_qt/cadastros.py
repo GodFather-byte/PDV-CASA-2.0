@@ -1,8 +1,10 @@
 """Cadastros Qt dirigidos pelas entidades e pelo CadastroController existentes."""
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
-    QFormLayout, QHBoxLayout, QHeaderView, QLineEdit, QMessageBox,
+    QFileDialog, QFormLayout, QHBoxLayout, QHeaderView, QLineEdit, QMessageBox,
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QTabWidget,
     QVBoxLayout, QWidget,
 )
@@ -10,6 +12,7 @@ from PySide6.QtWidgets import (
 from src.controllers.config_controller import modulos_desligados
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao
+from src.core.relatorio import Coluna, Relatorio, para_csv, para_texto
 from src.ui_qt.tema import texto
 
 
@@ -29,6 +32,7 @@ class FormularioCadastro(QDialog):
     def __init__(self, ctx, chave, id_=None, parent=None):
         super().__init__(parent)
         self.ctx, self.chave, self.id_ = ctx, chave, id_
+        self._operador_id = ctx.operador_id
         self.entidade = exigir_acesso(ctx, chave)
         self.setWindowTitle(("Novo • " if id_ is None else "Editar • ") + self.entidade.titulo)
         self.resize(620, 650)
@@ -98,9 +102,14 @@ class FormularioCadastro(QDialog):
                 dados[campo.nome] = editor.text()
         return dados
 
+    def exigir_acesso(self):
+        if self.ctx.operador_id != self._operador_id:
+            raise ErroPermissao("A sessão mudou. Abra o formulário novamente.")
+        return exigir_acesso(self.ctx, self.chave)
+
     def salvar(self):
         try:
-            exigir_acesso(self.ctx, self.chave)
+            self.exigir_acesso()
             self.id_ = self.ctx.cadastros.salvar(self.chave, self.valores(), self.id_)
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
@@ -169,7 +178,11 @@ class JanelaCadastro(QDialog):
     def __init__(self, ctx, chave, parent=None):
         super().__init__(parent)
         self.ctx, self.chave = ctx, chave
+        self._operador_id = ctx.operador_id
         self.entidade = exigir_acesso(ctx, chave)
+        self.filtros = {}
+        self.apenas_ativos = False
+        self.ordem = self.entidade.ordem
         self.setWindowTitle(self.entidade.titulo + " • Qt")
         self.resize(1000, 680)
         layout = QVBoxLayout(self)
@@ -189,6 +202,30 @@ class JanelaCadastro(QDialog):
             botao.clicked.connect(self.criar_embalagem)
             barra.addWidget(botao)
         layout.addLayout(barra)
+        extras = QHBoxLayout()
+        for rotulo, acao in (("Filtrar", self.filtrar), ("Ordenar", self.ordenar),
+                              ("Visualizar / imprimir", self.visualizar),
+                              ("Exportar CSV", lambda: self.exportar_csv())):
+            botao = QPushButton(rotulo)
+            botao.clicked.connect(acao)
+            extras.addWidget(botao)
+        if chave == "produtos":
+            for rotulo, acao in (
+                ("Tabela de preços", self.tabela_precos),
+                ("Observações", lambda: self.abrir_cadastro_relacionado("observacoes")),
+            ):
+                botao = QPushButton(rotulo)
+                botao.clicked.connect(acao)
+                extras.addWidget(botao)
+        elif chave == "clientes":
+            botao = QPushButton("Gerar arquivo de clientes")
+            botao.clicked.connect(lambda: self.gerar_clientes())
+            extras.addWidget(botao)
+        elif chave == "planos_contas":
+            botao = QPushButton("Sub Planos")
+            botao.clicked.connect(lambda: self.abrir_cadastro_relacionado("subplanos"))
+            extras.addWidget(botao)
+        layout.addLayout(extras)
         self.colunas = [c for c in self.entidade.campos if c.na_grade and c.tipo != "senha"]
         self.grade = QTableWidget(0, len(self.colunas))
         self.grade.setHorizontalHeaderLabels([c.rotulo for c in self.colunas])
@@ -204,14 +241,19 @@ class JanelaCadastro(QDialog):
         layout.addWidget(self.mensagem)
         self.atualizar()
 
+    def exigir_acesso(self):
+        if self.ctx.operador_id != self._operador_id:
+            raise ErroPermissao("A sessão mudou. Abra o cadastro novamente.")
+        return exigir_acesso(self.ctx, self.chave)
+
     def atualizar(self):
         try:
-            exigir_acesso(self.ctx, self.chave)
-            linhas = self.ctx.cadastros.listar(self.chave, self.busca.text())
+            selecionado = self.selecionado()
+            linhas = self._listar()
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
             self.grade.setRowCount(0)
-            return
+            return False
         self.grade.setRowCount(len(linhas))
         for numero, linha in enumerate(linhas):
             valores = self.ctx.cadastros.exibir(self.chave, linha)
@@ -219,7 +261,174 @@ class JanelaCadastro(QDialog):
                 item = QTableWidgetItem(valores.get(campo.nome, ""))
                 item.setData(Qt.ItemDataRole.UserRole, linha["id"])
                 self.grade.setItem(numero, coluna, item)
-        self.mensagem.setText(f"{len(linhas)} registro(s). Regras e validações do cadastro original.")
+            if linha["id"] == selecionado:
+                self.grade.selectRow(numero)
+        ordem = ("padrão do cadastro" if self.ordem == self.entidade.ordem else "de cadastramento")
+        self.mensagem.setText(
+            f"{len(linhas)} registro(s). Ordem {ordem}; "
+            f"{len(self.filtros)} filtro(s)" + ("; somente ativos." if self.apenas_ativos else "."))
+        return True
+
+    def _listar(self):
+        self.exigir_acesso()
+        return self.ctx.cadastros.listar(
+            self.chave, self.busca.text(), ordem=self.ordem,
+            apenas_ativos=self.apenas_ativos, filtros=self.filtros)
+
+    def ordenar(self):
+        try:
+            self.exigir_acesso()
+            self.ordem = "id" if self.ordem == self.entidade.ordem else self.entidade.ordem
+            return self.atualizar()
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return False
+
+    def aplicar_filtros(self, filtros, apenas_ativos=False):
+        try:
+            self.exigir_acesso()
+            campos = {c.nome: c for c in self.entidade.campos if c.tipo == "lookup"}
+            for nome, valor in filtros.items():
+                if nome not in campos or valor not in dict(self.ctx.cadastros.opcoes(campos[nome].lookup)):
+                    raise ErroNegocio("Filtro inválido para este cadastro.")
+            self.filtros = dict(filtros)
+            self.apenas_ativos = bool(apenas_ativos and self.entidade.tem_ativo)
+            return self.atualizar()
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return False
+
+    def filtrar(self):
+        dialogo = None
+        try:
+            self.exigir_acesso()
+            dialogo = QDialog(self)
+            dialogo.setWindowTitle("Filtrar cadastro")
+            layout = QVBoxLayout(dialogo)
+            layout.addWidget(texto("Mostrar somente registros com:"))
+            formulario = QFormLayout()
+            combos = {}
+            for campo in self.entidade.campos:
+                if campo.tipo != "lookup":
+                    continue
+                combo = QComboBox()
+                combo.addItem("Todos", None)
+                for id_, rotulo in self.ctx.cadastros.opcoes(campo.lookup):
+                    combo.addItem(str(rotulo), id_)
+                combo.setCurrentIndex(max(0, combo.findData(self.filtros.get(campo.nome))))
+                combos[campo.nome] = combo
+                formulario.addRow(campo.rotulo, combo)
+            layout.addLayout(formulario)
+            ativos = QCheckBox("Somente ativos")
+            ativos.setChecked(self.apenas_ativos)
+            if self.entidade.tem_ativo:
+                layout.addWidget(ativos)
+            elif not combos:
+                layout.addWidget(texto("Este cadastro não tem filtros. Use Pesquisar."))
+            botoes = QDialogButtonBox()
+            botoes.addButton("Aplicar", QDialogButtonBox.ButtonRole.AcceptRole)
+            botoes.addButton("Cancelar", QDialogButtonBox.ButtonRole.RejectRole)
+            botoes.accepted.connect(dialogo.accept)
+            botoes.rejected.connect(dialogo.reject)
+            layout.addWidget(botoes)
+            if dialogo.exec() != QDialog.DialogCode.Accepted:
+                return False
+            return self.aplicar_filtros(
+                {nome: combo.currentData() for nome, combo in combos.items()
+                 if combo.currentData() is not None}, ativos.isChecked())
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return False
+        finally:
+            if dialogo is not None:
+                dialogo.deleteLater()
+
+    def _relatorio(self):
+        linhas = self._listar()
+        relatorio = Relatorio(self.entidade.titulo, [
+            Coluna(c.rotulo, c.largura, "d" if c.tipo in ("dinheiro", "decimal", "int") else "e")
+            for c in self.colunas])
+        for linha in linhas:
+            valores = self.ctx.cadastros.exibir(self.chave, linha)
+            relatorio.add(*[valores.get(c.nome, "") for c in self.colunas])
+        relatorio.rodape = [("Registros", str(len(linhas)))]
+        return relatorio
+
+    def _documento(self, titulo, conteudo, nome):
+        from src.ui_qt.visualizador import JanelaVisualizador
+        janela = JanelaVisualizador(
+            self.ctx, titulo, conteudo, self, modulo=self.entidade.modulo, nome=nome)
+        janela.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        janela.show()
+        return janela
+
+    def visualizar(self):
+        try:
+            relatorio = self._relatorio()
+            return self._documento(relatorio.titulo, para_texto(relatorio, 100), self.chave)
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return None
+
+    def tabela_precos(self):
+        try:
+            self.exigir_acesso()
+            if self.chave != "produtos":
+                raise ErroNegocio("A tabela de preços pertence ao cadastro de produtos.")
+            return self._documento("Tabela de preços", self.ctx.impressao.tabela_precos(), "tabela_precos")
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return None
+
+    def abrir_cadastro_relacionado(self, chave):
+        try:
+            self.exigir_acesso()
+            janela = JanelaCadastro(self.ctx, chave, self)
+            janela.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            janela.show()
+            return janela
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return None
+
+    def _salvar_arquivo(self, caminho, nome, conteudo):
+        self.exigir_acesso()
+        if not caminho:
+            caminho, _ = QFileDialog.getSaveFileName(
+                self, "Exportar cadastro", nome, "Texto / CSV (*.txt *.csv)")
+        if not caminho:
+            return False
+        self.exigir_acesso()
+        with Path(caminho).open("w", encoding="utf-8-sig", newline="") as arquivo:
+            arquivo.write(conteudo)
+        self.mensagem.setText("Arquivo exportado. Nenhum dado foi enviado pela rede.")
+        return True
+
+    def exportar_csv(self, caminho=None):
+        try:
+            return self._salvar_arquivo(
+                caminho, self.chave + ".csv", para_csv(self._relatorio()))
+        except (ErroNegocio, OSError, ValueError) as erro:
+            self.mensagem.setText(str(erro))
+            return False
+
+    def gerar_clientes(self, caminho=None):
+        try:
+            self.exigir_acesso()
+            if self.chave != "clientes":
+                raise ErroNegocio("A geração de clientes pertence ao cadastro de clientes.")
+            campos = ("numero_consulta", "nome", "endereco", "complemento", "cep",
+                      "cidade", "telefone", "rg", "cpf", "email", "obs")
+            clientes = self.ctx.cadastros.listar("clientes", ordem="nome")
+            linhas = [";".join(campos)]
+            for cliente in clientes:
+                linhas.append(";".join(
+                    str(cliente.get(c) or "").replace(";", ",").replace("\r", " ").replace("\n", " ")
+                    for c in campos))
+            return self._salvar_arquivo(caminho, "clientes.txt", "\r\n".join(linhas) + "\r\n")
+        except (ErroNegocio, OSError, ValueError) as erro:
+            self.mensagem.setText(str(erro))
+            return False
 
     def selecionado(self):
         linha = self.grade.currentRow()
@@ -227,6 +436,7 @@ class JanelaCadastro(QDialog):
 
     def _formulario(self, id_=None):
         try:
+            self.exigir_acesso()
             dialogo = FormularioCadastro(self.ctx, self.chave, id_, self)
             dialogo.exec()
             dialogo.deleteLater()
@@ -244,7 +454,7 @@ class JanelaCadastro(QDialog):
 
     def criar_embalagem(self):
         try:
-            exigir_acesso(self.ctx, self.chave)
+            self.exigir_acesso()
             id_ = self.selecionado()
             if id_ is None:
                 self.mensagem.setText("Selecione o produto unitário para criar o fardo ou a caixa.")
@@ -264,11 +474,12 @@ class JanelaCadastro(QDialog):
         if id_ is None:
             return
         try:
-            exigir_acesso(self.ctx, self.chave)
+            self.exigir_acesso()
             if QMessageBox.question(self, "Excluir registro", "Excluir definitivamente o registro selecionado?",
                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                     QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
                 return
+            self.exigir_acesso()
             mensagem = self.ctx.cadastros.excluir(self.chave, id_)
             self.atualizar()
             if mensagem:

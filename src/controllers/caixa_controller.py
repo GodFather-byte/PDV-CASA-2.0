@@ -338,6 +338,8 @@ class CaixaController:
                     (venda_id, produto_id, temperatura, preco, observacao, self.operador_id, p["cobrar_servico"]))
                 if existente and 0 < maximo < fmt.arred_qtd(existente["quantidade"] + quantidade):
                     existente = None
+                if existente and self._qtd_paga(existente["id"]) > 0:
+                    existente = None        # linha já paga por item não recebe leitura nova: o vínculo não cobre o novo
             if existente:
                 item_id = existente["id"]
                 nova_qtd = fmt.arred_qtd(existente["quantidade"] + quantidade)
@@ -368,6 +370,7 @@ class CaixaController:
             if quantidade_cascos:
                 self.adicionar_item(venda_id, p["casco_produto_id"], quantidade_cascos)
             self.recalcular(venda_id)
+            self._conferir_vinculos(venda_id)
             if v["prepago"]:
                 self._conferir_credito(venda_id, v["total_cent"] - v["taxa_cent"])
         return item_id
@@ -397,9 +400,12 @@ class CaixaController:
         venda = self.obter(venda_id)
         if venda["modalidade"] != "balcao" or venda["status"] not in ABERTAS:
             return
+        # Quantidade já paga por item vem na mesma consulta (uma só ida ao banco por reprecificação).
+        paga_sql = ("(SELECT COALESCE(SUM(x.quantidade), 0) FROM pagamentos_itens x WHERE x.item_id = i.id)"
+                    if self._tem_vinculos() else "0")
         itens = self.banco.todos(
-            """SELECT i.*, p.atacado_qtd, p.preco_atacado_cent, p.atacado_gelada_qtd,
-                      p.preco_atacado_gelada_cent, p.comissao_pct
+            f"""SELECT i.*, p.atacado_qtd, p.preco_atacado_cent, p.atacado_gelada_qtd,
+                      p.preco_atacado_gelada_cent, p.comissao_pct, p.nome AS nome_produto, {paga_sql} AS qtd_paga_item
                FROM itens_venda i JOIN produtos p ON p.id = i.produto_id
                WHERE i.venda_id = ? AND i.cancelado = 0 AND i.preco_base_cent IS NOT NULL
                AND NOT EXISTS (SELECT 1 FROM itens_venda_partes x WHERE x.item_id = i.id)""", (venda_id,))
@@ -411,6 +417,14 @@ class CaixaController:
             preco = self.produtos.preco_por_quantidade_adega(
                 i, i["preco_base_cent"], quantidades[(i["produto_id"], i["temperatura"])], i["temperatura"])
             total = fmt.mult_cent(preco, i["quantidade"])
+            if i["qtd_paga_item"] > 0:
+                # Linha já paga por item não muda: nem preço (recusa) nem o total exato que foi pago.
+                if preco == i["preco_unit_cent"]:
+                    continue
+                raise ErroNegocio(
+                    f"'{i['nome_produto']}' já foi pago na divisão por item e esta mudança alteraria o preço dele "
+                    f"(faixa de atacado: {fmt.fmt_brl(i['preco_unit_cent'])} para {fmt.fmt_brl(preco)}). "
+                    "Remova o pagamento desse item antes.")
             mudou_preco = preco != i["preco_unit_cent"] or total != i["total_cent"]
             retrato = self.produtos.ler_regra_preco(dict(i))
             if retrato is not None or mudou_preco:
@@ -490,22 +504,278 @@ class CaixaController:
             raise ErroNegocio(f"A comanda chegou ao limite de {fmt.fmt_brl(limite)}. "
                               "Não dá para lançar mais: é preciso acertar a comanda.")
 
-    def cancelar_item(self, item_id: int, motivo: str = "") -> None:
+    def cancelar_item(self, item_id: int, motivo: str = "", quantidade: float | None = None) -> int:
+        """Cancela o item inteiro ou só parte da quantidade (cancelamento parcial). Devolve o id da linha cancelada.
+
+        Parcial: a linha é cindida (como em `transferir_item`); a original continua ativa com o resto e uma linha nova,
+        marcada como cancelada, guarda a quantidade cancelada, o total e a comissão proporcionais (somam exatamente os
+        originais). O motivo é obrigatório e fica na auditoria. Só se cancela o que NÃO foi pago: a quantidade já paga
+        na divisão por item é protegida, e um cancelamento que deixasse a conta abaixo do que já foi pago por valor é
+        recusado (o dinheiro recebido não tem item atribuído, então não dá para saber qual parte ele cobre)."""
         motivo = (motivo or "").strip()
-        if not motivo and self.banco.cfg_bool("exigir_motivo_cancelamento", False):
-            raise ErroNegocio("Informe o motivo do cancelamento.")
         item = self.banco.um("SELECT * FROM itens_venda WHERE id = ?", (item_id,))
         if item is None or item["cancelado"]:
             raise ErroNegocio("Item não encontrado ou já cancelado.")
-        self._aberta(item["venda_id"])
+        parcial = False
+        if quantidade is not None:
+            try:
+                quantidade = fmt.validar_qtd(quantidade)
+            except ValueError as exc:
+                raise ErroNegocio(str(exc).capitalize() + ".") from None
+            if quantidade <= 0:
+                raise ErroNegocio("Informe uma quantidade maior que zero para cancelar.")
+            if quantidade > item["quantidade"]:
+                raise ErroNegocio(f"Quantidade acima da lançada (máximo {fmt.fmt_qtd(item['quantidade'], 3)}).")
+            parcial = quantidade < item["quantidade"]
+        if parcial and not motivo:
+            raise ErroNegocio("Informe o motivo do cancelamento parcial.")
+        if not motivo and self.banco.cfg_bool("exigir_motivo_cancelamento", False):
+            raise ErroNegocio("Informe o motivo do cancelamento.")
+        if parcial:
+            aceita = self.banco.valor("SELECT aceita_decimal FROM produtos WHERE id = ?", (item["produto_id"],), 0)
+            if not aceita and quantidade != int(quantidade):
+                raise ErroNegocio("Este produto não aceita quantidade fracionada.")
+        v = self._aberta(item["venda_id"])
+        paga = self._qtd_paga(item_id)
+        livre = fmt.arred_qtd(item["quantidade"] - paga)
+        cancelar = quantidade if parcial else item["quantidade"]
+        if paga > 0 and cancelar > livre:
+            if livre <= 0:
+                raise ErroNegocio("Este item já foi pago na divisão por item. Remova o pagamento antes de cancelar.")
+            raise ErroNegocio(f"Parte deste item já foi paga ({fmt.fmt_qtd(paga, 3)}). Só dá para cancelar até "
+                              f"{fmt.fmt_qtd(livre, 3)}, a quantidade ainda não paga.")
+        pago_valor = sum(p["valor_cent"] for p in self.pagamentos(v["id"]) if not p["recarga"])
+        agora = fmt.agora()
         with self.banco.transacao():
-            self.banco.executar("UPDATE itens_venda SET cancelado = 1, cancelado_em = ? WHERE id = ?",
-                                (fmt.agora(), item_id))
-            self._reprecificar_balcao(item["venda_id"])
-            self.recalcular(item["venda_id"])
-            self.banco.log("item_cancelado", f"venda {item['venda_id']} item {item_id}" + (f" motivo: {motivo}"[:200] if motivo else ""),
-                           self.operador_id)
-        notificacoes.avisar(self.banco, "item", "item_cancelado", item_id, motivo, self.operador_id)
+            if parcial:
+                resto = fmt.arred_qtd(item["quantidade"] - quantidade)
+                total_resto = self._total_resto(item, resto, paga)
+                comissao_resto = fmt.arredondar(
+                    fmt._dec(item["comissao_cent"]) * fmt._dec(resto) / fmt._dec(item["quantidade"]))
+                self.banco.executar("UPDATE itens_venda SET quantidade = ?, total_cent = ?, comissao_cent = ? WHERE id = ?",
+                                    (resto, total_resto, comissao_resto, item_id))
+                linha = dict(item)
+                linha.pop("id")
+                linha.update(quantidade=quantidade, total_cent=item["total_cent"] - total_resto,
+                             comissao_cent=item["comissao_cent"] - comissao_resto, cancelado=1, cancelado_em=agora)
+                cancelado_id = self.banco.inserir("itens_venda", linha)
+                for pt in self.banco.todos("SELECT produto_id, fracao FROM itens_venda_partes WHERE item_id = ?", (item_id,)):
+                    self.banco.inserir("itens_venda_partes",
+                                       {"item_id": cancelado_id, "produto_id": pt["produto_id"], "fracao": pt["fracao"]})
+            else:
+                cancelado_id = item_id
+                self.banco.executar("UPDATE itens_venda SET cancelado = 1, cancelado_em = ? WHERE id = ?", (agora, item_id))
+            self._reprecificar_balcao(v["id"])
+            calc = self.recalcular(v["id"])
+            if calc["total"] < min(v["total_cent"], pago_valor):
+                raise ErroNegocio(
+                    f"A conta já tem {fmt.fmt_brl(pago_valor)} pago por valor, sem item atribuído. Cancelar isto deixaria a "
+                    f"conta em {fmt.fmt_brl(calc['total'])}, abaixo do que já foi pago. Remova o pagamento antes de cancelar.")
+            self._conferir_vinculos(v["id"])
+            detalhe = f"venda {v['id']} item {cancelado_id}"
+            if parcial:
+                detalhe += f" (parcial de {item_id}: {fmt.fmt_qtd(quantidade, 3)} de {fmt.fmt_qtd(item['quantidade'], 3)})"
+            self.banco.log("item_cancelado", detalhe + (f" motivo: {motivo}"[:200] if motivo else ""), self.operador_id)
+            if parcial:
+                self.banco.registrar_auditoria(
+                    "itens_venda", item_id, "cancelamento_parcial",
+                    antes={"quantidade": item["quantidade"], "total_cent": item["total_cent"],
+                           "comissao_cent": item["comissao_cent"]},
+                    depois={"quantidade": resto, "total_cent": total_resto, "comissao_cent": comissao_resto,
+                            "linha_cancelada_id": cancelado_id, "quantidade_cancelada": quantidade,
+                            "valor_cancelado_cent": item["total_cent"] - total_resto, "venda_id": v["id"],
+                            "motivo": motivo},
+                    operador_id=self.operador_id)
+        notificacoes.avisar(self.banco, "item", "item_cancelado", cancelado_id, motivo, self.operador_id)
+        return cancelado_id
+
+    def info_cancelamento(self, item_id: int) -> dict:
+        """O que as telas precisam para perguntar a quantidade a cancelar: lançada, já paga por item, livre e se o
+        produto aceita fração. `pergunta_qtd` diz se vale perguntar (mais de uma
+        unidade, quantidade fracionada ou parte já paga); uma unidade inteira cancela direto, como antes."""
+        item = self.banco.um("SELECT * FROM itens_venda WHERE id = ?", (item_id,))
+        if item is None or item["cancelado"]:
+            raise ErroNegocio("Item não encontrado ou já cancelado.")
+        aceita = bool(self.banco.valor("SELECT aceita_decimal FROM produtos WHERE id = ?", (item["produto_id"],), 0))
+        paga = self._qtd_paga(item_id)
+        livre = max(fmt.arred_qtd(item["quantidade"] - paga), 0)
+        return {"quantidade": item["quantidade"], "qtd_paga": paga, "qtd_livre": livre, "aceita_decimal": aceita,
+                "pergunta_qtd": item["quantidade"] > 1 or item["quantidade"] != int(item["quantidade"]) or paga > 0}
+
+    # ------------------------------------------------- divisão da conta por item
+    def _tem_vinculos(self) -> bool:
+        """A tabela `pagamentos_itens` (vínculo pagamento x item da divisão por item) vem de uma migração do esquema."""
+        return bool(self.banco.valor(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pagamentos_itens'"))
+
+    def _pagos_por_item(self, venda_id: int) -> dict[int, dict]:
+        """{item_id: {'quantidade', 'valor_cent'}} já pagos na divisão por item desta venda."""
+        if not self._tem_vinculos():
+            return {}
+        return {r["item_id"]: {"quantidade": fmt.arred_qtd(r["qtd"]), "valor_cent": r["valor"]}
+                for r in self.banco.todos(
+                    """SELECT x.item_id, SUM(x.quantidade) AS qtd, SUM(x.valor_cent) AS valor FROM pagamentos_itens x
+                       JOIN pagamentos_venda p ON p.id = x.pagamento_id WHERE p.venda_id = ? GROUP BY x.item_id""",
+                    (venda_id,))}
+
+    def _total_resto(self, item: dict, resto: float, paga: float) -> int:
+        """Total da parte que fica na linha numa cisão (cancelamento parcial ou transferência). Se só sobra a parte já
+        paga por item, a linha fica exatamente com o valor pago (sem diferença de arredondamento de centavo)."""
+        if paga > 0 and resto == paga:
+            return self.banco.valor(
+                "SELECT COALESCE(SUM(valor_cent), 0) FROM pagamentos_itens WHERE item_id = ?", (item["id"],), 0)
+        return fmt.mult_cent(item["preco_unit_cent"], resto)
+
+    def _conferir_vinculos(self, venda_id: int) -> None:
+        """Trava da divisão por item, chamada dentro da transação de toda mudança na conta (lançamento, reprecificação,
+        cancelamento, desconto, serviço, rodízio, transferência). Recusa (e a transação desfaz) qualquer mudança que deixe
+        um vínculo pagamento x item inconsistente: item cancelado ou fora da conta do pagamento, quantidade paga acima da
+        lançada, preço diferente do que foi pago, item pago que deixou de ter valor próprio (rodízio) ou conta abaixo do
+        que já foi pago por item. Para mudar, o operador remove o pagamento primeiro (o que libera os itens)."""
+        if not self._tem_vinculos():
+            return
+        linhas = self.banco.todos(
+            """SELECT x.item_id, SUM(x.quantidade) AS qtd, SUM(x.valor_cent) AS valor, COUNT(*) AS n,
+                      MIN(p.venda_id) AS venda_min, MAX(p.venda_id) AS venda_max
+               FROM pagamentos_itens x JOIN pagamentos_venda p ON p.id = x.pagamento_id
+               WHERE p.venda_id = ? OR x.item_id IN (SELECT id FROM itens_venda WHERE venda_id = ?)
+               GROUP BY x.item_id""", (venda_id, venda_id))
+        if not linhas:
+            return
+        v = self.obter(venda_id)
+        ativos = {i["id"]: i for i in self.itens(venda_id)}
+        pago_por_item = 0
+        for r in linhas:
+            i = ativos.get(r["item_id"])
+            qtd = fmt.arred_qtd(r["qtd"])
+            problema = None
+            if i is None or r["venda_min"] != venda_id or r["venda_max"] != venda_id:
+                problema = "foi cancelado ou saiu da conta em que foi pago"
+            else:
+                cobrado = 0 if (v.get("rodizio") and i["rodizio_incluso"]) else i["total_cent"]
+                if cobrado <= 0:
+                    problema = "deixaria de ter valor próprio na conta (incluso no rodízio)"
+                elif qtd > i["quantidade"] or r["valor"] > cobrado:
+                    problema = "ficaria com menos quantidade ou valor do que o já pago"
+                elif qtd == i["quantidade"] and r["valor"] != cobrado:
+                    problema = f"mudaria de valor ({fmt.fmt_brl(r['valor'])} pago, {fmt.fmt_brl(cobrado)} na conta)"
+                elif abs(r["valor"] - fmt.mult_cent(i["preco_unit_cent"], qtd)) > r["n"]:
+                    problema = "mudaria de preço depois de pago"
+            if problema:
+                nome = i["nome"] if i else "Um item"
+                raise ErroNegocio(f"'{nome}' já foi pago na divisão por item e {problema}. "
+                                  "Remova o pagamento desse item antes de fazer esta mudança.")
+            pago_por_item += r["valor"]
+        total = self.calcular(v)["total"]
+        if total < pago_por_item:
+            raise ErroNegocio(f"A conta ficaria em {fmt.fmt_brl(total)}, abaixo dos {fmt.fmt_brl(pago_por_item)} já pagos "
+                              "na divisão por item. Remova o pagamento antes de fazer esta mudança.")
+
+    def _qtd_paga(self, item_id: int) -> float:
+        if not self._tem_vinculos():
+            return 0
+        return fmt.arred_qtd(self.banco.valor(
+            "SELECT COALESCE(SUM(quantidade), 0) FROM pagamentos_itens WHERE item_id = ?", (item_id,), 0) or 0)
+
+    def itens_para_divisao(self, venda_id: int) -> list[dict]:
+        """Itens ativos com o que já foi pago por item e o que ainda está livre (quantidade e valor) para a divisão.
+        Itens sem valor próprio (incluso no rodízio) aparecem com valor zero e não podem ser pagos por item."""
+        v = self.obter(venda_id)
+        pagos = self._pagos_por_item(venda_id)
+        saida = []
+        for i in self.itens(venda_id):
+            pago = pagos.get(i["id"], {"quantidade": 0, "valor_cent": 0})
+            cobrado = 0 if (v.get("rodizio") and i["rodizio_incluso"]) else i["total_cent"]
+            livre = max(fmt.arred_qtd(i["quantidade"] - pago["quantidade"]), 0)
+            saida.append({"item_id": i["id"], "produto_id": i["produto_id"], "nome": i["nome"], "codigo": i["codigo"],
+                          "quantidade": i["quantidade"], "preco_unit_cent": i["preco_unit_cent"],
+                          "total_cent": cobrado, "qtd_paga": pago["quantidade"], "valor_pago_cent": pago["valor_cent"],
+                          "qtd_livre": livre,
+                          "valor_livre_cent": max(cobrado - pago["valor_cent"], 0) if livre > 0 else 0})
+        return saida
+
+    def previa_pagamento_itens(self, venda_id: int, selecao) -> dict:
+        """Quanto custam os itens escolhidos (lista de (item_id, quantidade)). Devolve {'itens': [...], 'valor_cent'}.
+        O valor de cada item é proporcional à quantidade, em centavos; quem leva o que resta do item leva o restante exato,
+        então pagar um item em várias vezes soma exatamente o total dele. Serviço, desconto, taxa e acréscimo não entram:
+        ficam no restante da conta, que é dividido por valor."""
+        v = self._aberta(venda_id)
+        if v["modalidade"] == "caderneta":
+            raise ErroNegocio("Venda em caderneta não recebe pagamento: o valor fica na conta do cliente.")
+        if v["prepago"]:
+            raise ErroNegocio("Comanda pré-paga já tem crédito carregado: a divisão por item não se aplica.")
+        selecao = list(selecao or [])
+        if not selecao:
+            raise ErroNegocio("Escolha ao menos um item para pagar.")
+        ids = [int(i) for i, _ in selecao]
+        if len(set(ids)) != len(ids):
+            raise ErroNegocio("O mesmo item foi escolhido mais de uma vez. Informe a quantidade total dele uma vez só.")
+        disponiveis = {d["item_id"]: d for d in self.itens_para_divisao(venda_id)}
+        linhas, total = [], 0
+        for item_id, qtd in selecao:
+            d = disponiveis.get(int(item_id))
+            if d is None:
+                raise ErroNegocio("Item não encontrado nesta conta ou já cancelado.")
+            try:
+                qtd = fmt.validar_qtd(qtd)
+            except ValueError as exc:
+                raise ErroNegocio(str(exc).capitalize() + ".") from None
+            if qtd <= 0:
+                raise ErroNegocio(f"Informe uma quantidade maior que zero para '{d['nome']}'.")
+            if d["total_cent"] <= 0:
+                raise ErroNegocio(f"'{d['nome']}' não tem valor próprio na conta (incluso no rodízio). Divida por valor.")
+            if d["qtd_livre"] <= 0:
+                raise ErroNegocio(f"'{d['nome']}' já foi pago na divisão por item.")
+            if qtd > d["qtd_livre"]:
+                raise ErroNegocio(f"'{d['nome']}': só {fmt.fmt_qtd(d['qtd_livre'], 3)} ainda não foi pago.")
+            if qtd == d["qtd_livre"]:
+                valor = d["valor_livre_cent"]
+            else:
+                valor = min(fmt.arredondar(fmt._dec(d["total_cent"]) * fmt._dec(qtd) / fmt._dec(d["quantidade"])),
+                            d["valor_livre_cent"])
+            linhas.append({"item_id": d["item_id"], "nome": d["nome"], "quantidade": qtd, "valor_cent": valor})
+            total += valor
+        if total <= 0:
+            raise ErroNegocio("Os itens escolhidos não têm valor a pagar.")
+        falta = self.liquidar(venda_id)["falta"]
+        if total > falta:
+            raise ErroNegocio(f"Os itens escolhidos somam {fmt.fmt_brl(total)}, mas faltam só {fmt.fmt_brl(falta)} na conta "
+                              "(parte já foi paga por valor, sem item atribuído). Divida o restante por valor.")
+        return {"itens": linhas, "valor_cent": total}
+
+    def pagar_itens(self, venda_id: int, tipo_pagamento_id: int, selecao, valor_esperado_cent: int | None = None) -> int:
+        """Divisão da conta por item: recebe, na forma escolhida, exatamente o valor dos itens (mais o acréscimo da forma,
+        se houver) e vincula o pagamento a cada item e quantidade. O vínculo impede pagar o mesmo item duas vezes e
+        protege o item do cancelamento; remover o pagamento libera os itens. `valor_esperado_cent` é o valor que a tela
+        mostrou ao operador: se a conta mudou nesse meio tempo, nada é gravado. Devolve o id do pagamento."""
+        if not self._tem_vinculos():
+            raise ErroNegocio("A divisão por item precisa da atualização do banco de dados (tabela pagamentos_itens).")
+        previa = self.previa_pagamento_itens(venda_id, selecao)
+        valor = previa["valor_cent"] + self.acrescimo_da_forma(venda_id, tipo_pagamento_id)
+        if valor_esperado_cent is not None and valor_esperado_cent != valor:
+            raise ErroNegocio(f"O valor dos itens mudou para {fmt.fmt_brl(valor)}. Confira e tente de novo.")
+        agora = fmt.agora()
+        with self.banco.transacao():
+            pid = self.adicionar_pagamento(venda_id, tipo_pagamento_id, valor)
+            for ln in previa["itens"]:
+                self.banco.inserir("pagamentos_itens", {"pagamento_id": pid, "item_id": ln["item_id"],
+                                                        "quantidade": ln["quantidade"], "valor_cent": ln["valor_cent"],
+                                                        "criado_em": agora})
+            self.banco.registrar_auditoria(
+                "pagamentos_venda", pid, "pagamento_por_item",
+                depois={"venda_id": venda_id, "tipo_pagamento_id": tipo_pagamento_id, "valor_cent": valor,
+                        "itens": [{k: ln[k] for k in ("item_id", "quantidade", "valor_cent")} for ln in previa["itens"]]},
+                operador_id=self.operador_id)
+        return pid
+
+    def itens_do_pagamento(self, pagamento_id: int) -> list[dict]:
+        """Itens (e quantidades) pagos por um pagamento da divisão por item; vazio se foi pago por valor."""
+        if not self._tem_vinculos():
+            return []
+        return [dict(r) for r in self.banco.todos(
+            """SELECT x.item_id, x.quantidade, x.valor_cent, p.nome FROM pagamentos_itens x
+               JOIN itens_venda i ON i.id = x.item_id JOIN produtos_historico p ON p.id = i.produto_id
+               WHERE x.pagamento_id = ? ORDER BY x.id""", (pagamento_id,))]
 
     def definir_observacao(self, item_id: int, texto: str | None) -> None:
         item = self.banco.um("SELECT venda_id, temperatura FROM itens_venda WHERE id = ?", (item_id,))
@@ -619,19 +889,22 @@ class CaixaController:
                 "subtotal_cent": calculo["subtotal"], "servico_cent": calculo["servico"],
                 "taxa_cent": calculo["taxa"], "acrescimo_cent": calculo["acrescimo"],
                 "total_cent": calculo["total"]})
+            self._conferir_vinculos(venda_id)
             self.banco.log("desconto", f"venda {venda_id}: pct={pct} valor={valor_cent}", self.operador_id)
         return calculo
 
     def definir_servico(self, venda_id: int, valor_cent: int | None) -> dict:
         """None volta ao cálculo automático. O cliente pode pagar menos (ou zero): serviço não é obrigatório."""
         self._aberta(venda_id)
-        if valor_cent is None:
-            self.banco.executar("UPDATE vendas SET servico_manual = 0, servico_cent = 0 WHERE id = ?", (venda_id,))
-        else:
-            if valor_cent < 0:
-                raise ErroNegocio("O serviço não pode ser negativo.")
-            self.banco.executar("UPDATE vendas SET servico_manual = 1, servico_cent = ? WHERE id = ?", (valor_cent, venda_id))
-        return self.recalcular(venda_id)
+        if valor_cent is not None and valor_cent < 0:
+            raise ErroNegocio("O serviço não pode ser negativo.")
+        with self.banco.transacao():
+            if valor_cent is None:
+                self.banco.executar("UPDATE vendas SET servico_manual = 0, servico_cent = 0 WHERE id = ?", (venda_id,))
+            else:
+                self.banco.executar("UPDATE vendas SET servico_manual = 1, servico_cent = ? WHERE id = ?",
+                                    (valor_cent, venda_id))
+            return self._recalcular_protegido(venda_id)
 
     def ativar_rodizio(self, venda_id: int, pessoas: int) -> dict:
         """Liga o rodízio nesta mesa/comanda: os produtos de subgrupo "incluso" passam a entrar na conta
@@ -644,13 +917,21 @@ class CaixaController:
             raise ErroNegocio("Rodízio só vale para mesa ou comanda.")
         if pessoas < 1:
             raise ErroNegocio("Informe quantas pessoas estão no rodízio.")
-        self.banco.executar("UPDATE vendas SET rodizio = 1, pessoas = ? WHERE id = ?", (pessoas, venda_id))
-        return self.recalcular(venda_id)
+        with self.banco.transacao():
+            self.banco.executar("UPDATE vendas SET rodizio = 1, pessoas = ? WHERE id = ?", (pessoas, venda_id))
+            return self._recalcular_protegido(venda_id)
 
     def desativar_rodizio(self, venda_id: int) -> dict:
         self._aberta(venda_id)
-        self.banco.executar("UPDATE vendas SET rodizio = 0 WHERE id = ?", (venda_id,))
-        return self.recalcular(venda_id)
+        with self.banco.transacao():
+            self.banco.executar("UPDATE vendas SET rodizio = 0 WHERE id = ?", (venda_id,))
+            return self._recalcular_protegido(venda_id)
+
+    def _recalcular_protegido(self, venda_id: int) -> dict:
+        """Recalcula e confere os vínculos da divisão por item (use dentro de uma transação)."""
+        calculo = self.recalcular(venda_id)
+        self._conferir_vinculos(venda_id)
+        return calculo
 
     # ========================================================== pagamentos
     def adicionar_pagamento(self, venda_id: int, tipo_pagamento_id: int, valor_cent: int) -> int:
@@ -680,6 +961,14 @@ class CaixaController:
             raise ErroNegocio("Este pagamento foi recebido em um turno que já foi fechado e conferido; ele não pode "
                               "ser removido. Se for preciso devolver o valor, cancele a conta.")
         with self.banco.transacao():
+            vinculos = self.itens_do_pagamento(pagamento_id)
+            if vinculos:                               # libera os itens da divisão por item para outro pagamento
+                self.banco.executar("DELETE FROM pagamentos_itens WHERE pagamento_id = ?", (pagamento_id,))
+                self.banco.registrar_auditoria(
+                    "pagamentos_venda", pagamento_id, "vinculo_itens_liberado",
+                    antes={"venda_id": p["venda_id"],
+                           "itens": [{k: x[k] for k in ("item_id", "quantidade", "valor_cent")} for x in vinculos]},
+                    operador_id=self.operador_id)
             self.banco.executar("DELETE FROM pagamentos_venda WHERE id = ?", (pagamento_id,))
             self.recalcular(p["venda_id"])             # sem o crédito, a taxa sai do total
 
@@ -871,6 +1160,10 @@ class CaixaController:
                 self._devolver_adiantamentos(venda_id, turno)
                 # O recebido neste turno é devolvido da própria gaveta: sai da venda, como sempre. O de turno anterior
                 # fica registrado (aquele turno o recebeu e já foi conferido com ele).
+                if self._tem_vinculos():
+                    self.banco.executar(
+                        "DELETE FROM pagamentos_itens WHERE pagamento_id IN (SELECT id FROM pagamentos_venda "
+                        "WHERE venda_id = ? AND (turno_id IS NULL OR turno_id = ?))", (venda_id, turno["id"]))
                 self.banco.executar("DELETE FROM pagamentos_venda WHERE venda_id = ? AND (turno_id IS NULL OR turno_id = ?)",
                                     (venda_id, turno["id"]))
             elif v["status"] == "fechada":
@@ -972,7 +1265,7 @@ class CaixaController:
                 destino_id = d["id"]
                 antes = self.obter(destino_id)
                 self._mover_itens(o["id"], destino_id)
-            self.recalcular(destino_id)
+            self._recalcular_protegido(destino_id)
             if d is not None and antes["prepago"]:
                 self._conferir_credito(destino_id, antes["total_cent"] - antes["taxa_cent"])
             registrar_transferencia(self.banco, self.operador_id, "mesa", rotulo_posicao(c_origem, n_origem),
@@ -996,7 +1289,7 @@ class CaixaController:
                 self._mover_itens(o["id"], destino_id)
                 registrar_transferencia(self.banco, self.operador_id, "mesa", rotulo_posicao(c, n),
                                         rotulo_posicao(c_destino, n_destino), o["subtotal_cent"])
-            self.recalcular(destino_id)
+            self._recalcular_protegido(destino_id)
             if antes["prepago"]:
                 self._conferir_credito(destino_id, antes["total_cent"] - antes["taxa_cent"])
         return destino_id
@@ -1015,6 +1308,10 @@ class CaixaController:
             raise ErroNegocio(f"Origem e destino são a mesma {'comanda' if c_destino else 'mesa'}.")
         if not 0 < quantidade <= item["quantidade"]:
             raise ErroNegocio(f"Quantidade inválida (máximo {fmt.fmt_qtd(item['quantidade'], 3)}).")
+        paga = self._qtd_paga(item_id)
+        if quantidade > fmt.arred_qtd(item["quantidade"] - paga):
+            raise ErroNegocio(f"Parte deste item já foi paga nesta conta ({fmt.fmt_qtd(paga, 3)}). Só dá para transferir "
+                              f"até {fmt.fmt_qtd(max(item['quantidade'] - paga, 0), 3)}.")
         with self.banco.transacao():
             destino_id, _ = self.abrir_mesa(n_destino, comanda=c_destino)
             antes = self.obter(destino_id)
@@ -1023,7 +1320,7 @@ class CaixaController:
                 valor_movido = item["total_cent"]
             else:
                 resto = fmt.arred_qtd(item["quantidade"] - quantidade)
-                total_resto = fmt.mult_cent(item["preco_unit_cent"], resto)
+                total_resto = self._total_resto(item, resto, paga)
                 valor_movido = item["total_cent"] - total_resto
                 comissao_resto = fmt.arredondar(
                     fmt._dec(item["comissao_cent"]) * fmt._dec(resto) / fmt._dec(item["quantidade"]))
@@ -1039,8 +1336,8 @@ class CaixaController:
                     self.banco.inserir("itens_venda_partes", {"item_id": novo_id, "produto_id": pt["produto_id"], "fracao": pt["fracao"]})
             self.banco.executar("UPDATE vendas SET ultimo_lancamento_em = ?, status = 'aberta' WHERE id = ?",
                                 (fmt.agora(), destino_id))
-            self.recalcular(origem["id"])
-            self.recalcular(destino_id)
+            self._recalcular_protegido(origem["id"])
+            self._recalcular_protegido(destino_id)
             if antes["prepago"]:
                 self._conferir_credito(destino_id, antes["total_cent"] - antes["taxa_cent"])
             registrar_transferencia(

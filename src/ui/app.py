@@ -28,7 +28,8 @@ CADASTROS = [("unidades", "Unidades"), ("grupos", "Grupos"), ("subgrupos", "Subg
              ("setores_impressao", "Setores de Impressão")]
 MODULO_CADASTRO = {"planos_contas": "cad_plano_contas"}   # os demais seguem o padrão cad_<chave>
 
-LANCAMENTOS = [("contas", "Contas", "lanc_contas"), ("estoque", "Estoque", "lanc_estoque")]
+LANCAMENTOS = [("contas", "Contas", "lanc_contas"), ("estoque", "Estoque", "lanc_estoque"),
+              ("retornaveis", "Retornáveis por cliente", "lanc_estoque")]
 
 RELATORIOS = [
     ("Vendas", [("vendas_periodo", "Venda no período", "rel_vendas"), ("vendas_grupo", "Venda por grupo", "rel_vendas_grupo"),
@@ -605,11 +606,15 @@ class App:
                 mod = MODULO_CADASTRO.get(chave, f"cad_{chave}")
                 if mod in permitidos:
                     m.add_command(label=rotulo, command=lambda c=chave: self.abrir_cadastro(c))
+            if "cad_produtos" in permitidos:
+                m.add_command(label="Promoções e faixas de preço", command=self.abrir_promocoes)
         elif grupo == "Lançamentos":
             for chave, rotulo, mod in LANCAMENTOS:
                 if mod in permitidos:
                     m.add_command(label=rotulo, command=lambda c=chave: self.abrir_lancamento(c))
         elif grupo == "Relatórios":
+            if permitidos & {"rel_estoque", "rel_informativos"}:
+                m.add_command(label="Alertas da operação", command=self.abrir_alertas)
             for sub, itens in RELATORIOS:
                 visiveis = [i for i in itens if i[2] in permitidos
                             and (i[0] != "auditoria_eventos" or ctx.operador.nivel == 4)]
@@ -659,11 +664,34 @@ class App:
         self._unica("cad_" + chave, lambda: JanelaCadastro(self.root, self.ctx, chave))
 
     def abrir_lancamento(self, chave: str) -> None:
+        if chave == "retornaveis":
+            return self.abrir_retornaveis()
         if chave == "estoque":
             self.abrir_estoque()
             return
         from src.ui.lancamentos_ui import JanelaContas
         self._unica("lanc_contas", lambda: JanelaContas(self.root, self.ctx))
+
+    def _abrir_painel_operacional(self, chave, criar):
+        def abrir():
+            janela = self.janelas.get(chave)
+            if janela is not None and janela.winfo_exists():
+                janela.exigir_acesso()
+            return self._unica(chave, criar)
+        ok, janela = tema.tratar(self.root, abrir)
+        return janela if ok else None
+
+    def abrir_retornaveis(self):
+        from src.ui.retornaveis_ui import abrir
+        return self._abrir_painel_operacional("retornaveis", lambda: abrir(self.root, self.ctx))
+
+    def abrir_promocoes(self):
+        from src.ui.promocoes_ui import abrir
+        return self._abrir_painel_operacional("promocoes", lambda: abrir(self.root, self.ctx))
+
+    def abrir_alertas(self):
+        from src.ui.alertas_ui import abrir
+        return self._abrir_painel_operacional("alertas", lambda: abrir(self.root, self.ctx))
 
     def abrir_estoque(self, filtro: str = "todos") -> None:
         """Painel de Estoque (visão geral). Já aberta, a janela só troca o filtro e vem para a frente."""

@@ -322,6 +322,7 @@ class TestCadastrosQt(BaseQt):
         self.banco.cfg_set("usar_caderneta", "1")
         self.banco.cfg_set("usar_delivery", "1")
         self.banco.cfg_set("usar_contas", "1")
+        self.banco.cfg_set("usar_cozinha_bar", "1")
         for chave, _rotulo in JanelaPrincipal.CADASTROS_QT:
             with self.subTest(cadastro=chave):
                 janela = self.janela(JanelaCadastro(self.ctx, chave))

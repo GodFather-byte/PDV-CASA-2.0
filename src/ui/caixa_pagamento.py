@@ -46,6 +46,11 @@ def ler_valor_pagamento(texto: str) -> int:
     return cent
 
 
+def _qtd_curta(q) -> str:
+    """Quantidade sem zeros sobrando: 5 -> "5", 0,25 -> "0,25"."""
+    return fmt.fmt_qtd(q, 3).rstrip("0").rstrip(",")
+
+
 class JanelaPagamento(tk.Toplevel):
     def __init__(self, master, ctx, venda_id: int):
         super().__init__(master)
@@ -161,6 +166,9 @@ class JanelaPagamento(tk.Toplevel):
         if not self.eh_credito:        # dívida de caderneta não se divide entre pessoas
             ttk.Button(cab, text="Dividir conta", takefocus=False, command=self._dividir_conta).pack(
                 side="right", padx=(0, 6))
+            if not v["prepago"] and v["modalidade"] != "caderneta":     # pré-pago e caderneta: sem pagamento por item
+                ttk.Button(cab, text="Pagar itens", takefocus=False, command=self._pagar_itens).pack(
+                    side="right", padx=(0, 6))
         self.grade_pag = tema.Grade(dir_, [("tipo", "Pagamento", 220, "w"), ("valor", "Valor", 110, "e")], altura=4,
                                     estilo="Cx", cor_par=CX["linha_par"])
         self.grade_pag.pack(fill="x", pady=(4, 0))
@@ -385,6 +393,40 @@ class JanelaPagamento(tk.Toplevel):
         self.grade_formas.tree.focus_set()
         return "break"
 
+    def _pagar_itens(self, e=None) -> str:
+        """Divisão da conta por item: escolhe os itens (e quanto de cada), confere o valor exato na forma escolhida e grava
+        o pagamento vinculado aos itens (o mesmo item não pode ser pago duas vezes; remover o pagamento libera os itens)."""
+        forma = self.grade_formas.selecionado()
+        if forma is None:
+            self._aviso("Escolha a forma de pagamento antes de pagar itens.")
+            self.grade_formas.tree.focus_set()
+            return "break"
+        selecao = selecionar_itens_para_pagar(self, self.caixa, self.venda_id)
+        if not selecao:
+            return "break"
+        ok, previa = tema.tratar(self, self.caixa.previa_pagamento_itens, self.venda_id, selecao)
+        if not ok:
+            return "break"
+        acrescimo = self.caixa.acrescimo_da_forma(self.venda_id, int(forma))
+        valor = previa["valor_cent"] + acrescimo
+        nome_forma = next((f["tipo"] for f in self.formas if int(f["id"]) == int(forma)), "")
+        texto = "\n".join(f"{_qtd_curta(ln['quantidade'])} x {ln['nome']}: {fmt.fmt_brl(ln['valor_cent'])}"
+                          for ln in previa["itens"])
+        if acrescimo:
+            texto += f"\nTaxa da forma: {fmt.fmt_brl(acrescimo)}"
+        if not tema.confirmar(self, f"{texto}\n\nReceber {fmt.fmt_brl(valor)} em {nome_forma}?", "Pagar itens"):
+            return "break"
+        ok, _ = tema.tratar(self, self.caixa.pagar_itens, self.venda_id, int(forma), selecao, valor_esperado_cent=valor)
+        self._divisao = None               # pagou por item: a divisão por valor (se houver) é refeita sobre o novo restante
+        self.atualizar()
+        if ok:
+            self._aviso(f"Itens pagos: {fmt.fmt_brl(valor)} em {nome_forma}.", CX["azul"])
+            if self.caixa.liquidar(self.venda_id)["falta"] <= 0:
+                self.btn_fechar.focus_set()
+                return "break"
+        self.grade_formas.tree.focus_set()
+        return "break"
+
     def _autorizar_desconto(self) -> bool:
         if self.desconto_autorizado:
             return True
@@ -480,3 +522,46 @@ class JanelaPagamento(tk.Toplevel):
     def _registrar_falha_de_impressao(e: Exception) -> None:
         from src.core import registro
         registro.registrar_excecao(type(e), e, e.__traceback__, origem="pagamento")
+
+
+def selecionar_itens_para_pagar(master, caixa, venda_id: int) -> list[tuple[int, float]]:
+    """Escolhe, um a um, os itens ainda não pagos e a quantidade de cada (Enter em 'Concluir' termina). Devolve a lista
+    de (item_id, quantidade) para `pagar_itens`; vazia se o operador desistiu."""
+    try:
+        livres = [d for d in caixa.itens_para_divisao(venda_id) if d["qtd_livre"] > 0 and d["valor_livre_cent"] > 0]
+    except ErroNegocio as e:
+        tema.erro(master, str(e))
+        return []
+    if not livres:
+        tema.aviso(master, "Não há itens a pagar: todos já foram pagos por item ou não têm valor próprio.")
+        return []
+    escolhidos: dict[int, float] = {}
+    while True:
+        opcoes = [] if not escolhidos else [("ok", f"Concluir ({len(escolhidos)} item(ns) escolhido(s))")]
+        for d in livres:
+            resta = fmt.arred_qtd(d["qtd_livre"] - escolhidos.get(d["item_id"], 0))
+            if resta > 0:
+                opcoes.append((d["item_id"], f"{d['nome']}  -  a pagar: {_qtd_curta(resta)} "
+                                             f"({fmt.fmt_brl(d['valor_livre_cent'])})"))
+        if len(opcoes) == (1 if escolhidos else 0):
+            return list(escolhidos.items())
+        op = tema.escolher(master, "Pagar itens", opcoes, "Escolha o item e tecle Enter:", altura=min(len(opcoes), 8))
+        if op is None:
+            return []
+        if op == "ok":
+            return list(escolhidos.items())
+        d = next(x for x in livres if x["item_id"] == op)
+        resta = fmt.arred_qtd(d["qtd_livre"] - escolhidos.get(op, 0))
+        if resta == 1 and not escolhidos.get(op):
+            q = 1.0
+        else:
+            def validar(v: str, resta=resta) -> float:
+                q = fmt.validar_qtd(fmt.para_qtd(v))
+                if q <= 0 or q > resta:
+                    raise ValueError(f"Informe de 0 a {_qtd_curta(resta)}.")
+                return q
+            q = tema.pedir_texto(master, "Pagar itens", f"Quantidade de '{d['nome']}' a pagar:",
+                                 _qtd_curta(resta), validar=validar)
+            if q is None:
+                continue
+        escolhidos[op] = fmt.arred_qtd(escolhidos.get(op, 0) + q)

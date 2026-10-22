@@ -64,10 +64,16 @@ class TesteAuditoriaEstruturada(BaseTeste):
         self.assertEqual(len(self.eventos()), quantidade)
 
     def test_promocao_auditada_como_preco(self):
-        produto = self.novo_produto()
+        produto = self.novo_produto(promo_de="03/10/2026", promo_ate="04/10/2026")
         self.cad.salvar("produtos", {"promo_preco_cent": "6,00"}, produto)
-        evento = self.eventos("produtos", "preco_alterado")[0]
+        eventos = self.eventos("produtos", "preco_alterado")
+        self.assertEqual(len(eventos), 1)
+        evento = eventos[0]
+        self.assertEqual(evento["antes"]["promo_preco_cent"], 0)
         self.assertEqual(evento["depois"]["promo_preco_cent"], 600)
+        self.assertEqual(evento["operador_id"], self.adm.id)
+        cadastro = self.cad.obter("produtos", produto)
+        self.assertEqual((cadastro["promo_de"], cadastro["promo_ate"]), ("2026-10-03", "2026-10-04"))
 
     def test_sem_operador_e_sistema_nao_herda_responsavel_do_registro(self):
         self.contexto.operador = None

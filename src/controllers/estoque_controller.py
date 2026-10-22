@@ -428,15 +428,98 @@ class EstoqueController:
             return "Nome indicativo"
         return None
 
-    def _consumo_30_dias(self) -> dict[int, float]:
-        """Saídas líquidas no intervalo local [agora - 30 dias, agora], já em unidades."""
+    def _consumo_30_dias(self, terminal: int | None = None) -> dict[int, float]:
+        """Saídas líquidas no intervalo local [agora - 30 dias, agora], já em unidades.
+
+        Com `terminal`, conta só as vendas (e os estornos) daquele caixa."""
         agora = fmt.agora()
         inicio = (datetime.fromisoformat(agora) - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+        junta = "JOIN vendas v ON v.id = m.ref_id" if terminal is not None else ""
+        filtro = "AND v.terminal = ?" if terminal is not None else ""
+        params = (inicio, agora) + ((terminal,) if terminal is not None else ())
         return {r["produto_id"]: max(round(-r["saldo"], fmt.CASAS_QTD), 0)
                 for r in self.banco.todos(
-                    """SELECT produto_id, SUM(quantidade) AS saldo FROM movimentos_estoque
-                       WHERE tipo IN ('venda', 'estorno_venda') AND ref_tipo = 'venda'
-                         AND criado_em >= ? AND criado_em <= ? GROUP BY produto_id""", (inicio, agora))}
+                    f"""SELECT m.produto_id, SUM(quantidade) AS saldo FROM movimentos_estoque m {junta}
+                       WHERE m.tipo IN ('venda', 'estorno_venda') AND m.ref_tipo = 'venda'
+                         AND m.criado_em >= ? AND m.criado_em <= ? {filtro} GROUP BY m.produto_id""", params)}
+
+    # ---------------------------------------------------- reposição pelo giro
+    COBERTURA_DIAS = 7
+
+    def terminal_atual(self) -> int:
+        return self.banco.cfg_int("terminal", 1)
+
+    def terminais(self) -> list[int]:
+        """Caixas conhecidos (cadastrados ou com vendas), incluindo o terminal desta máquina."""
+        achados = {r[0] for r in self.banco.todos("SELECT terminal FROM maquinas")}
+        achados |= {r[0] for r in self.banco.todos("SELECT DISTINCT terminal FROM vendas")}
+        achados.add(self.terminal_atual())
+        return sorted(achados)
+
+    def reposicao_giro(self, terminal: int | None = None, *, cobertura_dias: int = COBERTURA_DIAS,
+                       adega: bool = False, situacao: str | None = None, texto: str = "",
+                       grupo: str | None = None) -> list[dict]:
+        """SUGESTÃO de compra pelo giro: vendas líquidas de 30 dias ÷ 30 × dias de cobertura − saldo.
+
+        `terminal` recorta o consumo de um caixa (None = todos); o saldo é sempre o do estoque.
+        Só entram produtos que controlam estoque e tiveram consumo. Nunca cria pedido sozinha."""
+        if type(cobertura_dias) is not int or not 1 <= cobertura_dias <= 365:
+            raise ErroNegocio("Informe a cobertura em dias inteiros, de 1 a 365.")
+        if terminal is not None and (type(terminal) is not int or terminal < 1):
+            raise ErroNegocio("Terminal inválido.")
+        consumos = self._consumo_30_dias(terminal)
+        sugestoes = []
+        for p in self._painel(situacao, texto, grupo, adega=adega):
+            consumo = consumos.get(p["id"], 0)
+            if not p["controla_estoque"] or consumo <= 0:
+                continue
+            media = consumo / 30
+            alvo = fmt.arred_qtd(media * cobertura_dias)
+            sugerido = fmt.arred_qtd(max(alvo - max(p["qt_atual"], 0), 0))
+            if sugerido <= 0:
+                continue
+            sugestoes.append({**p, "terminal": terminal, "consumo_30_dias": consumo, "media_diaria": media,
+                              "cobertura_dias": max(p["qt_atual"], 0) / media, "alvo_qtd": alvo,
+                              "sugerido": sugerido})
+        return sorted(sugestoes, key=lambda p: (p["cobertura_dias"], p["nome"]))
+
+    def pedido_por_giro(self, fornecedor_id: int, produtos: list[tuple[int, float]] | None = None,
+                        terminal: int | None = None, **recorte) -> int:
+        """Cria um PEDIDO (o saldo só muda na entrega) a partir da sugestão pelo giro, por ação explícita.
+
+        `produtos` escolhe/ajusta quantidades à mão, mas só aceita itens da sugestão atual."""
+        sugestoes = {p["id"]: p for p in self.reposicao_giro(terminal, **recorte)}
+        itens = produtos if produtos is not None else [(pid, p["sugerido"]) for pid, p in sugestoes.items()]
+        if any(pid not in sugestoes for pid, _ in itens):
+            raise ErroNegocio("O pedido pelo giro só aceita produtos da sugestão atual.")
+        itens = [(pid, self._validar_quantidade(q)) for pid, q in itens]
+        if not itens:
+            raise ErroNegocio("Nenhum produto precisa de reposição pelo giro agora.")
+        with self.banco.transacao():
+            lanc = self.criar_lancamento(
+                "pedido", fornecedor_id=fornecedor_id,
+                descricao="Pedido sugerido pelo giro" + (f" - caixa {terminal}" if terminal else ""))
+            for pid, q in itens:
+                self.adicionar_item(lanc, pid, q)
+        return lanc
+
+    def texto_reposicao_giro(self, sugestoes: list[dict], terminal: int | None = None,
+                             cobertura_dias: int = COBERTURA_DIAS) -> str:
+        """Texto para visualizar/imprimir a sugestão do giro."""
+        escopo = f"CAIXA {terminal}" if terminal else "TODOS OS CAIXAS"
+        linhas = [f"REPOSIÇÃO PELO GIRO - {fmt.fmt_data(fmt.hoje())}",
+                  f"{escopo} | vendas líquidas de 30 dias | cobertura de {cobertura_dias} dias",
+                  "SUGESTÃO: revise antes de comprar.", "-" * 78,
+                  f"{'Produto':<30}{'Tem':>9}{'Giro 30d':>10}{'Cobre':>9}{'Comprar':>10}", "-" * 78]
+        for p in sugestoes:
+            linhas.append(f"{p['nome'][:29]:<30}{self._q(p['qt_atual']):>9}{self._q(p['consumo_30_dias']):>10}"
+                          f"{p['cobertura_dias']:>8.1f}d{self._q(p['sugerido']):>10}")
+        return "\n".join(linhas)
+
+    @staticmethod
+    def _q(q: float) -> str:
+        t = fmt.fmt_qtd(q, fmt.CASAS_QTD)
+        return t.rstrip("0").rstrip(",") if "," in t else t
 
     def painel(self, situacao: str | None = None, texto: str = "", grupo: str | None = None,
                adega: bool = False) -> list[dict]:
