@@ -4,7 +4,8 @@
 
 - Titular autorizou resolver a mesclagem, validar, commitar na `main` e publicar no
   GitHub sem force. Trabalho local da central em `9951e3c`, integrado com a main
-  remota `730fd76` (PR #14). Publicação será confirmada após o push.
+  remota `730fd76` (PR #14). Destino autorizado: `origin/main`, sem force;
+  conferir estado remoto e CI após o commit.
 - PDV **1.7.0**, licenciador **1.2.0**, esquema SQLite **25**.
 - Conflitos resolvidos preservando os dois trabalhos: configurações Tk/Qt mantêm
   seleção/preview de logotipo, proteção dos campos secretos e botão de pendências.
@@ -37,7 +38,14 @@
   direcionados; autotestes dos binários PDV Tk/Qt e licenciador passaram.
 - Primeira rodada da mesclagem: 108 casos, uma falha de importação por Pillow
   ausente. Instalado Pillow 12.3 conforme `requirements.txt`; sem alteração do manifesto.
-- Suíte completa pós-mesclagem em execução; registrar resultado antes do commit.
+- Suíte completa pós-mesclagem: **2453 casos, 10 ignorados, duas falhas** no
+  teste do indicador de licença: `Mock.cfg_bool` não configurado era verdadeiro,
+  simulando ponte ativa em cenários da nuvem legada. Substituído o banco simulado
+  pelo banco real em memória; adicionados dois casos da ponte ativa.
+- Após esse ajuste somente nos testes, **135 testes direcionados passaram**,
+  incluindo os seis casos do indicador, logotipos Tk/Qt, configurações,
+  integrações, NF-e, ponte, central e autoteste. A suíte completa não foi repetida.
+  Pylance sem erros de sintaxe nas duas configurações; diff sem erros de espaços.
 - Os ZIPs `dist\WillPDV-1.7.0-portatil.zip` e
   `dist\WillLicencas-1.2.0-central-portatil.zip` são **anteriores à mesclagem**:
   não contêm as melhorias remotas agora integradas. Não anunciar novos binários.
