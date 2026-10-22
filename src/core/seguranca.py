@@ -8,7 +8,7 @@ import hmac
 import os
 import re
 
-_ITERACOES = 60_000
+_ITERACOES = 600_000     # OWASP para PBKDF2-SHA256; hashes antigos (60 mil) seguem válidos e são regravados no login
 FORMATO_SENHA = re.compile(r"[A-Za-z0-9]{1,10}")     # manual: até 10 caracteres alfanuméricos
 
 
@@ -30,6 +30,14 @@ def conferir(senha: str, armazenado: str | None) -> bool:
         h = hashlib.pbkdf2_hmac("sha256", _normalizar(senha), bytes.fromhex(sal_hex), int(iteracoes))
         return hmac.compare_digest(h.hex(), hash_hex)
     except (ValueError, TypeError):
+        return False
+
+
+def precisa_atualizar(armazenado: str | None) -> bool:
+    """True se o hash guardado usa menos iterações que o padrão atual (regravar após um login correto)."""
+    try:
+        return int((armazenado or "").split("$")[1]) < _ITERACOES
+    except (IndexError, ValueError):
         return False
 
 

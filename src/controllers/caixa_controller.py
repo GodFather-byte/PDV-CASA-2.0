@@ -816,7 +816,7 @@ class CaixaController:
                 servico = v["servico_cent"]
             else:
                 base = sum(i["total_cent"] for i in itens_cobrados if i["cobra_servico"]) + rodizio_total
-                servico = fmt.pct_de(base, float(self.banco.cfg("servico_pct", "10") or 0))
+                servico = fmt.pct_de(base, self.banco.cfg("servico_pct", "10") or 0)
         taxa = v["taxa_cent"]
         if v["modalidade"] == "mesa" and v.get("comanda") and not v.get("rodizio"):
             taxa = self.complemento_consumacao(v["posicao"], subtotal - desconto)      # comanda não tem taxa de entrega

@@ -9,9 +9,18 @@
   promoções sem acúmulo. Sem ativar cobrança nem integrações fiscais.
 - PDV **1.8.0**, licenciador permanece **1.2.0**, esquema **27**.
 - Base publicada anteriormente: `df0864f`, main local/remota sincronizadas ao começar.
-  Nova entrega operacional concluída e validada, preparada para commit local.
-  Durante o trabalho `origin/main` avançou até `e3484dd` (PR #15, segurança);
-  esse avanço **não foi integrado** nesta entrega. Não houve push novo.
+  Entrega operacional commitada em `7fb7cb1`. Titular autorizou integrar a
+  main remota `e3484dd` (PR #15); merge preserva ambas as linhas de trabalho.
+  Não houve push novo nesta etapa.
+
+## Endurecimento remoto preservado (PR #15)
+
+- PBKDF2 de senha de operador com 600 mil iterações; hashes antigos (60 mil) seguem válidos e
+  são regravados no login correto (`seguranca.precisa_atualizar`, `AcessoController.autenticar`).
+- `BancoDados.inserir/atualizar` recusam tabela/coluna fora de `[A-Za-z0-9_]`.
+- `servico_pct` vai direto a `Decimal` (sem `float`). Zip duplicado removido da raiz.
+- Testes: `tests/test_seguranca_auditoria.py` (inclui vetores RFC 8032 do Ed25519).
+- Pendências sugeridas: lint/tipos/cobertura no CI; piloto em loja real (impressora, balança, queda de energia).
 
 ## Implementação
 
@@ -54,6 +63,9 @@
   validação sintática foi feita pelo Python, sem alegar type-check Pylance.
 - Log da suíte contém exceções simuladas de propósito e avisos Tk de callbacks
   destruídos; resultado final do unittest foi OK. Não foram ocultados.
+- Após integrar PR #15: **154 testes direcionados passaram** (segurança,
+  acesso, caixa, cancelamento parcial, divisão por item, retornáveis, promoções
+  e menus Tk/Qt). Não repetida a suíte inteira após este merge.
 
 ## Homologação e pendências
 
@@ -63,8 +75,8 @@
   outra pasta não isola `%LOCALAPPDATA%\WILL-PDV`. Uma interface por vez.
 - Homologar periféricos reais, teclado e escala. Paridade de menus não certifica
   cada detalhe ergonômico nem impressão/gaveta/balança reais.
-- Antes de publicar, integrar normalmente a main remota e validar a interação
-  com PR #15 (senhas, SQL e percentual de serviço). Não usar force push.
+- Merge do PR #15 validado e concluído na main local. Não usar force push.
+  Publicação e novos pacotes permanecem pendentes.
 - Divisão por item não atende caderneta, pré-pago ou itens inclusos no rodízio.
   Alteração que reprecifica item pago é recusada até remover o pagamento;
   pagamentos legados por valor não recebem atribuição automática a itens.
