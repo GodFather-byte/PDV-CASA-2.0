@@ -1,7 +1,7 @@
 # Confiabilidade e operação — 1.9
 
 As melhorias gerais atendem os perfis comerciais existentes, sem depender do perfil
-Adega. Tk continua disponível; Qt/PySide6 continua em homologação gradual.
+Adega. A interface Tk foi removida; o PDV usa só Qt/PySide6, ainda em homologação gradual.
 Não ative NFC-e, iFood, cobrança automática ou serviços bancários por causa desta entrega.
 
 ## 1. Roteiro automático isolado

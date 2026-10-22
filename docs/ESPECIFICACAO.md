@@ -156,7 +156,7 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
   usada tem `na_gaveta`, quando há troco e na sangria. As vias são o maior `tipos_pagamento.vias` (1 a 3). O
   logotipo é selecionado com preview em Configurações > Loja (PNG/JPG/JPEG/BMP, até 5 MiB e 16 milhões de pixels),
   copiado junto ao banco e normalizado para BMP de até 384x192, preservando proporção. BMP legado continua aceito;
-  o cabeçalho do caixa Tk/Qt também mostra o logo. Sem imagem válida, a identidade textual permanece.
+  o cabeçalho do caixa também mostra o logo. Sem imagem válida, a identidade textual permanece.
   Veja limites de impressão e backup em `ADEGA.md`. Tudo é não fiscal. As impressoras do computador são listadas pela API do
   Windows (`hardware/impressoras_so.py`, ctypes) e o envio RAW pelo spooler usa a mesma API: o `pywin32` deixou de ser
   necessário. As portas COM vêm do registro do Windows (e do `pyserial`, só para a descrição).
@@ -250,7 +250,7 @@ Estas regras foram escolhidas por quem implementou; confirme com o dono da loja.
 
 ### Preparação de iFood e NFC-e SP
 
-Configurações > Integrações (Tk) ou Parâmetros e módulos (Qt) permite marcar iFood e NFC-e como
+Configurações > Parâmetros e módulos permite marcar iFood e NFC-e como
 **Desativado** (padrão) ou **Em preparação (sem operação)** e informar o regime tributário a confirmar
 com o contador. O botão **Pendências das integrações** consulta somente a configuração já salva.
 Não há opção de ativar em produção, contratação, envio de dados, recebimento de pedidos ou emissão

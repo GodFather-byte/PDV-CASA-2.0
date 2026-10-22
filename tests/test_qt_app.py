@@ -383,7 +383,7 @@ class TestAppQt(BaseQt):
         self.assertIn("não configurada", principal.indicadores["sync"].text())
         self.assertIn("não executada automaticamente", principal.indicadores["sync"].text())
         principal.mostrar_limites()
-        self.assertIn("--tk", principal.mensagem.text())
+        self.assertIn("duas instâncias", principal.mensagem.text())
         self.assertIn("indisponíveis", principal.mensagem.text())
 
     def test_menu_admin_abre_contas_unica_e_fecha_na_sessao(self):

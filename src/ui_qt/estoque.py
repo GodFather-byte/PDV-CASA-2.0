@@ -24,7 +24,7 @@ def _curta(quantidade):
 
 
 class _DialogoQuantidade(QDialog):
-    """Entrada rápida de quantidade com a mesma validação e prévia do painel Tk."""
+    """Entrada rápida de quantidade com a mesma validação e prévia do painel."""
 
     def __init__(self, produto, tipo, parent=None):
         super().__init__(parent)

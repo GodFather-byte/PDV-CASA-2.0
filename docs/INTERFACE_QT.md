@@ -177,7 +177,7 @@ sincronização contínua pelo painel Qt.
 - Saída sem consumo (código 1002): libera a comanda/mesa vazia (ou pergunta qual),
   pelo `CaixaController.liberar_saida`, e emite o ticket de saída. Com consumo é
   recusada sem alterar a venda.
-- **Operações do caixa** reúne os fluxos complementares, sem abrir Tk:
+- **Operações do caixa** reúne os fluxos complementares:
   - Adega/comércio sem mesas (`usar_mesas = N`): esconde painel e posição,
     desativa ações exclusivas de mesas e mantém delivery/caderneta conforme os módulos.
     Aceita `6*código`, cadastro rápido de código de barras desconhecido com permissão

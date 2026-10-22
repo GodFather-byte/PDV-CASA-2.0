@@ -259,7 +259,7 @@ class JanelaPrincipal(QMainWindow):
         conteudo.setContentsMargins(24, 12, 12, 12)
         conteudo.addWidget(tema.texto("Sua operação, em foco", "titulo"))
         conteudo.addWidget(tema.texto(
-            "Validação gradual: Qt e Tk compartilham as regras, não as janelas.", "suave"))
+            "Caixa, estoque, relatórios e gestão em uma única interface.", "suave"))
         self.indicadores = {}
         for chave, titulo in (("turno", "CAIXA"), ("licenca", "LICENÇA"),
                               ("backup", "PROTEÇÃO DOS DADOS"), ("impressao", "RECUPERAÇÃO DA IMPRESSÃO"),
@@ -274,8 +274,7 @@ class JanelaPrincipal(QMainWindow):
             self.indicadores[chave] = rotulo
             conteudo.addWidget(cartao)
         conteudo.addWidget(tema.texto(
-            "Interface em homologação: valide os fluxos em cópia dos dados e com periféricos reais. "
-            "O caminho --tk permanece disponível durante a transição. "
+            "Valide os fluxos em cópia dos dados e com periféricos reais antes de operar. "
             "Não abra duas instâncias sobre o mesmo banco.", "aviso"))
         self.mensagem = tema.texto("", "aviso")
         conteudo.addWidget(self.mensagem)
@@ -401,7 +400,7 @@ class JanelaPrincipal(QMainWindow):
             "Telegram, alertas, retornáveis, promoções, cozinha/bar, utilitários, importação, ficha técnica, "
             "impressão, backup e restauração. Use a busca lateral para localizar os módulos. "
             "Valide em cópia dos dados. Serviços externos e periféricos indisponíveis não são simulados. "
-            "Encerre antes de usar --tk; não há fallback para Tk nem duas instâncias no mesmo banco.")
+            "Não abra duas instâncias sobre o mesmo banco.")
 
     def _unica(self, chave, criar):
         janela = self.janelas.get(chave)
@@ -425,7 +424,7 @@ class JanelaPrincipal(QMainWindow):
             return self._unica("caixa", lambda: JanelaCaixa(self.ctx, self))
         except Exception as erro:
             logging.getLogger("pdv.qt").exception("Falha ao abrir o caixa Qt.")
-            self.mensagem.setText(f"Não foi possível abrir o caixa Qt: {erro}. Sem fallback; use --tk.")
+            self.mensagem.setText(f"Não foi possível abrir o caixa Qt: {erro}. Consulte o log e reinicie o programa.")
 
     def abrir_estoque(self):
         try:
@@ -809,7 +808,7 @@ class App:
             QMessageBox.critical(
                 self.principal or self.login, "Erro nesta tela",
                 "Ocorreu um erro inesperado. O que já estava gravado foi preservado. "
-                "Consulte o log; se repetir, encerre o piloto e use --tk.")
+                "Consulte o log; se repetir, reinicie o programa.")
 
     def entrar(self):
         if self._finalizada:
@@ -906,7 +905,7 @@ class App:
 
 
 def preparar_inicio(parent=None):
-    """Mesmas APIs de proteção do bootstrap Tk, com perguntas exclusivamente Qt."""
+    """Mesmas APIs de proteção do bootstrap, com perguntas exclusivamente Qt."""
     from src.core.instancia import InstanciaUnica
     from src.database import protecao
 
@@ -971,8 +970,7 @@ def main():
     except Exception:
         registro.registrar_excecao(*sys.exc_info(), "início Qt")
         QMessageBox.critical(None, "WillPDV • Falha no início",
-                             "Não foi possível iniciar o piloto Qt. Nenhum fallback foi executado. "
-                             "Consulte o log e, após encerrar, use --tk.")
+                             "Não foi possível iniciar o WillPDV. Consulte o log e reinicie o programa.")
         return 1
     finally:
         if not ciclo_transferido:

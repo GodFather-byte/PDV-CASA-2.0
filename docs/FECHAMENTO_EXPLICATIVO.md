@@ -7,11 +7,10 @@ justificativa o operador ativo pode concluir, sem precisar modificar os valores
 para fazer o caixa bater. Não foi criada permissão nova: o caixa permanece
 disponível aos perfis atuais, inclusive nível zero.
 
-## Integração Tk e Qt
+## Integração Qt
 
 Diálogos especializados disponíveis:
 
-- Tk: `src.ui.fechamento_ui.coletar(master, ctx, turno_id, valor_final_cent)`.
 - Qt: `src.ui_qt.fechamento.coletar(ctx, turno_id, valor_final_cent, parent=None)`.
 
 Ambos retornam `None` no cancelamento, ou

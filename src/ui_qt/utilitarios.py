@@ -16,7 +16,7 @@ class JanelaUtilitarios(QDialog):
     Não abre restauração, fila nem configuração de backup externo; `verificar_backup`
     abre `JanelaVerificarBackup` (ensaio isolado, sem tocar o banco em uso). Erros das
     ações aparecem em ``mensagem``; resultados e caminhos ficam em ``status``.
-    A construção exige sessão ativa; cada ação exige sua permissão Tk.
+    A construção exige sessão ativa; cada ação exige sua permissão.
     """
 
     ACOES = (

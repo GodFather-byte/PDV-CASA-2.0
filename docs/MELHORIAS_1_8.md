@@ -42,8 +42,7 @@ Detalhes: [caixa](CAIXA_MELHORIAS.md), [estoque e etiquetas](ESTOQUE.md),
 1. Faça backup e prepare uma cópia do banco fora da pasta de dados da produção.
 2. Informe essa cópia por `PDV_DB` antes de executar o programa. Extrair um pacote
    em outra pasta não isola o banco padrão do usuário.
-3. Abra uma interface de cada vez: `python -m src.app --qt` ou
-   `python -m src.app --tk`. O Tk permanece disponível durante a homologação.
+3. Abra o PDV com `python -m src.app` (interface Qt).
 4. Confira saldo inicial, turno, pagamentos, cancelamentos, preços e estoque
    na cópia. Repita com as permissões reais dos operadores.
 5. Homologue teclado, leitor, escala da tela, gaveta, balança, etiquetas e cozinha

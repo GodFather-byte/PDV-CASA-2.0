@@ -196,10 +196,9 @@ insuficiente, testes de movimentos/estornos/composição e consulta agregada com
 - `src/controllers/produto_controller.py`: explicação reutilizável e cálculo compartilhado de preço por quantidade.
 - `src/controllers/caixa_controller.py`: retrato aplicado por item, preservando agrupamento, reprecificação e produto excluído.
 - `src/database/esquema.py`: migração 24 para o retrato de preço opcional e índice parcial do consumo.
-- `src/ui/caixa_ui.py`, `src/ui_qt/caixa.py`: exibem rótulo, regra e economia; detalhe legível no Tk e dica no Qt.
-- `src/ui/adega_dialogos.py`: atalhos, prévia financeira e validação de cascos.
+- `src/ui_qt/caixa.py`: exibe rótulo, regra e economia; dica no Qt.
 - `src/controllers/estoque_controller.py`: recorte Adega, cobertura, pedido/lista filtrados e prioridade de reposição.
-- `src/ui/estoque_ui.py`, `src/ui_qt/estoque.py`: seletor Geral/Adega para compras, cobertura e identificação operacional.
+- `src/ui_qt/estoque.py`: seletor Geral/Adega para compras, cobertura e identificação operacional.
 - `tests/test_adega_regras.py`, `tests/test_adega_tk.py`, `tests/test_adega_qt.py`: regressão de preço, cascos e notebook.
 - `tests/test_estoque.py`, `tests/test_qt_estoque.py`, `tests/test_ui.py`: recorte, filtros e prioridades.
 - `tests/test_estoque_adega_melhorias.py`, `tests/test_adega_retrato.py`: cobertura, compras, classificação e auditoria histórica.

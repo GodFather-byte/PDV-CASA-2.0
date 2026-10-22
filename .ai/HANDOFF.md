@@ -23,7 +23,11 @@
 
 - Homologar o Qt no balcão (teclado, impressora, gaveta, balança, leitor) antes de gerar o novo Setup: a rede
   de segurança do Tk não existe mais.
-- Revisar manualmente se alguma regra só tinha teste em tela Tk (consultar `git log -- tests/` / `git show HEAD~1`).
+- Revisão de cobertura (Haiku, só leitura) listou regras que só tinham teste em tela Tk. Já repostas em
+  `tests/test_regras_recuperadas.py`: vias do fechamento 1-3, nome da casa obrigatório, alerta de gaveta (Qt).
+  Ainda sem teste equivalente confirmado (ver `git show 4e6e6d2 -- tests/`): falha de impressão não duplicar
+  devolução; ticket de saída 1002 disparado no pagamento; garota inativa/sem turno no modo comissão; primeiro
+  acesso/perfil; exclusão em massa só com a palavra de confirmação; aviso de giro de caixa sem venda.
 - Limpar menções "Tk" restantes em `docs/` e comentários do código quando convier.
 
 ---

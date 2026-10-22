@@ -13,7 +13,7 @@ consumo (código 1002) libera a comanda vazia e imprime o ticket.
 Adega: balcão sem painel de mesas quando desligadas, quantidade antes do código (6*código), cadastro rápido do leitor,
 escolha natural/gelada e cascos. Atacado e agrupamento ficam exclusivamente no controlador.
 Cascos são itens separados: ao cancelar uma bebida, confira também o casco (e vice-versa).
-As operações complementares usam os mesmos controladores e periféricos do Tk, sem abrir janelas Tk.
+As operações complementares usam os mesmos controladores e periféricos do caixa.
 """
 from __future__ import annotations
 

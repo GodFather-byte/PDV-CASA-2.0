@@ -175,7 +175,7 @@ def estado(banco) -> dict:
 
 
 def resumo(banco) -> str:
-    """Texto da situação da central (sem o token) para Tk e Qt."""
+    """Texto da situação da central (sem o token) para a interface Qt."""
     e = estado(banco)
     linhas = [f"Central do fornecedor: {'LIGADA' if e['ativa'] else 'desligada'}.",
               f"ID deste caixa: {e['caixa_id'] or '(vazio)'}",
