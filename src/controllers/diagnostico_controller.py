@@ -1,6 +1,6 @@
 """Diagnóstico central dos equipamentos do caixa: impressora, gaveta, balança e leitor de código de barras.
 
-Regras (iguais nas telas Tk e Qt):
+Regras das telas Qt:
 - `resumo()` e `avaliar_leitura()` só leem a configuração e o cadastro: nunca acionam equipamento.
 - `verificar_impressora()` consulta o Windows (lista de impressoras, spooler) sem imprimir nada.
 - Os testes ativos (`testar_impressora`, `testar_gaveta`, `ler_balanca`) só rodam com o operador que a tela capturou

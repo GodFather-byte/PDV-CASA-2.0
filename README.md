@@ -9,7 +9,7 @@ licença mensal e atualizações pela nuvem.
 
 > **Estado do projeto:** em desenvolvimento. O sistema local (cadastros, caixa, mesas,
 > caderneta, entrega, estoque, contas, relatórios, utilitários e configurações dos
-> manuais Willyan) está implementado em Python + SQLite + Tkinter e coberto
+> manuais Willyan) está implementado em Python + SQLite + Qt (PySide6) e coberto
 > por testes automatizados de regras e de telas. Ainda **não foi validado em loja**: não há
 > emissão fiscal, TEF nem leitura real de balança, e a impressora térmica e a gaveta só foram testadas com
 > impressora simulada (ver
@@ -65,10 +65,9 @@ qualquer operador cuja senha seja igual ao nome); depois crie os operadores em M
 Cinco senhas erradas seguidas bloqueiam aquele usuário (ou a senha de supervisor) por 5 minutos. Operadores de nível 0
 entram direto no caixa. O primeiro acesso ao caixa pede o número do turno e o valor do fundo de caixa.
 
-O caixa continua usando SQLite local e a interface Tk completa pode funcionar sem pacotes externos.
-Instale `pip install -r requirements.txt` para Qt, backup criptografado e integrações.
-O instalador Windows já inclui as dependências.
-`python -m src.app --qt` abre a interface Qt em migração; `--tk` abre explicitamente a atual.
+O caixa usa SQLite local. A interface do PDV é **somente Qt (PySide6)**: instale `pip install -r requirements.txt`
+(Qt, backup criptografado e integrações). O instalador Windows já inclui as dependências.
+`python -m src.app` abre o PDV. O gerador de licenças (`licenciador/`) continua em Tkinter.
 Confira os limites antes de operar na [documentação Qt](docs/INTERFACE_QT.md).
 Veja também [backup externo criptografado](docs/BACKUP_EXTERNO.md) e
 [auditoria estruturada](docs/AUDITORIA.md).
@@ -132,7 +131,7 @@ se o cupom não puder ser preparado a venda continua gravada e a tela avisa para
 Em **Configurações > Aparência** (a primeira aba) escolha **Modo escuro** (o padrão) ou **Modo claro**. Vale para tudo: entrada,
 menu, caixa e as telas de cadastro, relatórios, estoque e configurações. Ao gravar, o visual muda na hora: o menu é refeito e as
 telas que estavam abertas são fechadas (cada uma guarda as cores de quando abriu), então termine o que estiver editando antes de
-trocar. A escolha fica gravada e o programa já abre no modo escolhido. As cores dos dois modos estão em `src/ui/paleta.py`, com
+trocar. A escolha fica gravada e o programa já abre no modo escolhido. As cores dos dois modos estão em `src/ui_qt/tema.py`, com
 teste de contraste para o texto continuar legível em ambos.
 
 ## Mesas e comandas
@@ -535,7 +534,7 @@ cliente liga dizendo que "não entra".
 - Gerar localmente (Windows): `pip install pyinstaller` e, na raiz do repositório, `python build_licenciador.py` (gera
   `dist\WillLicencas\WillLicencas.exe` e, com o [Inno Setup 6](https://jrsoftware.org/isdl.php), o instalador em
   `instalador\saida\WillLicencas-Setup-<versão>.exe`). Para só o `.exe`: `python build_licenciador.py --sem-instalador`.
-- Rodar do código-fonte: `python -m licenciador.app` (precisa do Tkinter, que vem com o Python do Windows). Autoteste:
+- Rodar do código-fonte: `python -m licenciador.app` (precisa do Tkinter, que vem com o Python do Windows; só o gerador de licenças usa). Autoteste:
   `python -m licenciador.app --autoteste`.
 - Testes: `python -m unittest tests.test_licenciador`.
 - A versão do programa fica em `VERSAO` em [`licenciador/nucleo.py`](licenciador/nucleo.py) (hoje 1.1.0); o número do

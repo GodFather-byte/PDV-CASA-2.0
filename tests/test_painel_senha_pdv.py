@@ -1,5 +1,5 @@
 """O dono troca a senha do painel pelo próprio PDV (Configurações > Nuvem): as regras e a nuvem de verdade, sem tela.
-A janela do Tk tem o seu arquivo (test_painel_senha_tk.py); a do Qt, o test_qt_configuracoes.py."""
+A janela Qt é testada em test_qt_configuracoes.py."""
 from __future__ import annotations
 
 import unittest

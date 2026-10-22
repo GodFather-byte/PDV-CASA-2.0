@@ -67,7 +67,7 @@ conta na noite que começou na véspera.
 
 O agendamento nasce **ativo às 23:00, no relógio local do computador**. Isso não liga o bot:
 continua exigindo token, Telegram ligado e celular do dono explicitamente pareado.
-Em **Configurações > Telegram**, tanto Tk quanto Qt, edite o horário e a opção
+Em **Configurações > Telegram**, edite o horário e a opção
 **Resumo diário**, depois use **Salvar resumo**. A aba geral Telegram também oferece
 os dois campos. Depois da aplicação inicial descrita abaixo, horário vazio ou resumo
 desativado pausam o envio. Desligar o Telegram pausa também a fila já existente.
@@ -124,7 +124,7 @@ Reembolso externo é **declaração do operador**, nunca prova de estorno no ban
 
 ## Alertas operacionais
 
-O botão **🚨 Alertas** (ou `alertas`, `avisos`, `pendências`) e o painel **Alertas da casa** do PDV (Tk e Qt) mostram a mesma
+O botão **🚨 Alertas** (ou `alertas`, `avisos`, `pendências`) e o painel **Alertas da casa** do PDV mostram a mesma
 lista, montada só com o banco deste caixa, sem rede e sem gravar nada. Atualiza quando o dono pede (botão ou F5); o
 bot **não** manda esses alertas sozinho, para não virar spam. Os avisos automáticos continuam só os de sempre (estoque
 que cruzou o mínimo, cancelamento, fechamento, licença), pela fila com repetição controlada.
@@ -167,7 +167,7 @@ mensagem. Em poucos segundos a tela mostra o celular na lista e o bot responde *
 Toque em **Enviar mensagem de teste**. Pronto. Para escolher quais avisos receber (inclusive ligar o aviso de **cada venda**, para ver o dinheiro entrando ao vivo, e o horário do resumo):
 **Configurações > Configurações > aba Telegram**.
 O resumo diário também pode ser ativado/pausado e ter seu horário editado diretamente
-na própria janela Telegram (Tk e Qt).
+na própria janela Telegram.
 
 Quer que um sócio também receba? Repita o passo 3 com o celular dele (gere um código novo).
 
@@ -208,7 +208,7 @@ uma senha.
 
 - Código: `src/sync/telegram_api.py` (cliente da Bot API, só biblioteca padrão), `src/controllers/notificacoes.py` (grava o aviso
   na fila; nunca levanta erro), `src/controllers/telegram_textos.py` (os textos), `src/controllers/telegram_controller.py`
-  (pareamento, fila, comandos e as duas threads de segundo plano), `src/ui/telegram_ui.py` (a tela).
+  (pareamento, fila, comandos e as duas threads de segundo plano), `src/ui_qt/telegram.py` (a tela).
 - Tabelas `telegram_chats` e `telegram_fila` (esquema v11); chaves `telegram_*` em `config`; módulo de acesso `cfg_telegram` (nível 4).
 - O PDV só faz conexões de **saída** para `api.telegram.org:443` (envio e *long polling* de 25 s). Se a rede da loja usa proxy ou
   firewall, libere esse endereço.

@@ -7,10 +7,7 @@ from unittest import mock
 
 from src.controllers.impressao_controller import ImpressaoController
 from src.core.erros import ErroNegocio
-from src.ui.painel_mesas import montar_tiles
 from tests.test_caixa import BaseCaixa
-from tests.test_comissao_na_tela import BaseNaTela
-from tests.ui_robo import botoes, clicar, entradas
 
 
 class BasePrepago(BaseCaixa):
@@ -183,87 +180,6 @@ class TesteSaida(BasePrepago):
         self.assertRegex(pre, r"Saldo\s+34,00")
         self.caixa.fechar(self.vid)
         self.assertRegex(imp.cupom(self.vid), r"Devolução do crédito\s+34,00")
-
-    def test_cartao_do_painel_mostra_o_saldo(self):
-        self.recarga(5000)
-        self.caixa.adicionar_item(self.vid, self.skol, 2)
-        mesas = self.caixa.mesas()
-        for m in mesas:
-            m["recebido_cent"] = sum(p["valor_cent"] for p in self.caixa.pagamentos(m["id"]))
-        tile = next(t for t in montar_tiles(mesas) if t["chave"] == "15")
-        self.assertEqual((tile["estado"], tile["saldo"]), ("consumindo", "34,00"))   # não é "Concluir acerto"
-        self.assertNotIn("falta", tile)
-
-
-class TesteRecargaNaTela(BaseNaTela):
-    def setUp(self):
-        super().setUp()
-        self.banco.cfg_set("usar_prepago", "S")
-        self.banco.cfg_set("cobra_servico_comanda", "N")
-
-    def test_recarga_pela_tela_carrega_e_mostra_o_saldo(self):
-        def responder(w):
-            nomes = [str(b.cget("text")) for b in botoes(w)]
-            if "Escolher" in nomes:
-                clicar(w, "Escolher")                                           # Dinheiro é a primeira forma
-            else:
-                entradas(w)[0].insert(0, "50,00")
-                clicar(w, "OK")
-        self.robo.quando("Dialogo", responder, vezes=2)
-        self.posicao("15")
-        self.cx.recarga()
-        self.cx.update()
-        pags = self.ctx.caixa.pagamentos(self.cx.venda_id)
-        self.assertEqual([(p["tipo"], p["valor_cent"], p["recarga"]) for p in pags], [("Dinheiro", 5000, 1)])
-        self.assertIn("Saldo: R$ 50,00", self.cx.lbl_recebido.cget("text"))
-        self.assertEqual(self.cx.lbl_status_venda.cget("text"), "Pré-pago")
-        self.assertIn("Saldo: R$ 50,00", self.status())
-        self.sem_travar()
-
-    def test_lancar_alem_do_credito_avisa_e_nao_lanca(self):
-        self.posicao("15")
-        self.ctx.caixa.recarregar(self.cx.venda_id, self.tipo_dinheiro(), 1000)
-        avisos = []
-        self.dialogos({"": lambda w: (avisos.append(" ".join(self.textos(w))), clicar(w, "OK"))})
-        self.digitar_codigo("1"); self.valor("2")                              # 16,00 de 10,00
-        self.assertTrue(any("Crédito insuficiente" in a for a in avisos), avisos)
-        self.assertEqual(self.ctx.caixa.itens(self.cx.venda_id), [])
-        self.sem_travar()
-
-    def test_f12_sem_consumo_abre_o_pagamento_para_devolver(self):
-        self.posicao("15")
-        self.ctx.caixa.recarregar(self.cx.venda_id, self.tipo_dinheiro(), 3000)
-        with mock.patch("src.ui.caixa_ui.JanelaPagamento") as janela:
-            janela.return_value.fechou = False
-            self.cx.pagar()
-        janela.assert_called_once()
-
-    def test_pagamento_mostra_quanto_devolver_e_fecha_com_a_saida_da_gaveta(self):
-        self.posicao("15")
-        self.ctx.caixa.recarregar(self.cx.venda_id, self.tipo_pix(), 5000)
-        self.digitar_codigo("1"); self.valor("2")
-        vistos = {}
-
-        def acao(j):
-            def rodar():
-                vistos.update(rotulo=j.lbl_troco_rotulo.cget("text"), valor=j.lbl_troco.cget("text"), msg=j.lbl_msg.cget("text"))
-                j.btn_fechar.invoke()
-            j.after(30, rodar)
-        self.robo.quando("JanelaPagamento", acao)
-        self.robo.quando("Visualizador", lambda w: w.destroy(), vezes=5)
-        self.dialogos({"": lambda w: clicar(w, botoes(w)[0].cget("text"))})
-        self.cx.pagar(); self.cx.update()
-        self.assertEqual((vistos.get("rotulo"), vistos.get("valor")), ("Devolver:", "34,00"), vistos)
-        self.assertIn("devolva R$ 34,00 em dinheiro", vistos.get("msg", ""))
-        self.assertEqual(self.banco.valor("SELECT valor_cent FROM movimentos_caixa WHERE tipo = 'saida'"), 3400)
-        self.assertIn("Troco R$ 34,00", self.status())
-        self.sem_travar()
-
-    def tipo_dinheiro(self):
-        return self.banco.valor("SELECT id FROM tipos_pagamento WHERE tipo = 'Dinheiro'")
-
-    def tipo_pix(self):
-        return self.banco.valor("SELECT id FROM tipos_pagamento WHERE tipo = 'Pix'")
 
 
 if __name__ == "__main__":

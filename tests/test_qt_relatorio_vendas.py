@@ -9,7 +9,7 @@ from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication, QAbstractItemView
 
 from src.core.erros import ErroPermissao
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.relatorio_vendas import JanelaRelatorioVendas
 from tests.base import BaseTeste
 

@@ -7,7 +7,7 @@ from unittest.mock import patch
 from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.composicao import JanelaComposicao
 from src.ui_qt.tema import aplicar
 from tests.base import BaseTeste

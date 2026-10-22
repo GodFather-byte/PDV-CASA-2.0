@@ -6,16 +6,16 @@ Módulos opcionais, como Cozinha/Bar, continuam respeitando sua configuração.
 
 ## Onde encontrar
 
-| Recurso | Tk | PySide6 |
-|---|---|---|
-| Cancelamento parcial e divisão da conta | Caixa | Abrir caixa |
-| Alertas operacionais | Relatórios > Alertas da operação | Alertas da operação |
-| Reposição por giro e etiquetas | Lançamentos > Estoque | Estoque |
-| Controle de retornáveis | Lançamentos > Retornáveis por cliente | Retornáveis por cliente |
-| Promoções e simulação de preço | Cadastros > Promoções e faixas de preço | Promoções e faixas |
-| Painel do dono | Telegram configurado na loja | Mesmo bot e banco da loja |
-| Cozinha/Bar | Utilitários > Painel da Cozinha/Bar | Cozinha / Bar |
-| Setores de impressão | Cadastros > Setores de Impressão | Mais cadastros > Setores de impressão |
+| Recurso | Onde |
+|---|---|
+| Cancelamento parcial e divisão da conta | Abrir caixa |
+| Alertas operacionais | Alertas da operação |
+| Reposição por giro e etiquetas | Estoque |
+| Controle de retornáveis | Retornáveis por cliente |
+| Promoções e simulação de preço | Promoções e faixas |
+| Painel do dono | Mesmo bot e banco da loja |
+| Cozinha/Bar | Cozinha / Bar |
+| Setores de impressão | Mais cadastros > Setores de impressão |
 
 No Qt, a busca lateral localiza os módulos também sem acentos. Filtrar a navegação
 não concede permissões. Painéis novos revalidam a sessão ao reabrir e nas ações.
@@ -42,8 +42,7 @@ Detalhes: [caixa](CAIXA_MELHORIAS.md), [estoque e etiquetas](ESTOQUE.md),
 1. Faça backup e prepare uma cópia do banco fora da pasta de dados da produção.
 2. Informe essa cópia por `PDV_DB` antes de executar o programa. Extrair um pacote
    em outra pasta não isola o banco padrão do usuário.
-3. Abra uma interface de cada vez: `python -m src.app --qt` ou
-   `python -m src.app --tk`. O Tk permanece disponível durante a homologação.
+3. Abra o PDV com `python -m src.app` (interface Qt).
 4. Confira saldo inicial, turno, pagamentos, cancelamentos, preços e estoque
    na cópia. Repita com as permissões reais dos operadores.
 5. Homologue teclado, leitor, escala da tela, gaveta, balança, etiquetas e cozinha

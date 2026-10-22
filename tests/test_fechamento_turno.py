@@ -1,9 +1,7 @@
 """Fechamento completo do turno: posições abertas, cupons e itens cancelados, transferências, a fita e as telas."""
 from __future__ import annotations
 
-import tkinter as tk
 import unittest
-from tkinter import ttk
 from unittest import mock
 
 from src.controllers.cadastro_controller import CadastroController
@@ -11,8 +9,6 @@ from src.controllers.caixa_controller import CaixaController
 from src.controllers.conferencia_turno import LIMITE_FITA, linhas_fita, texto_conferencia
 from src.controllers.impressao_controller import ImpressaoController
 from tests.test_caixa import BaseCaixa
-from tests.test_ui import BaseUI
-from tests.ui_robo import clicar, entradas
 
 
 class BaseConferencia(BaseCaixa):
@@ -141,152 +137,7 @@ class TesteFitaDoFechamento(BaseConferencia):
         self.assertIn("POSIÇÕES EM ABERTO (3)", texto)
 
 
-def rotulos(janela) -> str:
-    achados, pilha = [], [janela]
-    while pilha:
-        w = pilha.pop()
-        pilha.extend(w.winfo_children())
-        if isinstance(w, (ttk.Label, tk.Label)):
-            achados.append(str(w.cget("text")))
-    return "\n".join(achados)
-
-
-class TesteFechamentoNaTela(BaseUI):
-    def abrir_comanda(self, numero, itens):
-        self.abrir_turno()
-        v, _ = self.ctx.caixa.abrir_mesa(numero, comanda=True)
-        for pid, qtd in itens:
-            self.ctx.caixa.adicionar_item(v, pid, qtd)
-        return v
-
-    def test_troca_de_turno_avisa_das_comandas_abertas(self):
-        from src.ui import caixa_dialogos
-        self.abrir_comanda(2, [(self.skol, 1)])
-        textos = []
-
-        def trocar(w):
-            campos = entradas(w)
-            if w.title() == "Conferir maquininha":      # 1º diálogo: cartão/Pix lançados, para bater com a maquininha
-                clicar(w, "Continuar")
-            elif campos:                         # 2º diálogo: valor encontrado na gaveta
-                campos[0].delete(0, "end"); campos[0].insert(0, "100,00"); clicar(w, "OK")
-            else:                                # 3º diálogo: "Confirma?"
-                textos.append(rotulos(w)); clicar(w, "Sim")
-        self.robo.quando("Dialogo", trocar, vezes=3)
-        self.robo.quando("PainelFechamento", lambda w: w.destroy())
-        declarados = {r["tipo_id"]: 10000 if r["dinheiro"] else 0
-                      for r in self.ctx.turnos.formas_conferencia(
-                          self.ctx.turnos.atual()["id"], self.ctx.operador_id)}
-        with mock.patch("src.ui.fechamento_ui.coletar", return_value={
-                "informados_por_forma": declarados, "justificativa": ""}):
-            self.assertTrue(caixa_dialogos.trocar_turno(self.root, self.ctx))
-        self.assertIn("1 mesa(s)/comanda(s) aberta(s), R$ 8,80", textos[0])
-        self.assertIn("Comanda 2", textos[0])
-        self.assertIn("continuam abertas no próximo turno", textos[0])
-        self.sem_travar()
-
-    def test_troca_de_turno_sem_posicoes_abertas_nao_avisa(self):
-        from src.ui import caixa_dialogos
-        self.abrir_turno()
-        textos = []
-
-        def trocar(w):
-            campos = entradas(w)
-            if w.title() == "Conferir maquininha":
-                clicar(w, "Continuar")
-            elif campos:
-                campos[0].delete(0, "end"); campos[0].insert(0, "100,00"); clicar(w, "OK")
-            else:
-                textos.append(rotulos(w)); clicar(w, "Sim")
-        self.robo.quando("Dialogo", trocar, vezes=3)
-        self.robo.quando("PainelFechamento", lambda w: w.destroy())
-        declarados = {r["tipo_id"]: 10000 if r["dinheiro"] else 0
-                      for r in self.ctx.turnos.formas_conferencia(
-                          self.ctx.turnos.atual()["id"], self.ctx.operador_id)}
-        with mock.patch("src.ui.fechamento_ui.coletar", return_value={
-                "informados_por_forma": declarados, "justificativa": ""}):
-            caixa_dialogos.trocar_turno(self.root, self.ctx)
-        self.assertNotIn("ATENÇÃO", textos[0])
-
-    def test_painel_do_fechamento_mostra_a_conferencia(self):
-        from src.ui.caixa_dialogos import PainelFechamento
-        v = self.abrir_comanda(2, [(self.skol, 2), (self.agua, 1)])
-        self.ctx.caixa.cancelar_item(self.ctx.caixa.itens(v)[1]["id"])
-        self.ctx.caixa.transferir_item(self.ctx.caixa.itens(v)[0]["id"], "C5", 1)
-        res = self.ctx.turnos.fechar(self.ctx.turnos.atual()["id"], self.ctx.operador_id, 10000)
-        pares, abertos = {}, []
-
-        def ler(janela):
-            linhas, pilha = {}, [janela]
-            while pilha:
-                w = pilha.pop()
-                pilha.extend(w.winfo_children())
-                if isinstance(w, ttk.Label) and w.grid_info():
-                    info = w.grid_info()
-                    linhas.setdefault((str(w.master), int(info["row"])), {})[int(info["column"])] = w.cget("text")
-            pares.update({c[0]: c[1] for c in linhas.values() if 0 in c and 1 in c})
-            with mock.patch("src.ui.caixa_dialogos.Visualizador") as visualizador:
-                janela.conferencia()                                        # botão "Conferência do turno"
-            abertos.append(visualizador.call_args.args[3])
-            janela.destroy()
-        self.robo.quando("PainelFechamento", ler)
-        PainelFechamento(self.root, self.ctx, res)
-        self.assertEqual((pares["Itens cancelados"], pares["Cupons cancelados"], pares["Transferências"]), ("1", "0", "1"))
-        self.assertTrue(pares["Posições em aberto"].startswith("2 ("))        # a C2 e a C5
-        self.assertIn("ITENS CANCELADOS (1)", abertos[0])
-        self.assertIn("C2>C5", abertos[0])
-        self.sem_travar()
-
-
 if __name__ == "__main__":
     unittest.main()
 
 
-class TesteConferenciaDaMaquininhaNaTela(BaseUI):
-    """Antes de contar a gaveta, a tela mostra o cartão (débito e crédito separados) para comparar com a maquininha."""
-
-    def vender_em(self, forma, valor):
-        v = self.ctx.caixa.abrir_balcao()
-        self.ctx.caixa.adicionar_item(v, self.skol, 1)
-        self.ctx.caixa.adicionar_pagamento(v, self.tipo(forma), valor)
-        self.ctx.caixa.fechar(v)
-
-    def tipo(self, nome):
-        return self.banco.valor("SELECT id FROM tipos_pagamento WHERE tipo = ?", (nome,))
-
-    def test_mostra_debito_e_credito_antes_de_pedir_o_dinheiro(self):
-        from src.ui import caixa_dialogos
-        self.abrir_turno()
-        self.vender_em("Cartão Débito", 800)
-        self.vender_em("Cartão Débito", 800)
-        self.vender_em("Cartão Crédito", 1300)                     # 8,00 + R$ 5,00 da taxa do crédito
-        ordem, tela = [], []
-
-        def trocar(w):
-            if w.title() == "Conferir maquininha":
-                ordem.append("maquininha"); tela.append(rotulos(w)); clicar(w, "Continuar")
-            elif entradas(w):
-                ordem.append("gaveta")
-                entradas(w)[0].delete(0, "end"); entradas(w)[0].insert(0, "100,00"); clicar(w, "OK")
-            else:
-                ordem.append("confirma"); clicar(w, "Sim")
-        self.robo.quando("Dialogo", trocar, vezes=3)
-        self.robo.quando("PainelFechamento", lambda w: w.destroy())
-        declarados = {self.tipo("Dinheiro"): 10000, self.tipo("Cartão Débito"): 1600,
-                      self.tipo("Cartão Crédito"): 1300, self.tipo("Pix"): 0}
-        with mock.patch("src.ui.fechamento_ui.coletar", return_value={
-                "informados_por_forma": declarados, "justificativa": ""}):
-            self.assertTrue(caixa_dialogos.trocar_turno(self.root, self.ctx))
-        self.assertEqual(ordem, ["maquininha", "gaveta", "confirma"])
-        for trecho in ("Cartão Débito", "Cartão Crédito", "16,00", "13,00", "29,00"):
-            self.assertIn(trecho, tela[0])
-        self.assertNotIn("esperado", tela[0].lower())                      # a contagem da gaveta continua às cegas
-        self.sem_travar()
-
-    def test_cancelar_a_conferencia_nao_fecha_o_turno(self):
-        from src.ui import caixa_dialogos
-        self.abrir_turno()
-        self.robo.quando("Dialogo", lambda w: clicar(w, "Cancelar"), vezes=1)
-        self.assertFalse(caixa_dialogos.trocar_turno(self.root, self.ctx))
-        self.assertEqual(self.banco.valor("SELECT status FROM turnos"), "aberto")
-        self.sem_travar()

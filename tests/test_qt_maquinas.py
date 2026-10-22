@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from src.controllers.config_controller import CAMPOS_MAQUINA
 from src.core.erros import ErroNegocio, ErroPermissao
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.maquinas import JanelaMaquinas
 from tests.base import BaseTeste
 

@@ -1,4 +1,4 @@
-"""Configurações do Telegram em Qt, sem carregar nenhuma interface Tk."""
+"""Configurações do Telegram em Qt."""
 from __future__ import annotations
 
 import re

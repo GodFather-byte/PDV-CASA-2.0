@@ -1,1 +1,1 @@
-"""Interface Qt opt-in do WillPDV; não carrega nem inicia o Tk."""
+"""Interface Qt do WillPDV, a única interface do PDV."""

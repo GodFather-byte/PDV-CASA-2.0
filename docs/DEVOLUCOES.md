@@ -140,7 +140,6 @@ Cada linha de `listar`, `da_venda` e `obter` traz:
   abrir.
 - **Gravar:** `operador_autoriza()` diz se o próprio operador autoriza; se não, a tela pede a
   senha de um supervisor (`autorizado_por`).
-- **Tk:** `src.ui.devolucoes_ui.abrir(master, ctx)` devolve `JanelaDevolucoes` (Toplevel).
 - **Qt:** `src.ui_qt.devolucoes.JanelaDevolucoes(ctx, parent=None)` (QDialog).
 - **ctx:** as telas usam `ctx.banco`, `ctx.caixa`, `ctx.operador_id` e `ctx.impressao`.
 - **Fluxo da tela:** buscar o cupom, marcar itens e quantidades, escolher estoque, modo, forma,
@@ -149,7 +148,7 @@ Cada linha de `listar`, `da_venda` e `obter` traz:
 
 ## Onde aparece (integração feita pelo pai)
 
-- **Caixa Tk e Qt:** a tela de devolução abre como modal pelo botão ou menu do caixa
+- **Caixa Qt:** a tela de devolução abre como modal pelo botão ou menu do caixa
   ("mais opções") e pelo menu Lançamentos.
 - **Relatório:** em Relatórios > Caixa > "Devoluções e reembolsos" (`RelatorioController.devolucoes`),
   com uma linha por cupom.

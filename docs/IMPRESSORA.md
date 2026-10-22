@@ -62,7 +62,7 @@ instalador está em `INSTALAR_E_TESTAR.md`.
 
 ## Diagnóstico de equipamentos (impressora, gaveta, balança e leitor)
 
-Uma tela só para conferir os quatro equipamentos do caixa (Tk e Qt). Exige a permissão de
+Uma tela só para conferir os quatro equipamentos do caixa. Exige a permissão de
 configurar máquinas, conferida de novo no banco antes de cada teste.
 
 - **Abrir a tela não aciona nada.** Ela só mostra a configuração. "Verificar impressora (sem

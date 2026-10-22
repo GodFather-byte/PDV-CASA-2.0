@@ -11,7 +11,7 @@ from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from src.core.erros import ErroNegocio, ErroPermissao
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.importar_produtos import JanelaImportarNFe, JanelaImportarProdutos
 from tests.base import BaseTeste
 

@@ -8,7 +8,7 @@ from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QLineEdit
 
 from src.core.erros import ErroNegocio, ErroPermissao
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.configuracoes import (
     SECOES, CHAVES_LOJA, CHAVES_PREFERENCIAS, JanelaConfiguracoes,
 )

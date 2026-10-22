@@ -16,7 +16,7 @@ from src.controllers.utilitario_controller import UtilitarioController
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.database import protecao
 from src.database.conexao import BancoDados
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.restaurar_backup import JanelaRestaurarBackup
 from tests.base import BaseTeste
 

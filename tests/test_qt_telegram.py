@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from src.controllers.telegram_controller import TelegramController
 from src.core.erros import ErroPermissao
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.telegram import JanelaTelegram
 from tests.base import BaseTeste
 

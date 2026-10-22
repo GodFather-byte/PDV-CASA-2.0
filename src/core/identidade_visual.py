@@ -71,7 +71,7 @@ def importar_logotipo(caminho, banco) -> str:
 
 
 def preview_logotipo(caminho, tamanho=(160, 72)) -> bytes | None:
-    """PNG para Tk/Qt; arquivo ausente, inválido ou suporte indisponível mantém a identidade textual."""
+    """PNG para a interface Qt; arquivo ausente, inválido ou suporte indisponível mantém a identidade textual."""
     if not caminho:
         return None
     try:

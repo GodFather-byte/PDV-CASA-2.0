@@ -303,3 +303,18 @@ class ComissaoController:
                WHERE a.turno_id = ? AND a.shows_qtd > 0 GROUP BY a.garota ORDER BY a.garota""", (turno_id,))]
         return {"quantidade": sum(l["shows"] for l in linhas), "total_cent": sum(l["total_cent"] for l in linhas),
                 "por_garota": linhas}
+
+
+def entregar_via(ctx, lancamento_id: int) -> str:
+    """Imprime a via que a garota leva a cada comissão lançada (config 'imprimir_via_comissao'). Devolve a frase para o status
+    da tela. Sem impressora (modo tela) a via só fica gravada no histórico: abrir uma janela a cada lançamento travaria o caixa."""
+    if not ctx.banco.cfg_bool("imprimir_via_comissao", True):
+        return ""
+    try:
+        ctx.impressao.imprimir_via_comissao(lancamento_id, ctx.operador.nome)
+    except Exception as e:  # noqa: BLE001 - a comissão já está gravada: falha de impressão nunca pode parecer falha do lançamento
+        ctx.banco.log("via_comissao_falhou", f"lançamento {lancamento_id}: {e}"[:300], ctx.operador_id)
+        return f" ATENÇÃO: a via da garota não foi impressa ({e})."
+    if ctx.impressao.deve_mostrar_na_tela():
+        return " Sem impressora configurada: a via ficou só no histórico."
+    return " Via da garota enviada para a impressora."

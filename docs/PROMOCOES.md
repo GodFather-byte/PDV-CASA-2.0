@@ -1,7 +1,6 @@
 # Promoções e faixas — sem acúmulo
 
-Gestão compartilhada para todos os perfis com acesso `cad_produtos`, nas interfaces
-Tk e Qt. O operador ativo e o nível atual são consultados ao abrir/reabrir, buscar,
+Gestão compartilhada para todos os perfis com acesso `cad_produtos`, na interface Qt. O operador ativo e o nível atual são consultados ao abrir/reabrir, buscar,
 simular e, novamente, na transação de gravação. A integração do menu é externa a
 estas telas.
 
@@ -40,10 +39,9 @@ preservado; balcão mantém a reprecificação por quantidade já existente. A s
 
 ## APIs para integração
 
-- Tk: `src.ui.promocoes_ui.abrir(master, ctx)` retorna `JanelaPromocoes`.
 - Qt: `src.ui_qt.promocoes.JanelaPromocoes(ctx, parent=None)`.
-- Ambas expõem `exigir_acesso()` para o menu validar antes de reabrir instância.
-  Nenhuma tela importa a outra; Qt não cria raiz Tk.
+- A janela expõe `exigir_acesso()` para o menu validar antes de reabrir instância.
+  Nenhuma tela importa a outra.
 - `PromocoesController(ctx)`: `listar(texto="")`, `obter(produto_id)`,
   `salvar(produto_id, valores)`, `simular(produto_id, quantidade="1",
   temperatura="natural", quando=None, valores=None)` e `descrever(resultado)`.
@@ -57,7 +55,7 @@ Sem migração: utiliza somente os campos existentes de produtos.
 
 `python -m unittest tests.test_promocoes` cobre sobreposição sem acúmulo, fronteiras
 de período/dias/horário, faixa natural/gelada, rascunho sem escrita, validação,
-revalidação de acesso, abertura/salvamento/simulação Tk/Qt e isolamento de imports.
+revalidação de acesso, abertura/salvamento/simulação na interface Qt e isolamento de imports.
 Regressão: `tests.test_adega_cadastro`, `tests.test_adega_regras`,
 `tests.test_adega_retrato`, `tests.test_adega`, `tests.test_caixa` e
 `tests.test_regras_caixa`.

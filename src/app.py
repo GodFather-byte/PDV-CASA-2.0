@@ -5,13 +5,11 @@ python -m src.app --sync   ou   WillPDV.exe --sync
 
 Com `--autoteste [arquivo] [--rede]` confere se o programa instalado está inteiro (ver src/autoteste.py) e encerra.
 Com `--homologacao [arquivo.json]` exercita retomada e fechamento em banco descartável, sem hardware.
-Com `--qt` abre a interface Qt em migração; `--tk` abre explicitamente a interface completa atual (padrão).
+A interface é Qt (PySide6).
 """
 import sys
 
 if __name__ == "__main__":
-    if "--qt" in sys.argv[1:] and "--tk" in sys.argv[1:]:
-        sys.exit("Escolha apenas uma interface: --qt ou --tk.")
     if "--homologacao" in sys.argv[1:]:
         from src.homologacao import executar
         resto = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -28,8 +26,5 @@ if __name__ == "__main__":
         from src.sync.sincronizador import main as sincronizar
         sincronizar()
     else:
-        if "--qt" in sys.argv[1:]:
-            from src.ui_qt.app import main
-        else:
-            from src.ui.app import main
+        from src.ui_qt.app import main
         main()

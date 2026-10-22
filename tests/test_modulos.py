@@ -7,7 +7,6 @@ import unittest
 from src.controllers.config_controller import CAMPOS_CONFIG, modulos_desligados
 from src.controllers.impressao_controller import ImpressaoController
 from tests.test_caixa import BaseCaixa
-from tests.test_ui import BaseUI
 
 
 class TesteModulosNoBanco(BaseCaixa):
@@ -56,49 +55,6 @@ class TesteModulosNoBanco(BaseCaixa):
         self.assertNotIn("caderneta", texto.lower())
         self.banco.cfg_set("usar_caderneta", "S")
         self.assertIn("Venda caderneta", imp.fechamento(self.turnos.resumo(self.turno)))
-
-
-class TesteModulosNaTela(BaseUI):
-    def setUp(self):
-        super().setUp()
-        for chave in ("usar_delivery", "usar_caderneta", "usar_contas"):
-            self.banco.cfg_set(chave, "N")               # o padrão da boate
-        self.abrir_turno()
-
-    def abrir_caixa(self):
-        from src.ui.caixa_ui import JanelaCaixa
-        cx = JanelaCaixa(self.root, self.ctx)
-        cx.update()
-        self.addCleanup(lambda: cx.winfo_exists() and cx.destroy())
-        return cx
-
-    def test_barra_do_caixa_sem_delivery_e_caderneta(self):
-        nomes = [t[0] for t in self.abrir_caixa().tarefas]
-        self.assertNotIn("Delivery (F6)", nomes)
-        self.assertNotIn("Caderneta (F5)", nomes)
-        self.assertNotIn("Rodízio", nomes)             # usar_rodizio também nasce desligado
-        self.assertNotIn("Recarga", nomes)             # e usar_prepago
-        self.assertIn("Pagar (F12)", nomes)
-
-    def test_f5_e_f6_nao_abrem_nada(self):
-        cx = self.abrir_caixa()
-        for classe in ("Dialogo", "JanelaClientes"):      # se algo abrisse, o robô fecha (e o teste acusa)
-            self.robo.quando(classe, lambda w: w.destroy(), vezes=2)
-        cx.caderneta()
-        cx.entrega()
-        self.assertEqual(self.robo.log, [])
-        self.assertIsNone(cx.venda_id)
-
-    def test_ligados_voltam_para_a_barra(self):
-        self.banco.cfg_set("usar_delivery", "S")
-        self.banco.cfg_set("usar_caderneta", "S")
-        self.banco.cfg_set("usar_rodizio", "S")
-        self.banco.cfg_set("usar_prepago", "S")
-        nomes = [t[0] for t in self.abrir_caixa().tarefas]
-        self.assertIn("Delivery (F6)", nomes)
-        self.assertIn("Caderneta (F5)", nomes)
-        self.assertIn("Rodízio", nomes)
-        self.assertIn("Recarga", nomes)
 
 
 if __name__ == "__main__":

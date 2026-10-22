@@ -5,8 +5,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from tests import test_ui, test_qt_caixa
-from tests.ui_robo import clicar
+from tests import test_qt_caixa
 
 
 class ComLogotipo:
@@ -19,64 +18,6 @@ class ComLogotipo:
         self.addCleanup(raiz.stop)
         self.origem = self.pasta / "adega.jpg"
         Image.new("RGB", (800, 200), "black").save(self.origem)
-
-
-class TesteLogotipoTk(ComLogotipo, test_ui.BaseUI):
-    def test_selecionar_preview_salvar_cancelar_e_remover(self):
-        from src.ui import config_ui
-        self.preparar_logo()
-        janela = config_ui.abrir(self.root, self.ctx, "loja")
-        self.assertIsNone(janela._foto_logo)
-        with patch.object(config_ui.filedialog, "askopenfilename", return_value=str(self.origem)):
-            clicar(janela, "Selecionar")
-        self.assertIsNotNone(janela._foto_logo)
-        self.assertFalse(self.ctx.config.loja()["logotipo"])
-        janela.recarregar()
-        self.assertIsNone(janela._foto_logo)
-        janela.definir("logotipo", str(self.origem))
-        with patch.object(config_ui.tema, "mensagem"):
-            janela.gravar()
-        salvo = self.ctx.config.loja()["logotipo"]
-        self.assertEqual(janela.valor("logotipo"), salvo)
-        self.origem.unlink()
-        clicar(janela, "Remover / padrão")
-        self.assertIsNone(janela._foto_logo)
-        janela.recarregar()
-        self.assertIsNotNone(janela._foto_logo)
-        clicar(janela, "Remover / padrão")
-        with patch.object(config_ui.tema, "mensagem"):
-            janela.gravar()
-        self.assertFalse(self.ctx.config.loja()["logotipo"])
-        janela.destroy()
-
-    def test_cancelar_selecao_ou_arquivo_invalido_nao_muda_logo(self):
-        from src.ui import config_ui
-        self.preparar_logo()
-        janela = config_ui.abrir(self.root, self.ctx, "loja")
-        janela.definir("logotipo", str(self.origem))
-        with patch.object(config_ui.filedialog, "askopenfilename", return_value=""):
-            clicar(janela, "Selecionar")
-        self.assertEqual(janela.valor("logotipo"), str(self.origem))
-        with patch.object(config_ui.filedialog, "askopenfilename", return_value=str(self.pasta / "ausente")), \
-                patch.object(config_ui.tema, "erro") as erro:
-            clicar(janela, "Selecionar")
-            erro.assert_called_once()
-        self.assertEqual(janela.valor("logotipo"), str(self.origem))
-        janela.destroy()
-
-    def test_cabecalho_com_logo_e_fallback(self):
-        from src.ui.caixa_ui import JanelaCaixa
-        self.preparar_logo()
-        self.abrir_turno()
-        self.ctx.config.salvar_loja({"logotipo": self.origem})
-        for disponivel in (True, False):
-            if not disponivel:
-                Path(self.ctx.config.loja()["logotipo"]).unlink()
-            janela = JanelaCaixa(self.root, self.ctx)
-            janela.update()
-            self.assertEqual(janela._foto_logo is not None, disponivel)
-            self.assertEqual(janela.lbl_loja.cget("text"), self.ctx.config.nome_loja().upper())
-            janela.destroy()
 
 
 class TesteLogotipoQt(ComLogotipo, test_qt_caixa.BaseCaixaQt):

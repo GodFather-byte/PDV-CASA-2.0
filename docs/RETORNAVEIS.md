@@ -1,7 +1,7 @@
 # Retornáveis por cliente
 
 Disponível para todos os perfis de negócio, mediante a permissão **Lançamentos de
-estoque (`lanc_estoque`)** e um operador ativo. As janelas Tk e Qt revalidam ambos
+estoque (`lanc_estoque`)** e um operador ativo. A janela revalida ambos
 ao abrir, consultar e registrar, mesmo quando a sessão ainda contém o nível antigo.
 
 Este recurso é **controle de posse**, não venda nem movimentação de estoque,
@@ -34,9 +34,8 @@ preexistente só entra por um lançamento explícito, com motivo e operador.
     tipos `emprestimo` e `devolucao`; retorna o identificador do movimento.
   - `saldo(cliente_id, produto_id)`, `saldos(cliente_id)` e
     `historico(cliente_id, produto_id=None)` consultam os registros explícitos.
-- Tk: `src.ui.retornaveis_ui.abrir(master, ctx)` retorna a janela.
 - Qt: `src.ui_qt.retornaveis.JanelaRetornaveis(ctx, parent=None)`.
-- Ambas as janelas oferecem `exigir_acesso()` e `atualizar()`. Ao reaproveitar
+- A janela oferece `exigir_acesso()` e `atualizar()`. Ao reaproveitar
   uma janela já aberta, o menu deve chamar `exigir_acesso()` antes de exibi-la.
 - Migração 26: `retornaveis_movimentos`, índice cliente/produto e proteção contra
   edição/exclusão. As gravações e os eventos de auditoria são uma única transação.

@@ -89,7 +89,7 @@ class JanelaAtualizacoes(QDialog):
         self._mostrar_pendente()
 
     def exigir_acesso(self):
-        """O aviso Tk não exige módulo: basta uma sessão ativa, de qualquer nível."""
+        """O aviso não exige módulo: basta uma sessão ativa, de qualquer nível."""
         try:
             operador_id = self.ctx.operador_id
             cadastro = (self.ctx.cadastros.obter("operadores", operador_id)

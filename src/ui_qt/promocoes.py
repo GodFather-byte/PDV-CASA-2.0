@@ -1,4 +1,4 @@
-"""Gestão Qt das regras existentes; não importa nem instancia a interface Tk."""
+"""Gestão Qt das regras existentes; não importa nem instancia outras interfaces."""
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTabWidget, QTextEdit, QVBoxLayout, QWidget,

@@ -73,11 +73,9 @@ mas só guarda as vendas dentro da retenção (120 dias): as mais antigas não o
 
 ## O dono troca a própria senha (no PDV)
 
-A senha que o fornecedor passou não precisa ficar para sempre. No caixa da loja (Tk ou Qt, **a partir do PDV 1.6.0**), com o
+A senha que o fornecedor passou não precisa ficar para sempre. No caixa da loja (Qt, **a partir do PDV 1.6.0**), com o
 endereço e o token da nuvem já salvos em Configurações > Nuvem:
 
-* **Tk:** Configurações > botão **Senha do painel do dono...** (na barra de cima, em qualquer aba). Grava antes o que está na
-  tela e pede a senha duas vezes.
 * **Qt:** Configurações > aba **Conexão com a nuvem** > **Trocar a senha do painel do dono…** (exige a aba salva: o endereço e o
   token usados são os salvos).
 
@@ -175,7 +173,7 @@ permite usá-lo como hospedagem de serviço comercial.
 | Parte | Arquivo |
 |---|---|
 | Envio do caixa e identificação do caixa | `src/sync/painel_envio.py` (chamado por `src/sync/sincronizador.py`) |
-| Troca da senha pelo PDV | `painel_envio.trocar_senha_na_nuvem` · telas `src/ui/config_ui.py` (`trocar_senha_painel`) e `src/ui_qt/configuracoes.py` |
+| Troca da senha pelo PDV | `painel_envio.trocar_senha_na_nuvem` · tela `src/ui_qt/configuracoes.py` (`trocar_senha_painel`) |
 | Configuração | `painel_dono` em `src/database/sementes.py` e `src/controllers/config_controller.py` (aba Nuvem) |
 | Nuvem: tabelas, senha, sessão, rotas, limpeza | `backend/painel.py` (instalado por `backend/main.py`) |
 | Senha e limpeza pela linha de comando | `python -m backend.lojas painel` e `python -m backend.lojas limpar-painel` |

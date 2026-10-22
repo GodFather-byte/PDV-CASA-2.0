@@ -483,7 +483,7 @@ class JanelaConfiguracoes(QDialog):
 
 
 class JanelaCadastroLoja(JanelaConfiguracoes):
-    """Convite do primeiro uso; fechar adia para a próxima entrada, como no Tk."""
+    """Convite do primeiro uso; fechar adia para a próxima entrada."""
 
     def __init__(self, ctx, parent=None):
         super().__init__(ctx, parent)

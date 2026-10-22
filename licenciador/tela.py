@@ -13,8 +13,8 @@ from licenciador import nucleo
 from licenciador.nucleo import Configuracao, ErroLicenciador, Historico
 from src.core import backup_seguro
 from src.core import formatacao as fmt
-from src.ui import icone, tema
-from src.ui.tema import COR, Grade
+from licenciador import icone, tema
+from licenciador.tema import COR, Grade
 
 BR = "%d/%m/%Y"
 

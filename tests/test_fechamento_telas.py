@@ -1,9 +1,8 @@
-"""Coleta real Tk/Qt: declaração explícita, motivo e revalidação sem fechar turno."""
+"""Coleta real Qt: declaração explícita, motivo e revalidação sem fechar turno."""
 from unittest import mock
 
 from src.controllers.acesso_controller import Operador
 from src.core.erros import ErroNegocio
-from tests.test_ui import BaseUI
 from tests.test_qt_caixa import BaseCaixaQt, QApplication
 
 
@@ -143,45 +142,6 @@ class CenariosColeta:
     def preencher(self, janela, dinheiro="100,00"):
         for chave, campo in janela.campos.items():
             self.escrever(campo, dinheiro if chave == self.dinheiro else "0,00")
-
-
-class TesteColetaTk(CenariosColeta, BaseUI):
-    def setUp(self):
-        super().setUp()
-        self.turno = self.abrir_turno()
-        self.dinheiro = self.banco.valor("SELECT id FROM tipos_pagamento WHERE tipo = 'Dinheiro'")
-
-    def dialogo(self, valor=10000):
-        from src.ui.fechamento_ui import DialogoFechamento
-        janela = DialogoFechamento(self.root, self.ctx, self.turno, valor)
-        self.addCleanup(lambda: janela.destroy() if janela.winfo_exists() else None)
-        return janela
-
-    @staticmethod
-    def ler(campo):
-        return campo.get() if hasattr(campo, "get") else campo.cget("text")
-
-    @staticmethod
-    def escrever(campo, texto):
-        campo.delete(0, "end")
-        campo.insert(0, texto)
-
-    def test_coletar_cancelamento_retorna_none(self):
-        from src.ui.fechamento_ui import coletar
-        self.robo.quando("DialogoFechamento", lambda j: j.destroy())
-        self.assertIsNone(coletar(self.root, self.ctx, self.turno, 10000))
-        self.assertEqual(self.ctx.turnos.obter(self.turno)["status"], "aberto")
-
-    def test_coletar_retorna_mapa_e_justificativa(self):
-        from src.ui.fechamento_ui import coletar
-        def preencher_e_aceitar(j):
-            self.preencher(j)
-            j.conferir()
-            j.aceitar()
-        self.robo.quando("DialogoFechamento", preencher_e_aceitar)
-        resultado = coletar(self.root, self.ctx, self.turno, 10000)
-        self.assertEqual(resultado["informados_por_forma"][self.dinheiro], 10000)
-        self.assertEqual(resultado["justificativa"], "")
 
 
 class TesteColetaQt(CenariosColeta, BaseCaixaQt):

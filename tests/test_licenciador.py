@@ -225,7 +225,7 @@ class TesteTela(BaseLicenciador):
         j.var_tipo.set("mensal"); j.var_qtd.set("0"); j.atualizar_validade()
         self.assertIn("1 a", j.lbl_validade.cget("text"))
         j.var_qtd.set("1"); j.atualizar_validade()
-        with mock.patch("src.ui.tema.erro") as erro:
+        with mock.patch("licenciador.tema.erro") as erro:
             j.gerar()
         erro.assert_called_once()
         self.assertEqual(self.historico.todas(), [])
@@ -264,7 +264,7 @@ class TesteTela(BaseLicenciador):
         self.historico.adicionar(e)
         j = self.janela
         j.atualizar_lojas(); j.grade.selecionar(e.codigo)
-        with mock.patch("src.ui.tema.confirmar", return_value=True):
+        with mock.patch("licenciador.tema.confirmar", return_value=True):
             j.remover()
         self.assertEqual(self.historico.todas(), [])
 
@@ -443,8 +443,8 @@ class TesteTelaBackup(BaseLicenciador):
         self.historico.adicionar(nucleo.emitir("BAR", "mensal", 1, self.chave, HOJE))
         self.janela.config.definir(pasta_backup=self.nuvem)
         senhas = iter(["uma-senha-bem-longa", "uma-senha-bem-longa"])
-        with mock.patch("src.ui.tema.pedir_texto", side_effect=lambda *a, **k: next(senhas)), \
-                mock.patch("src.ui.tema.mensagem"):
+        with mock.patch("licenciador.tema.pedir_texto", side_effect=lambda *a, **k: next(senhas)), \
+                mock.patch("licenciador.tema.mensagem"):
             self.janela.backup_agora()
         self.assertEqual(len(self.copias()), 1)
         self.assertTrue((self.nuvem / nucleo.PASTA_BACKUP / "licenca_privada.key.pdvbkp").exists())
@@ -453,8 +453,8 @@ class TesteTelaBackup(BaseLicenciador):
         self.historico.adicionar(nucleo.emitir("BAR", "mensal", 1, self.chave, HOJE))
         self.janela.config.definir(pasta_backup=self.nuvem)
         senhas = iter(["uma-senha-bem-longa", "outra-senha-bem-longa"])
-        with mock.patch("src.ui.tema.pedir_texto", side_effect=lambda *a, **k: next(senhas)), \
-                mock.patch("src.ui.tema.erro") as erro, mock.patch("src.ui.tema.mensagem"):
+        with mock.patch("licenciador.tema.pedir_texto", side_effect=lambda *a, **k: next(senhas)), \
+                mock.patch("licenciador.tema.erro") as erro, mock.patch("licenciador.tema.mensagem"):
             self.janela.backup_agora()
         erro.assert_called_once()
         self.assertFalse((self.nuvem / nucleo.PASTA_BACKUP / "licenca_privada.key.pdvbkp").exists())

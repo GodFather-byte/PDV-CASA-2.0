@@ -40,7 +40,7 @@ principal (o cartão "Sem estoque" já abre a lista só com os produtos zerados)
   identificam o escopo. Ao alternar a visão, cada uma conserva seus próprios filtros.
   Somente os produtos com reposição sugerida positiva entram; sem mínimo ou sem controle
   não se inventa uma quantidade. Consultar/imprimir não grava nada e pedido não baixa saldo.
-* **Cobertura (30 dias)**, exibida na Adega Tk/Qt, é `saldo não negativo ÷ média diária`.
+* **Cobertura (30 dias)**, exibida na Adega, é `saldo não negativo ÷ média diária`.
   A média é o consumo líquido **dividido por 30**, mesmo quando há poucos dias de histórico.
   Uma única consulta agregada soma as quantidades dos movimentos de venda e de estorno
   de venda com referência confiável (`ref_tipo = 'venda'`) no intervalo local inclusivo
@@ -71,7 +71,7 @@ principal (o cartão "Sem estoque" já abre a lista só com os produtos zerados)
 
 ## Reposição pelo giro, por caixa
 
-Botão **Reposição pelo giro** (Tk e Qt). Escolha um caixa (terminal) ou "Todos". Para cada produto que
+Botão **Reposição pelo giro**. Escolha um caixa (terminal) ou "Todos". Para cada produto que
 controla estoque e vendeu nos últimos 30 dias: média diária = consumo líquido (vendas menos estornos) ÷ 30;
 alvo = média × 7 dias de cobertura; **sugerido = alvo − saldo** (saldo negativo conta como zero), com 4 casas.
 O recorte por caixa usa o terminal da venda (`vendas.terminal`).
@@ -83,7 +83,7 @@ API: `EstoqueController.reposicao_giro(terminal, cobertura_dias=7)`, `pedido_por
 
 ## Etiquetas de produtos e preços
 
-Botão **Etiquetas** (Tk e Qt): selecione produtos, informe cópias (1 a 99 por produto, até 500 no total) e a
+Botão **Etiquetas**: selecione produtos, informe cópias (1 a 99 por produto, até 500 no total) e a
 temperatura (natural, gelada ou ambas; gelada exige preço gelado). A prévia usa o Visualizador (imprimir pela
 impressão existente, texto de 40 colunas); a janela também exporta CSV (`;`, UTF-8). O preço é o vigente (promoção
 inclusa); mostra preço de atacado e "Fardo com N un" quando o produto é composto de um único insumo com quantidade inteira.

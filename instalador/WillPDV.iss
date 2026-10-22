@@ -64,7 +64,6 @@ Source: "..\dist\WillPDV\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdi
 
 [Icons]
 Name: "{autoprograms}\{#Nome}"; Filename: "{app}\{#Exe}"
-Name: "{autoprograms}\{#Nome} Qt (prévia)"; Filename: "{app}\{#Exe}"; Parameters: "--qt"
 Name: "{autodesktop}\{#Nome}"; Filename: "{app}\{#Exe}"; Tasks: desktopicon
 Name: "{autostartup}\{#Nome}"; Filename: "{app}\{#Exe}"; Tasks: iniciarcomwindows
 Name: "{autostartup}\{#Nome} - envio para a nuvem"; Filename: "{app}\{#Exe}"; Parameters: "--sync"; Tasks: nuvem

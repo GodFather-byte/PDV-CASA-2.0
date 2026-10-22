@@ -1,6 +1,6 @@
 """Comissão das garotas no caixa Qt: lançar (código 50), pagar/acertar (comissão, shows, vale e Pix) e cancelar lançamento.
 
-Espelha `src/ui/comissao_ui.py` do caixa clássico: as regras são do `ComissaoController`, os papéis do `ImpressaoController` e as
+As regras são do `ComissaoController`, os papéis do `ImpressaoController` e as
 senhas do `AcessoController`. Esta camada só pergunta, confere o que foi digitado e mostra o resultado.
 
 As funções soltas recebem o caixa (`JanelaCaixa`) como anfitrião e usam dele: `ctx`, `dialogos`, `_autorizar`, `_executar`,
@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QDial
 from src.controllers.comissao_controller import LIMITE_CONFIRMAR_CENT
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
-from src.ui.comissao_ui import entregar_via
+from src.controllers.comissao_controller import entregar_via
 
 VERMELHO, MUDO = "#b32020", "#5b6573"
 

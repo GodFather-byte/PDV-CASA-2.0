@@ -8,7 +8,7 @@ from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from src.core.erros import ErroPermissao
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.acessos import JanelaAcessos
 from tests.base import BaseTeste
 

@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from src.controllers import impressao_assistente as assistente
 from src.core.erros import ErroPermissao
 from src.hardware.impressoras_so import ImpressoraWindows
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.assistente_impressora import JanelaAssistenteImpressora
 from tests.base import BaseTeste
 

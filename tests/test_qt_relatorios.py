@@ -1,4 +1,4 @@
-"""Catálogo Qt com banco em memória; paridade com declarações Tk sem importá-las."""
+"""Catálogo Qt com banco em memória."""
 import ast
 from datetime import datetime
 import os
@@ -17,32 +17,12 @@ from PySide6.QtWidgets import QApplication, QAbstractItemView
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.core.relatorio import para_csv, para_texto
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.relatorios import FILTROS, SPECS, JanelaRelatorios
 from tests.base import BaseTeste
 
 
 RAIZ = Path(__file__).resolve().parents[1]
-
-
-def declaracoes_tk():
-    def spec(titulo, filtros, executar, padrao="hoje", **kwargs):
-        return SimpleNamespace(titulo=titulo, filtros=filtros, executar=executar,
-                               padrao=padrao, mais=kwargs.get("mais", []))
-
-    arvore = ast.parse((RAIZ / "src" / "ui" / "relatorios_ui.py").read_text(encoding="utf-8"))
-    nomes = {"FILTROS", "VENDAS", "VENDAS_CATEGORIA", "VENDAS_MAIS", "PERIODO", "PERIODO_TURNO", "SPECS"}
-    corpo = []
-    for no in arvore.body:
-        if isinstance(no, ast.Assign) and any(
-                isinstance(alvo, ast.Name) and alvo.id in nomes for alvo in no.targets):
-            corpo.append(no)
-        elif isinstance(no, ast.AnnAssign) and isinstance(no.target, ast.Name) and no.target.id in nomes:
-            corpo.append(ast.Assign(targets=[no.target], value=no.value))
-    ambiente = {"Spec": spec, "fmt": fmt}
-    exec(compile(ast.fix_missing_locations(ast.Module(body=corpo, type_ignores=[])),
-                 "<declarações Tk sem imports>", "exec"), ambiente)
-    return ambiente
 
 
 class TestRelatoriosQt(BaseTeste):
@@ -104,53 +84,6 @@ class TestRelatoriosQt(BaseTeste):
         self.ctx.turnos.movimentar(turno, self.ctx.operador_id, "saida", 351, "Sangria")
         return turno
 
-    def test_catalogo_filtros_padroes_e_modulos_espelham_tk_sem_importar_tk(self):
-        tk = declaracoes_tk()
-        self.assertEqual(set(SPECS), set(tk["SPECS"]))
-        self.assertEqual(len(SPECS), 25)
-        self.assertEqual(FILTROS, tk["FILTROS"])
-        arvore = ast.parse((RAIZ / "src" / "ui" / "app.py").read_text(encoding="utf-8"))
-        grupos = next(ast.literal_eval(no.value) for no in arvore.body
-                      if isinstance(no, ast.Assign) and any(
-                          isinstance(alvo, ast.Name) and alvo.id == "RELATORIOS" for alvo in no.targets))
-        modulos = {chave: modulo for _, itens in grupos for chave, _, modulo in itens}
-        for chave, spec in SPECS.items():
-            with self.subTest(chave=chave):
-                original = tk["SPECS"][chave]
-                self.assertEqual(spec.titulo, original.titulo)
-                self.assertEqual(list(spec.filtros), original.filtros)
-                self.assertEqual(list(spec.mais), original.mais)
-                self.assertEqual(spec.padrao, original.padrao)
-                self.assertEqual(spec.modulo, modulos[chave])
-
-    def test_todos_os_23_relatorios_consultam_controlador_real_com_paridade_tk(self):
-        self.movimentar_caixa()
-        produto = self.novo_produto("AGUA", 351, estoque=True)
-        lancamento = self.ctx.estoque.criar_lancamento("entrada")
-        self.ctx.estoque.adicionar_item(lancamento, produto, 1.2345)
-        sub = self.banco.valor("SELECT id FROM subplanos WHERE nome = 'Aluguel'")
-        self.ctx.contas.incluir(sub, "Aluguel", self.tipo(), 1053,
-                               "03/10/2026", "03/10/2026", "03/10/2026")
-        janela = self.janela()
-        originais = declaracoes_tk()["SPECS"]
-        antes = list(self.banco.conexao.iterdump())
-        alteracoes = self.banco.conexao.total_changes
-        self.banco.executar("PRAGMA query_only = ON")
-        for chave, spec in SPECS.items():
-            with self.subTest(chave=chave):
-                self.selecionar(janela, chave)
-                filtros = janela.painel.valores()
-                with patch.object(self.ctx.relatorios, spec.metodo,
-                                  wraps=getattr(self.ctx.relatorios, spec.metodo)) as executar:
-                    self.assertTrue(janela.atualizar(), janela.mensagem.text())
-                    executar.assert_called_once()
-                esperado = originais[chave].executar(self.ctx, filtros)
-                self.comparar(janela, esperado)
-                self.assertEqual(para_csv(janela.rel), para_csv(esperado))
-                for grade in (janela.grade, janela.totais):
-                    self.assertEqual(grade.editTriggers(), QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.assertEqual(self.banco.conexao.total_changes, alteracoes)
-        self.assertEqual(list(self.banco.conexao.iterdump()), antes)
 
     def test_caixa_preserva_centavos_lookup_inteiro_e_alias_tipo(self):
         self.movimentar_caixa()
@@ -467,7 +400,7 @@ def sem_tk(nome, *args, **kwargs):
 builtins.__import__ = sem_tk
 from PySide6.QtWidgets import QApplication
 from src.database.conexao import BancoDados
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.relatorios import JanelaRelatorios
 from src.ui_qt.visualizador import JanelaVisualizador
 from unittest.mock import patch

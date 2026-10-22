@@ -87,7 +87,7 @@ antes de depender deste procedimento numa emergência.
 ## Verificar backup (teste de restauração isolado)
 
 Gerar a cópia não basta: é preciso provar que ela volta. Em **Utilitários >
-Verificar backup (teste de restauração)** (Tk e Qt) o dono escolhe o backup
+Verificar backup (teste de restauração)** o dono escolhe o backup
 local mais recente, um da lista ou um `.pdvbkp` (com a senha de recuperação).
 No backup externo, **Testar recuperação de um arquivo** faz o mesmo ensaio.
 

@@ -11,11 +11,6 @@ from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
 from tests.base import BaseTeste
 
-try:
-    import tkinter as tk
-    from src.ui.estoque_ui import PainelEstoque
-except ImportError:
-    tk = None
 
 
 class TesteMelhoriasEstoqueAdega(BaseTeste):
@@ -321,74 +316,3 @@ class TesteMelhoriasEstoqueAdega(BaseTeste):
         self.assertEqual(len(self.est.itens(pedido)), 1)
 
 
-@unittest.skipUnless(tk, "Tkinter indisponível")
-class TesteMelhoriasEstoqueAdegaTk(BaseTeste):
-    def setUp(self):
-        super().setUp()
-        try:
-            self.root = tk.Tk()
-        except tk.TclError:
-            self.skipTest("sem ambiente gráfico")
-        self.root.withdraw()
-        self.addCleanup(self.root.destroy)
-        from src.ui import tema
-        tema.aplicar_tema(self.root)
-        self.est = EstoqueController(self.banco, self.operador_adm())
-        self.fornecedor = self.banco.inserir("fornecedores", {"nome": "DISTRIBUIDORA"})
-        self.ctx = SimpleNamespace(
-            estoque=self.est,
-            cadastros=SimpleNamespace(opcoes=lambda _: [(self.fornecedor, "DISTRIBUIDORA")]))
-        self.adega = self.novo_produto("CERVEJA ADEGA", estoque=True, qt=1)
-        self.geral = self.novo_produto("SABONETE", estoque=True, qt=1)
-        self.banco.executar("UPDATE produtos SET estoque_minimo = 5")
-        self.painel = PainelEstoque(self.root, self.ctx)
-
-    def test_troca_visao_restaura_filtros_compras_e_coluna_cobertura(self):
-        painel = self.painel
-        painel.v_busca.set("sabonete")
-        painel.filtrar("ponto")
-        painel.v_visao.set("Adega")
-        painel._trocar_visao()
-        self.assertEqual(painel.v_busca.get(), "")
-        self.assertEqual([p["id"] for p in painel.linhas], [self.adega])
-        self.assertEqual(painel.tree["displaycolumns"], ("#all",))
-        painel.v_busca.set("cerveja")
-        painel.filtrar("ponto")
-        with patch("src.ui.estoque_ui.Visualizador") as visualizar:
-            painel.lista_de_compras()
-        saida = visualizar.call_args.args[3]
-        self.assertIn("ADEGA", saida)
-        self.assertIn("CERVEJA ADEGA", saida)
-        self.assertNotIn("SABONETE", saida)
-        with patch("src.ui.estoque_ui.tema.escolher", return_value=self.fornecedor), \
-                patch.object(painel, "novo_lancamento"):
-            painel.gerar_pedido()
-        pedido = self.est.lancamentos("pedido")[0]
-        self.assertEqual([p["produto_id"] for p in self.est.itens(pedido["id"])], [self.adega])
-        painel.v_visao.set("Geral")
-        painel._trocar_visao()
-        self.assertEqual(painel.v_busca.get(), "sabonete")
-        self.assertEqual(painel.filtro, "ponto")
-        self.assertNotIn("cobertura", painel.tree["displaycolumns"])
-        self.assertEqual(painel._recorte_compras(), {})
-        with patch("src.ui.estoque_ui.Visualizador") as visualizar:
-            painel.lista_de_compras()
-        self.assertIn("CERVEJA ADEGA", visualizar.call_args.args[3])
-        painel.v_visao.set("Adega")
-        painel._trocar_visao()
-        self.assertEqual(painel.v_busca.get(), "cerveja")
-        self.assertEqual(painel.filtro, "ponto")
-
-    def test_grupo_que_comeca_com_todos_nao_diverge_da_lista_de_compras(self):
-        gid = self.banco.inserir("grupos", {"nome": "Todos os importados"})
-        sub = self.banco.inserir("subgrupos", {"nome": "Cervejas", "grupo_id": gid})
-        self.banco.executar("UPDATE produtos SET subgrupo_id = ? WHERE id = ?", (sub, self.adega))
-        fora = self.novo_produto("CERVEJA FORA DO GRUPO", estoque=True, qt=1)
-        self.banco.executar("UPDATE produtos SET estoque_minimo = 5 WHERE id = ?", (fora,))
-        self.painel.v_visao.set("Adega")
-        self.painel._trocar_visao()
-        self.painel.v_grupo.set("Todos os importados")
-        self.painel.atualizar()
-        self.assertEqual([p["id"] for p in self.painel.linhas], [self.adega])
-        self.assertEqual([p["id"] for p in self.est.lista_de_compras(
-            **self.painel._recorte_compras())], [self.adega])

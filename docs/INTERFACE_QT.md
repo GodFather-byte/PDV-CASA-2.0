@@ -1,8 +1,7 @@
-# Interface Qt — piloto opt-in
+# Interface Qt
 
-Esta migração mantém o Qt opt-in durante a homologação. O caminho Tk
-permanece disponível durante a homologação. Nunca mantenha dois programas abertos
-sobre o mesmo banco. Faça backup antes de homologar em uma cópia dos dados.
+O Qt (PySide6) é a **única interface do PDV**; o PDV não tem outra interface (só o gerador de
+licenças, `licenciador/`, usa Tkinter). Nunca mantenha dois programas abertos sobre o mesmo banco. Faça backup antes de homologar em uma cópia dos dados.
 
 ## Confiabilidade e operação na 1.9
 
@@ -14,7 +13,7 @@ sobre o mesmo banco. Faça backup antes de homologar em uma cópia dos dados.
   físicos, confirmações com padrão Não e nova autorização após o diálogo.
   O diagnóstico foi testado com largura de 560 px e fonte aumentada.
 - Conferência de fechamento por forma, declarações explícitas e justificativa
-  obrigatória em divergências, compartilhando o controlador do Tk.
+  obrigatória em divergências, usando o controlador.
 - Devoluções e trocas por cupom no menu e nas operações do caixa. Reembolsos
   têm relatório próprio pela data/turno do reembolso; vendas e CMV preservam
   o bruto histórico. Consulte as restrições em [devoluções](DEVOLUCOES.md).
@@ -30,11 +29,8 @@ certificam todos os detalhes ergonômicos nem equipamentos físicos.
 
 Use Python 3.10+ e instale as dependências do projeto, incluindo
 `PySide6-Essentials>=6.7,<7` (Qt Core/Gui/Widgets; não exige WebEngine).
-Depois da integração do seletor no ponto de entrada:
-
 ```text
-python -m src.app --qt
-python -m src.app --tk
+python -m src.app
 ```
 
 Também existe uma entrada direta do piloto, com as mesmas proteções:
@@ -44,7 +40,7 @@ python -m src.ui_qt.app
 ```
 
 Se Qt não estiver instalado ou falhar, o início deve informar o erro e encerrar.
-Não há fallback silencioso nem abertura de Tk dentro do processo Qt.
+Não há fallback silencioso.
 `--sync` continua sendo um modo separado do programa, não uma promessa de
 sincronização contínua pelo painel Qt.
 
@@ -54,7 +50,7 @@ sincronização contínua pelo painel Qt.
   troca obrigatória da senha igual ao nome (inclusive ADM/ADM).
 - Primeiro uso: após entrar, operador com `cfg_loja` recebe o convite para
   cadastrar a casa pelo `ConfigController.cadastrar_loja`. O nome é obrigatório
-  para salvar; fechar adia o convite para a próxima entrada, como no Tk.
+  para salvar; fechar adia o convite para a próxima entrada.
 - Licença local pelas APIs existentes, preservando carência, relógio e isenção
   de turno recente. Ativação manual de código e consulta online em thread:
   só a rede sai da thread Qt; o banco e os widgets permanecem na thread principal.
@@ -80,7 +76,7 @@ sincronização contínua pelo painel Qt.
 - Cadastros oferecem pré-visualização/impressão textual e exportação CSV da
   pesquisa atual, sem incluir campos de senha. Produtos também oferecem tabela
   de preços e acesso às observações; clientes geram o arquivo de mala direta
-  com os mesmos campos e separador do Tk, no destino escolhido explicitamente.
+  com os mesmos campos e separador, no destino escolhido explicitamente.
   Salvar/imprimir revalida a sessão e a permissão, inclusive após a confirmação.
 - Cadastros também oferecem filtros pelos campos de relacionamento definidos nos
   metadados e “Somente ativos” quando aplicável, combinados à pesquisa textual.
@@ -88,7 +84,7 @@ sincronização contínua pelo painel Qt.
   preservando a seleção quando o registro continua visível. Visualização e CSV
   respeitam esses filtros e a ordem; cancelar o diálogo não altera a consulta.
   Aplicar filtros revalida o acesso após o diálogo. A mala direta continua
-  exportando todos os clientes por nome, como no Tk.
+  exportando todos os clientes por nome.
 - Composição/ficha técnica: busca de produto, consulta da composição e inclusão/
   exclusão de insumos pelas APIs de produto existentes, com acesso `cad_composicao`.
   Quantidades usam a unidade cadastrada do insumo; não há conversão nem alteração
@@ -105,7 +101,7 @@ sincronização contínua pelo painel Qt.
   situação, previsão e busca, saldo/resumo, repetição mensal, quitação e reversão
   pelos métodos existentes de `ContasController`. O acesso `lanc_contas` é
   revalidado ao abrir e antes das operações; quitação só muda pelos botões próprios.
-- Catálogo de outros relatórios: os 23 relatórios genéricos que já existiam no Tk
+- Catálogo de outros relatórios: os 23 relatórios genéricos que já existiam
   usam `ctx.relatorios`, filtros equivalentes, as permissões de cada módulo e
   exportação CSV da estrutura comum, além de pré-visualização textual, salvar
   texto e envio explícito para impressão com confirmação e revalidação.
@@ -128,8 +124,8 @@ sincronização contínua pelo painel Qt.
 - Telegram: configuração, pareamento e diagnóstico em janela própria, com
   rede fora da thread dos widgets/banco e descarte de resultados após fechar.
   Testes dependem de credenciais reais; abrir a janela não comprova entrega.
-- Atualizações: consulta manual e verificação periódica pelo mesmo serviço do
-  Tk, em thread sem banco/widgets. O painel apenas avisa; download abre o link
+- Atualizações: consulta manual e verificação periódica pelo mesmo serviço,
+  em thread sem banco/widgets. O painel apenas avisa; download abre o link
   somente por ação explícita. Não instala automaticamente. Fechar a sessão
   descarta respostas tardias; falha não apaga o aviso previamente confirmado.
 - Importação de produtos por CSV ou Excel: modelo/exportação, prévia com ações e
@@ -139,7 +135,7 @@ sincronização contínua pelo painel Qt.
   confirmações e bloqueios existentes.
 - Utilitários: backup local manual, pacote de suporte, limpeza do movimento,
   exclusão em massa de produtos e abertura do programa de comunicação. As
-  ações destrutivas mantêm as confirmações do Tk e as validações do controlador;
+  ações destrutivas mantêm as confirmações e as validações do controlador;
   backup e suporte usam caminhos escolhidos/configurados, nunca enviam dados
   automaticamente a terceiros.
 - Assistente de impressora: lista e sugere dispositivos do Windows, mostra
@@ -153,7 +149,7 @@ sincronização contínua pelo painel Qt.
 - Painel da Cozinha/Bar (`src.ui_qt.cozinha.JanelaCozinha(ctx, parent=None)`):
   acompanha a fila real de `PreparoController`, filtra por setor ativo, mostra
   posição, produto, quantidade, observação, minutos e situação. Iniciar preparo,
-  marcar pronto e avançar usam os mesmos estados do Tk. Atualiza a cada dois
+  marcar pronto e avançar usam os mesmos estados. Atualiza a cada dois
   segundos na thread principal; timer para ao ocultar/fechar. Cada consulta e
   alteração revalida operador ativo, `util_cozinha` e módulo habilitado;
   `exigir_acesso()` público também protege a reabertura pelo menu.
@@ -167,7 +163,7 @@ sincronização contínua pelo painel Qt.
   gravações; balcão com itens pede confirmação para manter a venda aberta;
   mesa/comanda vazia é descartada ao sair. O turno nunca é fechado sozinho.
 - Comissão das garotas no caixa Qt (`src/ui_qt/comissao.py`), pelos mesmos
-  `ComissaoController`, `ImpressaoController` e `AcessoController` do Tk:
+  `ComissaoController`, `ImpressaoController` e `AcessoController`:
   código 50 na linha de entrada com `comissao_na_linha` ligada (Garota nº +
   valor/pontos, Enter avança, Esc descarta) ou pela janela com ela desligada.
   Mesmas senhas (`caixa_comissao`/`exigir_senha_comissao`, pagamento
@@ -180,13 +176,13 @@ sincronização contínua pelo painel Qt.
 - Saída sem consumo (código 1002): libera a comanda/mesa vazia (ou pergunta qual),
   pelo `CaixaController.liberar_saida`, e emite o ticket de saída. Com consumo é
   recusada sem alterar a venda.
-- **Operações do caixa** reúne os fluxos complementares, sem abrir Tk:
+- **Operações do caixa** reúne os fluxos complementares:
   - Adega/comércio sem mesas (`usar_mesas = N`): esconde painel e posição,
     desativa ações exclusivas de mesas e mantém delivery/caderneta conforme os módulos.
     Aceita `6*código`, cadastro rápido de código de barras desconhecido com permissão
     ou supervisor, escolha natural/gelada e quantidade de cascos sem troca.
     Atacado por temperatura, estoque compartilhado e agrupamento no balcão usam
-    o mesmo controlador do Tk. Bebida e casco são itens independentes no cancelamento.
+    o mesmo controlador. Bebida e casco são itens independentes no cancelamento.
     O Cadastro de Produtos oferece a seção Adega e **Criar fardo**, sem criar
     estoque separado para o fardo. Regras e cuidados em [ESTOQUE.md](ESTOQUE.md).
   - Produto dividido/montagem: número de partes, escolha dos componentes e opção
@@ -279,16 +275,14 @@ sem segurar o processo. Não se usa `terminate()` inseguro.
 ## Limites assumidos
 
 A cobertura é descrita acima; isso não certifica paridade de todos os detalhes
-ergonômicos nem a homologação operacional. Tk permanece disponível por `--tk`;
-encerre o processo antes de trocar de interface.
+ergonômicos nem a homologação operacional. Não há mais interface alternativa.
 
 Os fluxos de caixa listados acima estão disponíveis no piloto; isso não substitui
 homologação em cópia do banco. Impressão, gaveta e balança precisam de homologação
 com os periféricos reais. Cancelar a entrada manual de peso não simula uma leitura;
 sem configuração/driver/dispositivo, a interface informa a limitação.
 
-Não há sincronização contínua de vendas pelo painel Qt. Configurações compartilham
-a mesma base do Tk; não abra os dois sobre ela ao mesmo tempo. Status de backup/licença
+Não há sincronização contínua de vendas pelo painel Qt. Não abra duas instâncias sobre o mesmo banco. Status de backup/licença
 não substitui os testes de recuperação e de periféricos reais.
 
 ## Testes

@@ -129,7 +129,7 @@ class TelegramController:
         """Persiste o token e os dados devolvidos por getMe já confirmado pelo chamador.
 
         Não faz rede. Permite validar fora da thread do banco mantendo a mesma
-        persistência usada por salvar_token e pela interface Tk.
+        persistência usada por salvar_token e pela interface Qt.
         """
         token = (token or "").strip()
         if token != self.token:                                 # outro bot: os pareamentos do anterior não valem

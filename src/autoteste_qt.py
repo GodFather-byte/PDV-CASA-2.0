@@ -1,4 +1,4 @@
-"""Autoteste isolado da interface Qt: não abre Tk nem usa o banco da loja."""
+"""Autoteste isolado da interface Qt: não usa o banco da loja."""
 from __future__ import annotations
 
 import sys

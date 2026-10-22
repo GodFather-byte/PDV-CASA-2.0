@@ -1,6 +1,6 @@
 # Caixa: cancelamento parcial e divisão da conta (melhorias 1 e 6)
 
-Vale para os dois caixas (Tk `src/ui/caixa_ui.py` + `caixa_pagamento.py` e Qt `src/ui_qt/caixa.py`) e para
+Vale para o caixa Qt (`src/ui_qt/caixa.py`) e para
 todos os perfis. Toda regra fica no `CaixaController`; as telas só perguntam e mostram.
 
 ## 1. Cancelamento parcial por quantidade
@@ -15,13 +15,13 @@ todos os perfis. Toda regra fica no `CaixaController`; as telas só perguntam e 
 - `info_cancelamento(item_id)` → `{quantidade, qtd_paga, qtd_livre, aceita_decimal, pergunta_qtd}`. As telas só
   perguntam a quantidade quando `pergunta_qtd` (mais de uma unidade, quantidade fracionada ou parte já paga); uma
   unidade inteira cancela direto, como antes.
-- Telas: Tk "Cancelar item" e Qt "Cancelar item"/modo cancelar pedem quantidade (validada: faixa e fração) e, no
+- Tela Qt: "Cancelar item"/modo cancelar pedem quantidade (validada: faixa e fração) e, no
   parcial, motivo obrigatório. O cancelamento total segue o fluxo e a autorização de sempre.
 
 ## 6. Divisão da conta
 
 - **Por valor**: `dividir_restante(venda_id, partes)` (já existente) divide `liquidar()["falta"]` em centavos exatos.
-  Tk e Qt ("Dividir conta") sugerem a parte da vez no valor; remover um pagamento zera a divisão.
+  A tela Qt ("Dividir conta") sugere a parte da vez no valor; remover um pagamento zera a divisão.
 - **Por item**: `itens_para_divisao`, `previa_pagamento_itens`, `pagar_itens(venda_id, tipo_id, selecao,
   valor_esperado_cent=None)` e `itens_do_pagamento(pagamento_id)`. Cada pagamento grava o vínculo
   pagamento/item/quantidade/valor em `pagamentos_itens`; o que já foi pago não aparece de novo (sem cobrar duas vezes).
@@ -29,7 +29,7 @@ todos os perfis. Toda regra fica no `CaixaController`; as telas só perguntam e 
   taxas ficam no restante, para dividir por valor. Recusa caderneta, pré-pago e item incluso no rodízio.
 - `remover_pagamento` apaga os vínculos (auditoria `vinculo_itens_liberado`) e libera os itens; `cancelar_venda`
   também apaga. `transferir_item` não move quantidade já paga por item.
-- Telas: Tk botão "Pagar itens" na janela de pagamento; Qt botão "Pagar itens". Ambas confirmam forma e valor.
+- Tela Qt: botão "Pagar itens" na janela de pagamento. Confirma forma e valor.
 
 ## Tabela `pagamentos_itens` (migração 27, dono do esquema)
 
@@ -48,13 +48,13 @@ CREATE INDEX IF NOT EXISTS ix_pagamentos_itens_pagamento ON pagamentos_itens(pag
 
 Sem backfill. Sem a tabela (banco antigo), `pagar_itens` recusa com mensagem e o resto funciona.
 
-## Caixa Qt: paridade com o Tk
+## Caixa Qt: lacunas fechadas
 
 - Rodízio (Ctrl+R) e Recarga pré-pago (Ctrl+Shift+P) em "Operações do caixa", visíveis só com o módulo ligado
   (`usar_rodizio`/`usar_prepago`) e com mesas; usam `ativar_rodizio`/`desativar_rodizio`/`recarregar`.
 - Pré-pago: título mostra "Pré-pago"/"Sem crédito", painel mostra crédito e saldo, F12 fecha comanda sem consumo e
   confirma a devolução da sobra (recarga por Pix/cartão).
-- Pedido remoto da cozinha/bar vai ao setor do subgrupo (`setor_do_subgrupo`), como no Tk.
+- Pedido remoto da cozinha/bar vai ao setor do subgrupo (`setor_do_subgrupo`).
 
 ## Restrições conhecidas
 
@@ -63,9 +63,9 @@ Sem backfill. Sem a tabela (banco antigo), `pagar_itens` recusa com mensagem e o
   conta ou valor próprio de item já pago por item, ou deixarem a conta abaixo do pago por item. Remover o pagamento
   libera. Leitura nova nunca é agrupada em linha paga; cisão que deixa só a parte paga fica com o valor exato pago.
 - `transferir_item` não protege pagamentos por valor (comportamento anterior).
-- Lacunas Qt fechadas (só tela, reaproveitando controllers e permissões do Tk; teste `tests/test_qt_caixa_lacunas.py`):
+- Lacunas Qt fechadas (só tela, reaproveitando controllers e permissões; teste `tests/test_qt_caixa_lacunas.py`):
   F3 liga/desliga o leitor óptico (padrão vem de `config.maquina()["leitor_optico"]`; com leitor, produto sem fração
   lança 1 unidade sem perguntar); F7 abre sangria/suprimento; menu de ações ganhou "Nomear comanda" (só com mesas,
   usa `definir_apelido`), "Leitor óptico liga/desliga (F3)", "Leitura X", "Redução Z" e "Fila de impressão"
   (`JanelaFilaImpressao`, uma só janela; sem permissão mostra aviso).
-- Não verificado no Qt: ergonomia da barra fixa de botões do Tk e telas de acertos.
+- Não verificado no Qt: ergonomia da barra fixa de botões e telas de acertos.

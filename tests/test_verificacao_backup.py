@@ -17,7 +17,7 @@ from src.core import backup_seguro
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.database import esquema, protecao
 from src.database.conexao import BancoDados
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from tests.base import BaseTeste
 
 SENHA = "recuperacao-teste-2026"
@@ -462,49 +462,6 @@ class TesteJanelaQt(BaseVerificacao):
         self.assertTrue(utilitarios.verificar_backup())
         self.janelas.append(utilitarios.janela_verificacao)
         self.assertIn("ainda não testada", utilitarios.status.text())
-
-
-class TesteJanelaTk(BaseVerificacao):
-    def setUp(self):
-        super().setUp()
-        import tkinter as tk
-        try:
-            self.root = tk.Tk()
-        except tk.TclError as erro:
-            self.skipTest(f"Sem display para Tk: {erro}")
-        self.root.withdraw()
-        self.addCleanup(self.root.destroy)
-        self.ctx = Contexto(self.banco)
-        self.ctx.operador = self.ctx.acesso.operador(self.operador_adm())
-
-    def test_janela_tk_verifica_e_revalida(self):
-        from src.ui import utilitarios_ui
-        self.gerar_backup()
-        janela = utilitarios_ui.executar(self.root, self.ctx, "verificar_backup")
-        self.assertIsNotNone(janela)
-        janela.withdraw()
-        self.assertEqual(len(janela.caminhos), 1)
-        self.assertTrue(janela.verificar())
-        self.assertIn("APROVADO", janela.texto_resultado())
-        self.assertIn("aprovado em", janela.ultima.cget("text"))
-        janela.grade.selection_set(next(iter(janela.caminhos)))
-        self.assertTrue(janela.verificar_selecionado())
-        self.orfanizar(Path(next(iter(janela.caminhos.values()))))
-        self.assertTrue(janela.verificar_selecionado())
-        self.assertIn("APROVADO COM AVISOS", janela.mensagem.cget("text"))
-        self.banco.executar("UPDATE operadores SET ativo = 0 WHERE id = ?", (self.operador_adm(),))
-        with mock.patch.object(UtilitarioController, "testar_recuperacao") as testar:
-            self.assertFalse(janela.verificar())
-        testar.assert_not_called()
-        self.assertIn("inativo", janela.mensagem.cget("text"))
-        self.assertSemRestauracaoMarcada()
-
-    def test_tk_sem_acesso_nao_abre(self):
-        from src.ui import utilitarios_ui
-        self.ctx.operador = None
-        with mock.patch.object(utilitarios_ui.tema, "erro") as erro:
-            self.assertIsNone(utilitarios_ui.executar(self.root, self.ctx, "verificar_backup"))
-        erro.assert_called_once()
 
 
 if __name__ == "__main__":

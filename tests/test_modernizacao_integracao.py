@@ -36,20 +36,34 @@ class TesteDistribuicaoModerna(unittest.TestCase):
                 copiados = {arquivo.name for arquivo in pasta_pacote.iterdir()} if pasta_pacote.exists() else set()
                 self.assertEqual(copiados, arquivos_licenca, nome)
 
-    def test_instalador_tem_previa_sem_trocar_atalho_padrao(self):
+    def test_instalador_tem_um_unico_atalho_do_programa(self):
         texto = (RAIZ / "instalador" / "WillPDV.iss").read_text(encoding="utf-8-sig")
-        self.assertIn('Parameters: "--qt"', texto)
+        self.assertNotIn('"--qt"', texto)
+        self.assertNotIn("prévia", texto)
         self.assertIn('Name: "{autoprograms}\\{#Nome}"; Filename: "{app}\\{#Exe}"', texto)
 
-    def test_interfaces_mutuamente_exclusivas(self):
-        resultado = subprocess.run([sys.executable, "-m", "src.app", "--qt", "--tk"],
-                                   capture_output=True, timeout=30, cwd=RAIZ)
-        self.assertNotEqual(resultado.returncode, 0)
-        self.assertIn(b"--qt ou --tk", resultado.stderr)
+    def test_ponto_de_entrada_so_conhece_a_interface_qt(self):
+        texto = (RAIZ / "src" / "app.py").read_text(encoding="utf-8")
+        self.assertIn("src.ui_qt.app", texto)
+        self.assertNotIn("--tk", texto)
+        self.assertFalse((RAIZ / "src" / "ui").exists())
 
     def test_workflow_valida_qt_empacotado_e_instalado(self):
         texto = (RAIZ / ".github" / "workflows" / "build-windows.yml").read_text(encoding="utf-8")
         self.assertGreaterEqual(texto.count("--autoteste-qt"), 2)
+
+
+class TesteIconeQt(unittest.TestCase):
+    def test_icone_aplicado_e_falha_nunca_derruba(self):
+        from unittest import mock
+        from PySide6.QtWidgets import QApplication
+        from src.ui_qt.app import aplicar_icone
+        self.qt = QApplication.instance() or QApplication([])        # QIcon exige uma aplicação Qt viva
+        aplicacao = mock.Mock()
+        self.assertTrue(aplicar_icone(aplicacao))
+        aplicacao.setWindowIcon.assert_called_once()
+        aplicacao.setWindowIcon.side_effect = RuntimeError("sem ícone")
+        self.assertFalse(aplicar_icone(aplicacao))
 
 
 class TesteRelatorioQt(unittest.TestCase):

@@ -176,7 +176,7 @@ Não publique segredos neste documento nem no git. Os exemplos usam variáveis s
 Extrair o ZIP inteiro em pasta nova e manter o executável junto da pasta `_internal`.
 Não executar dentro do ZIP nem copiar somente o `.exe`. São pacotes portáteis,
 não instaladores Setup; o Inno Setup não está disponível na máquina de desenvolvimento.
-Os executáveis passaram nos autotestes isolados Tk/Qt e do licenciador.
+Os executáveis passaram nos autotestes isolados do Qt e do licenciador.
 
 **Não abrir o portátil sobre o banco de produção para experimentar.** Fazer backup,
 usar cópia do banco em pasta separada e definir `PDV_DB` apontando para essa cópia
@@ -235,7 +235,7 @@ Informar a credencial exclusiva desse caixa e ativar a ponte somente após a pub
 da licença correta. Usar o endereço HTTPS da API atual; token de caixa **não** é
 `PDV_API_TOKEN`, `PDV_CENTRAL_TOKEN` nem o token legado de loja.
 
-A ponte tem serviço próprio nas interfaces Tk e Qt, iniciado antes do login e
+A ponte tem serviço próprio na interface Qt, iniciado antes do login e
 sem rede enquanto a opção estiver desligada. Não é preciso iniciar `--sync` para
 receber licença com o PDV aberto. O processo separado `python -m src.app --sync`
 continua disponível, inclusive para o painel web legado; as operações da ponte

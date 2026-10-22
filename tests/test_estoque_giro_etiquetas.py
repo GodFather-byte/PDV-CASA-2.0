@@ -1,4 +1,4 @@
-"""Reposição pelo giro por caixa e etiquetas de produtos/preços (controllers, Tk e Qt)."""
+"""Reposição pelo giro por caixa e etiquetas de produtos/preços (controllers e Qt)."""
 import os
 import tempfile
 import unittest
@@ -14,11 +14,6 @@ from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
 from tests.base import BaseTeste
 
-try:
-    import tkinter as tk
-    from src.ui.estoque_ui import PainelEstoque
-except ImportError:
-    tk = None
 
 
 class BaseGiro(BaseTeste):
@@ -144,137 +139,3 @@ class TesteEtiquetas(BaseGiro):
         self.assertEqual(self.banco.valor("SELECT preco_cent FROM produtos WHERE id = ?", (pid,)), 500)
 
 
-@unittest.skipUnless(tk, "Tkinter indisponível")
-class TesteGiroEtiquetasTk(BaseGiro):
-    def setUp(self):
-        super().setUp()
-        try:
-            self.root = tk.Tk()
-        except tk.TclError:
-            self.skipTest("sem ambiente gráfico")
-        self.root.withdraw()
-        self.addCleanup(self.root.destroy)
-        from src.ui import tema
-        tema.aplicar_tema(self.root)
-        self.ctx = SimpleNamespace(
-            banco=self.banco, estoque=self.est,
-            cadastros=SimpleNamespace(opcoes=lambda _: [(self.fornecedor, "DISTRIBUIDORA")]))
-        self.pid = self.produto("CERVEJA", qt=2)
-        self.venda(self.pid, 30, terminal=2)
-        self.painel = PainelEstoque(self.root, self.ctx)
-
-    def test_giro_do_caixa_escolhido_so_cria_pedido_se_confirmar(self):
-        with patch("src.ui.estoque_ui.Visualizador") as ver, patch("src.ui.tema.escolher", side_effect=[2]), \
-                patch("src.ui.tema.confirmar", return_value=False):
-            self.painel.reposicao_giro()
-        self.assertIn("CAIXA 2", ver.call_args.args[3])
-        self.assertEqual(self.est.lancamentos("pedido"), [])
-        with patch("src.ui.estoque_ui.Visualizador"), patch("src.ui.tema.escolher", side_effect=[2, self.fornecedor]), \
-                patch("src.ui.tema.confirmar", return_value=True), patch.object(PainelEstoque, "novo_lancamento"):
-            self.painel.reposicao_giro()
-        pedido = self.est.lancamentos("pedido")[0]
-        self.assertEqual(self.est.itens(pedido["id"])[0]["quantidade"], 5)
-
-    def test_giro_de_outro_caixa_sem_venda_avisa(self):
-        with patch("src.ui.tema.escolher", return_value=1), patch("src.ui.tema.aviso") as aviso, \
-                patch("src.ui.estoque_ui.Visualizador") as ver:
-            self.painel.reposicao_giro()
-        aviso.assert_called_once()
-        ver.assert_not_called()
-
-    def test_dialogo_de_etiquetas_seleciona_e_abre_previa(self):
-        from src.ui.etiquetas_ui import DialogoEtiquetas
-        outro = self.produto("OUTRA", qt=1)
-        linhas = [dict(l) for l in self.painel.linhas]
-        linhas.append({**self.painel.linhas[0], "id": outro, "nome": "OUTRA"})
-        dialogo = DialogoEtiquetas(self.root, self.ctx, linhas, [self.pid, outro])
-        self.addCleanup(dialogo.destroy)
-        dialogo.v_copias.set("2")
-        with patch("src.ui.etiquetas_ui.Visualizador") as ver:
-            dialogo.previa()
-        self.assertEqual(len(dialogo.itens()), 2)
-        self.assertEqual(ver.call_args.args[3].count("Cód"), 4)
-        self.assertIn("codigo;nome", ver.call_args.kwargs["csv"])
-        dialogo.v_copias.set("0")
-        with patch("src.ui.etiquetas_ui.Visualizador") as ver, patch("src.ui.tema.erro") as erro:
-            dialogo.previa()
-        ver.assert_not_called()
-        erro.assert_called_once()
-
-    def test_botoes_acessiveis_no_painel(self):
-        self.assertEqual(self.painel.b_giro.cget("text"), "Reposição pelo giro")
-        with patch("src.ui.etiquetas_ui.DialogoEtiquetas") as dialogo:
-            self.painel.etiquetas()
-        dialogo.assert_called_once()
-
-
-try:
-    from PySide6.QtWidgets import QApplication, QMessageBox, QInputDialog
-    from src.ui.contexto import Contexto
-    from src.ui_qt.estoque import JanelaEstoque
-    from src.ui_qt.etiquetas import JanelaEtiquetas
-    from src.ui_qt.tema import aplicar
-    from src.ui_qt.visualizador import JanelaVisualizador
-except ImportError:
-    QApplication = None
-
-
-@unittest.skipUnless(QApplication, "PySide6 indisponível")
-class TesteGiroEtiquetasQt(BaseGiro):
-    @classmethod
-    def setUpClass(cls):
-        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-        cls.aplicacao = QApplication.instance() or QApplication([])
-        aplicar(cls.aplicacao)
-
-    def setUp(self):
-        super().setUp()
-        self.ctx = Contexto(self.banco)
-        self.ctx.operador = self.ctx.acesso.operador(self.operador_adm())
-        self.pid = self.produto("CERVEJA", qt=2)
-        self.venda(self.pid, 30, terminal=2)
-        self.janela = JanelaEstoque(self.ctx)
-        self.addCleanup(self.janela.close)
-
-    def test_giro_por_caixa_so_gera_pedido_confirmado(self):
-        with patch.object(QInputDialog, "getItem", return_value=("Caixa 2", True)), \
-                patch.object(JanelaVisualizador, "exec") as ver, \
-                patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
-            self.assertTrue(self.janela.reposicao_giro())
-        ver.assert_called_once()
-        self.assertEqual(self.ctx.estoque.lancamentos("pedido"), [])
-        respostas = [("Caixa 2", True), ("DISTRIBUIDORA", True)]
-        with patch.object(QInputDialog, "getItem", side_effect=respostas), \
-                patch.object(JanelaVisualizador, "exec"), patch.object(JanelaEstoque, "abrir_lancamentos"), \
-                patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
-            self.assertTrue(self.janela.reposicao_giro())
-        pedido = self.ctx.estoque.lancamentos("pedido")[0]
-        self.assertEqual(self.ctx.estoque.itens(pedido["id"])[0]["quantidade"], 5)
-
-    def test_giro_sem_venda_no_caixa_mostra_mensagem(self):
-        with patch.object(QInputDialog, "getItem", return_value=("Caixa 1", True)):
-            self.assertFalse(self.janela.reposicao_giro())
-        self.assertIn("Nenhum produto", self.janela.mensagem.text())
-
-    def test_etiquetas_selecao_previa_e_csv(self):
-        self.janela.grade.selectRow(0)
-        dialogo = self.janela.etiquetas()
-        self.assertIsInstance(dialogo, JanelaEtiquetas)
-        self.addCleanup(dialogo.close)
-        dialogo.copias.setValue(3)
-        self.assertEqual(dialogo.itens(), [{"produto_id": self.pid, "copias": 3, "temperatura": "natural"}])
-        with patch.object(JanelaVisualizador, "exec") as ver:
-            self.assertTrue(dialogo.previa())
-        ver.assert_called_once()
-        with tempfile.TemporaryDirectory() as pasta:
-            caminho = os.path.join(pasta, "etiquetas.csv")
-            self.assertTrue(dialogo.exportar_csv(caminho))
-            with open(caminho, encoding="utf-8-sig") as f:
-                self.assertEqual(len(f.read().splitlines()), 4)
-        dialogo.grade.clearSelection()
-        self.assertFalse(dialogo.previa())
-        self.assertIn("Selecione", dialogo.mensagem.text())
-
-
-if __name__ == "__main__":
-    unittest.main()

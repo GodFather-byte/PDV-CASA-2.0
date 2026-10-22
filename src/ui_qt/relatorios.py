@@ -1,7 +1,7 @@
 """Catálogo Qt opt-in dos relatórios genéricos de ``relatorios_ui.SPECS``.
 
 Uso: ``JanelaRelatorios(ctx, chave="caixa_mov").exec()``. Sem integração ao menu.
-Filtros adicionais do Tk ficam sempre visíveis. Consulta e CSV usam os mesmos
+Filtros adicionais ficam sempre visíveis. Consulta e CSV usam os mesmos
 controladores e conversores, sem recalcular valores na interface.
 
 Fora deste catálogo: vendas_periodo e estoque_atual (telas Qt próprias).
@@ -84,7 +84,7 @@ class Spec:
         return metodo(filtros)
 
 
-# Módulos espelham RELATORIOS de ui.app, sem importar sua dependência Tk.
+# Catálogo dos relatórios por módulo.
 SPECS = {
     "vendas_grupo": Spec("Venda por grupo", "rel_vendas_grupo", "vendas_por_grupo", VENDAS_CATEGORIA, mais=VENDAS_MAIS),
     "mais_vendidos": Spec("Produtos mais vendidos", "rel_vendas_grupo", "mais_vendidos", VENDAS_CATEGORIA, mais=VENDAS_MAIS),

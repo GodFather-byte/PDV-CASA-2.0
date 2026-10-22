@@ -7,7 +7,7 @@ from pathlib import Path
 
 def caminho(nome: str = "willpdv.ico") -> Path | None:
     """O .ico: dentro do executável (PyInstaller o põe na pasta temporária `_MEIPASS`) ou em `instalador/` no código-fonte."""
-    base = Path(getattr(sys, "_MEIPASS", "")) if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[2] / "instalador"
+    base = Path(getattr(sys, "_MEIPASS", "")) if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1] / "instalador"
     arquivo = base / nome
     return arquivo if arquivo.is_file() else None
 

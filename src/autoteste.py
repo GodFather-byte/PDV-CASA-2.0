@@ -1,7 +1,7 @@
 """Autoteste do programa instalado:  WillPDV.exe --autoteste [arquivo] [--rede]
 
 Serve para conferir, no próprio executável (PyInstaller) e no instalador, o que os testes de código-fonte não pegam: módulo
-que ficou de fora do pacote, biblioteca que não veio junto (Tk, SQLite, SSL) ou tela que não abre. O GitHub Actions roda isto
+que ficou de fora do pacote, biblioteca que não veio junto (Qt, SQLite, SSL) ou tela que não abre. O GitHub Actions roda isto
 depois de gerar o executável e depois de instalar o instalador; em qualquer PC também dá para rodar para ver se o programa
 está inteiro. Não mexe nos dados do caixa: usa um banco temporário.
 
@@ -43,14 +43,7 @@ MODULOS = [
     "src.controllers.integracoes_controller",
     "src.controllers.alertas_controller", "src.controllers.etiqueta_controller",
     "src.controllers.promocoes_controller", "src.controllers.retornaveis_controller", "src.controllers.diagnostico_controller",
-    "src.controllers.devolucoes_controller", "src.homologacao",
-    "src.ui.adega_dialogos", "src.ui.app", "src.ui.assistente_impressora_ui", "src.ui.atualizacao_ui", "src.ui.auditoria_ui", "src.ui.cadastro_loja_ui", "src.ui.cadastro_rapido_ui", "src.ui.cadastros_tk", "src.ui.caixa_dialogos",
-    "src.ui.caixa_pagamento", "src.ui.caixa_tema", "src.ui.caixa_ui", "src.ui.clientes_ui", "src.ui.comissao_ui", "src.ui.composicao_ui",
-    "src.ui.config_ui", "src.ui.contexto", "src.ui.cozinha_ui", "src.ui.escolher_impressora_ui", "src.ui.fila_impressao_ui", "src.ui.icone",
-    "src.ui.estoque_ui", "src.ui.importar_produtos_ui", "src.ui.inicializacao", "src.ui.lancamentos_ui", "src.ui.login", "src.ui.menu_widgets", "src.ui.paleta", "src.ui.painel_mesas",
-    "src.ui.relatorios_ui", "src.ui.telegram_ui", "src.ui.tema", "src.ui.utilitarios_ui", "src.ui.visualizador",
-    "src.ui.alertas_ui", "src.ui.etiquetas_ui", "src.ui.promocoes_ui", "src.ui.retornaveis_ui", "src.ui.diagnostico_ui",
-    "src.ui.devolucoes_ui", "src.ui.fechamento_ui",
+    "src.controllers.devolucoes_controller", "src.homologacao", "src.controllers.contexto", "src.core.valor_pagamento",
     "src.ui_qt.app", "src.ui_qt.tema", "src.ui_qt.login", "src.ui_qt.cadastros", "src.ui_qt.caixa", "src.ui_qt.auditoria",
     "src.ui_qt.comissao", "src.ui_qt.assistente_impressora", "src.ui_qt.composicao",
     "src.ui_qt.configuracoes", "src.ui_qt.estoque", "src.ui_qt.fila_impressao",
@@ -79,63 +72,21 @@ def _modulos() -> list[str]:
 def _bibliotecas() -> list[str]:
     import sqlite3
     import ssl
-    import tkinter
+    import PySide6
     ssl.create_default_context()           # no Windows lê os certificados do sistema: sem isto o Telegram não conecta
     return [f"Python {platform.python_version()} ({'executável' if getattr(sys, 'frozen', False) else 'código-fonte'}), "
-            f"SQLite {sqlite3.sqlite_version}, Tk {tkinter.TkVersion}, {ssl.OPENSSL_VERSION}"]
+            f"SQLite {sqlite3.sqlite_version}, Qt/PySide6 {PySide6.__version__}, {ssl.OPENSSL_VERSION}"]
 
 
 def _banco_e_telas(pasta: Path) -> list[str]:
-    import tkinter as tk
-    from src.controllers.cadastro_controller import CadastroController
-    from src.database.conexao import BancoDados
-    from src.ui import config_ui, tema
-    from src.ui.app import App
-    from src.ui.auditoria_ui import JanelaAuditoria
-    from src.ui.cadastros_tk import JanelaCadastro
-
-    banco = BancoDados(str(pasta / "autoteste.db"))
+    """Abre a interface Qt com banco efêmero (sem tocar nos dados da loja) e confere o backup criptografado."""
+    from src.autoteste_qt import _backup_seguro
+    from src.ui_qt.app import autoteste
     try:
-        if not banco.valor("SELECT COUNT(*) FROM acessos"):
-            raise RuntimeError("o banco novo nasceu sem os níveis de acesso")
-        banco.atualizar("loja", 1, {"nome_fantasia": "Autoteste"})        # senão o menu abriria o cadastro da casa
-        try:
-            app = App(banco)
-        except tk.TclError as e:
-            raise RuntimeError(f"sem ambiente gráfico (Tk): {e}") from None
-        try:
-            app.ctx.operador = app.ctx.acesso.autenticar("adm", "adm")
-            app.mostrar_menu()
-            app.root.update()
-            if not app.botoes or not app.cartoes:
-                raise RuntimeError("o menu principal abriu vazio")
-            tema.aplicar_tema(app.root)
-            for abrir in (lambda: JanelaCadastro(app.root, app.ctx, "produtos"),
-                          lambda: JanelaAuditoria(app.root, app.ctx),
-                          lambda: config_ui.abrir(app.root, app.ctx, "configuracoes"),
-                          lambda: config_ui.abrir(app.root, app.ctx, "telegram"),
-                          app.abrir_alertas, app.abrir_promocoes, app.abrir_retornaveis,
-                          app.abrir_devolucoes, app.abrir_diagnostico, app.abrir_verificar_backup):
-                janela = abrir()
-                janela.update()
-                janela.destroy()
-            from src.core import formatacao as fmt
-            from src.ui.fechamento_ui import DialogoFechamento
-            turno_id = banco.inserir("turnos", {
-                "numero": 1, "terminal": app.ctx.turnos.terminal,
-                "operador_id": app.ctx.operador_id, "aberto_em": fmt.agora(),
-                "valor_inicial_cent": 0, "status": "aberto"})
-            conferencia = DialogoFechamento(app.root, app.ctx, turno_id, 0)
-            conferencia.update()
-            conferencia.destroy()
-            CadastroController(banco).listar("produtos")
-        finally:
-            app._destruir_menu()
-            app.root.destroy()
-    finally:
-        banco.fechar()
-    return ["banco novo, menu principal e telas de cadastro, auditoria, configurações, Telegram, "
-            "alertas, promoções, retornáveis, devoluções, diagnóstico, conferência e verificação de backup abrem"]
+        textos = autoteste(pasta)
+    except ImportError as e:
+        raise RuntimeError(f"sem ambiente gráfico (Qt): {e}") from None
+    return [*textos, _backup_seguro(pasta)]
 
 
 def _rede() -> list[str]:

@@ -6,7 +6,7 @@ from tkinter import ttk
 
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
-from src.ui import paleta
+from licenciador import paleta
 
 COR = dict(paleta.COR[paleta.PADRAO])        # o conteúdo troca com o modo (claro/escuro): ver paleta.aplicar
 FONTE = ("Segoe UI", 10)

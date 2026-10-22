@@ -15,8 +15,6 @@ from src.controllers.importacao_produtos import ImportacaoProdutos
 from src.controllers.utilitario_controller import UtilitarioController
 from src.core.erros import ErroNegocio
 from tests.test_caixa import BaseCaixa
-from src.ui import tema
-from tests.test_ui import BaseUI
 
 
 class BaseExcluir(BaseCaixa):
@@ -231,118 +229,6 @@ class TesteCodigosExatosDaPlanilha(BaseExcluir):
         self.assertEqual(int(self.banco.valor("SELECT codigo FROM produtos_historico WHERE id = ?", (self.skol,))), 1)
         novo = self.banco.valor("SELECT id FROM produtos WHERE nome = 'OUTRO'")
         self.assertNotEqual(novo, self.skol)
-
-
-class TesteTelaExcluirTodosOsProdutos(BaseUI):
-    def setUp(self):
-        super().setUp()
-        self.pasta = tempfile.TemporaryDirectory()
-        self.addCleanup(self.pasta.cleanup)
-        self.banco.cfg_set("pasta_backup", self.pasta.name)
-        from src.ui import utilitarios_ui
-        self.ui = utilitarios_ui
-
-    def total(self):
-        return self.banco.valor("SELECT COUNT(*) FROM produtos")
-
-    def excluir(self, resposta):
-        """Roda a tela com a resposta dada à confirmação; devolve (resultado, texto mostrado, mensagem final)."""
-        with mock.patch.object(tema, "pedir_texto", return_value=resposta) as pergunta, \
-                mock.patch.object(tema, "mensagem") as fim:
-            feito = self.ui.excluir_produtos(self.root, self.ctx)
-        texto = pergunta.call_args.args[2] if pergunta.called else ""
-        return feito, texto, (fim.call_args.args[1] if fim.called else "")
-
-    def test_confirmacao_mostra_os_numeros_e_so_apaga_com_a_palavra(self):
-        antes = self.total()
-        feito, texto, fim = self.excluir("apagar")                      # maiúsculas e minúsculas valem
-        self.assertTrue(feito)
-        self.assertEqual(self.total(), 0)
-        self.assertIn(f"Produtos cadastrados: {antes}", texto)
-        self.assertIn(f"Serão excluídos: {antes}", texto)
-        self.assertIn("Backup anterior à exclusão", fim)
-        self.assertIn(f"Produtos excluídos: {antes}", fim)
-
-    def test_palavra_errada_ou_cancelar_nao_apaga(self):
-        antes = self.total()
-        for resposta in ("sim", "", None):
-            feito, _, fim = self.excluir(resposta)
-            self.assertFalse(feito)
-            self.assertEqual(fim, "")
-            self.assertEqual(self.total(), antes)
-        self.assertEqual(os.listdir(self.pasta.name), [])                  # sem backup: nada foi feito
-
-    def test_aviso_diz_que_o_historico_e_preservado(self):
-        self.ctx.turnos.abrir(self.ctx.operador_id, 1, 0)
-        vid, _ = self.ctx.caixa.abrir_mesa(3, comanda=True)
-        self.ctx.caixa.adicionar_item(vid, self.skol, 1)
-        dinheiro = self.banco.valor("SELECT id FROM tipos_pagamento WHERE tipo = 'Dinheiro'")
-        self.ctx.caixa.adicionar_pagamento(vid, dinheiro, self.ctx.caixa.obter(vid)["total_cent"])
-        self.ctx.caixa.fechar(vid)
-        feito, texto, fim = self.excluir("APAGAR")
-        self.assertTrue(feito)
-        self.assertIn("Cupons, relatórios e movimentos antigos", texto)
-        self.assertIn("Histórico de vendas e estoque preservado", fim)
-        self.assertEqual(self.total(), 0)
-
-    def test_venda_aberta_so_avisa_e_nao_pergunta(self):
-        self.ctx.turnos.abrir(self.ctx.operador_id, 1, 0)
-        vid, _ = self.ctx.caixa.abrir_mesa(3, comanda=True)
-        self.ctx.caixa.adicionar_item(vid, self.skol, 1)
-        with mock.patch.object(tema, "aviso") as aviso, mock.patch.object(tema, "pedir_texto") as pergunta:
-            self.assertFalse(self.ui.excluir_produtos(self.root, self.ctx))
-        self.assertFalse(pergunta.called)
-        self.assertIn("abertas com itens", aviso.call_args.args[1])
-        self.assertEqual(self.total(), 2)
-
-    def test_sem_produtos_so_avisa(self):
-        self.ctx.utilitarios.excluir_todos_produtos()
-        with mock.patch.object(tema, "aviso") as aviso:
-            self.assertFalse(self.ui.excluir_produtos(self.root, self.ctx))
-        self.assertIn("Não há produtos", aviso.call_args.args[1])
-
-    def test_aparece_nos_utilitarios_e_pede_nivel_de_administrador(self):
-        from src.ui.app import UTILITARIOS
-        self.assertIn(("excluir_produtos", "Excluir todos os produtos", "util_excluir_produtos"), UTILITARIOS)
-        self.assertEqual(self.ctx.acesso.nivel_modulo("util_excluir_produtos"), 4)
-        with mock.patch.object(self.ui, "excluir_produtos") as chamada:
-            self.ui.executar(self.root, self.ctx, "excluir_produtos")
-        chamada.assert_called_once()
-
-    def test_botao_na_janela_de_importacao_exclui_e_atualiza_a_lista(self):
-        from src.ui.importar_produtos_ui import JanelaImportarProdutos
-        atualizou = []
-        j = JanelaImportarProdutos(self.root, self.ctx, lambda: atualizou.append(1)); j.update()
-        self.addCleanup(j.destroy)
-        self.assertTrue(j.btn_excluir_todos.instate(["!disabled"]))
-        with mock.patch.object(tema, "pedir_texto", return_value="APAGAR"), mock.patch.object(tema, "mensagem"):
-            j.btn_excluir_todos.invoke()
-        self.assertEqual(self.total(), 0)
-        self.assertEqual(atualizou, [1])
-        self.assertEqual(j.v_inicio.get(), "1")                         # a numeração sugerida recomeça
-
-    def test_botao_fica_desligado_sem_nivel(self):
-        from src.ui.importar_produtos_ui import JanelaImportarProdutos
-        self.ctx.cadastros.salvar("operadores", {"nome": "BAR", "senha": "1", "nivel": "1"})
-        self.ctx.operador = self.ctx.acesso.autenticar("BAR", "1")
-        j = JanelaImportarProdutos(self.root, self.ctx); j.update()
-        self.addCleanup(j.destroy)
-        self.assertTrue(j.btn_excluir_todos.instate(["disabled"]))
-
-    def test_depois_de_excluir_a_planilha_entra_toda_como_nova(self):
-        from src.ui.importar_produtos_ui import JanelaImportarProdutos
-        j = JanelaImportarProdutos(self.root, self.ctx); j.update()
-        self.addCleanup(j.destroy)
-        pasta = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, pasta, True)
-        arquivo = Path(pasta) / "produtos.csv"
-        arquivo.write_bytes("Código;Produto;Preço\n1;SKOL;9,00\n2;AGUA;4,00\n".encode("utf-8-sig"))
-        j.carregar(str(arquivo)); j.update()
-        self.assertEqual([j.grade.valores(i)[1] for i in j.grade.tree.get_children()], ["Atualizar", "Atualizar"])
-        with mock.patch.object(tema, "pedir_texto", return_value="APAGAR"), mock.patch.object(tema, "mensagem"):
-            j.btn_excluir_todos.invoke()
-        j.update()
-        self.assertEqual([j.grade.valores(i)[1] for i in j.grade.tree.get_children()], ["Criar", "Criar"])
 
 
 if __name__ == "__main__":

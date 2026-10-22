@@ -765,35 +765,6 @@ class TesteReembolsosNoResumo(BaseTelegram):
         self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM movimentos_caixa WHERE tipo = 'saida'"), 0)
 
 
-class TesteResumoAgendadoTk(BaseTelegram):
-    def test_tela_tk_edita_e_exibe_pendente_sem_rede(self):
-        import tkinter as tk
-        from types import SimpleNamespace
-        from src.ui.telegram_ui import JanelaTelegram
-        self.parear()
-        self.avancar(hours=2)
-        self.tg.resumo_agendado()
-        raiz = tk.Tk()
-        raiz.withdraw()
-        janela = None
-        try:
-            janela = JanelaTelegram(raiz, SimpleNamespace(banco=self.banco, telegram=self.tg))
-            self.assertTrue(janela.var_resumo_ativo.get())
-            self.assertEqual(janela.var_resumo_hora.get(), "23:00")
-            self.assertIn("Pendente: 2026-10-03", janela.lbl_agendamento.cget("text"))
-            janela.var_resumo_ativo.set(False)
-            janela.var_resumo_hora.set("22:15")
-            janela.salvar_resumo()
-            self.assertEqual(self.banco.cfg("telegram_resumo_ativo"), "N")
-            self.assertEqual(self.banco.cfg("telegram_resumo_hora"), "22:15")
-            self.assertIn("pausado", janela.lbl_agendamento.cget("text"))
-            self.assertEqual(self.tg_http.textos(), [])
-        finally:
-            if janela:
-                janela.destroy()
-            raiz.destroy()
-
-
 class TesteConfiguracaoDoTelegram(BaseTelegram):
     def test_primeira_atualizacao_aplica_23h_ativo_sem_ligar_bot(self):
         from src.controllers.config_controller import ConfigController
