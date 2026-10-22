@@ -3,6 +3,12 @@
 É um programa **separado do PDV**, só para quem vende o sistema. Você escolhe a loja e o tipo de licença, toca em **Gerar licença** e
 copia o código (ou uma mensagem pronta) para mandar ao cliente. Não precisa de Python nem de linha de comando.
 
+Na **1.2.0**, o botão **Central Telegram** abre a central exclusiva do fornecedor:
+cadastro de lojas, administradores locais, credenciais de caixa, backup e execução
+do bot administrativo. A assinatura permanece no seu PC e a API atual é somente
+ponte para lojas migradas. Não faz cobrança. Configuração e implantação:
+[Central Telegram](CENTRAL_TELEGRAM.md).
+
 Para cobrar mensalidades e renovar pela internet, veja o guia separado
 [Cobrança de licenças com Asaas](COBRANCA_LICENCAS_ASAAS.md). O licenciador continua
 disponível para operação manual e liberações excepcionais; não é entregue ao cliente.
@@ -25,7 +31,7 @@ entrada (nunca com um turno recente aberto). Renovar é emitir um código novo e
 
 1. No GitHub: aba **Actions > Gerar instalador (Windows)** > clique na execução mais recente (a primeira da lista, com o ✔ verde)
    > role até o fim da página, em **Artifacts** >
-   `WillLicencas-Instalador-<versão>-<commit>`. Baixe, extraia o .zip e rode `WillLicencas-Setup-1.1.0.exe`.
+   `WillLicencas-Instalador-<versão>-<commit>`. Baixe, extraia o .zip e rode `WillLicencas-Setup-1.2.0.exe`.
 2. Se o Windows avisar "protegeu o seu computador", clique em **Mais informações > Executar assim mesmo** (o instalador ainda não
    tem assinatura digital paga).
 3. Não pede senha de administrador. Pode ficar instalado junto com o PDV no mesmo computador.

@@ -3,6 +3,7 @@ níveis de acesso e configuração padrão. Tudo pode ser editado depois pelo si
 from __future__ import annotations
 
 import socket
+import uuid
 
 from src.core import formatacao as fmt
 from src.core import seguranca
@@ -99,6 +100,9 @@ CONFIG_PADRAO = {
     "api_url": "", "api_token": "", "sync_intervalo_seg": "60",
     # Painel do dono no celular: desligado até o dono pedir (as vendas só saem da loja com isto ligado).
     "painel_dono": "N",
+    # Central do fornecedor (src/sync/ponte.py): desligada até o fornecedor provisionar este caixa. O ID do caixa nasce
+    # sozinho (UUID) e o token é do caixa, emitido pelo fornecedor (não é o api_token da loja).
+    "central_ponte_ativa": "N", "central_caixa_id": "", "central_caixa_token": "",
     "programa_comunicacao": "", "pasta_backup": "", "pasta_backup_extra": "", "backup_erro": "", "backup_extra_erro": "",
     "email_loja": "", "email_destino": "", "smtp_servidor": "",
     # Telegram do dono: desligado até o dono criar o bot e parear (Configurações > Telegram).
@@ -165,6 +169,7 @@ def aplicar(banco) -> None:
         banco.executar(
             "INSERT OR IGNORE INTO maquinas(terminal, nome_computador, descricao) VALUES (1, ?, ?)",
             (socket.gethostname(), "Caixa 1"))
+        banco.executar("UPDATE config SET valor = ? WHERE chave = 'central_caixa_id' AND valor = ''", (str(uuid.uuid4()),))
 
         if not banco.valor("SELECT valor FROM config WHERE chave = 'formas_pagamento_enxutas'"):
             marcas = ",".join("?" * len(FORMAS_APOSENTADAS))

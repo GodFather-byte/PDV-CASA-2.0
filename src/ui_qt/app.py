@@ -18,6 +18,7 @@ from src.controllers.telegram_controller import ServicoTelegram
 from src.core import licenca, registro
 from src.core.erros import ErroNegocio
 from src.database.conexao import BancoDados, caminho_padrao
+from src.sync.ponte import ServicoPonte
 from src.ui.contexto import Contexto
 from src.ui_qt import tema
 from src.ui_qt.login import JanelaLogin
@@ -325,13 +326,18 @@ class JanelaPrincipal(QMainWindow):
             _, backup = self.ctx.utilitarios.situacao_backup()
         self.indicadores["backup"].setText(backup)
         banco = self.ctx.banco
+        from src.sync import ponte
+        estado_ponte = ponte.estado(banco)
         configurada = bool(banco.cfg("api_url").strip() and banco.cfg("api_token").strip())
-        ultima = banco.cfg("licenca_nuvem_sucesso_em") or banco.cfg("licenca_nuvem_consultada_em")
-        erro = banco.cfg("licenca_nuvem_erro")
-        nuvem = "Nuvem configurada." if configurada else "Nuvem não configurada."
+        ultima = (estado_ponte["ultimo_sucesso"] if estado_ponte["ativa"] else
+                  banco.cfg("licenca_nuvem_sucesso_em") or banco.cfg("licenca_nuvem_consultada_em"))
+        erro = estado_ponte["erro"] if estado_ponte["ativa"] else banco.cfg("licenca_nuvem_erro")
+        nuvem = ("Ponte da central ativa (sem envio de vendas)." if estado_ponte["ativa"] else
+                 "Nuvem configurada." if configurada else "Nuvem não configurada.")
         nuvem += f"\nÚltima consulta de licença concluída: {ultima}." if ultima else "\nSem consulta de licença concluída."
         if erro:
-            nuvem += f"\nÚltima falha de licença: {erro}"
+            nuvem += ("\nFalha na ponte; consulte Configurações ou Suporte no Telegram."
+                      if estado_ponte["ativa"] else f"\nÚltima falha de licença: {erro}")
         nuvem += "\nSincronização de vendas: não executada automaticamente pelo piloto."
         if self.app.estado_servicos:
             nuvem += "\n" + " | ".join(self.app.estado_servicos)
@@ -683,7 +689,8 @@ class App:
             idade = self.ctx.utilitarios.idade_backup_horas()
             if idade is None or idade >= 12:
                 self.ctx.utilitarios.backup_automatico("início")
-            for classe, nome in ((ServicoFilaImpressao, "Impressão"), (ServicoTelegram, "Telegram")):
+            for classe, nome in ((ServicoFilaImpressao, "Impressão"), (ServicoTelegram, "Telegram"),
+                                 (ServicoPonte, "Ponte de licenças")):
                 servico = None
                 try:
                     servico = classe(self.banco.caminho)

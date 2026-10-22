@@ -14,6 +14,12 @@ O caixa **não depende** da nuvem para vender: sem internet ele continua funcion
 
 Tudo o que é da nuvem está na pasta `backend/` do projeto.
 
+**Modo ponte (1.7.0):** a [central Telegram do fornecedor](CENTRAL_TELEGRAM.md)
+publica códigos assinados no PC exclusivo. Para lojas migradas, a API entrega o
+código publicado e não carrega chave privada nem emite licença. As lojas antigas
+não migradas preservam o fluxo descrito neste guia. Credenciais da central e dos
+caixas são separadas; o painel web continua opcional e independente.
+
 **Cobrança automática da mensalidade:** veja o guia separado
 [Cobrança de licenças com Asaas](COBRANCA_LICENCAS_ASAAS.md). Ele explica vínculo
 por loja, webhook, conciliação, custos e homologação. Para cobranças reais,

@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from backend.database import Base, SessionLocal, engine
 from backend import cobrancas
 from backend import operacao_asaas
+from backend import ponte as _ponte     # tabelas e rotas da ponte de licenças (central do fornecedor)
 from src.core import ed25519, licenca as licenca_pdv
 from src.versao import chave, mais_nova, valida      # a mesma regra de comparação de versões do PDV
 
@@ -225,6 +226,9 @@ def licenca(acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db))
     if acesso.admin:
         raise HTTPException(status_code=403, detail="Use o token da loja.")
     loja = db.query(Loja).filter(Loja.chave_loja == acesso.loja).first()
+    publicada = _ponte.licenca_legado(db, loja.chave_loja)
+    if publicada is not None:       # loja migrada: só o código assinado pela central, nunca assinatura na nuvem
+        return publicada
     if not loja.licenca_ate:
         raise HTTPException(status_code=404, detail="Nenhuma assinatura registrada para esta loja.")
     ate = date.fromisoformat(loja.licenca_ate)
@@ -245,3 +249,4 @@ def licenca(acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db))
 from backend import painel as _painel   # noqa: E402  (depois de Loja e autenticar existirem)
 
 _painel.instalar(app, Loja, autenticar)
+_ponte.instalar(app, Loja, hash_token)

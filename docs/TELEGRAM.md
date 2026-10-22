@@ -39,6 +39,10 @@ dono vê no celular se sobrou ou faltou.
 | 💳 Contas | contas a pagar vencidas e dos próximos 7 dias (só se o módulo de contas estiver ligado) |
 | 📒 Caderneta | quanto a casa tem a receber e quem mais deve (nome e valor; nunca CPF, telefone ou endereço) |
 | 🔎 Produto | explica como buscar um produto |
+| 🔐 Licença | situação e validade, sem expor o código |
+| 🛟 Suporte | versão, contato com a central e andamento do pedido, sem credenciais |
+| 🔄 Renovar | solicita renovação ao fornecedor pela ponte configurada; não cobra nem emite licença |
+| ❓ Ajuda | comandos organizados por assunto |
 
 Além dos botões, o dono pode **digitar**:
 
@@ -46,6 +50,13 @@ Além dos botões, o dono pode **digitar**:
 * `mesa 12` ou `comanda 5`: o consumo daquela mesa agora, item a item, com o total.
 
 Tudo é respondido na hora, direto do PDV, enquanto ele estiver ligado e com internet.
+
+Na 1.7.0 há avisos de vencimento e de licença renovada, sem repetir a mesma situação
+na mesma data e validade. "Renovada" depende de aumento da validade aplicada no PDV,
+não apenas de um pedido. A solicitação pela ponte é opcional e exige aprovação do
+caixa pela central; falha de conexão não é mostrada como pedido entregue.
+O bot do fornecedor é **outro bot**, sem acesso ao faturamento desta loja:
+[configuração da central](CENTRAL_TELEGRAM.md).
 
 A "noite" segue a virada do dia do PDV (Configurações > Configurações > Caixa, opção da hora em que o dia vira; 6h por padrão): a venda das 2h da manhã
 conta na noite que começou na véspera.

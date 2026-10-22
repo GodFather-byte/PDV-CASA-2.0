@@ -10,7 +10,7 @@ from src.controllers.config_controller import CAMPOS_CONFIG, CAMPOS_LOJA, CAMPOS
 from src.controllers.integracoes_controller import IntegracoesController
 from src.controllers.perfil_controller import PERFIS
 from src.core.erros import ErroNegocio
-from src.sync import painel_envio
+from src.sync import painel_envio, ponte
 from src.ui import paleta, tema
 from src.ui.escolher_impressora_ui import JanelaEscolherImpressora
 from src.ui.visualizador import Visualizador
@@ -54,7 +54,8 @@ def abrir(master, ctx, chave: str):
                             ctx.config.todas, ctx.config.salvar_config,
                             acoes=[("Perfil do estabelecimento...", lambda j: escolher_perfil(j, ctx)),
                                    ("Pendências das integrações...", lambda j: mostrar_integracoes(j, ctx)),
-                                   ("Senha do painel do dono...", lambda j: trocar_senha_painel(j, ctx))],
+                                   ("Senha do painel do dono...", lambda j: trocar_senha_painel(j, ctx)),
+                                   ("Central do fornecedor...", lambda j: central_fornecedor(j, ctx))],
                             depois_de_gravar=lambda janela: aplicar_visual(janela, ctx))
 
 
@@ -140,6 +141,51 @@ def trocar_senha_painel(janela, ctx) -> None:
                               f"de novo. {entrar_de_novo}", "Senha do painel do dono")
     else:
         tema.mensagem(janela, f"Senha do painel trocada. {entrar_de_novo}", "Senha do painel do dono")
+
+
+AVISO_NOVO_ID = ("Gerar um NOVO ID para este caixa?\n\nUse só se o token do caixa foi perdido ou revogado. O token atual é apagado, a "
+                "central do fornecedor fica DESLIGADA neste caixa e o fornecedor precisa aprovar o ID novo e entregar um token "
+                "novo. O ID antigo não volta a valer. A licença já gravada continua valendo.")
+
+
+def central_fornecedor(janela, ctx) -> None:
+    """Copia o ID do caixa para passar ao fornecedor, apaga o token do caixa e mostra a situação. A rede fica com a
+    sincronização em segundo plano (a tela nunca espera a central)."""
+    banco = ctx.banco
+    caixa_id = ponte.uuid_valido(janela.valor(ponte.CHAVE_CAIXA_ID)) or ponte.garantir_caixa_id(banco)
+    janela.definir(ponte.CHAVE_CAIXA_ID, caixa_id)
+    itens = [("copiar", ("Copiar o ID deste caixa", caixa_id)),
+             ("situacao", ("Ver a situação da central", "último contato, erro e pedidos")),
+             ("apagar", ("Apagar o token do caixa", "a central deixa de reconhecer este computador")),
+             ("novo", ("Gerar novo ID do caixa", "token perdido ou revogado: exige nova aprovação"))]
+    escolha = tema.escolher(janela, "Central do fornecedor", itens, "Escolha e tecle Enter:", altura=len(itens),
+                            colunas=[("acao", "Ação", 260, "w"), ("det", "Detalhe", 360, "w")])
+    if escolha == "copiar":
+        janela.clipboard_clear()
+        janela.clipboard_append(caixa_id)
+        tema.mensagem(janela, f"ID do caixa copiado:\n\n{caixa_id}\n\nPasse este ID ao fornecedor e grave. Ele devolve o "
+                              "token do caixa, que vai no campo \"Token do caixa\" da aba Nuvem (não é o token da API).",
+                      "Central do fornecedor")
+    elif escolha == "situacao":
+        tema.mensagem(janela, ponte.resumo(banco), "Central do fornecedor")
+    elif escolha == "apagar":
+        if ponte.ativa(banco):
+            tema.erro(janela, "Desligue a central do fornecedor e grave antes de apagar o token do caixa.",
+                      "Central do fornecedor")
+        elif tema.confirmar(janela, "Apagar o token deste caixa? Para religar a central será preciso um token novo do "
+                                    "fornecedor.", "Central do fornecedor", padrao_sim=False):
+            banco.cfg_set(ponte.CHAVE_TOKEN, "")
+            tema.mensagem(janela, "Token do caixa apagado.", "Central do fornecedor")
+    elif escolha == "novo":
+        if tema.confirmar(janela, AVISO_NOVO_ID, "Central do fornecedor", padrao_sim=False):
+            novo = ponte.novo_caixa(banco)
+            janela.definir(ponte.CHAVE_CAIXA_ID, novo)
+            janela.definir(ponte.CHAVE_ATIVA, "N")
+            janela.definir(ponte.CHAVE_TOKEN, "")
+            janela.clipboard_clear()
+            janela.clipboard_append(novo)
+            tema.mensagem(janela, f"Novo ID do caixa (já copiado):\n\n{novo}\n\nPasse ao fornecedor para aprovar. Com o token "
+                                  "novo, informe-o na aba Nuvem, ligue a central e grave.", "Central do fornecedor")
 
 
 def escolher_perfil(janela, ctx) -> None:
@@ -278,8 +324,9 @@ class JanelaFormulario(tk.Toplevel):
                         self.opcoes[chave] = {r: val for val, r in opc}
                         w = ttk.Combobox(pagina, textvariable=v, values=[r for _, r in opc], state="readonly", width=34)
                     else:
-                        w = ttk.Entry(pagina, textvariable=v, width=46 if tipo == "texto" else 14,
-                                      state="readonly" if chave in somente_leitura else "normal")
+                        w = ttk.Entry(pagina, textvariable=v, width=46 if tipo in ("texto", "segredo") else 14,
+                                      state="readonly" if chave in somente_leitura else "normal",
+                                      show="•" if tipo == "segredo" else "")
                     w.grid(row=i, column=1, sticky="w", pady=4)
                     if botoes_campo and chave in botoes_campo:
                         texto, funcao = botoes_campo[chave]
@@ -300,6 +347,8 @@ class JanelaFormulario(tk.Toplevel):
                 self.vars[chave].set(str(v).upper() in ("S", "1", "TRUE"))
             elif tipo == "escolha":
                 self.vars[chave].set(next((r for val, r in opc if str(val) == str(v)), ""))
+            elif tipo == "segredo":
+                self.vars[chave].set("")                 # o segredo não volta para a tela; vazio mantém o gravado
             else:
                 self.vars[chave].set("" if v is None else str(v))
 
@@ -327,12 +376,17 @@ class JanelaFormulario(tk.Toplevel):
                 v = "S" if v else "N"
             elif tipo == "escolha":
                 v = self.opcoes[chave].get(v, v)
+            elif tipo == "segredo" and not v.strip():
+                continue
             valores[chave] = v
         return valores
 
     def gravar(self) -> None:
         ok, _ = tema.tratar(self, self.salvar, self._coletar())
         if ok:
+            for chave, _, tipo, _, _ in self.campos:
+                if tipo == "segredo":
+                    self.vars[chave].set("")
             tema.mensagem(self, "Configurações gravadas.", "Gravar")
             if self.depois_de_gravar is not None:
                 self.depois_de_gravar(self)

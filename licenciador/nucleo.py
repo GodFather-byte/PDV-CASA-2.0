@@ -18,7 +18,7 @@ from src.core import ed25519, licenca
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
 
-VERSAO = "1.1.0"
+VERSAO = "1.2.0"
 MAX_MESES = 60
 MAX_DIAS_TESTE = 90
 TIPOS = ("mensal", "permanente", "teste")

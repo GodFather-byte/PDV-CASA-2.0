@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 from src.controllers.config_controller import CAMPOS_CONFIG, CAMPOS_LOJA
 from src.controllers.integracoes_controller import IntegracoesController
 from src.core.erros import ErroNegocio, ErroPermissao
-from src.sync import painel_envio
+from src.sync import painel_envio, ponte
 from src.ui_qt.tema import texto
 
 
@@ -23,6 +23,11 @@ CHAVES_PREFERENCIAS = (
     "painel_mesas_fixo", "painel_mostra_garotas",
 )
 SECOES = ("loja", "preferencias", "parametros", "nuvem")
+AVISO_NOVO_ID = ("Gerar um NOVO ID para este caixa?\n\nUse só se o token do caixa foi perdido ou revogado. O token atual é apagado, a "
+                "central do fornecedor fica DESLIGADA neste caixa e o fornecedor precisa aprovar o ID novo e entregar um token "
+                "novo. O ID antigo não volta a valer. A licença já gravada continua valendo.")
+# Segredos nunca voltam para a tela: campo de senha, vazio mantém o gravado.
+SEGREDOS = ("api_token", ponte.CHAVE_TOKEN)
 MODULOS = {secao: "cfg_loja" if secao == "loja" else "cfg_configuracoes"
            for secao in SECOES}
 CAMPOS = {
@@ -97,7 +102,7 @@ class JanelaConfiguracoes(QDialog):
                 else:
                     # Texto também para inteiros: validação e limites são do controller.
                     editor = QLineEdit()
-                    if chave == "api_token":
+                    if chave in SEGREDOS:
                         editor.setEchoMode(QLineEdit.EchoMode.Password)
                         editor.setPlaceholderText("Vazio mantém o token atual")
                 self.campos[secao][chave] = editor
@@ -109,6 +114,21 @@ class JanelaConfiguracoes(QDialog):
             if secao == "nuvem":
                 self.apagar_token = QCheckBox("Apagar o token salvo ao salvar esta aba")
                 formulario.addRow(self.apagar_token)
+                self.apagar_token_caixa = QCheckBox("Apagar o token do caixa (central do fornecedor) ao salvar esta aba")
+                formulario.addRow(self.apagar_token_caixa)
+                self.btn_copiar_caixa = QPushButton("Copiar o ID deste caixa")
+                self.btn_copiar_caixa.setToolTip("Passe este ID ao fornecedor; ele devolve o token do caixa.")
+                self.btn_copiar_caixa.clicked.connect(self.copiar_id_caixa)
+                self.btn_situacao_central = QPushButton("Situação da central do fornecedor…")
+                self.btn_situacao_central.clicked.connect(self.mostrar_situacao_central)
+                linha_central = QHBoxLayout()
+                linha_central.addWidget(self.btn_copiar_caixa)
+                linha_central.addWidget(self.btn_situacao_central)
+                self.btn_novo_caixa = QPushButton("Gerar novo ID do caixa…")
+                self.btn_novo_caixa.setToolTip("Token perdido ou revogado: apaga o token, desliga a central e exige nova aprovação.")
+                self.btn_novo_caixa.clicked.connect(self.gerar_novo_id_caixa)
+                linha_central.addWidget(self.btn_novo_caixa)
+                formulario.addRow(linha_central)
                 self.btn_senha_painel = QPushButton("Trocar a senha do painel do dono…")
                 self.btn_senha_painel.setToolTip(
                     "Muda a senha que o dono usa no celular (painel da nuvem). Usa o endereço e o token já salvos.")
@@ -165,10 +185,15 @@ class JanelaConfiguracoes(QDialog):
                 self._originais[secao] = {}
         self.btn_salvar.setEnabled(permissoes[SECOES[self.abas.currentIndex()]])
         self.apagar_token.setEnabled(permissoes["nuvem"])
+        self.apagar_token_caixa.setEnabled(permissoes["nuvem"])
+        self.btn_copiar_caixa.setEnabled(permissoes["nuvem"])
+        self.btn_situacao_central.setEnabled(permissoes["nuvem"])
+        self.btn_novo_caixa.setEnabled(permissoes["nuvem"])
         self.btn_integracoes.setEnabled(permissoes["parametros"])
         self.btn_senha_painel.setEnabled(permissoes["nuvem"] and not self._trocando_senha)
         if not permissoes["nuvem"]:
             self.apagar_token.setChecked(False)
+            self.apagar_token_caixa.setChecked(False)
 
     def _autorizar(self, secao):
         try:
@@ -213,9 +238,10 @@ class JanelaConfiguracoes(QDialog):
         carregar = self.ctx.config.loja if secao == "loja" else self.ctx.config.todas
         dados = carregar()
         for chave, editor in self.campos[secao].items():
-            self._definir(editor, "" if chave == "api_token" else dados.get(chave))
+            self._definir(editor, "" if chave in SEGREDOS else dados.get(chave))
         if secao == "nuvem":
             self.apagar_token.setChecked(False)
+            self.apagar_token_caixa.setChecked(False)
         # O retorno de todas() inclui segredos: nunca o conservamos na janela.
         self._originais[secao] = self._valores(secao)
 
@@ -246,6 +272,8 @@ class JanelaConfiguracoes(QDialog):
                          if v != self._originais[secao].get(k)}
             if secao == "nuvem" and self.apagar_token.isChecked():
                 alterados["api_token"] = ""
+            if secao == "nuvem" and self.apagar_token_caixa.isChecked():
+                alterados[ponte.CHAVE_TOKEN] = ""
             if not alterados:
                 self.mensagem.setText("Nenhuma alteração nesta aba.")
                 return True
@@ -259,8 +287,10 @@ class JanelaConfiguracoes(QDialog):
             return False
         # Normalizações são relidas do controller, não reproduzidas pela interface.
         if secao == "nuvem":
-            self.campos["nuvem"]["api_token"].clear()
+            for chave in SEGREDOS:
+                self.campos["nuvem"][chave].clear()
             self.apagar_token.setChecked(False)
+            self.apagar_token_caixa.setChecked(False)
         self._originais[secao] = self._valores(secao)
         try:
             self._carregar(secao)
@@ -280,6 +310,57 @@ class JanelaConfiguracoes(QDialog):
         QMessageBox.information(self, "Integrações — configuração salva", resumo)
         return True
 
+    # ------------------------------------------------ central do fornecedor
+    def copiar_id_caixa(self):
+        """Copia o ID do caixa (o do campo, se for um UUID válido; senão o salvo, criado se faltar)."""
+        try:
+            self._autorizar("nuvem")
+            editor = self.campos["nuvem"][ponte.CHAVE_CAIXA_ID]
+            caixa_id = ponte.uuid_valido(editor.text()) or ponte.garantir_caixa_id(self.ctx.banco)
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return None
+        if not editor.text().strip():
+            editor.setText(caixa_id)
+            self._originais["nuvem"][ponte.CHAVE_CAIXA_ID] = caixa_id
+        QApplication.clipboard().setText(caixa_id)
+        self.mensagem.setText(f"ID do caixa copiado: {caixa_id}. Passe ao fornecedor e informe o token do caixa que ele "
+                              "devolver (não é o token da API).")
+        return caixa_id
+
+    def gerar_novo_id_caixa(self):
+        """Novo provisionamento: novo UUID, token apagado e central desligada (a aba é relida do banco)."""
+        try:
+            self._autorizar("nuvem")
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return None
+        resposta = QMessageBox.question(self, "Central do fornecedor", AVISO_NOVO_ID,
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                        QMessageBox.StandardButton.No)
+        if resposta != QMessageBox.StandardButton.Yes:
+            return None
+        try:
+            novo = ponte.novo_caixa(self.ctx.banco)
+            self._carregar("nuvem")
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return None
+        QApplication.clipboard().setText(novo)
+        self.mensagem.setText(f"Novo ID do caixa (copiado): {novo}. Central desligada até o fornecedor aprovar e entregar "
+                              "o token novo; outras alterações não salvas desta aba foram descartadas.")
+        return novo
+
+    def mostrar_situacao_central(self):
+        try:
+            self._autorizar("nuvem")
+            resumo = ponte.resumo(self.ctx.banco)
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return False
+        QMessageBox.information(self, "Central do fornecedor", resumo)
+        return True
+
     # ------------------------------------------------ senha do painel do dono
     def trocar_senha_painel(self):
         """O dono troca a senha do painel do celular pelo próprio PDV, sem depender do fornecedor. Endereço e token são os
@@ -288,7 +369,8 @@ class JanelaConfiguracoes(QDialog):
             return False
         try:
             self._autorizar("nuvem")
-            if self._valores("nuvem") != self._originais["nuvem"] or self.apagar_token.isChecked():
+            if (self._valores("nuvem") != self._originais["nuvem"] or self.apagar_token.isChecked()
+                    or self.apagar_token_caixa.isChecked()):
                 raise ErroNegocio("Salve as alterações desta aba antes de trocar a senha do painel: o endereço e o token "
                                   "usados são os que estão salvos.")
             url, token = self.ctx.banco.cfg("api_url").strip(), self.ctx.banco.cfg("api_token").strip()
@@ -357,7 +439,8 @@ class JanelaConfiguracoes(QDialog):
             self.mensagem.setText("Aguarde a nuvem responder antes de fechar.")
             evento.ignore()
             return
-        self.campos["nuvem"]["api_token"].clear()
+        for chave in SEGREDOS:
+            self.campos["nuvem"][chave].clear()
         super().closeEvent(evento)
 
 

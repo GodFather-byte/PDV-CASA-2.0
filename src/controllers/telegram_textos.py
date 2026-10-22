@@ -219,16 +219,122 @@ def cancelamentos(banco, dia: str | None = None) -> str:
 
 def ajuda() -> str:
     return ("Sou o bot da sua casa. Toque nos botões aqui embaixo:\n\n"
-            "📊 Resumo — vendas da noite até agora\n📅 Ontem — resumo da noite passada\n"
-            "💵 Caixa — turno aberto, vendido e dinheiro esperado\n🍺 Mais vendidos — top 10 da noite\n"
-            "📦 Estoque — o que zerou ou está acabando\n🛒 Comprar — lista do que repor\n"
-            "🪑 Abertas — mesas e comandas em aberto\n❌ Cancelamentos — cupons e itens cancelados\n"
-            "📈 Semana — faturamento dos últimos 7 dias\n🗓️ Mês — mês até hoje e comparação com o anterior\n"
-            "🕐 Por hora — como a noite está andando\n👥 Equipe — vendas por garçom/vendedor\n"
-            "💳 Contas — contas a pagar vencidas e próximas\n📒 Caderneta — quem está devendo\n\n"
+            "Vendas\n📊 Resumo — vendas da noite até agora\n📅 Ontem — resumo da noite passada\n"
+            "🍺 Mais vendidos — top 10 da noite\n📈 Semana — faturamento dos últimos 7 dias\n"
+            "🗓️ Mês — mês até hoje e comparação com o anterior\n🕐 Por hora — como a noite está andando\n"
+            "👥 Equipe — vendas por garçom/vendedor\n\n"
+            "Operação\n💵 Caixa — turno aberto, vendido e dinheiro esperado\n🪑 Abertas — mesas e comandas em aberto\n"
+            "❌ Cancelamentos — cupons e itens cancelados\n\n"
+            "Estoque\n📦 Estoque — o que zerou ou está acabando\n🛒 Comprar — lista do que repor\n"
+            "🔎 Produto — preço, estoque e últimos movimentos\n\n"
+            "Financeiro\n💳 Contas — contas a pagar vencidas e próximas\n📒 Caderneta — quem está devendo\n\n"
+            "Licença e suporte\n🔐 Licença — situação e vencimento da licença deste caixa\n"
+            "🛟 Suporte — versão e contato técnico com o fornecedor\n"
+            "🔄 Renovar — pede a renovação ao fornecedor (só o pedido; nada é pago por aqui)\n\n"
             "Também dá para digitar:\n • produto skol — preço, estoque e últimos movimentos\n"
             " • mesa 12 (ou comanda 5) — o consumo da mesa agora\n\n"
-            "Os avisos (caixa, cancelamentos, sangrias, produto acabando) chegam sozinhos.")
+            "Os avisos (caixa, cancelamentos, sangrias, produto acabando, licença vencendo) chegam sozinhos.\n"
+            "Pelo Telegram você só consulta: nada de dinheiro, preço ou cadastro é alterado no caixa por aqui.")
+
+
+# ------------------------------------------------- licença e suporte (sem código da licença, tokens ou clientes)
+_SITUACAO_LICENCA = {"ok": "✅ Em dia", "aviso": "⏳ Vence em breve", "carencia": "⚠️ Vencida, em carência",
+                     "bloqueada": "⛔ Vencida, carência encerrada", "sem_licenca": "⛔ Sem licença válida",
+                     "desativada": "ℹ️ Não exigida neste caixa"}
+# Estados gravados pela ponte (src/sync/ponte.py): 'pendente' ainda não saiu deste caixa; 'enviada' chegou à central;
+# 'atendida' = a central confirmou que este caixa aplicou uma licença posterior ao pedido.
+_PEDIDO_STATUS = {"pendente": "registrado neste caixa, aguardando conexão para chegar ao fornecedor",
+                  "enviada": "entregue ao fornecedor, aguardando a nova licença",
+                  "atendida": "concluído, nova licença já aplicada neste caixa"}
+
+
+def _data_br(dia) -> str:
+    return dia.strftime("%d/%m/%Y") if dia else "?"
+
+
+def _quando_br(iso) -> str:
+    iso = str(iso or "").strip()
+    if len(iso) < 10:
+        return ""
+    return f"{iso[8:10]}/{iso[5:7]}/{iso[:4]}" + (f" às {iso[11:16]}" if len(iso) >= 16 else "")
+
+
+def _pedido(pedido) -> str:
+    """Andamento do pedido de renovação: só o estado conhecido e a data (nada de identificador, token ou valor)."""
+    if not isinstance(pedido, dict) or not pedido:
+        return ""
+    status = _PEDIDO_STATUS.get(str(pedido.get("status") or "").strip().lower(), "em andamento")
+    quando = _quando_br(pedido.get("criado_em"))
+    return f"Pedido de renovação: {status}" + (f" (feito em {quando})" if quando else "")
+
+
+def licenca(est, pedido=None) -> str:
+    """Situação da licença deste caixa (`est` = licenca.estado). Nunca mostra o código da licença."""
+    linhas = ["🔐 Licença deste caixa", "", f"Situação: {_SITUACAO_LICENCA.get(est.situacao, est.situacao)}"]
+    if est.expira_em:
+        linhas.append(f"Válida até: {_data_br(est.expira_em)}")
+        if est.dias is not None and est.dias > 0:
+            linhas.append(f"Faltam {est.dias} {'dia' if est.dias == 1 else 'dias'}.")
+    if est.mensagem:
+        linhas += ["", est.mensagem]
+    texto_pedido = _pedido(pedido)
+    if texto_pedido:
+        linhas += ["", texto_pedido]
+    if est.situacao != "desativada":
+        linhas += ["", "Para pedir a renovação ao fornecedor, toque em 🔄 Renovar. Nenhum pagamento é feito pelo Telegram."]
+    return "\n".join(linhas)
+
+
+def licenca_alerta(est, renovada: bool = False) -> str:
+    """Aviso automático de licença. `renovada` só quando a nova validade já está aplicada neste caixa."""
+    linhas = []
+    if renovada and est.expira_em:
+        linhas.append(f"✅ Licença renovada e aplicada neste caixa: válida até {_data_br(est.expira_em)}.")
+    if est.situacao in ("aviso", "carencia", "bloqueada", "sem_licenca"):
+        icone = "⏳" if est.situacao == "aviso" else "⚠️" if est.situacao == "carencia" else "⛔"
+        linhas.append(f"{icone} Licença: {est.mensagem or _SITUACAO_LICENCA[est.situacao]}")
+        linhas.append("Toque em 🔄 Renovar para pedir a renovação ao fornecedor.")
+    return "\n".join(linhas)
+
+
+def suporte(versao: str, est, situacao_ponte, fila_pendente: int, telegram_com_erro: bool) -> str:
+    """Dados técnicos da própria loja: versão, licença, contato com o fornecedor e pendências. Sem tokens nem o texto
+    dos erros (pode ter endereço ou credencial)."""
+    linhas = ["🛟 Suporte deste caixa", "", f"Versão do PDV: {versao}",
+              f"Licença: {_SITUACAO_LICENCA.get(est.situacao, est.situacao)}"
+              + (f" (até {_data_br(est.expira_em)})" if est.expira_em else "")]
+    if situacao_ponte is None:
+        linhas.append("Contato com o fornecedor: ainda não configurado neste caixa.")
+    elif not situacao_ponte.get("ativa", True):
+        linhas.append("Contato com o fornecedor: desligado neste caixa.")
+    else:
+        contato = _quando_br(situacao_ponte.get("ultimo_contato"))
+        linhas.append(f"Último contato com o fornecedor: {contato}" if contato else
+                      "Último contato com o fornecedor: nenhum registrado.")
+        if situacao_ponte.get("com_erro"):
+            linhas.append("⚠️ A última tentativa de contato falhou. Confira a internet; detalhes no PDV.")
+        linhas.append(_pedido(situacao_ponte.get("pedido")) or "Nenhum pedido de renovação pendente.")
+    if fila_pendente:
+        linhas.append(f"Avisos esperando envio: {fila_pendente}")
+    if telegram_com_erro:
+        linhas.append("⚠️ O envio de avisos teve erro recentemente; detalhes em Configurações > Telegram.")
+    return "\n".join(linhas)
+
+
+def renovacao_pedida(entregue: bool, repetido: bool = False, atendida: bool = False) -> str:
+    """Resposta ao pedido de renovação. Só fala em licença aplicada quando a ponte marca o pedido como 'atendida'."""
+    if atendida:
+        return ("✅ O último pedido de renovação já foi concluído: a nova licença está aplicada neste caixa. "
+                "Nenhum pedido novo foi criado; confira em 🔐 Licença.")
+    if repetido:
+        inicio = "📨 Já existe um pedido de renovação entregue ao fornecedor; não foi criado outro."
+    elif entregue:
+        inicio = "📨 Pedido de renovação entregue ao fornecedor."
+    else:
+        inicio = ("📝 Pedido de renovação registrado neste caixa, mas ainda NÃO chegou ao fornecedor (sem conexão com a "
+                  "central). O PDV reenvia sozinho; acompanhe em 🛟 Suporte.")
+    return "\n".join([inicio, "", "A licença só muda depois que o novo código for aplicado neste caixa; você recebe um "
+                                   "aviso aqui quando isso acontecer. Nenhuma cobrança ou pagamento é feito pelo Telegram."])
 
 
 # ------------------------------------------------- consultas do dono (tudo do PDV)

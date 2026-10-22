@@ -53,10 +53,18 @@ class Janela(tk.Tk):
         self._aba_conferir()
         self._aba_chave()
         self._aba_backup()
+        ttk.Button(barra, text="Central Telegram", command=self.abrir_central).pack(side="right")
+        self.janela_central = None
         self.atualizar_chave()
         self.atualizar_lojas()
         self.atualizar_backup()
         self.atualizar_validade()
+
+    def abrir_central(self):
+        from licenciador.central_tela import JanelaCentral
+        if self.janela_central is None or not self.janela_central.winfo_exists():
+            self.janela_central = JanelaCentral(self)
+        self.janela_central.lift()
 
     # --------------------------------------------------------------- emitir
     def _aba_emitir(self) -> None:

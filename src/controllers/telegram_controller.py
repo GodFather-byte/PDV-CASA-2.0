@@ -11,6 +11,7 @@ Sem internet o PDV segue vendendo normalmente; os avisos ficam na fila e saem qu
 """
 from __future__ import annotations
 
+import importlib
 import logging
 import re
 import secrets
@@ -20,6 +21,7 @@ from datetime import timedelta
 from src.controllers import notificacoes, telegram_textos as textos
 from src.controllers.relatorio_vendas import virada_dia
 from src.core import formatacao as fmt
+from src.core import licenca
 from src.core.erros import ErroNegocio
 from src.sync.telegram_api import ClienteTelegram, ErroTelegram
 
@@ -34,14 +36,19 @@ ESPERAS = (5, 10, 20, 40, 60)     # segundos entre tentativas quando o Telegram 
 BOTOES = [("📊 Resumo", "resumo"), ("📅 Ontem", "ontem"), ("💵 Caixa", "caixa"), ("🍺 Mais vendidos", "top"),
           ("📦 Estoque", "estoque"), ("🛒 Comprar", "comprar"), ("🪑 Abertas", "abertas"), ("❌ Cancelamentos", "cancelamentos"),
           ("📈 Semana", "semana"), ("🗓️ Mês", "mes"), ("🕐 Por hora", "horas"), ("👥 Equipe", "equipe"),
-          ("💳 Contas", "contas"), ("📒 Caderneta", "caderneta"), ("🔎 Produto", "produto")]
-TECLADO = [[BOTOES[i][0], BOTOES[i + 1][0]] for i in range(0, len(BOTOES) - 1, 2)] + [[BOTOES[-1][0]]]
+          ("💳 Contas", "contas"), ("📒 Caderneta", "caderneta"), ("🔎 Produto", "produto"),
+          ("🔐 Licença", "licenca"), ("🛟 Suporte", "suporte"), ("🔄 Renovar", "renovar"), ("❓ Ajuda", "ajuda")]
+# Duas colunas; se a quantidade for ímpar, o último botão fica sozinho na linha.
+TECLADO = [[texto for texto, _ in BOTOES[i:i + 2]] for i in range(0, len(BOTOES), 2)]
 _COMANDOS = {texto: cmd for texto, cmd in BOTOES}
 _COMANDOS.update({cmd: cmd for _, cmd in BOTOES})
 _COMANDOS.update({"mais vendidos": "top", "cancelamentos": "cancelamentos", "ajuda": "ajuda", "help": "ajuda", "menu": "ajuda",
                   "mês": "mes", "por hora": "horas", "hora": "horas", "compras": "comprar", "lista de compras": "comprar",
                   "vendas da semana": "semana", "semanal": "semana", "mensal": "mes", "garçons": "equipe", "garcons": "equipe",
-                  "devedores": "caderneta", "mesas": "abertas", "produtos": "produto", "mesa": "mesa", "comanda": "mesa"})
+                  "devedores": "caderneta", "mesas": "abertas", "produtos": "produto", "mesa": "mesa", "comanda": "mesa",
+                  "licença": "licenca", "saude": "suporte", "saúde": "suporte", "central": "suporte",
+                  "status": "suporte", "renovação": "renovar", "renovacao": "renovar"})
+CHAVE_AVISO_LICENCA = "telegram_licenca_aviso"   # 'dia|validade|situação' do último aviso de licença (não repetir)
 # Comandos que levam um argumento depois do nome: "produto skol", "mesa 12", "comanda 5".
 _COM_ARGUMENTO = {"produto": "produto", "produtos": "produto", "preço": "produto", "preco": "produto", "buscar": "produto",
                   "mesa": "mesa", "comanda": "comanda"}
@@ -76,6 +83,8 @@ class TelegramController:
     def __init__(self, banco, http=None):
         self.banco = banco
         self._http = http          # nos testes, um falso: http(url, dados, timeout) -> dict
+        self.chave_publica = None  # nos testes, a chave pública de teste; None = a chave real embutida no PDV
+        self.http_ponte = None     # repassado à ponte com o fornecedor (None = HTTP real dela)
 
     # ------------------------------------------------------------ cliente
     @property
@@ -289,7 +298,114 @@ class TelegramController:
             return textos.produto(b, argumento)
         if comando == "mesa":
             return textos.mesa(b, argumento)
+        if comando == "licenca":
+            return textos.licenca(self._estado_licenca(), self._pedido_pendente())
+        if comando == "suporte":
+            from src.versao import VERSAO
+            fila = b.valor("SELECT COUNT(*) FROM telegram_fila WHERE status = 'pendente'", padrao=0)
+            return textos.suporte(VERSAO, self._estado_licenca(), self._situacao_ponte(), fila, bool(self.ultimo_erro()))
+        if comando == "renovar":
+            return self.pedir_renovacao()
         return textos.ajuda()
+
+    # ---------------------------------------------------- licença e fornecedor
+    def _estado_licenca(self):
+        return licenca.estado(self.banco, chave_publica=self.chave_publica)
+
+    @staticmethod
+    def _ponte():
+        """O módulo da ponte com o fornecedor, ou None enquanto ele não existir nesta instalação."""
+        try:
+            return importlib.import_module("src.sync.ponte")
+        except ModuleNotFoundError as e:
+            if e.name in ("src.sync.ponte", "src.sync"):
+                return None
+            raise
+
+    def _situacao_ponte(self) -> dict | None:
+        """Retrato LOCAL do contato com o fornecedor, lido de `ponte.estado(banco)` (sem rede), reduzido ao que o dono
+        pode ver: ligada, último contato, se houve erro (sem o texto) e o andamento do pedido. None = ponte ausente."""
+        ponte = self._ponte()
+        leitor = getattr(ponte, "estado", None) if ponte else None
+        if leitor is None:
+            return None
+        try:
+            dados = leitor(self.banco)
+        except Exception as e:  # noqa: BLE001 - consulta de suporte não pode derrubar o bot
+            log.warning("Telegram: falha ao ler a situação da ponte (%s).", type(e).__name__)   # o texto pode ter credencial
+            return {"ativa": True, "com_erro": True}
+        if not isinstance(dados, dict):
+            return None
+        if not dados.get("ativa"):
+            return {"ativa": False}
+        pedido = None
+        if str(dados.get("solicitacao_id") or "").strip() and str(dados.get("solicitacao_estado") or "").strip():
+            pedido = {"status": str(dados["solicitacao_estado"]).strip()}
+        return {"ativa": True, "ultimo_contato": dados.get("ultimo_sucesso") or "", "com_erro": bool(dados.get("erro")),
+                "pedido": pedido}
+
+    def _pedido_pendente(self):
+        situacao = self._situacao_ponte()
+        return situacao.get("pedido") if situacao else None
+
+    def pedir_renovacao(self) -> str:
+        """Só PEDE a renovação ao fornecedor, pela ponte: não emite licença nem cobra. Faz rede, então roda na thread do
+        bot, nunca na tela. Só diz 'entregue' quando a ponte registra o pedido como enviado à central."""
+        if self._estado_licenca().situacao == "desativada":
+            return "ℹ️ A licença não é exigida neste caixa: não há o que renovar."
+        ponte = self._ponte()
+        solicitar = getattr(ponte, "solicitar_renovacao", None) if ponte else None
+        if solicitar is None:
+            return ("❌ O pedido de renovação pelo Telegram ainda não está disponível neste caixa. "
+                    "Fale com o fornecedor pelo canal de sempre.")
+        antes = self._pedido_pendente()
+        try:
+            resultado = solicitar(self.banco, http=self.http_ponte)
+        except ErroNegocio as e:
+            return f"❌ Não foi possível pedir a renovação: {str(e)[:300]}\nNada foi alterado na licença."
+        except Exception as e:  # noqa: BLE001 - rede, servidor fora do ar etc.: sem detalhe técnico no chat nem no log
+            log.warning("Telegram: falha ao pedir a renovação (%s).", type(e).__name__)
+            return "❌ Não consegui enviar o pedido de renovação agora. Nada foi alterado; tente de novo mais tarde."
+        pedido_id = resultado.get("id") if isinstance(resultado, dict) else resultado
+        if not isinstance(pedido_id, str) or not pedido_id.strip():
+            log.warning("Telegram: a ponte não confirmou o pedido de renovação (%s).", type(resultado).__name__)
+            return "❌ O pedido de renovação não foi registrado. Nada foi alterado; tente de novo mais tarde."
+        depois = self._pedido_pendente() or {}
+        status = depois.get("status") or (resultado.get("status") if isinstance(resultado, dict) else "") or ""
+        repetido = bool(antes and antes.get("status") == "enviada" and status == "enviada")
+        self.banco.log("telegram_renovacao_pedida", f"pedido {pedido_id.strip()[:60]} ({status or '?'})")
+        return textos.renovacao_pedida(entregue=status == "enviada", repetido=repetido, atendida=status == "atendida")
+
+    def aviso_licenca(self) -> bool:
+        """Enfileira o aviso de licença (vencendo, em carência, bloqueada, sem licença válida ou renovada e já aplicada)
+        no máximo uma vez por dia/validade/situação. A marca é gravada na mesma transação do aviso: reiniciar não repete.
+        Só roda com o Telegram ligado e celular pareado; licença não exigida não avisa. Nunca levanta erro."""
+        b = self.banco
+        texto = ""
+        try:
+            if not notificacoes.ligado(b, "licenca"):
+                return False
+            est = self._estado_licenca()
+            if est.situacao == "desativada":
+                return False
+            validade = est.expira_em.isoformat() if est.expira_em else ""
+            marca = f"{fmt.hoje()}|{validade}|{est.situacao}"
+            anterior = b.cfg(CHAVE_AVISO_LICENCA)
+            if marca == anterior:
+                return False
+            validade_anterior = (anterior.split("|") + ["", ""])[1]
+            renovada = bool(validade and validade_anterior and validade > validade_anterior)
+            texto = textos.licenca_alerta(est, renovada)
+            with b.transacao():
+                if texto:
+                    b.inserir("telegram_fila", {"criado_em": fmt.agora(), "tipo": "licenca", "texto": texto})
+                b.cfg_set(CHAVE_AVISO_LICENCA, marca)
+        except Exception:  # noqa: BLE001 - aviso é acessório
+            log.exception("Telegram: falha ao verificar a licença para avisar.")
+            return False
+        if texto:
+            notificacoes.ACORDAR.set()
+        return bool(texto)
 
     def tratar_mensagem(self, msg: dict) -> None:
         """Uma mensagem recebida pelo bot: pareamento, comando de quem é autorizado, ou recusa educada para estranhos."""
@@ -414,6 +530,7 @@ class ServicoTelegram:
                 try:
                     if ctl.token:
                         ctl.resumo_agendado()
+                        ctl.aviso_licenca()
                         ctl.processar_fila()
                         falhas = 0
                         ultima_limpeza += espera

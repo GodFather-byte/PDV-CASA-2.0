@@ -72,8 +72,11 @@ def _falhas(banco) -> int:
 
 
 def iniciar_consulta(banco, forcar: bool = False) -> bool:
-    """Registra a tentativa na thread dona do banco; só sucessos aguardam seis horas."""
-    if not licenca.exigida(banco):
+    """Registra a tentativa na thread dona do banco; só sucessos aguardam seis horas.
+
+    Com a central do fornecedor ligada (src/sync/ponte.py) a renovação por aqui fica desligada, inclusive no login."""
+    from src.sync import ponte
+    if ponte.ativa(banco) or not licenca.exigida(banco):
         return False
     tentativa = banco.cfg(CHAVE_TENTATIVA)
     sucesso = banco.cfg(CHAVE_SUCESSO) or banco.cfg(CHAVE_CONSULTA)

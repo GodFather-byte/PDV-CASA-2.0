@@ -38,6 +38,7 @@ class Sincronizador:
         """Uma rodada: vê se há versão nova e renova a licença (cada um no máximo a cada 6 horas). Devolve False se falhou."""
         if not self.configuracao()["url"]:
             return True                              # nuvem desligada: nada a fazer
+        self._ponte()
         try:
             from src.sync import atualizacoes, licenca_nuvem
             aviso = atualizacoes.verificar(self.banco, self._http)
@@ -48,6 +49,14 @@ class Sincronizador:
             log.exception("Falha ao consultar atualizações ou licença.")
             return False
         return self._enviar_painel()
+
+    def _ponte(self) -> None:
+        """Central do fornecedor (opcional, não precisa do token da loja); tem intervalo e espera próprios."""
+        try:
+            from src.sync import ponte
+            ponte.rodada(self.banco, self._http)
+        except Exception:
+            log.exception("Falha na comunicação com a central do fornecedor.")
 
     def _enviar_painel(self) -> bool:
         """Painel do dono (opcional): sobe as vendas que faltam e o retrato do caixa. Falha aqui só espera a próxima rodada."""

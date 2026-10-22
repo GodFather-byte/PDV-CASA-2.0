@@ -9,7 +9,7 @@
 ; ao atualizar ou desinstalar o programa.
 
 #ifndef Versao
-  #define Versao "1.1.0"          ; o build_licenciador.py passa a versão de licenciador\nucleo.py (/DVersao=...)
+  #define Versao "1.2.0"          ; o build_licenciador.py passa a versão de licenciador\nucleo.py (/DVersao=...)
 #endif
 #define Nome "WillPDV Licenças"
 #define Exe "WillLicencas.exe"

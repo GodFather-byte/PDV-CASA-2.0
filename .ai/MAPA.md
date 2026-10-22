@@ -12,6 +12,8 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `python -m src.app --qt` / `--tk` | Prévia PySide6/Qt ou interface Tk completa; mesma base SQLite |
 | `python -m src.app --autoteste-qt [arquivo]` | Autoteste Qt isolado, sem dados reais |
 | `python -m licenciador.app` | Gerador de licenças |
+| `python -m licenciador.app --central` | Central Telegram do fornecedor: configuração local e bot; somente no PC exclusivo |
+| `python -m licenciador.central_cli` | Administração local da central (subcomando obrigatório; `--help` lista opções) |
 | `python -m tools.gerar_licenca` | Licenças pela linha de comando (`novo-par`, `emitir`, `ver`) |
 | `python -m uvicorn backend.main:app` | API da nuvem |
 | `python -m backend.lojas` / `backend.atualizacoes` | Lojas, assinatura e versões na nuvem |
@@ -32,9 +34,9 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `src/ui/` | Telas Tkinter: `app.py` (janela principal), `caixa_ui.py` (caixa), `painel_mesas.py` (cartões, busca e abas das comandas), `caixa_tema.py` (cores e estilos do caixa), `paleta.py` (modo claro/escuro: as paletas e a troca), `login.py`, `tema.py` e uma tela por módulo |
 | `src/ui_qt/` | Migração PySide6/Qt: login, caixa, cadastros, estoque operacional, relatórios, configurações, máquinas, acessos, Telegram e utilitários; escopo em `docs/INTERFACE_QT.md` |
 | `src/hardware/` | Impressora térmica ESC/POS e gaveta, balança, logotipo no cupom, impressoras do Windows |
-| `src/sync/` | `sincronizador.py`, `licenca_nuvem.py`, `atualizacoes.py`, `telegram_api.py`, `painel_envio.py` (vendas e retrato de cada caixa para o painel do dono; troca da senha do painel) |
-| `licenciador/` | `nucleo.py` (regras), `tela.py` (janela), `app.py`, `autoteste.py` |
-| `backend/` | FastAPI: `main.py` (rotas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobrancas.py` (Asaas), `operacao_asaas.py` e `worker_asaas.py` (fila, agenda e indicadores), `painel.py` (painel do dono: envio, um retrato por caixa, senha, sessão, consultas e limpeza automática) e `painel_web/` (a PWA servida em `/painel/`) |
+| `src/sync/` | `sincronizador.py`, `licenca_nuvem.py`, `atualizacoes.py`, `telegram_api.py`, `ponte.py` (credencial individual, licença, contato técnico e pedido de renovação), `painel_envio.py` (vendas e retrato de cada caixa para o painel do dono; troca da senha do painel) |
+| `licenciador/` | `nucleo.py` (regras), `tela.py` (janela), `app.py`, `autoteste.py`; central própria em `central.py` (SQLite/emissão/ponte), `central_bot.py`, `central_cli.py`, `central_tela.py` |
+| `backend/` | FastAPI: `main.py` (rotas), `ponte.py` (central técnica, caixas aprovados e entrega de licenças assinadas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobrancas.py` (Asaas), `operacao_asaas.py` e `worker_asaas.py` (fila, agenda e indicadores), `painel.py` (painel do dono: envio, um retrato por caixa, senha, sessão, consultas e limpeza automática) e `painel_web/` (a PWA servida em `/painel/`) |
 | `tools/` | `gerar_licenca.py`, `gerar_logos.py` (não vão no instalador do PDV) |
 | `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`) e imagens |
 | `tests/` | Um `test_*.py` por assunto; `base.py` (banco em memória, relógio controlável); `ui_robo.py` (robô das janelas modais) |
@@ -77,7 +79,7 @@ implantação da adega), `IMPORTAR_PRODUTOS.md`, `PILOTO.md`,
 `COBRANCA_LICENCAS_ASAAS.md` (cobrança e renovação mensal), `PAINEL_DONO.md` (painel do dono no celular),
 `COORDENACAO.md` (histórico de pedidos entre agentes).
 `BACKUP_EXTERNO.md` (pasta sincronizada, senha e recuperação), `AUDITORIA.md`,
-`CENTRAL_TELEGRAM.md` (plano aprovado de conexão: dois painéis Telegram e central local com API como ponte; não implementado),
+`CENTRAL_TELEGRAM.md` (configuração dos dois painéis Telegram e central local com API como ponte; sem cobrança),
 `INTERFACE_QT.md` (prévia e homologação), `TERCEIROS_QT.md` (licenças das dependências).
 
 ## Dados

@@ -15,7 +15,8 @@ from datetime import date
 from pathlib import Path
 
 MODULOS = ["licenciador.nucleo", "licenciador.tela", "licenciador.autoteste", "src.core.licenca", "src.core.ed25519",
-           "src.core.backup_seguro", "src.core.formatacao", "src.core.erros", "src.ui.tema", "src.ui.icone"]
+           "src.core.backup_seguro", "src.core.formatacao", "src.core.erros", "src.ui.tema", "src.ui.icone",
+           "licenciador.central", "licenciador.central_bot", "licenciador.central_cli", "licenciador.central_tela"]
 
 
 def _modulos() -> list[str]:
@@ -63,9 +64,13 @@ def _tela(pasta: Path) -> list[str]:
         janela.update()
         if len(janela.abas.tabs()) != 5:
             raise RuntimeError("a janela abriu sem todas as abas")
+        janela.abrir_central()
+        janela.update()
+        if not janela.janela_central.winfo_exists():
+            raise RuntimeError("a central do fornecedor não abriu")
     finally:
         janela.destroy()
-    return ["a janela abre com as 5 abas"]
+    return ["a janela abre com as 5 abas e a central do fornecedor"]
 
 
 def _backup(pasta: Path) -> list[str]:

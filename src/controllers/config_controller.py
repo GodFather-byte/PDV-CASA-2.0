@@ -127,6 +127,10 @@ CAMPOS_CONFIG = [
     ("chave_loja", "Chave da loja (licença)", "texto", "Nuvem"), ("api_url", "Endereço da nuvem (licença e atualizações)", "texto", "Nuvem"),
     ("api_token", "Token da API", "texto", "Nuvem"), ("sync_intervalo_seg", "Intervalo da verificação na nuvem (segundos)", "int", "Nuvem"),
     ("painel_dono", "Painel do dono no celular: enviar vendas fechadas, caixa e estoque para a nuvem", "sn", "Nuvem"),
+    # Central do fornecedor (src/sync/ponte.py): usa o endereço da nuvem acima e um token só deste caixa.
+    ("central_ponte_ativa", "Central do fornecedor: buscar a licença publicada e enviar o contato deste caixa", "sn", "Nuvem"),
+    ("central_caixa_id", "ID deste caixa na central (passe ao fornecedor)", "texto", "Nuvem"),
+    ("central_caixa_token", "Token do caixa emitido pelo fornecedor (não é o token da API)", "segredo", "Nuvem"),
     # O token do bot e o pareamento ficam na janela Configurações > Telegram (não aqui, para o token não aparecer em tela cheia).
     ("telegram_ativo", "Telegram ligado: avisar o celular do dono e responder aos botões (precisa parear em Configurações > Telegram)",
      "sn", "Telegram"),
@@ -298,6 +302,9 @@ class ConfigController:
         return {c[0]: self.banco.cfg(c[0]) for c in CAMPOS_CONFIG}
 
     def salvar_config(self, valores: dict) -> None:
+        from src.sync import ponte
+        chaves_ponte = (ponte.CHAVE_ATIVA, ponte.CHAVE_CAIXA_ID, ponte.CHAVE_TOKEN, "api_url")
+        ponte_antes = {c: self.banco.cfg(c) for c in chaves_ponte}
         with self.banco.transacao():
             for chave, valor in valores.items():
                 if chave not in _TIPO_CONFIG:
@@ -327,6 +334,11 @@ class ConfigController:
                     v = self._formatar_codigo_especial(v, chave)
                 if chave == "show_valores":
                     v = self._validar_show_valores(v)
+                if chave == ponte.CHAVE_CAIXA_ID:
+                    v = ponte.uuid_valido(v) or ""
+                    if not v:
+                        raise ErroValidacao("O ID do caixa na central precisa ser um UUID válido "
+                                            "(ex.: 3f2b8c1e-0d4a-4e8f-9b6c-1a2b3c4d5e6f).", {chave: "inválido"})
                 if chave == "telegram_resumo_hora":
                     try:
                         v = fmt.para_hora(v) or ""
@@ -347,3 +359,5 @@ class ConfigController:
                 self.banco.cfg_set(chave, v)
             if valores.keys() & (set(CODIGOS_ESPECIAIS) | {m for m, _, _ in CODIGOS_ESPECIAIS.values()}):
                 self._conferir_codigos_especiais(valores)
+            if ponte.ativa(self.banco) and any(self.banco.cfg(c) != ponte_antes[c] for c in chaves_ponte):
+                ponte.validar_configuracao(self.banco)   # ligar ou mexer na central com dado faltando desfaz o salvamento

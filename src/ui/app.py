@@ -12,6 +12,7 @@ from src.controllers.telegram_controller import ServicoTelegram
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
 from src.database.conexao import BancoDados
+from src.sync.ponte import ServicoPonte
 from src.ui import icone as icone_janela
 from src.ui import caixa_tema, paleta, tema
 from src.ui.contexto import Contexto
@@ -84,6 +85,7 @@ class App:
         self.janelas: dict[str, tk.Toplevel] = {}
         self.servico_impressao: ServicoFilaImpressao | None = None
         self.servico_telegram: ServicoTelegram | None = None
+        self.servico_ponte: ServicoPonte | None = None
         self.menu: tk.Frame | None = None
         self.root.protocol("WM_DELETE_WINDOW", self.sair)
         self.root.report_callback_exception = self._erro_na_tela      # erro dentro de uma tela: registra e avisa, não derruba
@@ -132,6 +134,7 @@ class App:
     def run(self) -> None:
         self._iniciar_fila_impressao()
         self._iniciar_telegram()
+        self._iniciar_ponte()
         idade = self.ctx.utilitarios.idade_backup_horas()
         if idade is None or idade >= 12:                 # abriu o caixa e a última cópia é antiga: faz uma agora
             self.ctx.utilitarios.backup_automatico("início")
@@ -142,7 +145,15 @@ class App:
             self.servico_impressao.parar()
         if self.servico_telegram is not None:
             self.servico_telegram.parar()
+        if self.servico_ponte is not None:
+            self.servico_ponte.parar()
         self.banco.fechar()
+
+    def _iniciar_ponte(self) -> None:
+        if self.banco.caminho == ":memory:":
+            return
+        self.servico_ponte = ServicoPonte(self.banco.caminho)
+        self.servico_ponte.iniciar()
 
     def _iniciar_fila_impressao(self) -> None:
         """Thread que esvazia a fila da impressora térmica/cozinha. Precisa de banco em arquivo (conexão própria)."""
@@ -514,12 +525,15 @@ class App:
                  if estado.expira_em else estado.mensagem)
         if estado.mensagem and estado.expira_em:
             texto = estado.mensagem
-        sucesso = self.banco.cfg("licenca_nuvem_sucesso_em")
+        from src.sync import ponte
+        estado_ponte = ponte.estado(self.banco)
+        sucesso = (estado_ponte["ultimo_sucesso"] if estado_ponte["ativa"] else
+                   self.banco.cfg("licenca_nuvem_sucesso_em"))
         texto += (f" Última consulta bem-sucedida: {fmt.fmt_datahora(sucesso)}."
                   if sucesso else " Sem consulta bem-sucedida registrada nesta instalação.")
-        falha = self.banco.cfg("licenca_nuvem_erro")
+        falha = estado_ponte["erro"] if estado_ponte["ativa"] else self.banco.cfg("licenca_nuvem_erro")
         if falha:
-            texto += f" Nuvem: {falha}"
+            texto += " Ponte: consulte Configurações ou Suporte no Telegram." if estado_ponte["ativa"] else f" Nuvem: {falha}"
         cor = PAL["vermelho"] if estado.bloqueia else PAL["ambar"] if estado.avisa or falha else PAL["verde"]
         self.aviso_licenca.definir(texto, cor)
         self.aviso_licenca.pack(anchor="w")
