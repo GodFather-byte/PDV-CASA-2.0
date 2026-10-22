@@ -8,9 +8,10 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, ttk
 
-from src.controllers.importacao_produtos import ImportacaoProdutos, Previa, ler_tabela
+from src.controllers.config_controller import modulos_desligados
+from src.controllers.importacao_produtos import ImportacaoNFe, ImportacaoProdutos, Previa, ler_tabela
 from src.core import formatacao as fmt
-from src.core.erros import ErroNegocio
+from src.core.erros import ErroNegocio, ErroPermissao
 from src.ui import tema
 
 TIPOS_ARQUIVO = [("Planilhas (Excel ou CSV)", "*.xlsx *.csv *.txt"), ("Todos os arquivos", "*.*")]
@@ -22,6 +23,7 @@ class JanelaImportarProdutos(tk.Toplevel):
         super().__init__(master)
         self.ctx, self.ao_importar = ctx, ao_importar
         self.imp = ImportacaoProdutos(ctx.banco, getattr(ctx, "operador_id", None))
+        self.imp_nfe = ImportacaoNFe(ctx.banco, getattr(ctx, "operador_id", None))
         self.tabela: list[dict] | None = None
         self.previa: Previa | None = None
         self.title("Importar produtos")
@@ -46,6 +48,7 @@ class JanelaImportarProdutos(tk.Toplevel):
         topo = ttk.Frame(corpo)
         topo.pack(side="top", fill="x")
         ttk.Button(topo, text="1. Escolher a planilha...", command=self.escolher_arquivo).pack(side="left")
+        ttk.Button(topo, text="Importar NF-e XML...", command=self.escolher_nfe).pack(side="left", padx=6)
         self.lbl_arquivo = ttk.Label(topo, text="Nenhuma planilha escolhida", foreground=tema.COR["suave"])
         self.lbl_arquivo.pack(side="left", padx=10)
         ttk.Button(topo, text="Baixar planilha modelo...", command=self.salvar_modelo).pack(side="right")
@@ -103,6 +106,32 @@ class JanelaImportarProdutos(tk.Toplevel):
         caminho = filedialog.askopenfilename(parent=self, title="Planilha de produtos", filetypes=TIPOS_ARQUIVO)
         if caminho:
             self.carregar(caminho)
+
+    def _exigir_acesso(self) -> None:
+        if self.ctx.operador is None:
+            raise ErroPermissao("Entre no sistema para importar produtos.")
+        cadastro = self.ctx.cadastros.obter("operadores", self.ctx.operador_id)
+        if cadastro is None or not cadastro["ativo"]:
+            raise ErroPermissao("Operador inativo. Encerre a sessão.")
+        self.ctx.operador = self.ctx.acesso.operador(self.ctx.operador_id)
+        entidade = self.ctx.cadastros.entidade("produtos")
+        if entidade.modulo in modulos_desligados(self.ctx.banco):
+            raise ErroPermissao("O cadastro de produtos está desativado.")
+        self.ctx.acesso.exigir(self.ctx.operador, entidade.modulo)
+
+    def escolher_nfe(self) -> None:
+        caminho = filedialog.askopenfilename(
+            parent=self, title="Importar NF-e", filetypes=[("NF-e XML", "*.xml"), ("Todos os arquivos", "*.*")])
+        if not caminho:
+            return
+        try:
+            self._exigir_acesso()
+        except ErroNegocio as erro:
+            tema.erro(self, str(erro))
+            return
+        ok, previa = tema.tratar(self, self.imp_nfe.analisar, caminho)
+        if ok:
+            JanelaImportarNFe(self, previa)
 
     def carregar(self, caminho: str) -> None:
         ok, tabela = tema.tratar(self, ler_tabela, caminho)
@@ -196,3 +225,149 @@ class JanelaImportarProdutos(tk.Toplevel):
 
     def exportar(self) -> None:
         self._gravar("Exportar produtos", "produtos.csv", self.imp.exportar())
+
+
+class JanelaImportarNFe(tk.Toplevel):
+    """Conferência item a item da NF-e antes de atualizar o estoque."""
+
+    def __init__(self, importacao, previa):
+        super().__init__(importacao)
+        self.importacao, self.previa = importacao, previa
+        self.associacoes: dict[int, int | None] = {}
+        self.precos_venda: dict[int, str] = {}
+        self.title("Conferir NF-e")
+        self.configure(bg=tema.COR["fundo"])
+        self.geometry("1000x620")
+        self.transient(importacao)
+
+        corpo = ttk.Frame(self, padding=12)
+        corpo.pack(fill="both", expand=True)
+        ttk.Label(corpo, text=f"NF-e {previa.numero} • {previa.emitente}").pack(anchor="w")
+        ttk.Label(corpo, text="A entrada atualiza custo e estoque, mas nunca altera o preço de venda.").pack(anchor="w", pady=(2, 8))
+        filtros = ttk.Frame(corpo)
+        filtros.pack(fill="x", pady=(0, 8))
+        ttk.Label(filtros, text="Categoria para produtos novos:").pack(side="left")
+        self.grupo = tk.StringVar(value="BAR")
+        ttk.Combobox(filtros, textvariable=self.grupo, values=("BAR", "ADEGA"),
+                     state="readonly", width=12).pack(side="left", padx=8)
+        ttk.Label(filtros, text="Produtos sem preço ficam bloqueados para venda até o cadastro do preço.").pack(side="left")
+
+        self.grade = ttk.Treeview(corpo, columns=("xml", "ean", "quantidade", "custo", "associacao"),
+                                 show="headings", selectmode="browse", height=15)
+        for coluna, titulo, largura in (
+                ("xml", "Produto da nota", 300), ("ean", "EAN/GTIN", 140), ("quantidade", "Quantidade", 100),
+                ("custo", "Custo unitário", 120), ("associacao", "Associação atual", 270)):
+            self.grade.heading(coluna, text=titulo)
+            self.grade.column(coluna, width=largura)
+        self.grade.pack(fill="both", expand=True)
+        self.grade.bind("<<TreeviewSelect>>", self._selecionar_item)
+
+        associar = ttk.Frame(corpo)
+        associar.pack(fill="x", pady=8)
+        ttk.Label(associar, text="Associar item selecionado:").pack(side="left")
+        self.opcao = tk.StringVar()
+        self.combo = ttk.Combobox(associar, textvariable=self.opcao, state="readonly", width=70)
+        self.combo.pack(side="left", fill="x", expand=True, padx=8)
+        self.combo.bind("<<ComboboxSelected>>", self._alterar_associacao)
+        self._opcoes = []
+        ttk.Label(associar, text="Preço de venda opcional (R$):").pack(side="left")
+        self.preco_novo = tk.StringVar()
+        entrada_preco = ttk.Entry(associar, textvariable=self.preco_novo, width=12)
+        entrada_preco.pack(side="left", padx=6)
+        entrada_preco.bind("<KeyRelease>", self._alterar_preco)
+        self.mensagem = ttk.Label(corpo, text="", foreground=tema.COR["perigo"])
+        self.mensagem.pack(anchor="w")
+        botoes = ttk.Frame(corpo)
+        botoes.pack(fill="x", pady=(8, 0))
+        ttk.Button(botoes, text="Confirmar entrada", command=self.confirmar).pack(side="right")
+        ttk.Button(botoes, text="Cancelar", command=self.destroy).pack(side="right", padx=8)
+
+        for indice, item in enumerate(previa.itens):
+            associacao = self._nome_produto(item.produto_id) if item.produto_id else "Criar produto novo"
+            self.grade.insert("", "end", iid=str(indice), values=(
+                item.nome, item.codigo_barras or "—", fmt.fmt_qtd(item.quantidade),
+                fmt.fmt_num(item.custo_unit_cent), associacao))
+        if previa.itens:
+            primeiro = self.grade.get_children()[0]
+            self.grade.selection_set(primeiro)
+            self._selecionar_item()
+
+    def _nome_produto(self, produto_id):
+        produto = self.importacao.ctx.banco.um("SELECT codigo, nome FROM produtos WHERE id = ?", (produto_id,))
+        return f"{produto['codigo']} • {produto['nome']}" if produto else "Produto não encontrado"
+
+    def _selecionar_item(self, _evento=None):
+        selecionados = self.grade.selection()
+        if not selecionados:
+            return
+        indice = int(selecionados[0])
+        item = self.previa.itens[indice]
+        opcoes = [(None, f"Criar novo: {item.nome}")]
+        produtos = {}
+        for sugestao in item.sugestoes:
+            produtos[sugestao["id"]] = sugestao
+        if item.produto_id:
+            produto = self.importacao.ctx.banco.um(
+                "SELECT id, codigo, nome FROM produtos WHERE id = ?", (item.produto_id,))
+            if produto:
+                produtos[produto["id"]] = dict(produto)
+        opcoes.extend((p["id"], f"{p['codigo']} • {p['nome']}") for p in produtos.values())
+        self._opcoes = opcoes
+        self.combo.configure(values=[texto for _, texto in opcoes])
+        selecionado = self.associacoes.get(item.numero, item.produto_id)
+        indice_opcao = next((i for i, (pid, _) in enumerate(opcoes) if pid == selecionado), 0)
+        self.combo.current(indice_opcao)
+        self.preco_novo.set(self.precos_venda.get(item.numero, ""))
+
+    def _alterar_associacao(self, _evento=None):
+        selecionados = self.grade.selection()
+        if not selecionados or not self._opcoes:
+            return
+        item = self.previa.itens[int(selecionados[0])]
+        self.associacoes[item.numero] = self._opcoes[self.combo.current()][0]
+        valores = list(self.grade.item(selecionados[0], "values"))
+        valores[-1] = self.combo.get()
+        self.grade.item(selecionados[0], values=valores)
+
+    def _alterar_preco(self, _evento=None):
+        selecionados = self.grade.selection()
+        if selecionados:
+            item = self.previa.itens[int(selecionados[0])]
+            self.precos_venda[item.numero] = self.preco_novo.get()
+
+    def confirmar(self):
+        try:
+            self.importacao._exigir_acesso()
+        except ErroNegocio as erro:
+            tema.erro(self, str(erro))
+            return
+        self._alterar_preco()
+        if not tema.confirmar(self, f"Registrar {len(self.previa.itens)} item(ns) da NF-e {self.previa.numero} "
+                                    "no estoque?", "Confirmar entrada", sim="Confirmar", nao="Voltar"):
+            return
+        precos = {}
+        for item in self.previa.itens:
+            associacao = self.associacoes.get(item.numero, item.produto_id)
+            texto_preco = self.precos_venda.get(item.numero, "").strip()
+            if associacao is None and texto_preco:
+                try:
+                    precos[item.numero] = fmt.para_centavos(texto_preco)
+                    if precos[item.numero] < 0:
+                        raise ValueError
+                except ValueError:
+                    tema.erro(self, f"Preço de venda inválido para '{item.nome}'.")
+                    return
+        ok, resultado = tema.tratar(
+            self, self.importacao.imp_nfe.importar, self.previa, self.grupo.get(), self.associacoes, precos)
+        if not ok:
+            return
+        avisos = resultado["alertas_margem"]
+        mensagem = (f"Entrada concluída: {resultado['criados']} produto(s) criado(s), "
+                    f"{resultado['atualizados']} atualizado(s).")
+        if avisos:
+            nomes = ", ".join(f"{p['nome']} ({p['margem_pct']:.1f}% < {p['minima_pct']:g}%)" for p in avisos)
+            mensagem += "\nMargem mínima comprometida: " + nomes
+        if self.importacao.ao_importar:
+            self.importacao.ao_importar()
+        tema.mensagem(self, mensagem, "Importação NF-e concluída")
+        self.destroy()

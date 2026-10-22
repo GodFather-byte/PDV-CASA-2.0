@@ -49,3 +49,9 @@ As dependências nativas, incluindo OpenSSL, conservam seus próprios termos.
 
 O build copia os avisos de licença presentes nos metadados de cryptography,
 cffi, PySide6 Essentials e Shiboken6 para junto do programa.
+
+## Pillow (logotipos Tk e Qt)
+
+A importação de imagens usa Pillow sob licença MIT-CMU, conforme os metadados distribuídos.
+O build inclui seus avisos e os das bibliotecas de imagem fornecidas no pacote em
+`licencas/pacotes/Pillow`. Fontes e licenças: <https://github.com/python-pillow/Pillow>.

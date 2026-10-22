@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 22
+VERSAO_ESQUEMA = 25
 
 PRODUTOS_HISTORICO_DDL = """CREATE TABLE IF NOT EXISTS produtos_historico (
     id INTEGER PRIMARY KEY,
@@ -270,7 +270,8 @@ TABELAS = [
         valor_cent INTEGER NOT NULL DEFAULT 0,
         desconto_cent INTEGER NOT NULL DEFAULT 0,
         operador_id INTEGER REFERENCES operadores(id),
-        criado_em TEXT
+        criado_em TEXT,
+        tipo_perda TEXT CHECK (tipo_perda IS NULL OR tipo_perda IN ('quebra','oxidacao','devolucao'))
     )""",
     """CREATE TABLE IF NOT EXISTS itens_estoque (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -291,9 +292,37 @@ TABELAS = [
         quantidade REAL NOT NULL,
         qt_apos REAL NOT NULL,
         ref_tipo TEXT, ref_id INTEGER,
-        criado_em TEXT NOT NULL
+        criado_em TEXT NOT NULL,
+        operador_id INTEGER REFERENCES operadores(id),
+        observacao TEXT
     )""",
     "CREATE INDEX IF NOT EXISTS ix_movest_prod ON movimentos_estoque(produto_id, criado_em)",
+    """CREATE TABLE IF NOT EXISTS importacoes_nfe (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chave TEXT NOT NULL UNIQUE,
+        arquivo TEXT NOT NULL,
+        numero TEXT NOT NULL,
+        emitente TEXT NOT NULL,
+        cnpj TEXT NOT NULL DEFAULT '',
+        data_emissao TEXT,
+        importado_em TEXT NOT NULL,
+        operador_id INTEGER REFERENCES operadores(id),
+        lancamento_id INTEGER NOT NULL REFERENCES lancamentos_estoque(id),
+        quantidade_itens INTEGER NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS itens_importacao_nfe (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        importacao_id INTEGER NOT NULL REFERENCES importacoes_nfe(id) ON DELETE CASCADE,
+        produto_id INTEGER NOT NULL REFERENCES produtos_historico(id),
+        codigo_xml TEXT NOT NULL DEFAULT '',
+        ean TEXT NOT NULL DEFAULT '',
+        nome_xml TEXT NOT NULL,
+        quantidade REAL NOT NULL,
+        custo_unit_cent INTEGER NOT NULL,
+        custo_total_cent INTEGER NOT NULL,
+        resultado TEXT NOT NULL CHECK (resultado IN ('criado','atualizado'))
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_itens_importacao_nfe_produto ON itens_importacao_nfe(produto_id)",
     # ------------------------------------------------------------- caixa / vendas
     """CREATE TABLE IF NOT EXISTS turnos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -366,6 +395,7 @@ TABELAS = [
         quantidade REAL NOT NULL,
         preco_unit_cent INTEGER NOT NULL,
         preco_base_cent INTEGER,
+        regra_preco_json TEXT,
         temperatura TEXT NOT NULL DEFAULT 'natural' CHECK (temperatura IN ('natural', 'gelada')),
         total_cent INTEGER NOT NULL,
         cobra_servico INTEGER NOT NULL DEFAULT 1,
@@ -604,6 +634,9 @@ INDICES_POS_MIGRACAO = [
     """CREATE UNIQUE INDEX IF NOT EXISTS ix_posicao_aberta ON vendas(comanda, posicao)
         WHERE modalidade = 'mesa' AND status IN ('aberta','conta_enviada')""",
     "CREATE INDEX IF NOT EXISTS ix_pagto_turno ON pagamentos_venda(turno_id)",     # v9
+    """CREATE INDEX IF NOT EXISTS ix_movest_consumo
+        ON movimentos_estoque(ref_tipo, criado_em, produto_id)
+        WHERE ref_tipo = 'venda' AND tipo IN ('venda','estorno_venda')""",
 ]
 
 # Lista positiva: campos livres, contatos, documentos e credenciais nunca viram
@@ -637,9 +670,10 @@ _AUDITORIA_CAMPOS = {
                "taxa_cent acrescimo_cent total_cent pago_cent cancelada_por").split(),
     "itens_venda": ("id venda_id produto_id quantidade preco_unit_cent total_cent cancelado cancelado_em "
                    "temperatura preco_base_cent").split(),
-    "lancamentos_estoque": ("id tipo data fornecedor_id valor_cent desconto_cent").split(),
+    "lancamentos_estoque": ("id tipo tipo_perda data fornecedor_id valor_cent desconto_cent").split(),
     "itens_estoque": ("id lancamento_id produto_id quantidade preco_unit_cent desconto_cent valor_cent "
                       "qt_anterior diferenca aplicado").split(),
+    "movimentos_estoque": "id produto_id tipo quantidade qt_apos ref_tipo ref_id criado_em operador_id".split(),
 }
 _AUDITORIA_OMITIDOS = {
     "produtos": ("atalho cbarra usa_observacao texto_sugestao para_ser_montado manual compoe "
@@ -697,6 +731,9 @@ def _gatilhos_auditoria() -> list[str]:
             ("UPDATE", "NEW", retrato("OLD"), retrato("NEW"), acao),
             ("DELETE", "OLD", retrato("OLD"), "NULL", "'exclusao'"),
         ):
+            if tabela == "movimentos_estoque":
+                evento = (f"CASE WHEN {prefixo}.tipo IN ('quebra','oxidacao','devolucao') "
+                          "THEN 'perda_registrada' ELSE 'estoque_movimentado' END")
             condicao = "auditoria_ativa() = 1"
             if operacao == "UPDATE":
                 condicao += f" AND ({alterados})"
@@ -706,12 +743,14 @@ def _gatilhos_auditoria() -> list[str]:
                     continue
                 condicao += (f" AND NOT EXISTS (SELECT 1 FROM produtos WHERE id = {prefixo}.id)"
                              " AND OLD.qt_atual IS NOT NEW.qt_atual")
+            ator = (f"COALESCE(auditoria_operador(), {prefixo}.operador_id)"
+                    if tabela == "movimentos_estoque" else "auditoria_operador()")
             comandos.append(
                 f"CREATE TRIGGER IF NOT EXISTS auditoria_{tabela}_{operacao.lower()} "
                 f"AFTER {operacao} ON {tabela} WHEN {condicao} BEGIN "
                 "INSERT INTO auditoria_eventos(quando, operador_id, origem, entidade, entidade_id, acao, antes, depois) "
-                f"VALUES (auditoria_agora(), auditoria_operador(), "
-                f"CASE WHEN auditoria_operador() IS NULL THEN 'sistema' ELSE 'operador' END, "
+                f"VALUES (auditoria_agora(), {ator}, "
+                f"CASE WHEN {ator} IS NULL THEN 'sistema' ELSE 'operador' END, "
                 f"'{tabela}', CAST({prefixo}.{chave} AS TEXT), {evento}, {antes}, {depois}); END")
     return comandos
 
@@ -737,6 +776,18 @@ AUDITORIA = [
 # (ver BancoDados._migrar). Bancos novos já nascem na VERSAO_ESQUEMA e não as executam. Cada passo é um
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 MIGRACOES = {
+    # v25: tabelas de histórico de importação NF-e criadas por TABELAS.
+    25: [],
+    # Sem preenchimento retroativo: o cadastro atual não prova a regra de uma venda antiga.
+    24: [
+        ("coluna", "itens_venda", "regra_preco_json", "TEXT"),
+    ],
+    23: [
+        ("coluna", "movimentos_estoque", "operador_id", "INTEGER REFERENCES operadores(id)"),
+        ("coluna", "movimentos_estoque", "observacao", "TEXT"),
+        ("coluna", "lancamentos_estoque", "tipo_perda",
+         "TEXT CHECK (tipo_perda IS NULL OR tipo_perda IN ('quebra','oxidacao','devolucao'))"),
+    ],
     # v2: adiciona campos da impressora térmica e remove o CHECK de modo_impressao.
     # Recria a tabela maquinas preservando os dados existentes.
     2: [

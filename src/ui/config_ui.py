@@ -1,15 +1,17 @@
 """Configurações (manual ADM seção 8): acessos, loja, configurações operacionais e máquinas."""
 from __future__ import annotations
 
+import base64
 import threading
 import tkinter as tk
 from queue import Empty, Queue
-from tkinter import ttk
+from tkinter import filedialog, ttk
 
 from src.controllers.config_controller import CAMPOS_CONFIG, CAMPOS_LOJA, CAMPOS_MAQUINA
 from src.controllers.integracoes_controller import IntegracoesController
 from src.controllers.perfil_controller import PERFIS
 from src.core.erros import ErroNegocio
+from src.core.identidade_visual import preview_logotipo
 from src.sync import painel_envio, ponte
 from src.ui import paleta, tema
 from src.ui.escolher_impressora_ui import JanelaEscolherImpressora
@@ -288,6 +290,8 @@ class JanelaFormulario(tk.Toplevel):
         self.title(titulo)
         self.configure(bg=tema.COR["fundo"])
         self.geometry("900x660" if len({c[3] for c in campos}) > 1 else "760x560")
+        if any(c[0] == "logotipo" for c in campos):
+            self.geometry("960x700")
         barra = tk.Frame(self, bg=tema.COR["marinho"], padx=6, pady=5)
         barra.pack(fill="x")
         ttk.Button(barra, text="Gravar", style="Barra.TButton", command=self.gravar).pack(side="left", padx=2)
@@ -325,7 +329,7 @@ class JanelaFormulario(tk.Toplevel):
                         w = ttk.Combobox(pagina, textvariable=v, values=[r for _, r in opc], state="readonly", width=34)
                     else:
                         w = ttk.Entry(pagina, textvariable=v, width=46 if tipo in ("texto", "segredo") else 14,
-                                      state="readonly" if chave in somente_leitura else "normal",
+                                      state="readonly" if chave in somente_leitura or chave == "logotipo" else "normal",
                                       show="•" if tipo == "segredo" else "")
                     w.grid(row=i, column=1, sticky="w", pady=4)
                     if botoes_campo and chave in botoes_campo:
@@ -333,11 +337,35 @@ class JanelaFormulario(tk.Toplevel):
                         self.botoes[chave] = ttk.Button(pagina, text=texto, command=lambda f=funcao: f(self))
                         self.botoes[chave].grid(row=i, column=2, sticky="w", padx=8, pady=4)
                 self.vars[chave] = v
+                if chave == "logotipo":
+                    controles = ttk.Frame(pagina)
+                    controles.grid(row=i, column=2, sticky="w", padx=8)
+                    ttk.Button(controles, text="Selecionar…", command=self._selecionar_logotipo).pack()
+                    ttk.Button(controles, text="Remover / padrão",
+                               command=lambda: self.definir("logotipo", "")).pack()
+                    self.preview_logo = ttk.Label(pagina)
+                    self.preview_logo.grid(row=i + 1, column=1, sticky="w")
+                    v.trace_add("write", lambda *_: self._preview_logotipo())
         self.recarregar()
         self.bind("<Escape>", lambda e: self.destroy())
         self.bind("<Control-s>", lambda e: self.gravar())
         tema.centralizar(self, master.winfo_toplevel())
         self.transient(master.winfo_toplevel())
+
+    def _selecionar_logotipo(self):
+        caminho = filedialog.askopenfilename(
+            parent=self, title="Logotipo da adega",
+            filetypes=[("Imagens", "*.png *.jpg *.jpeg *.bmp")])
+        if caminho:
+            if preview_logotipo(caminho) is None:
+                tema.erro(self, "Escolha uma imagem PNG, JPG/JPEG ou BMP válida, de até 5 MiB e 16 milhões de pixels.")
+                return
+            self.definir("logotipo", caminho)
+
+    def _preview_logotipo(self):
+        dados = preview_logotipo(self.vars["logotipo"].get())
+        self._foto_logo = tk.PhotoImage(master=self, data=base64.b64encode(dados)) if dados else None
+        self.preview_logo.configure(image=self._foto_logo or "", text="" if dados else "Sem logotipo — identidade padrão")
 
     def recarregar(self) -> None:
         dados = self.carregar()
@@ -387,6 +415,8 @@ class JanelaFormulario(tk.Toplevel):
             for chave, _, tipo, _, _ in self.campos:
                 if tipo == "segredo":
                     self.vars[chave].set("")
+            if "logotipo" in self.vars:
+                self.definir("logotipo", self.ctx.config.loja().get("logotipo"))
             tema.mensagem(self, "Configurações gravadas.", "Gravar")
             if self.depois_de_gravar is not None:
                 self.depois_de_gravar(self)

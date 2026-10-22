@@ -7,7 +7,6 @@ Convenções do sistema inteiro:
 """
 from __future__ import annotations
 
-import math
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
@@ -107,12 +106,10 @@ def para_qtd(texto) -> float:
     if "," in s:
         s = s.replace(".", "").replace(",", ".")
     try:
-        valor = round(float(s), CASAS_QTD)
-    except ValueError:
+        decimal = Decimal(s)
+    except InvalidOperation:
         raise ValueError(f"quantidade inválida: {texto!r}") from None
-    if not math.isfinite(valor):            # 'nan', 'inf' e '1e999' também passam por float()
-        raise ValueError(f"quantidade inválida: {texto!r}")
-    return valor
+    return validar_qtd(decimal)
 
 
 def fmt_qtd(q, casas: int = 3) -> str:
@@ -122,6 +119,20 @@ def fmt_qtd(q, casas: int = 3) -> str:
 
 def arred_qtd(q) -> float:
     return round(float(q), CASAS_QTD)
+
+
+def validar_qtd(q) -> float:
+    """Valida a precisão da quantidade sem descartar casas decimais."""
+    try:
+        valor = _dec(q)
+        if not valor.is_finite():
+            raise ValueError("quantidade inválida")
+        arredondado = valor.quantize(Decimal(1).scaleb(-CASAS_QTD))
+    except (InvalidOperation, TypeError):
+        raise ValueError("quantidade inválida") from None
+    if valor != arredondado:
+        raise ValueError(f"use no máximo {CASAS_QTD} casas decimais")
+    return float(arredondado)
 
 
 # ------------------------------------------------------------------- datas

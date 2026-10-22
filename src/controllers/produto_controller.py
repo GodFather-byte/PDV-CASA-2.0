@@ -4,6 +4,8 @@ situação de estoque e composição (ficha técnica)."""
 from __future__ import annotations
 
 from datetime import datetime
+import json
+import math
 
 from src.controllers.config_controller import CODIGOS_ESPECIAIS, codigo_especial
 from src.core import formatacao as fmt
@@ -60,23 +62,152 @@ class ProdutoController:
             "SELECT * FROM produtos WHERE ativo = 1 AND venda = 1 ORDER BY nome")]
 
     # --------------------------------------------------------------- preços
+    @staticmethod
+    def preco_por_quantidade_adega(produto: dict, base_cent: int, quantidade: float,
+                                  temperatura: str = "natural") -> int:
+        gelada = temperatura == "gelada"
+        minimo = produto["atacado_gelada_qtd" if gelada else "atacado_qtd"]
+        atacado = produto["preco_atacado_gelada_cent" if gelada else "preco_atacado_cent"]
+        if minimo > 0 and atacado > 0 and quantidade >= minimo:
+            return min(base_cent, atacado)
+        return base_cent
+
+    @staticmethod
+    def ler_regra_preco(item: dict) -> dict | None:
+        """Retrato v1 persistido; ausência ou formato desconhecido não é histórico exato."""
+        try:
+            regra = json.loads(item.get("regra_preco_json") or "null")
+        except (TypeError, ValueError):
+            return None
+        if (not isinstance(regra, dict) or type(regra.get("versao")) is not int or regra["versao"] != 1
+                or not isinstance(regra.get("base"), dict)
+                or regra.get("tipo") not in ("normal", "gelada", "promocao", "atacado", "partes", "legado")):
+            return None
+        obrigatorios = {"preco_base_cent", "preco_unit_cent", "temperatura", "tem_preco_gelada",
+                        "minimo_qtd", "preco_faixa_cent", "faixa_atingida", "quantidade_grupo",
+                        "aplicado_em", "leituras"}
+        if not obrigatorios.issubset(regra):
+            return None
+
+        def centavos(valor):
+            return type(valor) is int and valor >= 0
+
+        def quantidade(valor):
+            return (type(valor) is int and valor > 0
+                    or type(valor) is float and math.isfinite(valor) and valor > 0)
+
+        def instante(valor):
+            if not isinstance(valor, str):
+                return False
+            try:
+                return datetime.strptime(valor, "%Y-%m-%d %H:%M:%S").strftime("%Y-%m-%d %H:%M:%S") == valor
+            except ValueError:
+                return False
+
+        minimo, faixa = regra["minimo_qtd"], regra["preco_faixa_cent"]
+        if (not centavos(regra["preco_base_cent"]) or not centavos(regra["preco_unit_cent"])
+                or regra["temperatura"] not in ("natural", "gelada")
+                or type(regra["tem_preco_gelada"]) is not bool
+                or type(regra["faixa_atingida"]) is not bool
+                or not quantidade(regra["quantidade_grupo"])
+                or not instante(regra["aplicado_em"])
+                or (minimo is not None and not (
+                    type(minimo) in (int, float) and (minimo == 0 or quantidade(minimo))))
+                or (faixa is not None and not centavos(faixa))
+                or (regra["faixa_atingida"] and not (
+                    quantidade(minimo) and centavos(faixa) and faixa > 0))
+                or (regra["tipo"] == "atacado" and not regra["faixa_atingida"])
+                or not isinstance(regra["leituras"], list)):
+            return None
+        bases = [regra["base"]]
+        for leitura in regra["leituras"]:
+            if (not isinstance(leitura, dict) or not isinstance(leitura.get("base"), dict)
+                    or not quantidade(leitura.get("quantidade"))):
+                return None
+            bases.append(leitura["base"])
+        if any(b.get("tipo") not in ("normal", "gelada", "promocao", "partes", "legado")
+               or not centavos(b.get("preco_cent"))
+               or (b["tipo"] != "legado" and not instante(b.get("avaliado_em")))
+               or (b["tipo"] == "promocao" and (
+                   b.get("criterio") not in ("período", "dia da semana", "horário")
+                   or "inicio" not in b or "fim" not in b)) for b in bases):
+            return None
+        return regra
+
+    @staticmethod
+    def explicacao_preco_adega(item: dict, modalidade: str) -> dict:
+        """Explica o preço já aplicado pelo caixa, sem recalcular a venda."""
+        retrato = ProdutoController.ler_regra_preco(item)
+        gelada = (retrato or item).get("temperatura") == "gelada"
+        temperatura = "Gelada" if gelada else "Natural"
+        if retrato is None:
+            return {"rotulo": f"{temperatura} · Legado",
+                    "detalhe": "Regra histórica indisponível; preço registrado preservado. "
+                               "O cadastro atual não comprova a promoção ou faixa aplicada.",
+                    "economia_cent": 0}
+        base = retrato["preco_base_cent"]
+        atacado = retrato["tipo"] == "atacado"
+        etiquetas = [temperatura] if gelada or retrato["tem_preco_gelada"] else []
+        economia = 0
+        detalhe = (f"Preço-base registrado: {fmt.fmt_brl(base)}; "
+                   f"preço aplicado: {fmt.fmt_brl(retrato['preco_unit_cent'])}; "
+                   f"aplicado em {retrato['aplicado_em']}")
+        if atacado:
+            etiquetas.append("Atacado")
+            minimo = retrato["minimo_qtd"]
+            quantidade = fmt.fmt_qtd(minimo, fmt.CASAS_QTD).rstrip("0").rstrip(",") if minimo else ""
+            regra = (f"a partir de {quantidade} un da mesma bebida/temperatura"
+                     if minimo else "faixa de quantidade indisponível")
+            economia = max(0, fmt.mult_cent(base, item["quantidade"]) - item["total_cent"])
+            detalhe = (f"Atacado {temperatura.lower()}: {regra}; "
+                       f"economia nesta linha: {fmt.fmt_brl(economia)}; {detalhe}")
+        bases = [l["base"] for l in retrato["leituras"]] or [retrato["base"]]
+        promocoes = sorted({b["criterio"] for b in bases if b["tipo"] == "promocao"})
+        if promocoes:
+            detalhe += "; base de promoção por " + ", ".join(promocoes)
+            if not atacado:
+                etiquetas.append("Promoção")
+        if retrato["faixa_atingida"] and not atacado:
+            detalhe += f"; atacado de {fmt.fmt_brl(retrato['preco_faixa_cent'])} não reduziu o preço-base"
+        if retrato["base"]["tipo"] == "legado":
+            detalhe += "; origem histórica do preço-base indisponível (legado)"
+        if len(retrato.get("leituras", [])) > 1:
+            nomes = {"normal": "normal", "gelada": "gelada", "promocao": "promoção",
+                     "partes": "partes", "legado": "legado"}
+            detalhe += "; bases das leituras agrupadas: " + ", ".join(sorted({nomes[b["tipo"]] for b in bases}))
+        return {"rotulo": " · ".join(etiquetas), "detalhe": detalhe, "economia_cent": economia}
+
     def preco_vigente(self, produto: dict, quando: datetime | None = None) -> int:
         """Preço de venda em centavos considerando promoções ativas.
 
         Se mais de uma promoção estiver ativa vale a de menor preço."""
+        return self.regra_preco_vigente(produto, quando)["preco_cent"]
+
+    @staticmethod
+    def regra_preco_vigente(produto: dict, quando: datetime | None = None) -> dict:
+        """Mesma seleção do preço vigente, incluindo a origem da promoção vencedora."""
         q = quando or fmt.agora_dt()
         dia_iso, hora = q.strftime("%Y-%m-%d"), q.strftime("%H:%M")
         promos = []
         if (produto.get("promo_preco_cent") or 0) > 0 and produto.get("promo_de") and produto.get("promo_ate"):
             if produto["promo_de"] <= dia_iso <= produto["promo_ate"]:
-                promos.append(produto["promo_preco_cent"])
+                promos.append({"tipo": "promocao", "criterio": "período",
+                               "inicio": produto["promo_de"], "fim": produto["promo_ate"],
+                               "preco_cent": produto["promo_preco_cent"]})
         if (produto.get("sem_preco_cent") or 0) > 0 and produto.get("sem_inicial") and produto.get("sem_final"):
             if _entre_dias(fmt.dia_semana(dia_iso), produto["sem_inicial"], produto["sem_final"]):
-                promos.append(produto["sem_preco_cent"])
+                promos.append({"tipo": "promocao", "criterio": "dia da semana",
+                               "inicio": produto["sem_inicial"], "fim": produto["sem_final"],
+                               "preco_cent": produto["sem_preco_cent"]})
         if (produto.get("hora_preco_cent") or 0) > 0 and produto.get("hora_ini") and produto.get("hora_fim"):
             if _entre_horas(hora, produto["hora_ini"], produto["hora_fim"]):
-                promos.append(produto["hora_preco_cent"])
-        return min(promos) if promos else produto["preco_cent"]
+                promos.append({"tipo": "promocao", "criterio": "horário",
+                               "inicio": produto["hora_ini"], "fim": produto["hora_fim"],
+                               "preco_cent": produto["hora_preco_cent"]})
+        regra = min(promos, key=lambda r: r["preco_cent"]) if promos else {
+            "tipo": "normal", "preco_cent": produto["preco_cent"]}
+        return {**regra, "preco_cadastro_cent": produto["preco_cent"],
+                "avaliado_em": q.strftime("%Y-%m-%d %H:%M:%S")}
 
     def preco_partes(self, base: dict, partes: list[dict], quando: datetime | None = None) -> int:
         """Preço de um item dividido/combo. Composto: preço único do produto-base.

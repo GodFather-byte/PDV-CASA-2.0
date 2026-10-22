@@ -203,6 +203,35 @@ class TestAdegaQt(BaseCaixaQt):
         self.lancar(self.j, "10")
         self.assertEqual(self.itens()[0]["temperatura"], "natural")
         self.assertEqual(self.j.dialogos.perguntas, [])
+        self.assertIn("Preço-base registrado: R$ 8,00", self.j.tabela.item(0, 1).text())
+        for coluna in range(6):
+            self.assertIn("Preço-base registrado: R$ 8,00", self.j.tabela.item(0, coluna).toolTip())
+        self.assertEqual(self.j.venda()["total_cent"], 800)
+
+    def test_legado_e_retrato_incompleto_mostram_fallback_sem_mudar_cobranca(self):
+        self.lancar(self.j, "10")
+        for retrato in (None, '{"versao":1,"tipo":"normal","base":{}}'):
+            with self.subTest(retrato=retrato):
+                self.banco.executar(
+                    "UPDATE itens_venda SET preco_base_cent = NULL, regra_preco_json = ? WHERE venda_id = ?",
+                    (retrato, self.j.venda_id))
+                self.j.recarregar()
+                self.assertIn("CERVEJA  [Natural · Legado]", self.j.tabela.item(0, 1).text())
+                for coluna in range(6):
+                    self.assertIn("Regra histórica indisponível", self.j.tabela.item(0, coluna).toolTip())
+                self.assertEqual(self.j.tabela.item(0, 3).text(), "8,00")
+                self.assertEqual(self.j.venda()["total_cent"], 800)
+
+    def test_tooltip_historico_nao_usa_faixa_editada_no_cadastro(self):
+        self.banco.atualizar("produtos", self.produto, {"atacado_qtd": 6, "preco_atacado_cent": 700})
+        self.lancar(self.j, "6*10")
+        self.banco.atualizar("produtos", self.produto, {"atacado_qtd": 99, "preco_atacado_cent": 1})
+        self.j.recarregar()
+        self.assertIn("a partir de 6 un", self.j.tabela.item(0, 1).text())
+        self.assertNotIn("99 un", self.j.tabela.item(0, 1).text())
+        self.assertIn("a partir de 6 un", self.j.tabela.item(0, 3).toolTip())
+        self.assertEqual(self.j.tabela.item(0, 3).text(), "7,00")
+        self.assertEqual(self.j.venda()["total_cent"], 4200)
 
     def test_gelada_cascos_mesma_transacao_e_troca(self):
         casco = self.bebida_retornavel()
@@ -303,6 +332,10 @@ class TestAdegaQt(BaseCaixaQt):
         self.assertEqual(self.j.venda()["total_cent"], 9600)
         self.assertIn("Natural · Atacado", self.j.tabela.item(0, 1).text())
         self.assertIn("Gelada · Atacado", self.j.tabela.item(1, 1).text())
+        for linha in (0, 1):
+            self.assertIn("a partir de 6 un", self.j.tabela.item(linha, 1).text())
+            self.assertIn("economia nesta linha: R$ 6,00", self.j.tabela.item(linha, 1).text())
+            self.assertIn("a partir de 6 un", self.j.tabela.item(linha, 3).toolTip())
 
     def test_delivery_e_caderneta_preservados_sem_mesas(self):
         cliente = self.ctx.cadastros.salvar("clientes", {"numero_consulta": "123", "nome": "CLIENTE",

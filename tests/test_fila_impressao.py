@@ -422,7 +422,7 @@ class TesteCupomTermico(BaseCaixa):
     def test_logotipo_so_sai_quando_ligado_e_so_nos_documentos_do_cliente(self):
         bmp = os.path.join(self.dir, "logo.bmp")
         gravar_bmp(bmp, [[PRETO] * 16] * 2)
-        ConfigController(self.banco).salvar_loja({"logotipo": bmp})
+        self.banco.atualizar("loja", 1, {"logotipo": bmp})     # caminho BMP legado, anterior à importação controlada
         vid = self.vender_e_fechar("Dinheiro", 800)
         texto = self.imp.cupom(vid)
         self.imp.enviar(texto, "sem_logo", tipo="cupom")                       # flag desligada
@@ -438,7 +438,7 @@ class TesteCupomTermico(BaseCaixa):
 
     def test_logotipo_quebrado_nao_impede_o_cupom_de_sair(self):
         Path(os.path.join(self.dir, "ruim.bmp")).write_bytes(b"lixo")
-        ConfigController(self.banco).salvar_loja({"logotipo": os.path.join(self.dir, "ruim.bmp")})
+        self.banco.atualizar("loja", 1, {"logotipo": os.path.join(self.dir, "ruim.bmp")})  # arquivo corrompido após configurar
         ConfigController(self.banco).salvar_maquina({"impressora_termica_logotipo": "S"})
         vid = self.vender_e_fechar("Dinheiro", 800)
         self.imp.enviar(self.imp.cupom(vid), "cupom", tipo="cupom")

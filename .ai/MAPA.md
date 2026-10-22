@@ -86,3 +86,5 @@ implantação da adega), `IMPORTAR_PRODUTOS.md`, `PILOTO.md`,
 
 Banco padrão `loja_offline.db` na raiz (no executável: `%LOCALAPPDATA%\WILL-PDV`); outro
 arquivo pela variável `PDV_DB`. Bancos, `.env`, `config.ini` e `*.key` nunca vão para o git.
+Logotipos importados ficam em `identidade/` junto ao banco; validação e preview compartilhados
+em `src/core/identidade_visual.py`. Configuração e limites em `docs/ADEGA.md`.

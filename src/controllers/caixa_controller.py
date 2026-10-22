@@ -10,7 +10,6 @@ Regras principais:
 from __future__ import annotations
 
 import json
-import math
 from uuid import uuid4
 
 from src.controllers import notificacoes
@@ -24,7 +23,7 @@ from src.core.posicao import interpretar as interpretar_posicao
 from src.core.posicao import nome as nome_posicao
 from src.core.posicao import padrao_valido
 from src.core.posicao import rotulo as rotulo_posicao
-from src.core.erros import ErroNegocio
+from src.core.erros import ErroEstoqueInsuficiente, ErroNegocio
 
 ABERTAS = ("aberta", "conta_enviada")
 NUM_COMANDAS_PADRAO = 10000
@@ -51,8 +50,9 @@ class CaixaController:
 
     def itens(self, venda_id: int, cancelados: bool = False) -> list[dict]:
         sql = """SELECT i.*, p.codigo, p.nome, u.abreviatura AS unidade, s.rodizio_incluso,
-                        (SELECT pv.preco_gelada_cent FROM produtos pv WHERE pv.id = i.produto_id) AS preco_gelada_cent
+                        pv.preco_gelada_cent, pv.atacado_qtd, pv.atacado_gelada_qtd
                  FROM itens_venda i JOIN produtos_historico p ON p.id = i.produto_id
+                 LEFT JOIN produtos pv ON pv.id = i.produto_id
                  JOIN unidades u ON u.id = p.unidade_id JOIN subgrupos s ON s.id = p.subgrupo_id
                  WHERE i.venda_id = ?"""
         if not cancelados:
@@ -265,8 +265,11 @@ class CaixaController:
             raise ErroNegocio("Temperatura inválida: escolha natural ou gelada.")
         if temperatura == "gelada" and (not p["preco_gelada_cent"] or partes):
             raise ErroNegocio("Este produto não tem preço gelado disponível para este lançamento.")
-        quantidade = fmt.arred_qtd(quantidade)
-        if not math.isfinite(quantidade) or quantidade <= 0:
+        try:
+            quantidade = fmt.validar_qtd(quantidade)
+        except ValueError as exc:
+            raise ErroNegocio(str(exc).capitalize() + ".") from None
+        if quantidade <= 0:
             raise ErroNegocio("Informe uma quantidade maior que zero.")
         maximo = self.banco.cfg_int("qtd_maxima_item", QTD_MAXIMA_ITEM)
         if 0 < maximo < quantidade:
@@ -286,6 +289,8 @@ class CaixaController:
             raise ErroNegocio("Selecione o cliente da caderneta antes de lançar itens.")
         self._conferir_limite_comanda(v)
 
+        quando = fmt.agora_dt()
+        agora = quando.strftime("%Y-%m-%d %H:%M:%S")
         if partes:
             qtd_partes = len(partes)
             if qtd_partes > p["partes"]:
@@ -299,14 +304,25 @@ class CaixaController:
                     raise ErroNegocio(f"'{c['nome']}' não pode compor '{p['nome']}'.")
                 componentes.append(c)
             preco = self.produtos.preco_partes(p, componentes)
+            base = {"tipo": "partes", "preco_cent": preco, "avaliado_em": agora,
+                    "criterio": "composto" if p["composto"] else "maior" if p["maior"] else "média"}
         else:
             componentes = []
-            preco = p["preco_gelada_cent"] if temperatura == "gelada" else self.produtos.preco_vigente(p)
+            preco = p["preco_gelada_cent"] if temperatura == "gelada" else self.produtos.preco_vigente(p, quando)
+            base = ({"tipo": "gelada", "preco_cent": preco, "avaliado_em": agora}
+                    if temperatura == "gelada" else self.produtos.regra_preco_vigente(p, quando))
+        if preco <= 0:
+            raise ErroNegocio(f"'{p['nome']}' está sem preço de venda. Defina o preço no cadastro antes de vender.")
+
+        retrato = {"versao": 1, "tipo": base["tipo"], "temperatura": temperatura,
+                   "preco_base_cent": preco, "preco_unit_cent": preco, "base": base,
+                   "minimo_qtd": None, "preco_faixa_cent": None, "faixa_atingida": False,
+                   "quantidade_grupo": quantidade, "tem_preco_gelada": bool(p["preco_gelada_cent"]),
+                   "aplicado_em": agora, "leituras": [{"quantidade": quantidade, "base": base}]}
 
         observacao = self._observacao_temperatura(observacao, temperatura)
 
         total = fmt.mult_cent(preco, quantidade)
-        agora = fmt.agora()
         with self.banco.transacao():
             existente = None
             if (v["modalidade"] == "balcao" and not partes
@@ -326,10 +342,20 @@ class CaixaController:
                 item_id = existente["id"]
                 nova_qtd = fmt.arred_qtd(existente["quantidade"] + quantidade)
                 self.banco.executar("UPDATE itens_venda SET quantidade = ? WHERE id = ?", (nova_qtd, item_id))
+                anterior = self.produtos.ler_regra_preco(dict(existente))
+                if anterior is None:
+                    base_legada = {"tipo": "legado", "preco_cent": existente["preco_base_cent"]}
+                    anterior = {**retrato, "tipo": "legado", "base": base_legada,
+                                "leituras": [{"quantidade": existente["quantidade"], "base": base_legada}]}
+                anterior["leituras"].extend(retrato["leituras"])
+                anterior["aplicado_em"] = agora
+                self.banco.atualizar("itens_venda", item_id, {
+                    "regra_preco_json": json.dumps(anterior, ensure_ascii=False)})
             else:
                 item_id = self.banco.inserir("itens_venda", {
                     "venda_id": venda_id, "produto_id": produto_id, "quantidade": quantidade,
                     "preco_unit_cent": preco, "preco_base_cent": None if partes else preco,
+                    "regra_preco_json": json.dumps(retrato, ensure_ascii=False),
                     "temperatura": temperatura, "total_cent": total, "cobra_servico": p["cobrar_servico"],
                     "observacao": observacao, "comissao_cent": fmt.pct_de(total, p["comissao_pct"]),
                     "partes": max(len(componentes), 1), "operador_id": self.operador_id, "criado_em": agora})
@@ -346,9 +372,30 @@ class CaixaController:
                 self._conferir_credito(venda_id, v["total_cent"] - v["taxa_cent"])
         return item_id
 
+    def previa_cascos(self, venda_id: int | None, casco: dict, quantidade: int) -> int:
+        """Variação dos itens de casco, incluindo promoção e reprecificação dos já lançados; sem taxas/desconto global."""
+        if quantidade == 0:
+            return 0
+        base = self.produtos.preco_vigente(casco)
+        if venda_id is not None and self.obter(venda_id)["modalidade"] != "balcao":
+            return fmt.mult_cent(base, quantidade)
+        anteriores = self.banco.todos(
+            """SELECT i.* FROM itens_venda i WHERE i.venda_id = ? AND i.produto_id = ?
+               AND i.cancelado = 0 AND i.temperatura = 'natural' AND i.preco_base_cent IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM itens_venda_partes x WHERE x.item_id = i.id)""",
+            (venda_id, casco["id"])) if venda_id is not None else []
+        total_qtd = fmt.arred_qtd(quantidade + sum(i["quantidade"] for i in anteriores))
+        preco = self.produtos.preco_por_quantidade_adega(casco, base, total_qtd)
+        impacto = fmt.mult_cent(preco, quantidade)
+        for item in anteriores:
+            novo = self.produtos.preco_por_quantidade_adega(casco, item["preco_base_cent"], total_qtd)
+            impacto += fmt.mult_cent(novo, item["quantidade"]) - item["total_cent"]
+        return impacto
+
     def _reprecificar_balcao(self, venda_id: int) -> None:
         """Reavalia o mínimo por produto e temperatura sem perder o preço-base de cada leitura."""
-        if self.obter(venda_id)["modalidade"] != "balcao":
+        venda = self.obter(venda_id)
+        if venda["modalidade"] != "balcao" or venda["status"] not in ABERTAS:
             return
         itens = self.banco.todos(
             """SELECT i.*, p.atacado_qtd, p.preco_atacado_cent, p.atacado_gelada_qtd,
@@ -361,13 +408,30 @@ class CaixaController:
             chave = (i["produto_id"], i["temperatura"])
             quantidades[chave] = fmt.arred_qtd(quantidades.get(chave, 0) + i["quantidade"])
         for i in itens:
-            gelada = i["temperatura"] == "gelada"
-            minimo = i["atacado_gelada_qtd" if gelada else "atacado_qtd"]
-            atacado = i["preco_atacado_gelada_cent" if gelada else "preco_atacado_cent"]
-            preco = i["preco_base_cent"]
-            if minimo > 0 and atacado > 0 and quantidades[(i["produto_id"], i["temperatura"])] >= minimo:
-                preco = min(preco, atacado)
+            preco = self.produtos.preco_por_quantidade_adega(
+                i, i["preco_base_cent"], quantidades[(i["produto_id"], i["temperatura"])], i["temperatura"])
             total = fmt.mult_cent(preco, i["quantidade"])
+            mudou_preco = preco != i["preco_unit_cent"] or total != i["total_cent"]
+            retrato = self.produtos.ler_regra_preco(dict(i))
+            if retrato is not None or mudou_preco:
+                # Uma reprecificação de legado prova a faixa atual, não a origem da base antiga.
+                retrato = retrato or {
+                    "versao": 1, "temperatura": i["temperatura"], "tem_preco_gelada": False,
+                    "preco_base_cent": i["preco_base_cent"], "leituras": [],
+                    "base": {"tipo": "legado", "preco_cent": i["preco_base_cent"]}}
+                gelada = i["temperatura"] == "gelada"
+                minimo = i["atacado_gelada_qtd" if gelada else "atacado_qtd"]
+                faixa = i["preco_atacado_gelada_cent" if gelada else "preco_atacado_cent"]
+                quantidade_grupo = quantidades[(i["produto_id"], i["temperatura"])]
+                novos = {"tipo": "atacado" if preco < i["preco_base_cent"] else retrato["base"]["tipo"],
+                         "preco_unit_cent": preco, "minimo_qtd": minimo, "preco_faixa_cent": faixa,
+                         "quantidade_grupo": quantidade_grupo,
+                         "faixa_atingida": minimo > 0 and faixa > 0 and quantidade_grupo >= minimo}
+                if mudou_preco or any(retrato.get(c) != valor for c, valor in novos.items()):
+                    retrato.update(novos)
+                    retrato["aplicado_em"] = fmt.agora()
+                    self.banco.atualizar("itens_venda", i["id"], {
+                        "regra_preco_json": json.dumps(retrato, ensure_ascii=False)})
             if preco != i["preco_unit_cent"] or total != i["total_cent"]:
                 self.banco.executar(
                     "UPDATE itens_venda SET preco_unit_cent = ?, total_cent = ?, comissao_cent = ? WHERE id = ?",
@@ -688,6 +752,13 @@ class CaixaController:
         v = self._aberta(venda_id)
         turno = self.turnos.exigir_aberto()
         itens = self.itens(venda_id)
+        sem_preco = self.banco.um(
+            """SELECT pr.nome FROM itens_venda i JOIN produtos_historico pr ON pr.id = i.produto_id
+               WHERE i.venda_id = ? AND i.cancelado = 0
+                 AND (i.preco_unit_cent <= 0 OR i.total_cent <= 0) LIMIT 1""", (venda_id,))
+        if sem_preco:
+            raise ErroNegocio(
+                f"'{sem_preco['nome']}' está sem preço de venda. Defina o preço no cadastro antes de finalizar.")
         eh_credito = v["modalidade"] == "caderneta" and not itens
         eh_debito = v["modalidade"] == "caderneta" and bool(itens)
         if not itens and not eh_credito and not v["prepago"]:       # pré-pago sem consumo fecha devolvendo a recarga
@@ -697,56 +768,64 @@ class CaixaController:
         if v["modalidade"] == "mesa" and self.banco.cfg_bool("controle_garcom") and not (garcom_id or v["garcom_id"]):
             raise ErroNegocio("Informe o garçom que atendeu a mesa.")
 
-        with self.banco.transacao():
-            self.banco.executar("UPDATE pagamentos_venda SET turno_id = ? WHERE venda_id = ? AND turno_id IS NULL",
-                                (turno["id"], venda_id))
-            calc = self.recalcular(venda_id)
-            total = calc["total"]
-            troco = vale = devolucao = 0
-            rateio: dict = {}
-            if eh_credito:
-                info = self.info_credito(venda_id)
-                if info["pago"] <= 0:
-                    raise ErroNegocio("Informe a forma de pagamento e o valor recebido.")
-                creditar = info["pago"]
-                if info["excedente"] > 0 and excesso_como_credito is not True:
-                    if excesso_como_credito is None:
-                        raise ErroNegocio("O valor excede a dívida do cliente: defina se o troco vira crédito.")
-                    creditar = info["divida"]
-                    liq = self.liquidar(venda_id, creditar)
-                    troco, vale, rateio = liq["troco"], liq["vale"], liq["rateio"]
-                total = creditar
-            elif eh_debito:
-                if self.pagamentos(venda_id):
-                    raise ErroNegocio("Venda em caderneta não recebe pagamento. Remova os pagamentos lançados.")
-                self._debitar_caderneta(v["cliente_id"], total)
-            else:
-                liq = self.liquidar(venda_id, total)
-                if liq["falta"] > 0:
-                    raise ErroNegocio(f"Faltam {fmt.fmt_brl(liq['falta'])} para completar o pagamento.")
-                troco, vale, rateio, devolucao = liq["troco"], liq["vale"], liq["rateio"], liq["devolucao"]
+        try:
+            with self.banco.transacao():
+                self.banco.executar("UPDATE pagamentos_venda SET turno_id = ? WHERE venda_id = ? AND turno_id IS NULL",
+                                    (turno["id"], venda_id))
+                calc = self.recalcular(venda_id)
+                total = calc["total"]
+                troco = vale = devolucao = 0
+                rateio: dict = {}
+                if eh_credito:
+                    info = self.info_credito(venda_id)
+                    if info["pago"] <= 0:
+                        raise ErroNegocio("Informe a forma de pagamento e o valor recebido.")
+                    creditar = info["pago"]
+                    if info["excedente"] > 0 and excesso_como_credito is not True:
+                        if excesso_como_credito is None:
+                            raise ErroNegocio("O valor excede a dívida do cliente: defina se o troco vira crédito.")
+                        creditar = info["divida"]
+                        liq = self.liquidar(venda_id, creditar)
+                        troco, vale, rateio = liq["troco"], liq["vale"], liq["rateio"]
+                    total = creditar
+                elif eh_debito:
+                    if self.pagamentos(venda_id):
+                        raise ErroNegocio("Venda em caderneta não recebe pagamento. Remova os pagamentos lançados.")
+                    self._debitar_caderneta(v["cliente_id"], total)
+                else:
+                    liq = self.liquidar(venda_id, total)
+                    if liq["falta"] > 0:
+                        raise ErroNegocio(f"Faltam {fmt.fmt_brl(liq['falta'])} para completar o pagamento.")
+                    troco, vale, rateio, devolucao = liq["troco"], liq["vale"], liq["rateio"], liq["devolucao"]
 
-            for pag_id, parte in rateio.items():
-                self.banco.executar("UPDATE pagamentos_venda SET troco_cent = ? WHERE id = ?", (parte, pag_id))
-            if devolucao:
-                self.turnos.movimentar(turno["id"], self.operador_id, "saida", devolucao,
-                                       f"Devolução do crédito pré-pago da {nome_posicao(v['comanda'], v['posicao']).lower()}")
-            pago = sum(p["valor_cent"] for p in self.pagamentos(venda_id))
-            agora = fmt.agora()
-            self.banco.atualizar("vendas", venda_id, {
-                "turno_id": turno["id"], "cupom": self.proximo_cupom(), "status": "fechada", "fechada_em": agora,
-                "total_cent": total, "pago_cent": pago, "troco_cent": troco, "vale_cent": vale,
-                "garcom_id": garcom_id or v["garcom_id"],
-                "pessoas": 0 if eh_credito else (pessoas if pessoas is not None else (v["pessoas"] or 1)),
-                "sincronizado": 0})
-            if eh_credito:
-                self._creditar_caderneta(v["cliente_id"], venda_id, total)
-            elif itens:
-                self.estoque.baixar_venda(venda_id)
-            if eh_debito:
-                self.banco.inserir("caderneta", {
-                    "cliente_id": v["cliente_id"], "venda_id": venda_id, "tipo": "debito", "valor_cent": total,
-                    "descricao": "Venda em caderneta", "criado_em": agora})
+                for pag_id, parte in rateio.items():
+                    self.banco.executar("UPDATE pagamentos_venda SET troco_cent = ? WHERE id = ?", (parte, pag_id))
+                if devolucao:
+                    self.turnos.movimentar(turno["id"], self.operador_id, "saida", devolucao,
+                                           f"Devolução do crédito pré-pago da {nome_posicao(v['comanda'], v['posicao']).lower()}")
+                pago = sum(p["valor_cent"] for p in self.pagamentos(venda_id))
+                agora = fmt.agora()
+                self.banco.atualizar("vendas", venda_id, {
+                    "turno_id": turno["id"], "cupom": self.proximo_cupom(), "status": "fechada", "fechada_em": agora,
+                    "total_cent": total, "pago_cent": pago, "troco_cent": troco, "vale_cent": vale,
+                    "garcom_id": garcom_id or v["garcom_id"],
+                    "pessoas": 0 if eh_credito else (pessoas if pessoas is not None else (v["pessoas"] or 1)),
+                    "sincronizado": 0})
+                if eh_credito:
+                    self._creditar_caderneta(v["cliente_id"], venda_id, total)
+                elif itens:
+                    self.estoque.baixar_venda(venda_id)
+                if eh_debito:
+                    self.banco.inserir("caderneta", {
+                        "cliente_id": v["cliente_id"], "venda_id": venda_id, "tipo": "debito", "valor_cent": total,
+                        "descricao": "Venda em caderneta", "criado_em": agora})
+        except ErroEstoqueInsuficiente as exc:
+            self.banco.registrar_auditoria(
+                "vendas", v["uuid"], "venda_sem_estoque",
+                antes={"status": v["status"]},
+                depois={"resultado": "recusada", "faltas": exc.faltas},
+                operador_id=self.operador_id if self.operador_id is not None else self.banco._operador_auditoria)
+            raise
         notificacoes.avisar(self.banco, "venda", "venda_fechada", venda_id)      # fora da transação: só avisa o que ficou gravado
         return self.obter(venda_id)
 

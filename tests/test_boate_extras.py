@@ -221,6 +221,7 @@ class TesteConsultaDeComandaNaTela(BaseBoateNaTela):
 
 class TesteAlertaDeGaveta(BaseBoateNaTela):
     def test_sem_limite_configurado_nunca_avisa(self):
+        self.banco.executar("UPDATE produtos SET qt_atual = 500 WHERE id = ?", (self.skol,))
         self.vender_em("Dinheiro", qtd=500)                                   # R$ 4.400,00 em dinheiro
         self.assertEqual(self.cx._alerta_gaveta(), "")
 
@@ -242,6 +243,7 @@ class TesteAlertaDeGaveta(BaseBoateNaTela):
 
     def test_cartao_e_pix_nao_disparam_o_alerta(self):
         self.banco.cfg_set("limite_gaveta", "100")
+        self.banco.executar("UPDATE produtos SET qt_atual = 100 WHERE id = ?", (self.skol,))
         self.vender_em("Cartão Crédito", numero=7, qtd=50)
         self.vender_em("Pix", numero=8, qtd=50)
         self.assertEqual(self.cx._alerta_gaveta(), "")

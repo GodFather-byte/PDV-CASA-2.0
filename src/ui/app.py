@@ -32,6 +32,7 @@ LANCAMENTOS = [("contas", "Contas", "lanc_contas"), ("estoque", "Estoque", "lanc
 
 RELATORIOS = [
     ("Vendas", [("vendas_periodo", "Venda no período", "rel_vendas"), ("vendas_grupo", "Venda por grupo", "rel_vendas_grupo"),
+                ("mais_vendidos", "Produtos mais vendidos", "rel_vendas_grupo"),
                 ("informativo", "Informativo por dia", "rel_informativos"), ("horas", "Vendas por hora", "rel_informativos"),
                 ("cancelados", "Cancelamentos", "rel_informativos")]),
     ("Caixa", [("caixa_mov", "Entradas e saídas financeiras", "rel_caixa"), ("fechamentos", "Fechamentos do caixa", "rel_caixa"),

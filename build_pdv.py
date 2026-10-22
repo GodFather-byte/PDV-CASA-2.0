@@ -46,7 +46,7 @@ def copiar_licencas(destino: Path) -> None:
     for arquivo in (RAIZ / "instalador" / "licencas").glob("*.txt"):
         shutil.copyfile(arquivo, pasta / arquivo.name)
     manifesto = []
-    for nome in ("PySide6-Essentials", "shiboken6", "cryptography", "cffi"):
+    for nome in ("PySide6-Essentials", "shiboken6", "cryptography", "cffi", "Pillow"):
         pacote = distribution(nome)
         manifesto.append(f"{nome} {pacote.version}: {pacote.metadata.get('License-Expression') or pacote.metadata.get('License', '')}")
         for arquivo in pacote.files or ():

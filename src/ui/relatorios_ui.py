@@ -24,9 +24,10 @@ FILTROS = {
     "operador_id": ("Operador", "lookup:operadores"), "garcom_id": ("Garçom", "lookup:operadores"),
     "vendedor_id": ("Vendedor", "lookup:operadores"), "entregador_id": ("Entregador", "lookup:operadores"),
     "cliente_id": ("Cliente", "lookup:clientes"),
+    "grupo_id": ("Categoria / setor", "lookup:grupos"),
     "modalidade": ("Modalidade", "escolha:balcao|mesa|comanda|caderneta|entrega"),
     "tipo_caixa": ("Movimento", "escolha:entrada|saida"),
-    "tipo_estoque": ("Tipo de movimento", "escolha:compra|entrada|saida|descarte|contagem|inicial|pedido|desc_acabados"),
+    "tipo_estoque": ("Tipo de movimento", "escolha:compra|entrada|saida|descarte|quebra|oxidacao|devolucao|contagem|inicial|pedido|desc_acabados"),
     "fornecedor_id": ("Fornecedor", "lookup:fornecedores"),
     "plano_id": ("Plano de contas", "lookup:planos_contas"), "subplano_id": ("Sub plano", "lookup:subplanos"),
     "por": ("Considerar a data de", "escolha:dt_quitacao|dt_entrada|dt_vencimento"),
@@ -37,6 +38,7 @@ FILTROS = {
 }
 VENDAS = ["de", "ate", "hora_ini", "hora_fim", "cupom_ini", "cupom_fim", "turno_atual", "turno", "operador_id", "modalidade"]
 VENDAS_MAIS = ["garcom_id", "vendedor_id", "entregador_id", "cliente_id"]
+VENDAS_CATEGORIA = VENDAS + ["grupo_id"]
 PERIODO = ["de", "ate"]
 PERIODO_TURNO = ["de", "ate", "turno", "operador_id"]
 
@@ -57,7 +59,8 @@ def _mes_a_hoje():
 
 
 SPECS: dict[str, Spec] = {
-    "vendas_grupo": Spec("Venda por grupo", VENDAS, lambda c, f: c.relatorios.vendas_por_grupo(f), mais=VENDAS_MAIS),
+    "vendas_grupo": Spec("Venda por grupo", VENDAS_CATEGORIA, lambda c, f: c.relatorios.vendas_por_grupo(f), mais=VENDAS_MAIS),
+    "mais_vendidos": Spec("Produtos mais vendidos", VENDAS_CATEGORIA, lambda c, f: c.relatorios.mais_vendidos(f), mais=VENDAS_MAIS),
     "informativo": Spec("Informativo de vendas por dia", PERIODO + ["operador_id"], lambda c, f: c.relatorios.informativo_dias(f), "mes"),
     "horas": Spec("Vendas por hora", PERIODO + ["hora_ini", "hora_fim"], lambda c, f: c.relatorios.vendas_por_hora(f), "mes"),
     "cancelados": Spec("Cancelamentos", PERIODO + ["operador_id"], lambda c, f: c.relatorios.cancelados(f), "mes"),
@@ -69,7 +72,7 @@ SPECS: dict[str, Spec] = {
     "garcons": Spec("Garçons", VENDAS, lambda c, f: c.relatorios.garcons(f), mais=VENDAS_MAIS),
     "comissao_garotas": Spec("Comissão das garotas", PERIODO + ["turno", "garota", "situacao_comissao", "detalhar"],
                              lambda c, f: c.relatorios.comissoes_garotas(f), "mes"),
-    "cmv": Spec("C.M.V. - Custo da mercadoria vendida", VENDAS, lambda c, f: c.relatorios.cmv(f), mais=VENDAS_MAIS),
+    "cmv": Spec("C.M.V. - Custo da mercadoria vendida", VENDAS_CATEGORIA, lambda c, f: c.relatorios.cmv(f), mais=VENDAS_MAIS),
     "comissao_produto": Spec("Comissão por produto", PERIODO, lambda c, f: c.relatorios.comissoes_produto(f), "mes"),
     "comissao_venda": Spec("Comissão por venda", PERIODO, lambda c, f: c.relatorios.comissoes_venda(f), "mes"),
     "comissao_cliente": Spec("Vendas por cliente", PERIODO + ["cliente_id"], lambda c, f: c.relatorios.comissoes_cliente(f), "mes"),

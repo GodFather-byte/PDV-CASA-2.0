@@ -22,6 +22,9 @@ ACOES = [
     ("entrada", "＋  Entrada", PAL["verde"], "Chegou mercadoria", "Quantas unidades entraram?"),
     ("saida", "－  Saída", PAL["azul"], "Saiu mercadoria", "Quantas unidades saíram (sem ser venda)?"),
     ("descarte", "Perda / quebra", PAL["vermelho"], "Perda ou quebra", "Quantas unidades foram perdidas?"),
+    ("quebra", "Quebra", PAL["vermelho"], "Perda por quebra", "Quantas unidades quebraram?"),
+    ("oxidacao", "Oxidação", PAL["ambar"], "Perda por oxidação", "Quantas unidades oxidaram?"),
+    ("devolucao", "Devolução", PAL["violeta"], "Devolução", "Quantas unidades foram devolvidas?"),
     ("contagem", "Contei e ajustar", PAL["ambar"], "Contagem na prateleira", "Quantas unidades existem de verdade agora?"),
 ]
 
@@ -108,6 +111,9 @@ class PainelEstoque(tk.Toplevel):
         self.linhas: list[dict] = []
         self._ordenar: tuple[str, bool] = ("nome", False)
         self.v_busca, self.v_grupo = tk.StringVar(), tk.StringVar(value="Todos os grupos")
+        self.v_visao = tk.StringVar(value="Geral")
+        self._visao_atual = "Geral"
+        self._filtros_visao = {}
         self._montar()
         self.bind("<Escape>", lambda e: self.destroy())
         self.bind("<F5>", lambda e: self.atualizar())
@@ -168,6 +174,21 @@ class PainelEstoque(tk.Toplevel):
         self.lbl_cont = tk.Label(barra, text="", font=(FONTE, 9), fg=PAL["mudo"], bg=PAL["fundo"])
         self.lbl_cont.pack(side="right")
 
+        visao = tk.Frame(self, bg=PAL["fundo"])
+        visao.pack(fill="x", padx=22, pady=(8, 0))
+        tk.Label(visao, text="Visão:", bg=PAL["fundo"], fg=PAL["suave"]).pack(side="left")
+        self.cb_visao = ttk.Combobox(visao, textvariable=self.v_visao, values=["Geral", "Adega"],
+                                     state="readonly", width=12, style="Estoque.TCombobox")
+        self.cb_visao.pack(side="left", padx=8)
+        self.cb_visao.bind("<<ComboboxSelected>>", lambda e: self._trocar_visao())
+        tk.Label(visao, text="Adega: categorias típicas e produtos configurados; prioridade alta = sem estoque, média = repor. "
+                            "Pedido/lista Adega seguem os filtros; Geral mantém compras gerais.",
+                 bg=PAL["fundo"], fg=PAL["suave"]).pack(side="left")
+        self.aviso_cobertura = tk.Label(
+            self, text="",
+            bg=PAL["fundo"], fg=PAL["suave"], font=(FONTE, 9), anchor="w")
+        self.aviso_cobertura.pack(fill="x", padx=22, pady=(4, 0))
+
         corpo = tk.Frame(self, bg=PAL["fundo"])
         corpo.pack(fill="both", expand=True, padx=22, pady=(12, 8))
         self._montar_detalhe(corpo)          # empacotado primeiro: a lista toma só o que sobrar, o painel nunca é espremido
@@ -175,15 +196,20 @@ class PainelEstoque(tk.Toplevel):
         lista.pack(side="left", fill="both", expand=True)
         colunas = [("situ", "Situação", 118, "w"), ("cod", "Código", 60, "w"), ("nome", "Produto", 175, "w"),
                    ("grupo", "Grupo", 100, "w"), ("qtd", "Qtd.", 85, "e"), ("min", "Mínimo", 65, "e"),
-                   ("nivel", "Nível", 95, "w"), ("repor", "Repor", 60, "e"), ("valor", "Valor parado", 100, "e")]
+                   ("nivel", "Nível", 95, "w"), ("repor", "Repor", 60, "e"), ("valor", "Valor parado", 100, "e"),
+                   ("cobertura", "Cobertura (30 dias)", 160, "w")]
         self.tree = ttk.Treeview(lista, columns=[c[0] for c in colunas], show="headings", style="Estoque.Treeview", selectmode="browse")
         for cid, titulo, largura, anc in colunas:
             self.tree.heading(cid, text=titulo, anchor=anc, command=lambda c=cid: self.ordenar(c))
             self.tree.column(cid, width=largura, anchor=anc, stretch=cid == "nome")
         rolagem = ttk.Scrollbar(lista, orient="vertical", command=self.tree.yview, style="Estoque.Vertical.TScrollbar")
-        self.tree.configure(yscrollcommand=rolagem.set)
-        rolagem.pack(side="right", fill="y")
-        self.tree.pack(side="left", fill="both", expand=True)
+        horizontal = ttk.Scrollbar(lista, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=rolagem.set, xscrollcommand=horizontal.set)
+        lista.columnconfigure(0, weight=1)
+        lista.rowconfigure(0, weight=1)
+        rolagem.grid(row=0, column=1, sticky="ns")
+        horizontal.grid(row=1, column=0, sticky="ew")
+        self.tree.grid(row=0, column=0, sticky="nsew")
         for sit, (_, cor) in SITUACAO.items():
             self.tree.tag_configure(sit, foreground=cor if sit != "normal" else PAL["texto"])
         self.tree.bind("<<TreeviewSelect>>", lambda e: self._selecionou())
@@ -236,6 +262,24 @@ class PainelEstoque(tk.Toplevel):
         self._habilitar(False)
 
     # ------------------------------------------------------------- dados
+    def _trocar_visao(self) -> None:
+        self._filtros_visao[self._visao_atual] = (
+            self.filtro, self.v_busca.get(), self.v_grupo.get(), self._ordenar)
+        self._visao_atual = self.v_visao.get()
+        filtro, busca, grupo, ordem = self._filtros_visao.get(
+            self._visao_atual, ("todos", "", "Todos os grupos", ("nome", False)))
+        self.filtro, self._ordenar = filtro, ordem
+        self.v_grupo.set(grupo)
+        self.v_busca.set(busca)
+        self.atualizar()
+
+    def _recorte_compras(self) -> dict:
+        if self.v_visao.get() != "Adega":
+            return {}
+        grupo = self.v_grupo.get()
+        return {"adega": True, "situacao": None if self.filtro == "todos" else self.filtro,
+                "texto": self.v_busca.get(), "grupo": None if grupo == "Todos os grupos" else grupo}
+
     def atualizar(self) -> None:
         """Recarrega tudo respeitando filtro, busca e grupo. Mantém o produto selecionado, se ele ainda estiver na lista."""
         try:
@@ -243,30 +287,44 @@ class PainelEstoque(tk.Toplevel):
                 return
         except tk.TclError:
             return
-        r = self.est.resumo()
+        adega = self.v_visao.get() == "Adega"
+        self.tree.configure(displaycolumns=("#all" if adega else
+                            tuple(c for c in self.tree["columns"] if c != "cobertura")))
+        self.b_pedido.configure(text="Gerar pedido Adega (filtros)" if adega else "Gerar pedido do que falta")
+        self.b_lista.configure(text="Lista de compras Adega (filtros)" if adega else "Lista de compras")
+        self.aviso_cobertura.configure(
+            text=("Cobertura indicativa = saldo ÷ (consumo líquido de vendas/estornos em 30 dias ÷ 30). "
+                  "Sem consumo: indisponível. Reposição mantém dobro do mínimo." if adega else ""))
+        r = self.est.resumo(adega=adega)
         self.cartoes["total"].definir(str(r["total"]), "controlados e ativos")
         for chave in ("sem", "ponto", "normal"):
             self.cartoes[chave].definir(str(r[chave]), f"{round(r[chave] * 100 / r['total'])}% dos produtos" if r["total"] else "")
         self.cartoes["valor"].definir(fmt.fmt_brl(r["valor_cent"]), "quantidade × último preço de compra")
         grupo = self.v_grupo.get()
         self.linhas = self.est.painel(None if self.filtro == "todos" else self.filtro, self.v_busca.get(),
-                                      None if grupo.startswith("Todos") else grupo)
+                                      None if grupo == "Todos os grupos" else grupo, adega=adega)
         coluna, invertido = self._ordenar
         chaves = {"situ": lambda p: ("sem", "ponto", "normal", "livre").index(p["situacao"]), "cod": lambda p: p["codigo"],
                   "nome": lambda p: p["nome"].casefold(), "grupo": lambda p: p["grupo"].casefold(), "qtd": lambda p: p["qt_atual"],
                   "min": lambda p: p["estoque_minimo"], "nivel": lambda p: p["qt_atual"] / p["estoque_minimo"] if p["estoque_minimo"] else 0,
-                  "repor": lambda p: p["repor"], "valor": lambda p: p["valor_cent"]}
-        self.linhas.sort(key=chaves[coluna], reverse=invertido)
+                  "repor": lambda p: p["repor"], "valor": lambda p: p["valor_cent"],
+                  "cobertura": lambda p: p.get("cobertura_dias") if p.get("cobertura_dias") is not None else float("inf")}
+        if not adega or coluna != "nome":
+            self.linhas.sort(key=chaves[coluna], reverse=invertido)
         atual = self.produto["id"] if self.produto else None
         self.tree.delete(*self.tree.get_children())
         for p in self.linhas:
             rotulo, _ = SITUACAO[p["situacao"]]
+            if adega:
+                rotulo = f"{p['prioridade']} · {rotulo}"
             self.tree.insert("", "end", iid=str(p["id"]), tags=(p["situacao"],), values=[
-                f"● {rotulo}", p["codigo"].lstrip("0") or "0", p["nome"], p["grupo"],
+                f"● {rotulo}", p["codigo"].lstrip("0") or "0", p["nome"],
+                f"{p['grupo']} / {p['categoria']}" if adega else p["grupo"],
                 "—" if p["situacao"] == "livre" else f"{curta(p['qt_atual'])} {p['unidade']}",
                 curta(p["estoque_minimo"]) if p["estoque_minimo"] else "-", nivel(p),
                 curta(p["repor"]) if p["repor"] else "",
-                "—" if p["situacao"] == "livre" else fmt.fmt_brl(p["valor_cent"])])
+                "—" if p["situacao"] == "livre" else fmt.fmt_brl(p["valor_cent"]),
+                p.get("cobertura_rotulo", "")])
         for chave, chip in self.chips.items():
             chip.marcar(chave == self.filtro)
         falta = r["sem"] + r["ponto"]
@@ -274,7 +332,7 @@ class PainelEstoque(tk.Toplevel):
             if r["total"] else "Nenhum produto controla estoque ainda."
         if r["livre"]:
             sub += f"  {r['livre']} produto(s) ainda não controlam estoque (filtro 'Sem controle')."
-        self.lbl_sub.configure(text=sub)
+        self.lbl_sub.configure(text=("Visão Adega · " if adega else "") + sub)
         self.lbl_cont.configure(text=f"{len(self.linhas)} de {r['total']} produtos")
         if not self.linhas:
             self.lbl_vazio.configure(text="Nenhum produto encontrado com esse filtro." if r["total"] or self.filtro == "livre" or
@@ -283,7 +341,7 @@ class PainelEstoque(tk.Toplevel):
             self.lbl_vazio.place(relx=0.5, rely=0.4, anchor="center")
         else:
             self.lbl_vazio.place_forget()
-        self.b_pedido.habilitar(any(p["repor"] > 0 for p in self.est.painel()))
+        self.b_pedido.habilitar(bool(self.est.lista_de_compras(**self._recorte_compras())))
         if atual is not None and self.tree.exists(str(atual)):
             self.tree.selection_set(str(atual))
         else:
@@ -350,6 +408,13 @@ class PainelEstoque(tk.Toplevel):
                   f"Último preço de compra: {fmt.fmt_brl(p['ult_preco_cent'])}", f"Valor parado: {fmt.fmt_brl(p['valor_cent'])}"]
         if p["repor"]:
             linhas.append(f"Sugestão: comprar {curta(p['repor'])} {p['unidade']}")
+        if "cobertura_rotulo" in p:
+            linhas.extend([
+                f"Cobertura: {p['cobertura_rotulo']}",
+                f"Consumo líquido em 30 dias: {curta(p['consumo_30_dias'])} {p['unidade']}; média = consumo ÷ 30.",
+                "Cobertura = saldo ÷ média diária. Reposição mantém dobro do mínimo.",
+                f"Recorte indicativo: {p['classificacao_adega']}.",
+            ])
         if p["ult_atualizacao"]:
             linhas.append(f"Última movimentação: {fmt.fmt_datahora(p['ult_atualizacao'])}")
         self.d_info.configure(text="\n".join(linhas))
@@ -374,11 +439,11 @@ class PainelEstoque(tk.Toplevel):
         c.create_line(w / 2, 0, w / 2, 10, fill=PAL["texto"])       # marca do estoque mínimo
 
     # ------------------------------------------------------------- ações
-    def registrar(self, tipo: str, quantidade: float) -> bool:
+    def registrar(self, tipo: str, quantidade: float, observacao: str | None = None) -> bool:
         """Grava o movimento rápido do produto selecionado e atualiza a tela."""
         if self.produto is None:
             return False
-        ok, _ = tema.tratar(self, self.est.registrar_rapido, self.produto["id"], tipo, quantidade)
+        ok, _ = tema.tratar(self, self.est.registrar_rapido, self.produto["id"], tipo, quantidade, observacao)
         if ok:
             self.atualizar()
         return ok
@@ -387,9 +452,10 @@ class PainelEstoque(tk.Toplevel):
         if self.produto is None:
             return
         _, _, cor, titulo, pergunta = next(a for a in ACOES if a[0] == tipo)
+        self._observacao_perda = None
         q = self._pedir_quantidade(titulo, pergunta, tipo)
         if q is not None:
-            self.registrar(tipo, q)
+            self.registrar(tipo, q, self._observacao_perda)
 
     def _pedir_quantidade(self, titulo: str, pergunta: str, tipo: str) -> float | None:
         """Diálogo com a quantidade e uma prévia de quanto o produto vai ficar (evita erro de digitação no estoque)."""
@@ -409,6 +475,10 @@ class PainelEstoque(tk.Toplevel):
         v = tk.StringVar()
         ent = ttk.Entry(dlg.corpo, textvariable=v, width=18, font=("Segoe UI", 14))
         ent.pack(anchor="w", pady=(4, 0))
+        observacao = tk.StringVar()
+        if tipo in ("quebra", "oxidacao", "devolucao"):
+            ttk.Label(dlg.corpo, text="Observação (opcional)", style="Rotulo.TLabel").pack(anchor="w", pady=(8, 0))
+            ttk.Entry(dlg.corpo, textvariable=observacao, width=44).pack(anchor="w")
         previa = ttk.Label(dlg.corpo, text="", foreground=tema.COR["rotulo"], font=tema.FONTE_B)
         previa.pack(anchor="w", pady=(8, 0))
         msg = ttk.Label(dlg.corpo, text="", foreground=tema.COR["perigo"])
@@ -437,6 +507,7 @@ class PainelEstoque(tk.Toplevel):
             if q is None:
                 msg.configure(text="Digite uma quantidade válida.")
                 return
+            self._observacao_perda = observacao.get().strip() or None
             dlg.ok(q)
         v.trace_add("write", atualizar_previa)
         tema._botoes(dlg, ok_texto="Confirmar", comando_ok=aceitar)
@@ -480,7 +551,8 @@ class PainelEstoque(tk.Toplevel):
         return j
 
     def gerar_pedido(self) -> None:
-        falta = [p for p in self.est.painel() if p["repor"] > 0]
+        recorte = self._recorte_compras()
+        falta = self.est.lista_de_compras(**recorte)
         if not falta:
             tema.aviso(self, "Nenhum produto precisa de reposição agora.\n(Produtos sem estoque mínimo definido não entram na sugestão.)")
             return
@@ -488,20 +560,24 @@ class PainelEstoque(tk.Toplevel):
         if not forn:
             tema.aviso(self, "Cadastre um fornecedor primeiro (Manutenção de Cadastros > Fornecedores).")
             return
-        fid = tema.escolher(self, "Gerar pedido", forn, f"{len(falta)} produto(s) serão incluídos. Para qual fornecedor é o pedido?")
+        escopo = "Adega (filtros atuais)" if recorte else "Geral (todos os produtos a repor)"
+        fid = tema.escolher(self, "Gerar pedido", forn,
+                           f"{escopo}: {len(falta)} produto(s). Para qual fornecedor é o pedido?")
         if fid is None:
             return
-        ok, lanc = tema.tratar(self, self.est.pedido_sugerido, fid)
+        ok, lanc = tema.tratar(self, self.est.pedido_sugerido, fid, **recorte)
         if ok:
             self.atualizar()
             self.novo_lancamento(lanc)
 
     def lista_de_compras(self) -> None:
-        itens = self.est.lista_de_compras()
+        recorte = self._recorte_compras()
+        itens = self.est.lista_de_compras(**recorte)
         if not itens:
             tema.aviso(self, "Nenhum produto precisa de reposição agora.")
             return
         linhas = [f"LISTA DE COMPRAS - {fmt.fmt_data(fmt.hoje())}", "-" * 64,
+                  "ADEGA — filtros atuais" if recorte else "GERAL — todos os produtos a repor",
                   f"{'Produto':<32}{'Tem':>9}{'Mínimo':>9}{'Comprar':>10}", "-" * 64]
         for p in itens:
             linhas.append(f"{p['nome'][:31]:<32}{curta(p['qt_atual']):>9}{curta(p['estoque_minimo']):>9}"

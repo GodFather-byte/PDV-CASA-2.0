@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib
+import io
 import subprocess
 import sys
 import tempfile
@@ -56,9 +57,11 @@ class TesteExecutar(unittest.TestCase):
                 raise ModuleNotFoundError("No module named 'xyz'")
             return real(nome, *a, **k)
 
-        with mock.patch("src.autoteste.importlib.import_module", side_effect=importar):
+        with mock.patch("src.autoteste.importlib.import_module", side_effect=importar), \
+             mock.patch("sys.stdout", new_callable=io.StringIO) as saida:
             self.assertEqual(autoteste.executar(str(self.saida)), 1)
         texto = self.saida.read_text(encoding="utf-8")
+        self.assertEqual(saida.getvalue(), texto)
         self.assertIn("FALHA módulos", texto)
         self.assertIn("src.ui.telegram_ui", texto)
         self.assertIn("RESULTADO: COM FALHAS", texto)

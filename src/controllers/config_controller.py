@@ -16,7 +16,7 @@ CAMPOS_LOJA = [
     ("endereco", "Endereço", "texto"), ("complemento", "Complemento", "texto"), ("bairro", "Bairro", "texto"),
     ("cidade", "Cidade", "texto"), ("uf", "UF", "texto"), ("cep", "CEP", "texto"),
     ("telefone", "Telefone", "texto"), ("email", "E-mail", "texto"),
-    ("logotipo", "Logotipo (bmp 180x121, 256 cores)", "texto"),
+    ("logotipo", "Logotipo (PNG/JPG/JPEG/BMP, até 5 MiB)", "texto"),
 ]
 
 CAMPOS_MAQUINA = [
@@ -36,7 +36,7 @@ CAMPOS_MAQUINA = [
     ("impressora_termica_cortar", "Impressora térmica: cortar o papel", "sn"),
     ("impressora_termica_gaveta", "Gaveta ligada à impressora térmica", "sn"),
     ("impressora_termica_pino", "Pino da gaveta (0 ou 1)", "int"),
-    ("impressora_termica_logotipo", "Imprimir o logotipo da loja no cupom (BMP em Configurações > Loja)", "sn"),
+    ("impressora_termica_logotipo", "Imprimir o logotipo da loja no cupom (Configurações > Loja)", "sn"),
     ("impressora_remota_conexao", "Impressora remota (cozinha/bar): conexão", "escolha",
      [("pasta", "Pasta de arquivos"), ("rede", "Rede (TCP/IP)"),
       ("spooler", "Impressora do Windows (USB ou instalada)"), ("nenhuma", "Nenhuma")]),
@@ -68,6 +68,7 @@ CAMPOS_CONFIG = [
     ("usar_desconto", "Permitir desconto no fechamento da conta", "sn", "Caixa"),
     ("agrupar_itens_balcao", "Agrupar produtos iguais e da mesma temperatura no balcão", "sn", "Caixa"),
     ("virada_dia_hora", "O dia do painel e dos relatórios de vendas vira às (hora, 0 a 23; 6 = a madrugada conta na noite anterior)", "int", "Caixa"),
+    ("margem_minima_pct", "Margem mínima para alertar após atualizar custo (0 = desligado)", "decimal", "Estoque"),
     ("exigir_senha_gaveta", "Exigir senha de supervisor para abrir a gaveta", "sn", "Caixa"),
     ("exigir_senha_sangria", "Exigir senha de supervisor para sangria", "sn", "Caixa"),
     ("exigir_senha_cancelamento", "Exigir senha de supervisor para cancelamentos", "sn", "Caixa"),
@@ -201,6 +202,9 @@ class ConfigController:
         limpos = {k: (str(v).strip() if v is not None else None) for k, v in dados.items() if k in validos}
         if limpos.get("uf") and len(limpos["uf"]) != 2:
             raise ErroValidacao("UF deve ter 2 letras.", {"uf": "inválido"})
+        if limpos.get("logotipo") and limpos["logotipo"] != self.loja().get("logotipo"):
+            from src.core.identidade_visual import importar_logotipo
+            limpos["logotipo"] = importar_logotipo(limpos["logotipo"], self.banco)
         self.banco.atualizar("loja", 1, limpos)
 
     def loja_cadastrada(self) -> bool:
