@@ -18,7 +18,7 @@ from src.core import licenca
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.database.conexao import BancoDados
 from src.sync.licenca_nuvem import ResultadoConsulta
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.app import App, JanelaBackupExterno, JanelaPrincipal, autoteste, preparar_inicio
 from src.ui_qt.cadastros import FormularioCadastro, JanelaCadastro
 from src.ui_qt.auditoria import JanelaAuditoria

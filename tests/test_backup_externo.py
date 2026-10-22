@@ -202,33 +202,3 @@ class TesteBackupExterno(unittest.TestCase):
         self.assertTrue(arquivo.exists())
 
 
-class TesteInterfaceBackupExterno(unittest.TestCase):
-    def setUp(self):
-        from src.ui import utilitarios_ui
-        self.ui = utilitarios_ui
-        self.ctx = mock.Mock()
-        self.ctx.banco.cfg.return_value = ""
-
-    def test_senhas_diferentes_nao_alteram_configuracao(self):
-        with mock.patch.object(self.ui.tema, "escolher", return_value="configurar"), \
-                mock.patch.object(self.ui.filedialog, "askdirectory", return_value="C:\\Backup"), \
-                mock.patch.object(self.ui.tema, "pedir_texto", side_effect=[SENHA, "diferente"]), \
-                mock.patch.object(self.ui.tema, "aviso") as aviso:
-            self.ui.backup_externo(None, self.ctx)
-        self.ctx.utilitarios.configurar_backup_externo.assert_not_called()
-        aviso.assert_called_once()
-
-    def test_cancelar_restauracao_nao_altera_banco(self):
-        with mock.patch.object(self.ui.tema, "escolher", return_value="recuperar"), \
-                mock.patch.object(self.ui.filedialog, "askopenfilename", return_value="C:\\copia.pdvbkp"), \
-                mock.patch.object(self.ui.tema, "pedir_texto", return_value=SENHA), \
-                mock.patch.object(self.ui.tema, "confirmar", return_value=False):
-            self.ui.backup_externo(None, self.ctx)
-        self.ctx.utilitarios.pedir_restauracao_externa.assert_not_called()
-
-    def test_backup_local_nao_oculta_falha_externa(self):
-        self.ctx.utilitarios.situacao_backup.return_value = ("aviso", "A cópia externa falhou.")
-        with mock.patch.object(self.ui.tema, "tratar", return_value=(True, "local.db")), \
-                mock.patch.object(self.ui.tema, "mensagem") as mensagem:
-            self.ui.executar(None, self.ctx, "backup")
-        self.assertIn("externa falhou", mensagem.call_args.args[1])

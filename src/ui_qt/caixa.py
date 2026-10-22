@@ -37,7 +37,7 @@ from src.core.posicao import nome as nome_posicao
 from src.hardware.impressora_termica import ErroImpressao
 from src.hardware.dispositivos import DispositivoIndisponivel
 from src.controllers.caixa_controller import LIMITE_PARTES_DIVISAO
-from src.ui.caixa_pagamento import LIMITE_TROCO_CENT, ler_valor_pagamento
+from src.core.valor_pagamento import LIMITE_TROCO_CENT, ler_valor_pagamento
 from src.ui_qt import comissao
 
 PAGINA_SEM_OPERADOR, PAGINA_ABERTURA, PAGINA_VENDA, PAGINA_FECHAMENTO = range(4)

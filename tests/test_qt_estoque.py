@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 from src.controllers.estoque_controller import EstoqueController
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.estoque import JanelaEstoque, _DialogoQuantidade
 from src.ui_qt.tema import aplicar
 from tests.base import BaseTeste

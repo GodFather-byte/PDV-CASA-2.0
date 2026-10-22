@@ -25,8 +25,8 @@ python -m unittest discover -s tests       # suíte inteira
 python -m unittest tests.test_caixa        # um arquivo só (prefira isto durante o trabalho)
 ```
 
-Python 3.10+. O PDV local usa só a biblioteca padrão (Tkinter e SQLite). No Linux os testes de
-tela precisam de X virtual: `xvfb-run -a -s "-screen 0 1920x1080x24" python -m unittest discover -s tests`.
+Python 3.10+. A interface do PDV é **somente Qt (PySide6)**; não há mais Tk no PDV. O gerador de licenças
+(`licenciador/`) continua em Tkinter. No Linux os testes de tela precisam de X virtual (ou `QT_QPA_PLATFORM=offscreen`): `xvfb-run -a -s "-screen 0 1920x1080x24" python -m unittest discover -s tests`.
 O CI (`.github/workflows/testes.yml`) roda em Windows e Linux, Python 3.10 e 3.12.
 
 ## Convenções obrigatórias
@@ -47,7 +47,7 @@ O CI (`.github/workflows/testes.yml`) roda em Windows e Linux, Python 3.10 e 3.1
 |------|------|-----------|
 | `src/core/`, `src/database/` | Claude | Esquema SQLite, formatação, segurança, licença. |
 | `src/controllers/` | Claude | Regras de negócio. |
-| `src/ui/` | Claude | Telas Tkinter. |
+| `src/ui_qt/` | Claude | Telas Qt (PySide6). |
 | `backend/` | Antigravity | API na nuvem (FastAPI). |
 | `src/sync/sincronizador.py` | Antigravity | Cliente HTTP. |
 | Qualquer área, quando chamado | Codex | Reserva: testes, mudança mecânica, diagnóstico e revisão de diff. Não decide regra de negócio. |

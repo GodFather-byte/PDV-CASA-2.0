@@ -176,34 +176,6 @@ class TestePromocoes(BaseTeste):
         produto.update(hora_ini="00:00", hora_fim="23:59", hora_preco_cent=1200)
         self.assertEqual(ProdutoController.regra_preco_vigente(produto, datetime(2026, 10, 3))["preco_cent"], 1000)
 
-    def test_importacoes_nao_cruzam_interfaces(self):
-        for modulo, proibido in (("src.ui_qt.promocoes", "tkinter"), ("src.ui.promocoes_ui", "PySide6")):
-            if modulo.startswith("src.ui_qt") and importlib.util.find_spec("PySide6") is None:
-                continue
-            script = f"import sys; import {modulo}; assert '{proibido}' not in sys.modules"
-            resultado = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
-            self.assertEqual(resultado.returncode, 0, resultado.stderr)
-
-    def test_tk_abre_retorna_janela_simula_e_revalida(self):
-        import tkinter as tk
-        from src.ui.promocoes_ui import abrir
-        try:
-            raiz = tk.Tk()
-        except tk.TclError as erro:
-            self.skipTest(str(erro))
-        self.addCleanup(raiz.destroy)
-        raiz.withdraw()
-        janela = abrir(raiz, self.ctx)
-        self.assertEqual(set(janela.campos), {c.nome for c in CAMPOS})
-        janela.simular()
-        self.assertIn("FINAL UNITÁRIO: 1000 cent", janela.resultado.get("1.0", "end"))
-        janela.campos["preco_cent"].delete(0, "end")
-        janela.campos["preco_cent"].insert(0, "9")
-        janela.salvar()
-        self.assertEqual(self.ctx.cadastros.obter("produtos", self.pid)["preco_cent"], 900)
-        self.banco.executar("UPDATE operadores SET nivel = 0 WHERE id = ?", (self.ctx.operador_id,))
-        with self.assertRaises(ErroPermissao):
-            janela.exigir_acesso()
 
     def test_qt_abre_simula_salva_e_revalida(self):
         if importlib.util.find_spec("PySide6") is None:

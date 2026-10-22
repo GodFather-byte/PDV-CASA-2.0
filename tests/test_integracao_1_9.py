@@ -5,7 +5,6 @@ from unittest.mock import patch
 
 from tests.test_qt_caixa import BaseCaixaQt
 from tests.test_qt_app import BaseQt
-from tests.test_ui import BaseUI
 
 
 class TesteIntegracaoFechamentoQt(BaseCaixaQt):
@@ -42,21 +41,6 @@ class TesteIntegracaoFechamentoQt(BaseCaixaQt):
         fita = self.ctx.impressao.fechamento(resumo)
         self.assertIn("Falta constatada na contagem física", fita)
         self.assertIn("FALTOU R$ 10,00", fita)
-
-
-class TesteIntegracaoFechamentoTk(BaseUI):
-    def test_cancelar_conferencia_nao_fecha_nem_imprime(self):
-        from src.ui import caixa_dialogos, tema
-        self.ctx.turnos.abrir(self.ctx.operador_id, 1, 10000)
-        with patch.object(caixa_dialogos, "conferir_maquininha", return_value=True), \
-                patch.object(tema, "pedir_dinheiro", return_value=10000), \
-                patch.object(tema, "confirmar", return_value=True), \
-                patch("src.ui.fechamento_ui.coletar", return_value=None) as conferencia, \
-                patch.object(caixa_dialogos, "imprimir_fechamento") as imprimir:
-            self.assertFalse(caixa_dialogos.trocar_turno(self.root, self.ctx))
-        conferencia.assert_called_once()
-        imprimir.assert_not_called()
-        self.assertIsNotNone(self.ctx.turnos.atual())
 
 
 class TesteIntegracaoBackupQt(BaseQt):

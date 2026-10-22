@@ -16,7 +16,7 @@ from src.controllers.estoque_controller import EstoqueController
 from src.controllers.utilitario_controller import UtilitarioController
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.database import protecao
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.utilitarios import JanelaUtilitarios, MODULOS_UTILITARIOS
 from tests.test_caixa import BaseCaixa
 

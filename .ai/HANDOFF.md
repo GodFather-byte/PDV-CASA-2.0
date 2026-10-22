@@ -1,5 +1,35 @@
 # HANDOFF
 
+## Entrega atual: PDV só em Qt (Tk removido do PDV)
+
+- **O PDV tem uma única interface, Qt/PySide6.** `python -m src.app` abre o Qt; `--qt`/`--tk` deixaram de existir.
+  `src/ui/` (Tk) foi apagado (o git guarda o histórico). `--autoteste` agora confere módulos, bibliotecas
+  (Qt/SQLite/SSL) e as telas Qt + backup; `--autoteste-qt` segue como alias (o CI usa).
+- **Gerador de licenças (`licenciador/`) continua em Tkinter**, por decisão do dono. Ele levou consigo
+  `tema.py`, `icone.py` e `paleta.py` (antes em `src/ui/`); `paleta.py` perdeu as paletas do PDV.
+- Peças compartilhadas que ficavam em `src/ui/` foram movidas: `Contexto` -> `src/controllers/contexto.py`,
+  leitura de valor do pagamento -> `src/core/valor_pagamento.py`, `entregar_via` -> `comissao_controller.py`.
+- Instalador: removido o atalho "WillPDV Qt (prévia)"; o atalho normal já abre o Qt. Janelas Qt ganharam o
+  ícone `instalador/willpdv.ico` (`aplicar_icone`).
+- **Testes:** os que exercitavam telas Tk foram apagados/podados por script (classes e métodos que citavam
+  tkinter/`src.ui`/`ui_robo`); sobraram os de regra, controlador e Qt. Também saíram dois testes de `test_qt_relatorios`
+  que comparavam o Qt com o Tk. Cobertura de tela agora é só Qt. Suíte neste ambiente (Python 3.13, Qt offscreen,
+  sem tkinter): 2186 testes, 166 ignorados, só falham os 2 de `licenciador` por falta de tkinter nesse Python; no
+  Python 3.12 com tkinter + xvfb, `test_licenciador`, `test_central_ui` e `test_empacotamento` passam.
+- Docs atualizados: `AGENTS.md`, `.ai/MAPA.md`, `README.md` (partes principais), `INTERFACE_QT.md`,
+  `INSTALAR_E_TESTAR.md`. Muitos outros guias em `docs/` ainda citam "Tk/Qt" como histórico.
+
+## Pendências desta mudança
+
+- Homologar o Qt no balcão (teclado, impressora, gaveta, balança, leitor) antes de gerar o novo Setup: a rede
+  de segurança do Tk não existe mais.
+- Revisar manualmente se alguma regra só tinha teste em tela Tk (consultar `git log -- tests/` / `git show HEAD~1`).
+- Limpar menções "Tk" restantes em `docs/` e comentários do código quando convier.
+
+---
+
+Estado anterior (1.9.0), preservado abaixo:
+
 ## Entrega e decisões
 
 - PDV **1.9.0**, licenciador **1.2.0**, esquema **29**. Recursos gerais para

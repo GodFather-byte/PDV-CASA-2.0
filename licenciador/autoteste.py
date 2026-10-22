@@ -15,7 +15,7 @@ from datetime import date
 from pathlib import Path
 
 MODULOS = ["licenciador.nucleo", "licenciador.tela", "licenciador.autoteste", "src.core.licenca", "src.core.ed25519",
-           "src.core.backup_seguro", "src.core.formatacao", "src.core.erros", "src.ui.tema", "src.ui.icone",
+           "src.core.backup_seguro", "src.core.formatacao", "src.core.erros", "licenciador.tema", "licenciador.icone", "licenciador.paleta",
            "licenciador.central", "licenciador.central_bot", "licenciador.central_cli", "licenciador.central_tela"]
 
 

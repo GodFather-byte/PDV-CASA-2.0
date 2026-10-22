@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
     QLineEdit, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget,
@@ -21,7 +21,7 @@ from src.core import licenca, registro
 from src.core.erros import ErroNegocio
 from src.database.conexao import BancoDados, caminho_padrao
 from src.sync.ponte import ServicoPonte
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt import tema
 from src.ui_qt.login import JanelaLogin
 from src.versao import VERSAO
@@ -932,10 +932,24 @@ def preparar_inicio(parent=None):
         raise
 
 
+def aplicar_icone(aplicacao) -> bool:
+    """Ícone do WillPDV em todas as janelas (barra de título e de tarefas). Ícone é enfeite: nunca impede o caixa de abrir."""
+    try:
+        base = Path(getattr(sys, "_MEIPASS", "")) if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[2] / "instalador"
+        arquivo = base / "willpdv.ico"
+        if not arquivo.is_file():
+            return False
+        aplicacao.setWindowIcon(QIcon(str(arquivo)))
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def main():
     """Entrada de produção; nunca continua se a proteção inicial falhar."""
     existente = QApplication.instance()
     aplicacao = existente or QApplication(sys.argv[:1])
+    aplicar_icone(aplicacao)
     aplicacao.setQuitOnLastWindowClosed(False)
     tema.aplicar(aplicacao)
     trava = None

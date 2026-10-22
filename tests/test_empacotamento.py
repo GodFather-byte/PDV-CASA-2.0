@@ -101,7 +101,7 @@ class TesteInstaladores(unittest.TestCase):
 
     def test_icone_da_janela_so_no_windows_e_nunca_derruba(self):
         from unittest import mock
-        from src.ui import icone
+        from licenciador import icone
         self.assertTrue(icone.caminho("willpdv.ico").is_file())
         self.assertIsNone(icone.caminho("nao_existe.ico"))
         with mock.patch.object(sys, "platform", "linux"):

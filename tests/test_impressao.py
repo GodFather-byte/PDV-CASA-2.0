@@ -331,7 +331,7 @@ class TesteRoteamento(BaseCaixa):
         self.assertEqual(self.imp.fila.contagem()["pendentes"], 0)
 
     def test_gaveta_do_contexto_abre_pela_termica(self):
-        from src.ui.contexto import Contexto
+        from src.controllers.contexto import Contexto
         with impressora_falsa() as (endereco, recebido):
             self.banco.executar(
                 "UPDATE maquinas SET impressora_termica_conexao='rede', impressora_termica_endereco=?, impressora_termica_gaveta=1, gaveta=1",

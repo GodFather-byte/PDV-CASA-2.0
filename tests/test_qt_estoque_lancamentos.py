@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from PySide6.QtWidgets import QApplication, QInputDialog, QMessageBox
 
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.estoque_lancamentos import JanelaLancamentosEstoque
 from src.ui_qt.tema import aplicar
 from tests.base import BaseTeste

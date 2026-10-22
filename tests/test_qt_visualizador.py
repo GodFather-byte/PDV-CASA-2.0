@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox, QPlainTextEdit
 
 from src.core.erros import ErroPermissao
 from src.hardware.impressora_termica import ErroImpressao
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.visualizador import JanelaVisualizador
 from tests.base import BaseTeste
 

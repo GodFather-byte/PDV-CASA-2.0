@@ -8,7 +8,6 @@ from __future__ import annotations
 import gc
 import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-import tkinter as tk
 from unittest.mock import patch
 
 from src.controllers.cadastro_controller import CadastroController
@@ -16,7 +15,7 @@ from src.controllers.diagnostico_controller import DiagnosticoController, Result
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.hardware.dispositivos import Balanca, DispositivoIndisponivel, Gaveta
 from src.hardware.impressora_termica import ErroImpressao
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from tests.base import BaseTeste
 
 EAN_VALIDO = "4006381333931"
@@ -386,97 +385,6 @@ class TesteDiagnosticoQt(BaseDiagnostico):
                 for botao in (janela.btn_verificar, janela.btn_impressora, janela.btn_leitor):
                     canto = botao.mapTo(pagina, botao.rect().topRight())
                     self.assertLessEqual(canto.x(), pagina.width())
-        self.nada_acionado()
-
-
-class TesteDiagnosticoTk(BaseDiagnostico):
-    def setUp(self):
-        super().setUp()
-        try:
-            self.root = tk.Tk()
-        except tk.TclError as erro:
-            self.skipTest(f"Sem ambiente gráfico: {erro}")
-        self.root.withdraw()
-        from src.ui import tema
-        tema.aplicar_tema(self.root)
-        self.addCleanup(self.fechar)
-        simulacao = patch("src.ui.tema.confirmar", side_effect=_proibido)
-        self.confirmar = simulacao.start()
-        self.addCleanup(simulacao.stop)
-
-    def fechar(self):
-        self.root.destroy()
-        self.root = None
-        gc.collect()
-
-    def abrir(self):
-        from src.ui.diagnostico_ui import abrir
-        janela = abrir(self.root, self.ctx)
-        self.root.update()
-        return janela
-
-    def test_abrir_nao_aciona_e_sem_permissao_nao_abre(self):
-        janela = self.abrir()
-        self.assertEqual(set(janela.resultados), {"impressora", "gaveta", "balanca", "leitor"})
-        self.nada_acionado()
-        self.confirmar.assert_not_called()
-        self.revogar()
-        from src.ui.diagnostico_ui import abrir
-        with self.assertRaises(ErroPermissao):
-            abrir(self.root, self.ctx)
-
-    def test_confirmacao_padrao_nao_e_revalidacao(self):
-        self.ligar_impressora(gaveta=True)
-        janela = self.abrir()
-        self.confirmar.side_effect = None
-        self.confirmar.return_value = False
-        self.assertIsNone(janela.testar_gaveta())
-        self.assertFalse(self.confirmar.call_args.kwargs["padrao_sim"])
-        self.confirmar.side_effect = lambda *a, **k: (self.revogar(), True)[1]
-        self.assertIsNone(janela.testar_gaveta())
-        self.assertIn("disabled", janela.btn_gaveta.state())
-        self.nada_acionado()
-
-    def test_envio_e_conferencia(self):
-        self.ligar_impressora(gaveta=True)
-        self.hw["gaveta"].side_effect = None
-        janela = self.abrir()
-        self.confirmar.side_effect = [True, True]
-        r = janela.testar_gaveta()
-        self.assertEqual(r.estado, "confirmado")
-        self.hw["gaveta"].assert_called_once_with()
-        self.assertIn("Confirmado pelo operador", janela.status["gaveta"].cget("text"))
-
-    def test_leitor_enter_so_confere(self):
-        janela = self.abrir()
-        antes = self.contagens()
-        # Sem foco real do sistema no processo de teste o Tk não entrega teclas; confere-se a
-        # ligação do Enter e executa-se a mesma ação que ela dispara.
-        for tecla in ("<Return>", "<KP_Enter>"):
-            self.assertTrue(janela.campo_leitor.bind(tecla))
-        janela.campo_leitor.insert(0, EAN_VALIDO)
-        janela.conferir_leitura()
-        self.root.update()
-        self.assertEqual(janela.resultados["leitor"].estado, "lido")
-        self.assertIn("GIN", janela.status["leitor"].cget("text"))
-        self.assertEqual(antes, self.contagens())
-        self.confirmar.assert_not_called()
-        self.nada_acionado()
-
-    def test_cabe_no_tamanho_minimo(self):
-        janela = self.abrir()
-        self.assertLessEqual(janela.winfo_width(), max(janela.winfo_screenwidth(), 560))
-        janela.deiconify()
-        janela.geometry("560x420")
-        self.root.update()
-        largura = janela.winfo_width()
-        self.assertLessEqual(largura, 640)
-        corpo = janela.rolavel.corpo
-        for widget in (janela.btn_verificar, janela.btn_impressora, janela.campo_leitor, janela.btn_leitor):
-            direita = widget.winfo_rootx() + widget.winfo_width()
-            self.assertLessEqual(direita, corpo.winfo_rootx() + corpo.winfo_width(), widget)
-        self.assertLessEqual(janela.btn_atualizar.winfo_rootx() + janela.btn_atualizar.winfo_width(),
-                             janela.winfo_rootx() + largura)
         self.nada_acionado()
 
 

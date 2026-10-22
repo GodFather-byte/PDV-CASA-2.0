@@ -1,8 +1,8 @@
-# Interface Qt — piloto opt-in
+# Interface Qt
 
-Esta migração mantém o Qt opt-in durante a homologação. O caminho Tk
-permanece disponível durante a homologação. Nunca mantenha dois programas abertos
-sobre o mesmo banco. Faça backup antes de homologar em uma cópia dos dados.
+O Qt (PySide6) é a **única interface do PDV**; o código Tk do PDV foi removido (só o gerador de
+licenças, `licenciador/`, segue em Tkinter). As menções ao "Tk" abaixo descrevem de onde veio cada
+comportamento. Nunca mantenha dois programas abertos sobre o mesmo banco. Faça backup antes de homologar em uma cópia dos dados.
 
 ## Confiabilidade e operação na 1.9
 
@@ -30,11 +30,8 @@ certificam todos os detalhes ergonômicos nem equipamentos físicos.
 
 Use Python 3.10+ e instale as dependências do projeto, incluindo
 `PySide6-Essentials>=6.7,<7` (Qt Core/Gui/Widgets; não exige WebEngine).
-Depois da integração do seletor no ponto de entrada:
-
 ```text
-python -m src.app --qt
-python -m src.app --tk
+python -m src.app
 ```
 
 Também existe uma entrada direta do piloto, com as mesmas proteções:
@@ -279,16 +276,14 @@ sem segurar o processo. Não se usa `terminate()` inseguro.
 ## Limites assumidos
 
 A cobertura é descrita acima; isso não certifica paridade de todos os detalhes
-ergonômicos nem a homologação operacional. Tk permanece disponível por `--tk`;
-encerre o processo antes de trocar de interface.
+ergonômicos nem a homologação operacional. Não há mais interface alternativa.
 
 Os fluxos de caixa listados acima estão disponíveis no piloto; isso não substitui
 homologação em cópia do banco. Impressão, gaveta e balança precisam de homologação
 com os periféricos reais. Cancelar a entrada manual de peso não simula uma leitura;
 sem configuração/driver/dispositivo, a interface informa a limitação.
 
-Não há sincronização contínua de vendas pelo painel Qt. Configurações compartilham
-a mesma base do Tk; não abra os dois sobre ela ao mesmo tempo. Status de backup/licença
+Não há sincronização contínua de vendas pelo painel Qt. Não abra duas instâncias sobre o mesmo banco. Status de backup/licença
 não substitui os testes de recuperação e de periféricos reais.
 
 ## Testes

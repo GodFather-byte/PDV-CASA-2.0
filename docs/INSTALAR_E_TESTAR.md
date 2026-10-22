@@ -60,21 +60,16 @@ atalho na Área de Trabalho e no Menu Iniciar.
 
 ## 4. Primeira abertura: banco e licença
 
-### Interface Qt em migração
+### Interface Qt
 
-O atalho normal continua abrindo a interface Tk completa. O Menu Iniciar inclui
-**WillPDV Qt (prévia)**, que abre a nova interface com `--qt`.
-Não misture as duas interfaces ao mesmo tempo: elas usam o mesmo banco e a mesma
-trava de instância. `--tk` seleciona explicitamente a interface anterior.
-
-A prévia não significa que todas as telas foram migradas. Confira o escopo e
-o roteiro de homologação em [INTERFACE_QT.md](INTERFACE_QT.md) antes de usá-la
-numa noite de operação. Não há conversão para banco remoto: o caixa continua
+O PDV tem uma única interface, em Qt (PySide6); o Tk foi removido do PDV. O atalho
+do Menu Iniciar abre o programa normalmente. Confira o escopo e o roteiro de
+homologação em [INTERFACE_QT.md](INTERFACE_QT.md) antes de usá-lo numa noite de operação. Não há conversão para banco remoto: o caixa continua
 SQLite local e a nuvem/licenças permanece separada.
 
 Ao executar pelo código-fonte, instale `pip install -r requirements.txt`;
 o instalador já leva Qt Widgets e as bibliotecas do backup seguro.
-As bibliotecas Qt são maiores que Tk; o tamanho do pacote aumenta.
+As bibliotecas Qt aumentam o tamanho do pacote.
 As licenças de terceiros ficam na pasta `licencas` do programa.
 
 O comando `WillPDV.exe --autoteste-qt caminho-do-relatorio.txt` verifica a

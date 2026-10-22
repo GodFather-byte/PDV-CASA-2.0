@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QApplication
 
 from src.core.erros import ErroPermissao
 from src.sync import atualizacoes
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.atualizacoes import JanelaAtualizacoes
 from tests.base import BaseTeste
 

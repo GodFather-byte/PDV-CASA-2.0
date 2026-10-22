@@ -4,7 +4,7 @@ Fontes: **MANUAL ADM LOCAL** (administração do Willyan), **MANUAL CAIXA** (ope
 venda) e o manual da **versão web**. Este documento liga cada seção dos manuais ao código,
 registra as decisões tomadas onde o manual não definia a regra e lista o que **não** foi feito.
 
-Convenção: `C` = controlador (regra, em `src/controllers/`), `UI` = tela (em `src/ui/`), `T` = teste.
+Convenção: `C` = controlador (regra, em `src/controllers/`), `UI` = tela (em `src/ui_qt/`), `T` = teste.
 
 ## 1. Mapa dos manuais
 

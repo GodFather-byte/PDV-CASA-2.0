@@ -546,7 +546,7 @@ except ImportError:                                    # pragma: no cover - Qt o
 class TesteTelaQt(BasePonte):
     def setUp(self):
         super().setUp()
-        from src.ui.contexto import Contexto
+        from src.controllers.contexto import Contexto
         from src.ui_qt.configuracoes import SECOES, JanelaConfiguracoes
         self.app = QApplication.instance() or QApplication([])
         self.ctx = Contexto(self.banco)
@@ -597,56 +597,6 @@ class TesteTelaQt(BasePonte):
         self.assertFalse(self.janela.salvar())
         self.assertIn("token do caixa", self.janela.mensagem.text())
         self.assertFalse(ponte.ativa(self.banco))
-
-
-class TesteTelaTk(BasePonte):
-    def setUp(self):
-        super().setUp()
-        import tkinter as tk
-        try:
-            self.root = tk.Tk()
-        except tk.TclError as e:                        # pragma: no cover - sem tela
-            self.skipTest(f"Tk indisponível: {e}")
-        self.root.withdraw()
-        self.addCleanup(self.root.destroy)
-        from src.ui.contexto import Contexto
-        self.ctx = Contexto(self.banco)
-        self.ctx.operador = self.ctx.acesso.operador(self.operador_adm())
-
-    def test_token_em_campo_senha_vazio_mantem_e_copiar_id(self):
-        from src.ui import config_ui, tema
-        self.banco.cfg_set(ponte.CHAVE_ATIVA, "N")
-        j = config_ui.abrir(self.root, self.ctx, "configuracoes")
-        self.assertEqual(j.vars[ponte.CHAVE_TOKEN].get(), "")
-        self.assertNotIn(ponte.CHAVE_TOKEN, j._coletar())
-        with mock.patch.object(tema, "mensagem"):
-            j.gravar()
-        self.assertEqual(self.banco.cfg(ponte.CHAVE_TOKEN), TOKEN)
-        j.vars[ponte.CHAVE_TOKEN].set("outro-token")
-        with mock.patch.object(tema, "mensagem"):
-            j.gravar()
-        self.assertEqual(self.banco.cfg(ponte.CHAVE_TOKEN), "outro-token")
-        self.assertEqual(j.vars[ponte.CHAVE_TOKEN].get(), "")
-        with mock.patch.object(tema, "escolher", return_value="copiar"), mock.patch.object(tema, "mensagem") as msg:
-            config_ui.central_fornecedor(j, self.ctx)
-        self.assertEqual(j.clipboard_get(), CAIXA)
-        self.assertIn(CAIXA, msg.call_args.args[1])
-        with mock.patch.object(tema, "escolher", return_value="apagar"), mock.patch.object(tema, "confirmar",
-                                                                                         return_value=True), \
-                mock.patch.object(tema, "mensagem"):
-            config_ui.central_fornecedor(j, self.ctx)
-        self.assertEqual(self.banco.cfg(ponte.CHAVE_TOKEN), "")
-        self.banco.cfg_set(ponte.CHAVE_TOKEN, TOKEN)
-        with mock.patch.object(tema, "escolher", return_value="novo"), \
-                mock.patch.object(tema, "confirmar", return_value=True) as conf, mock.patch.object(tema, "mensagem"):
-            config_ui.central_fornecedor(j, self.ctx)
-        self.assertIn("revogado", conf.call_args.args[1])
-        novo = self.banco.cfg(ponte.CHAVE_CAIXA_ID)
-        self.assertNotEqual(novo, CAIXA)
-        self.assertEqual((self.banco.cfg(ponte.CHAVE_TOKEN), j.valor(ponte.CHAVE_CAIXA_ID), j.valor(ponte.CHAVE_ATIVA)),
-                         ("", novo, "N"))
-        self.assertEqual(j.clipboard_get(), novo)
-        j.destroy()
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ from src.controllers.turno_controller import TurnoController
 from src.core.erros import ErroNegocio, ErroPermissao, ErroValidacao
 from src.database import esquema
 from src.database.conexao import BancoDados
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from tests.base import BaseTeste
 
 

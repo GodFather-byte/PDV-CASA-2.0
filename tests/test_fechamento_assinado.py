@@ -16,9 +16,6 @@ from src.controllers.impressao_controller import LIMITE_MOVIMENTOS, _ESTILOS, Im
 from src.core import formatacao as fmt
 from src.hardware.impressora_termica import TAMANHO_ALTO, TAMANHO_NORMAL, texto_para_escpos
 from tests.test_caixa import BaseCaixa
-from tests.test_fechamento_turno import rotulos
-from tests.test_ui import BaseUI
-from tests.ui_robo import clicar, entradas
 
 ESPERADO = 10000 + 880            # fundo de caixa + uma venda de R$ 8,80 em dinheiro
 
@@ -252,111 +249,6 @@ class TesteImpressaoDaVia(BaseFechamento):
         cid = self.com.lancar(180, 2500, self.turno, self.adm)
         self.assertIsNone(self.imp.imprimir_via_comissao(cid, "ADM"))
         self.assertEqual(list(Path(self.pasta).iterdir()), [])
-
-
-class TesteTrocaDeTurnoImprimeSozinha(BaseUI):
-    def setUp(self):
-        super().setUp()
-        self.abrir_turno()
-        self.painel = []
-
-    def termica(self):
-        pasta = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, pasta, True)
-        saida = os.path.join(pasta, "saida.prn")
-        self.ctx.config.salvar_maquina({"modo_impressao": "termica", "impressora_termica_conexao": "arquivo",
-                                        "impressora_termica_endereco": saida})
-        return Path(saida)
-
-    def trocar(self, valor="100,00"):
-        from src.ui import caixa_dialogos
-
-        def dialogo(w):
-            campos = entradas(w)
-            if w.title() == "Conferir maquininha":
-                clicar(w, "Continuar")
-            elif w.title() == "Atenção":
-                self.erros.append(rotulos(w)); clicar(w, "OK")
-            elif campos:
-                campos[0].delete(0, "end"); campos[0].insert(0, valor); clicar(w, "OK")
-            else:
-                clicar(w, "Sim")
-        self.erros = []
-        self.robo.quando("Dialogo", dialogo, vezes=7)
-        self.robo.quando("PainelFechamento", lambda w: (self.painel.append(rotulos(w)), w.destroy()))
-        declarados = {r["tipo_id"]: fmt.para_centavos(valor) if r["dinheiro"] else 0
-                      for r in self.ctx.turnos.formas_conferencia(
-                          self.ctx.turnos.atual()["id"], self.ctx.operador_id)}
-        with mock.patch("src.ui.fechamento_ui.coletar", return_value={
-                "informados_por_forma": declarados,
-                "justificativa": "Diferença constatada na contagem física" if valor != "100,00" else ""}):
-            ok = caixa_dialogos.trocar_turno(self.root, self.ctx)
-        self.assertTrue(ok)
-        self.sem_travar()
-
-    def test_a_termica_recebe_o_fechamento_assinavel_e_o_painel_avisa(self):
-        saida = self.termica()
-        self.trocar()
-        self.ctx.impressao.fila.processar()
-        dados = saida.read_bytes()
-        self.assertEqual(dados.count(b"FECHAMENTO DE TURNO"), 1)
-        for trecho in ("Caixa responsável: ADM", "Gerente / quem recebe o caixa", "CAIXA CONFERIDO"):
-            self.assertIn(trecho.encode("cp850"), dados)
-        self.assertIn("Fechamento enviado à impressora (1 via)", self.painel[0])
-        self.assertEqual(self.banco.valor("SELECT status FROM turnos"), "fechado")
-
-    def test_falta_de_dinheiro_sai_escrita_no_papel(self):
-        saida = self.termica()
-        self.trocar("90,00")
-        self.ctx.impressao.fila.processar()
-        self.assertIn(b"FALTOU R$ 10,00", saida.read_bytes())
-
-    def test_vias_do_fechamento_vem_da_configuracao(self):
-        saida = self.termica()
-        self.banco.cfg_set("vias_fechamento", "2")
-        self.trocar()
-        self.ctx.impressao.fila.processar()
-        self.assertEqual(saida.read_bytes().count(b"FECHAMENTO DE TURNO"), 2)
-        self.assertIn("(2 vias)", self.painel[0])
-
-    def test_vias_fora_do_intervalo_ficam_entre_1_e_3(self):
-        saida = self.termica()
-        self.banco.cfg_set("vias_fechamento", "9")                                 # valor inválido gravado direto no banco
-        self.trocar()
-        self.ctx.impressao.fila.processar()
-        self.assertEqual(saida.read_bytes().count(b"FECHAMENTO DE TURNO"), 3)
-
-    def test_desligado_nas_configuracoes_nao_imprime(self):
-        saida = self.termica()
-        self.banco.cfg_set("imprimir_fechamento_ao_trocar", "N")
-        self.trocar()
-        self.ctx.impressao.fila.processar()
-        self.assertFalse(saida.exists())
-        self.assertNotIn("Fechamento enviado", self.painel[0])
-
-    def test_sem_impressora_no_modo_tela_nao_abre_nada_alem_do_painel(self):
-        with mock.patch.object(type(self.ctx.impressao), "enviar") as enviar:
-            self.trocar()
-        enviar.assert_not_called()
-        self.assertNotIn("Fechamento enviado", self.painel[0])
-
-    def test_impressora_nao_configurada_avisa_e_o_turno_fecha_do_mesmo_jeito(self):
-        self.ctx.config.salvar_maquina({"modo_impressao": "termica", "impressora_termica_conexao": "nenhuma"})
-        self.trocar()
-        self.assertEqual(len(self.erros), 1, self.erros)
-        self.assertIn("O fechamento não foi impresso", self.erros[0])
-        self.assertIn("Nenhuma impressora térmica configurada", self.erros[0])
-        self.assertEqual(self.banco.valor("SELECT status FROM turnos"), "fechado")
-        self.assertNotIn("Fechamento enviado", self.painel[0])
-
-    def test_o_botao_imprimir_do_painel_continua_valendo(self):
-        from src.ui.caixa_dialogos import PainelFechamento
-        res = self.ctx.turnos.fechar(self.ctx.turnos.atual()["id"], self.ctx.operador_id, 10000)
-        with mock.patch("src.ui.caixa_dialogos.enviar_ou_mostrar") as mostrar:
-            self.robo.quando("PainelFechamento", lambda w: (w.imprimir(), w.destroy()))
-            PainelFechamento(self.root, self.ctx, res)
-        self.assertEqual(mostrar.call_args.kwargs["tipo"], "fechamento")
-        self.assertIn("Caixa responsável: ADM", mostrar.call_args.args[3])
 
 
 if __name__ == "__main__":

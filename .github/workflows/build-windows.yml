@@ -73,7 +73,7 @@ jobs:
           if (-not $inst) { throw "Faltou o instalador em instalador\saida" }
           $inst | Format-Table Name, Length
 
-      # O .exe nunca tinha sido gerado: o autoteste abre o programa empacotado (módulos, SQLite, Tk, SSL, menu e telas) e
+      # O .exe nunca tinha sido gerado: o autoteste abre o programa empacotado (módulos, SQLite, Qt, SSL, menu e telas) e
       # confere a conexão HTTPS com o Telegram (token falso: basta o Telegram responder "não autorizado").
       - name: Autoteste do programa empacotado
         run: |

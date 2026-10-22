@@ -13,7 +13,6 @@ from src.core.erros import ErroNegocio, ErroValidacao
 from src.core.posicao import interpretar, nome, parece_comanda, rotulo
 from src.database.conexao import BancoDados
 from src.database.esquema import VERSAO_ESQUEMA
-from src.ui.painel_mesas import montar_tiles
 from tests.test_caixa import BaseCaixa
 
 
@@ -239,29 +238,6 @@ class TesteIconesDoRodape(BaseCaixa):
         super().setUp()
         self.banco.cfg_set("posicao_padrao", "mesa")        # notação clássica destes testes: 5 é a mesa e C2 a comanda
 
-    def test_estados_e_ordem_dos_icones(self):
-        self.vender((self.skol, 1), mesa=5)                                   # fica parada: passam 40 min
-        c2, _ = self.caixa.abrir_mesa(2, comanda=True)
-        self.caixa.adicionar_item(c2, self.agua, 1)
-        self.caixa.enviar_conta(c2)                                           # conta enviada (não é "parada")
-        self.avancar(minutes=40)
-        c3, _ = self.caixa.abrir_mesa(3, comanda=True)
-        self.caixa.adicionar_item(c3, self.skol, 2)
-        tiles = montar_tiles(self.caixa.mesas(), self.caixa.balcao_aberto())
-        self.assertEqual([(t["chave"], t["tipo"], t["estado"], t["total"]) for t in tiles], [
-            ("0", "balcao", "balcao", ""), ("5", "mesa", "parada", "8,80"),
-            ("C2", "comanda", "conta", "3,85"), ("C3", "comanda", "consumindo", "17,60")])
-        self.assertEqual(tiles[1]["minutos"], 40)
-
-    def test_balcao_em_andamento_mostra_o_total(self):
-        self.assertIsNone(self.caixa.balcao_aberto())
-        self.assertEqual(montar_tiles([], None), [{"chave": "0", "rotulo": "Balcão", "tipo": "balcao",
-                                                   "estado": "balcao", "total": "", "minutos": 0}])
-        vid = self.vender((self.skol, 2))
-        self.assertEqual(self.caixa.balcao_aberto()["id"], vid)
-        self.assertEqual(montar_tiles([], self.caixa.balcao_aberto())[0]["total"], "16,00")
-        self.assertEqual(self.caixa.abrir_balcao(), vid)                       # retomar a venda é o mesmo que consultá-la
-
 
 class TesteConfigComandas(BaseCaixa):
     def test_configuracao_de_comandas(self):
@@ -432,16 +408,6 @@ class TesteComandaPorNumero(BaseCaixa):
             self.caixa.fechar(vid, garcom_id=self.adm)
         r = RelatorioController(self.banco).comandas({"de": fmt.hoje(), "ate": fmt.hoje()})
         self.assertEqual([(l[0], l[-1]) for l in r.linhas], [("M3", "8,80"), ("2", "3,85")])
-
-    def test_chave_do_icone_volta_igual_quando_digitada(self):
-        self.comanda(123, (self.skol, 1))
-        self.comanda(2, (self.agua, 1))
-        self.vender((self.skol, 1), mesa=5)
-        tiles = montar_tiles(self.caixa.mesas(), None)
-        self.assertEqual([t["chave"] for t in tiles], ["0", "M5", "2", "123"])
-        for t in tiles[1:]:
-            comanda, numero = self.caixa.ler_posicao(t["chave"])
-            self.assertEqual((comanda, numero), (t["tipo"] == "comanda", int(t["chave"].lstrip("M"))), t["chave"])
 
 
 class TesteConfigNotacao(BaseCaixa):

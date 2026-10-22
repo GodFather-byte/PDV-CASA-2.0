@@ -16,7 +16,7 @@ from tests.base import BaseTeste
 
 if QApplication is not None:
     from src.controllers.cadastro_controller import CadastroController
-    from src.ui.contexto import Contexto
+    from src.controllers.contexto import Contexto
     from src.ui_qt.caixa import (JanelaCaixa, PAGINA_ABERTURA, PAGINA_FECHAMENTO, PAGINA_VENDA, _fmt_qtd,
                                  ler_dinheiro)
 

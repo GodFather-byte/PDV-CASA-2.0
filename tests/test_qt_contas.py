@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QApplication, QAbstractItemView, QMessageBox
 
 from src.controllers.contas_controller import ContasController
 from src.core.erros import ErroNegocio, ErroPermissao
-from src.ui.contexto import Contexto
+from src.controllers.contexto import Contexto
 from src.ui_qt.contas import JanelaContas
 from tests.base import BaseTeste
 

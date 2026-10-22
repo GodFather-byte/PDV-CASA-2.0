@@ -1,6 +1,6 @@
 """Proteção do banco local: checagem de integridade, backups válidos e restauração.
 
-Roda ANTES de o banco ser aberto pelo programa (ver src/ui/inicializacao.py). Nada aqui depende de Tkinter.
+Roda ANTES de o banco ser aberto pelo programa (ver preparar_inicio em src/ui_qt/app.py). Nada aqui depende de interface gráfica.
 """
 from __future__ import annotations
 

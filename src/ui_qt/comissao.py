@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QDial
 from src.controllers.comissao_controller import LIMITE_CONFIRMAR_CENT
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
-from src.ui.comissao_ui import entregar_via
+from src.controllers.comissao_controller import entregar_via
 
 VERMELHO, MUDO = "#b32020", "#5b6573"
 

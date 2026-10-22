@@ -31,7 +31,7 @@ def gerar_executavel() -> None:
                "--windowed",                                # sem a janela preta do CMD atrás do caixa
                "--name", "WillPDV", "--paths", str(RAIZ)]   # a raiz no caminho: os imports são "from src..."
     if ICONE.exists():
-        # --icon: ícone do .exe; --add-data: o mesmo arquivo dentro do pacote, para as janelas do programa (src/ui/icone.py)
+        # --icon: ícone do .exe; --add-data: o mesmo arquivo dentro do pacote, para as janelas do programa (janelas do programa)
         comando += ["--icon", str(ICONE), "--add-data", f"{ICONE}{os.pathsep}."]
     comando.append(str(RAIZ / "src" / "app.py"))
     subprocess.run(comando, check=True, cwd=RAIZ)

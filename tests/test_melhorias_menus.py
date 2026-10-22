@@ -5,7 +5,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from unittest.mock import patch
 
 from tests.test_qt_app import BaseQt
-from tests.test_ui import BaseUI
 
 
 class TesteMenusMelhoriasQt(BaseQt):
@@ -95,31 +94,3 @@ class TesteMenusMelhoriasQt(BaseQt):
         self.assertIsNone(janela.abrir_cozinha())
 
 
-class TesteMenusMelhoriasTk(BaseUI):
-    def principal(self):
-        from src.ui.app import App
-        app = object.__new__(App)
-        app.root, app.ctx, app.banco = self.root, self.ctx, self.banco
-        app.janelas = {}
-        return app
-
-    def test_novos_paineis_abrem_pelas_acoes_do_menu(self):
-        app = self.principal()
-        for nome in ("retornaveis", "promocoes", "alertas", "devolucoes", "diagnostico", "verificar_backup"):
-            with self.subTest(painel=nome):
-                painel = getattr(app, "abrir_" + nome)()
-                self.assertIsNotNone(painel)
-                self.assertIs(painel, getattr(app, "abrir_" + nome)())
-                painel.destroy()
-
-    def test_reabertura_revalida_operador_inativo(self):
-        from src.ui import tema
-        app = self.principal()
-        paineis = [getattr(app, "abrir_" + nome)()
-                   for nome in ("retornaveis", "promocoes", "alertas", "devolucoes", "diagnostico", "verificar_backup")]
-        self.banco.executar("UPDATE operadores SET ativo = 0 WHERE id = ?", (self.ctx.operador_id,))
-        with patch.object(tema, "erro"):
-            for nome in ("retornaveis", "promocoes", "alertas", "devolucoes", "diagnostico", "verificar_backup"):
-                self.assertIsNone(getattr(app, "abrir_" + nome)())
-        for painel in paineis:
-            painel.destroy()

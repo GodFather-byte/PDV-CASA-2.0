@@ -196,7 +196,7 @@ class TesteCadastroAdega(BaseTeste):
 try:
     from PySide6.QtCore import QCoreApplication, QEvent
     from PySide6.QtWidgets import QApplication, QDialog, QPushButton, QTabWidget
-    from src.ui.contexto import Contexto
+    from src.controllers.contexto import Contexto
     from src.ui_qt.cadastros import FormularioCadastro, FormularioEmbalagem, JanelaCadastro
 except ImportError:
     QApplication = None
