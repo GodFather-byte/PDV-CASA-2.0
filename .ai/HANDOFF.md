@@ -14,6 +14,22 @@
 - Devoluções/trocas, fechamento explicativo, homologação isolada, backup verificável, diagnóstico de hardware e
   Telegram agendado (23h): ver `docs/MELHORIAS_1_9.md`, `docs/DEVOLUCOES.md`, `docs/FECHAMENTO_EXPLICATIVO.md`.
 
+## Painel de cartões da boate (restaurado no Qt)
+
+- Ao remover o Tk, o caixa Qt perdeu os cartões coloridos de mesas/comandas (ficou só uma lista). Foram
+  portados de `src/ui/painel_mesas.py` (git: commit `7e26f04`): modelo em `src/controllers/mesas_modelo.py`
+  e painel em `src/ui_qt/painel_mesas.py` (cartões, faixa do balcão, pílulas de situação, selo da garota,
+  busca, abas, setas/Enter/T/dígitos). Painel escuro no modo escuro e claro no claro. A boate já é o perfil de
+  fábrica (`PerfilController.PADRAO`). Colunas por largura da janela (1/2/3).
+- **Visual noturno da boate:** o caixa Qt era meio claro/meio escuro (rótulos quase invisíveis). Agora usa
+  `ESTILO_NOITE` (azul-marinho, destaques neon) no modo escuro e o estilo claro no modo claro
+  (`JanelaCaixa._aplicar_estilo`). O menu principal ganhou a faixa "noite ao vivo" (posições abertas, aguardando
+  acerto, em aberto na casa, comissões a pagar) para casas com mesas (`JanelaPrincipal._atualizar_noite`).
+- **Claro/escuro escolhido pelo cliente:** botão "Mudar para o modo claro/escuro" no topo do menu
+  (`JanelaPrincipal.alternar_tema`); grava `tema_visual`, aplica no programa todo e refaz o caixa aberto na hora.
+  A mesma opção continua em Configurações > Aparência.
+- Não portado ainda: PgUp/PgDn para navegar entre comandas; a opção `painel_mesas_fixo` (o Qt sempre mostra o painel).
+
 ## Testes
 
 - Os testes de telas Tk foram removidos por script (classes/métodos que citavam tkinter, `src.ui`, `ui_robo`).

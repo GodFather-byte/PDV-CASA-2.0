@@ -32,6 +32,9 @@ QTabWidget::pane { border: 1px solid #324158; }
 QTabBar::tab { background: #24364d; padding: 10px; }
 QTabBar::tab:selected { background: #187e65; }
 QScrollArea { border: 0; }
+QFrame#kpi { background: #1b2739; border: 1px solid #32b38e; border-radius: 12px; }
+QLabel#kpi_valor { font-size: 30px; font-weight: 800; color: #5ee2bb; }
+QLabel#kpi_alerta { font-size: 30px; font-weight: 800; color: #ffd28a; }
 """
 
 

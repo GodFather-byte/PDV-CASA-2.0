@@ -5,6 +5,7 @@ import os
 import tempfile
 import unittest
 
+from src.controllers.mesas_modelo import montar_tiles
 from src.controllers.config_controller import ConfigController
 from src.controllers.impressao_controller import ImpressaoController
 from src.controllers.relatorio_controller import RelatorioController
@@ -237,6 +238,37 @@ class TesteIconesDoRodape(BaseCaixa):
     def setUp(self):
         super().setUp()
         self.banco.cfg_set("posicao_padrao", "mesa")        # notação clássica destes testes: 5 é a mesa e C2 a comanda
+
+
+class TesteIconesDoRodape(BaseCaixa):
+    """O modelo dos ícones do caixa (sem tela): balcão primeiro, depois mesas e comandas, cada uma no seu estado."""
+
+    def setUp(self):
+        super().setUp()
+        self.banco.cfg_set("posicao_padrao", "mesa")        # notação clássica destes testes: 5 é a mesa e C2 a comanda
+
+    def test_estados_e_ordem_dos_icones(self):
+        self.vender((self.skol, 1), mesa=5)                                   # fica parada: passam 40 min
+        c2, _ = self.caixa.abrir_mesa(2, comanda=True)
+        self.caixa.adicionar_item(c2, self.agua, 1)
+        self.caixa.enviar_conta(c2)                                           # conta enviada (não é "parada")
+        self.avancar(minutes=40)
+        c3, _ = self.caixa.abrir_mesa(3, comanda=True)
+        self.caixa.adicionar_item(c3, self.skol, 2)
+        tiles = montar_tiles(self.caixa.mesas(), self.caixa.balcao_aberto())
+        self.assertEqual([(t["chave"], t["tipo"], t["estado"], t["total"]) for t in tiles], [
+            ("0", "balcao", "balcao", ""), ("5", "mesa", "parada", "8,80"),
+            ("C2", "comanda", "conta", "3,85"), ("C3", "comanda", "consumindo", "17,60")])
+        self.assertEqual(tiles[1]["minutos"], 40)
+
+    def test_balcao_em_andamento_mostra_o_total(self):
+        self.assertIsNone(self.caixa.balcao_aberto())
+        self.assertEqual(montar_tiles([], None), [{"chave": "0", "rotulo": "Balcão", "tipo": "balcao",
+                                                   "estado": "balcao", "total": "", "minutos": 0}])
+        vid = self.vender((self.skol, 2))
+        self.assertEqual(self.caixa.balcao_aberto()["id"], vid)
+        self.assertEqual(montar_tiles([], self.caixa.balcao_aberto())[0]["total"], "16,00")
+        self.assertEqual(self.caixa.abrir_balcao(), vid)                       # retomar a venda é o mesmo que consultá-la
 
 
 class TesteConfigComandas(BaseCaixa):

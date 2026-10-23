@@ -356,10 +356,10 @@ class TestVendaQt(BaseCaixaQt):
         j.btn_chamar.click()
         comanda_id = j.venda_id
         self.assertEqual(self.ctx.caixa.obter(comanda_id)["comanda"], 1)
-        j.btn_balcao.click()
+        j.ir_para_balcao()
         self.assertIsNone(j.venda_id)
         self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (comanda_id,)))
-        self.assertEqual(j.lista_mesas.count(), 1)
+        self.assertEqual([t["chave"] for t in j.cartoes.tiles()], ["0", "M5"])
         self.lancar(j, "20")                             # balcão com itens não deixa chamar mesa
         balcao = j.venda_id
         j.ent_pos.setText("M5")
@@ -368,14 +368,14 @@ class TestVendaQt(BaseCaixaQt):
         self.assertIn("Conclua", j.dialogos.avisos[-1])
         j.dialogos.confirmacoes = [True]
         j.btn_cancelar_venda.click()
-        j.lista_mesas.itemActivated.emit(j.lista_mesas.item(0))
+        j.cartoes.escolhida.emit("M5")
         self.assertEqual(j.venda_id, mesa["id"])
         j.btn_receber.click()                            # o valor sugerido já inclui o serviço
         j.btn_fechar_venda.click()
         v = self.ctx.caixa.obter(mesa["id"])
         self.assertEqual(v["status"], "fechada")
         self.assertEqual(v["total_cent"], 880)
-        self.assertEqual(j.lista_mesas.count(), 0)
+        self.assertEqual([t["chave"] for t in j.cartoes.tiles()], ["0"])
 
     def test_mesa_com_garcom_obrigatorio(self):
         self.banco.cfg_set("controle_garcom", "S")
