@@ -144,6 +144,71 @@ class TesteCartoesNoCaixa(BaseCaixaQt if BaseCaixaQt else object):
 
 
 @unittest.skipIf(BaseCaixaQt is None, "PySide6 indisponível")
+class TesteEscVoltaAoMarcarComanda(BaseCaixaQt if BaseCaixaQt else object):
+    def setUp(self):
+        super().setUp()
+        self.skol = self.novo_produto("SKOL", 800, codigo="10", estoque=True, qt=10)
+        self.abrir_turno()
+        self.j = self.janela()
+        self.j.ent_codigo.setFocus()
+
+    def esc(self):
+        self.j.esc_caixa()
+        self.aplicacao.processEvents()
+
+    def test_esc_sem_nada_pendente_volta_ao_campo_da_posicao_com_os_cartoes_atualizados(self):
+        vid, _ = self.ctx.caixa.abrir_mesa(5, comanda=False)
+        self.ctx.caixa.adicionar_item(vid, self.skol, 1)
+        self.esc()
+        self.assertIs(self.j.focusWidget(), self.j.ent_pos)
+        self.assertEqual([t["chave"] for t in self.j.cartoes.tiles()], ["0", "M5"])      # cartões recarregados
+
+    def test_esc_primeiro_limpa_o_digitado_e_so_o_segundo_volta_a_posicao(self):
+        self.j.ent_codigo.setText("10")
+        self.esc()
+        self.assertEqual(self.j.ent_codigo.text(), "")
+        self.assertIs(self.j.focusWidget(), self.j.ent_codigo)
+        self.esc()
+        self.assertIs(self.j.focusWidget(), self.j.ent_pos)
+
+    def test_esc_no_campo_da_posicao_volta_ao_balcao_e_a_mesa_continua_aberta(self):
+        self.j.ent_pos.setText("M5")
+        self.j.btn_chamar.click()
+        self.j.ent_codigo.setText("10")
+        self.j.btn_lancar.click()
+        mesa_id = self.j.venda_id
+        self.esc()                                   # nada pendente: vai marcar comanda
+        self.assertIs(self.j.focusWidget(), self.j.ent_pos)
+        self.esc()                                   # no campo da posição: balcão
+        self.assertIsNone(self.j.venda_id)
+        self.assertEqual(self.ctx.caixa.obter(mesa_id)["status"], "aberta")
+        self.assertIn("continua aberta", self.j.lbl_status.text())
+
+    def test_esc_nos_cartoes_volta_ao_campo_da_posicao(self):
+        self.j.cartoes.focar("0")
+        self.assertIs(self.j.focusWidget(), self.j.cartoes.grade)
+        self.esc()
+        self.assertIs(self.j.focusWidget(), self.j.ent_pos)
+
+    def test_esc_continua_descartando_a_comissao_digitada(self):
+        self.j.modo_comissao = True
+        self.esc()
+        self.assertFalse(self.j.modo_comissao)
+
+    def test_tecla_esc_de_verdade_passa_pelo_atalho_da_janela(self):
+        self.j.activateWindow()
+        self.j.ent_codigo.setFocus()
+        self.aplicacao.processEvents()
+        QTest.keyClick(self.j.ent_codigo, Qt.Key_Escape)
+        self.aplicacao.processEvents()
+        self.assertIs(self.j.focusWidget(), self.j.ent_pos)
+
+    def test_f4_faz_o_mesmo_que_esc_sem_pendencia(self):
+        self.j.foco_posicao()
+        self.assertIs(self.j.focusWidget(), self.j.ent_pos)
+
+
+@unittest.skipIf(BaseCaixaQt is None, "PySide6 indisponível")
 class TesteVisualNoiteDaBoate(BaseCaixaQt if BaseCaixaQt else object):
     def test_caixa_usa_o_estilo_noturno_no_modo_escuro_e_o_claro_no_claro(self):
         j = self.janela()

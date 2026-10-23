@@ -281,7 +281,7 @@ class JanelaCaixa(QMainWindow):
         atalho = QShortcut(QKeySequence("F12"), self)
         atalho.activated.connect(self.fechar_venda)
         esc = QShortcut(QKeySequence(Qt.Key_Escape), self)
-        esc.activated.connect(self.cancelar_modo_comissao)
+        esc.activated.connect(self.esc_caixa)
         for tecla, acao in (("F4", self.foco_posicao), ("F5", self.caderneta), ("F6", self.entrega),
                             ("F8", self.pre_conta), ("F9", self.repique),
                             ("F10", self.transferir_mesa), ("F2", self.balanca), ("F11", self.gaveta),
@@ -1862,8 +1862,44 @@ class JanelaCaixa(QMainWindow):
         self.chamar_posicao()
 
     def foco_posicao(self) -> None:
+        """F4 (ou Esc, sem nada pendente): volta ao 'marcar comanda'. Os cartões ficam à vista e o campo da posição, pronto."""
         self._limpar_entrada()
-        (self.ent_pos if self.com_mesas else self.ent_codigo).setFocus()
+        if not self.com_mesas:
+            self.ent_codigo.setFocus()
+            return
+        self.carregar_mesas()
+        self.ent_pos.setFocus()
+        self.ent_pos.selectAll()
+
+    def esc_caixa(self) -> None:
+        """Esc, do mais perto para o mais longe: desfaz a comissão ou o item que está sendo digitado; sem nada pendente,
+        volta ao 'marcar comanda'; já no campo da posição, volta ao balcão (a mesa aberta continua gravada)."""
+        if self._cancelamento_autorizado is not None or self.modo_comissao or not self.com_mesas:
+            self.cancelar_modo_comissao()
+            return
+        foco = self.focusWidget()
+        if foco is self.ent_pos:
+            self._esc_posicao()
+        elif foco is not None and self.painel_mesas.isAncestorOf(foco):      # nos cartões ou na busca: volta ao campo da posição
+            self.foco_posicao()
+        elif self.ent_codigo.text().strip() or self.ent_qtd.text().strip() not in ("", "1"):
+            self._limpar_entrada()                                            # primeiro Esc limpa o que estava digitado
+            self.ent_codigo.setFocus()
+        else:
+            self.foco_posicao()
+
+    def _esc_posicao(self) -> None:
+        """Segundo Esc, já no campo da posição: volta ao balcão, como no manual. Mesas e comandas abertas ficam gravadas."""
+        v = self.venda()
+        if v and v["modalidade"] == "mesa":
+            nome = nome_posicao(v["comanda"], v["posicao"]).lower()
+            tinha_itens = bool(self.ctx.caixa.itens(v["id"]))
+            self.ent_pos.setText("0")
+            self.chamar_posicao()
+            if tinha_itens and self.venda_id != v["id"]:
+                self.avisar(f"Balcão. A {nome} continua aberta: tecle Esc e escolha-a para voltar.")
+        else:
+            self.ent_codigo.setFocus()
 
     def chamar_posicao(self) -> None:
         if not self.com_mesas:
