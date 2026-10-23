@@ -45,7 +45,7 @@ class TestAdegaQt(BaseCaixaQt):
 
     def test_sem_painel_posicao_e_acoes_de_mesa(self):
         self.assertFalse(self.j.com_mesas)
-        for widget in (self.j.painel_mesas, self.j.ent_pos, self.j.btn_chamar, self.j.lista_mesas):
+        for widget in (self.j.painel_mesas, self.j.ent_pos, self.j.btn_chamar, self.j.cartoes):
             self.assertFalse(widget.isVisible())
         for chave in ("servico", "transferir_mesa", "transferir_varias", "transferir_item",
                       "repique", "consultar_comanda"):

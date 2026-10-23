@@ -21,7 +21,7 @@ import re
 import math
 import sys
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QColor, QFont, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
@@ -39,6 +39,7 @@ from src.hardware.dispositivos import DispositivoIndisponivel
 from src.controllers.caixa_controller import LIMITE_PARTES_DIVISAO
 from src.core.valor_pagamento import LIMITE_TROCO_CENT, ler_valor_pagamento
 from src.ui_qt import comissao
+from src.ui_qt.painel_mesas import CORES as CORES_MESAS, PainelMesas
 
 PAGINA_SEM_OPERADOR, PAGINA_ABERTURA, PAGINA_VENDA, PAGINA_FECHAMENTO = range(4)
 TENTATIVAS_SUPERVISOR = 3
@@ -285,8 +286,10 @@ class JanelaCaixa(QMainWindow):
         grade = QHBoxLayout(pagina)
 
         esq, c_esq = _cartao()
+        esq.setObjectName("painel_cartoes")
         self.painel_mesas = esq
-        esq.setFixedWidth(230)
+        c_esq.setContentsMargins(10, 10, 6, 10)
+        c_esq.setSpacing(6)
         c_esq.addWidget(_rotulo("Mesas e comandas", "titulo"))
         self.lbl_dica_pos = _rotulo("", "mudo")
         c_esq.addWidget(self.lbl_dica_pos)
@@ -294,25 +297,25 @@ class JanelaCaixa(QMainWindow):
         self.ent_pos = QLineEdit()
         self.ent_pos.setPlaceholderText("Número")
         self.ent_pos.returnPressed.connect(self.chamar_posicao)
+        self.ent_pos.installEventFilter(self)
         linha.addWidget(self.ent_pos)
         self.btn_chamar = QPushButton("Chamar")
         self.btn_chamar.clicked.connect(self.chamar_posicao)
         linha.addWidget(self.btn_chamar)
         c_esq.addLayout(linha)
-        self.btn_balcao = QPushButton("Venda de balcão")
-        self.btn_balcao.clicked.connect(self.ir_para_balcao)
-        c_esq.addWidget(self.btn_balcao)
-        c_esq.addWidget(_rotulo("Abertas (duplo clique para chamar):", "mudo"))
-        self.lista_mesas = QListWidget()
-        self.lista_mesas.itemActivated.connect(self._mesa_escolhida)
-        c_esq.addWidget(self.lista_mesas, 1)
+        self.cartoes = PainelMesas(colunas=2, com_comissoes=self.ctx.comissoes.ligada())
+        self.cartoes.escolhida.connect(self._tile_escolhido)
+        self.cartoes.transferir.connect(self._transferir_do_painel)
+        self.cartoes.voltar.connect(self.foco_posicao)
+        self.cartoes.digitou.connect(self._digitar_posicao)
+        c_esq.addWidget(self.cartoes, 1)
+        self._estilo_painel_cartoes()
         grade.addWidget(esq)
         if not self.com_mesas:
             esq.hide()
             self.ent_pos.hide()
             self.btn_chamar.hide()
-            self.btn_balcao.hide()
-            self.lista_mesas.hide()
+            self.cartoes.hide()
 
         centro, c_cen = _cartao()
         self.lbl_venda = _rotulo("Balcão", "titulo")
@@ -770,17 +773,54 @@ class JanelaCaixa(QMainWindow):
         self.lbl_aviso_venda.setText(texto)
         self.lbl_aviso_venda.setVisible(bool(texto))
 
+    def _modo_visual(self) -> str:
+        return "claro" if self.ctx.banco.cfg("tema_visual") == "claro" else "escuro"
+
+    def _estilo_painel_cartoes(self) -> None:
+        """O painel dos cartões é escuro (o visual da boate) no modo escuro e claro no modo claro, dentro do caixa claro."""
+        modo = self._modo_visual()
+        c = CORES_MESAS[modo]
+        self.cartoes.definir_modo(modo)
+        self.painel_mesas.setStyleSheet(
+            f"QFrame#painel_cartoes {{ background: {c['quadro']}; border: 1px solid {c['quadro_borda']}; border-radius: 12px; }}"
+            f"QFrame#painel_cartoes QLabel {{ background: transparent; color: {c['texto']}; }}"
+            f"QFrame#painel_cartoes QLabel#mudo {{ color: {c['suave']}; }}"
+            f"QFrame#painel_cartoes QLabel#titulo {{ font-size: 15pt; color: {c['texto']}; }}"
+            f"QFrame#painel_cartoes QLineEdit {{ background: {c['campo']}; color: {c['texto']}; border: 1px solid "
+            f"{c['borda']}; border-radius: 6px; padding: 6px; }}"
+            f"QFrame#painel_cartoes QPushButton {{ background: {c['cartao']}; color: {c['texto']}; border: 1px solid "
+            f"{c['borda']}; border-radius: 6px; padding: 6px 12px; }}"
+            f"QFrame#painel_cartoes QPushButton:hover {{ background: {c['cartao2']}; }}"
+            f"QFrame#painel_cartoes QScrollArea, QFrame#painel_cartoes QScrollArea > QWidget > QWidget "
+            f"{{ background: transparent; }}")
+
+    def _chave_atual(self) -> str | None:
+        """O cartão da venda que está na tela: '0' (balcão) ou a comanda/mesa na notação da loja; None na caderneta e na entrega."""
+        v = self.venda()
+        if v is None or v["modalidade"] == "balcao":
+            return "0"
+        if v["modalidade"] == "mesa":
+            return self.ctx.caixa.rotular_posicao(v["comanda"], v["posicao"])
+        return None
+
     def carregar_mesas(self) -> None:
-        self.lista_mesas.clear()
         if not self.com_mesas:
             return
-        for m in self.ctx.caixa.mesas():
-            situacao = " (conta)" if m["status"] == "conta_enviada" else " (parada)" if m["inativa"] else ""
-            item = QListWidgetItem(f"{m['rotulo']}  ·  {fmt.fmt_brl(m['total_cent'])}  ·  {m['n_itens']} item(ns){situacao}")
-            item.setData(Qt.UserRole, m["rotulo"])
-            self.lista_mesas.addItem(item)
-            if m["id"] == self.venda_id:
-                item.setSelected(True)
+        garotas = []
+        if self.ctx.comissoes.ligada() and self.ctx.banco.cfg_bool("painel_mostra_garotas", True):   # garotas a pagar viram cartões
+            garotas = [{"rotulo": self.ctx.caixa.rotular_posicao(True, p["garota"]), "total_cent": p["total_cent"],
+                        "nome": p["nome"], "marcacoes": p["lancamentos"]}
+                       for p in self.ctx.comissoes.pendentes_por_garota()]
+        mesas = self.ctx.caixa.mesas()
+        # Somente apresentação: lê pagamentos já registrados, sem recalcular ou fechar vendas.
+        recebidos = {r["venda_id"]: r["recebido"] for r in self.ctx.banco.todos(
+            """SELECT p.venda_id, SUM(p.valor_cent) AS recebido FROM pagamentos_venda p
+               JOIN vendas v ON v.id = p.venda_id
+               WHERE v.modalidade = 'mesa' AND v.status IN ('aberta', 'conta_enviada') GROUP BY p.venda_id""")}
+        for mesa in mesas:
+            mesa["recebido_cent"] = recebidos.get(mesa["id"], 0)
+        self._estilo_painel_cartoes()
+        self.cartoes.atualizar(mesas, self.ctx.caixa.balcao_aberto(), self._chave_atual(), garotas)
 
     def _sugerir_valor(self) -> None:
         """No campo do valor já vem o que falta (com a taxa da forma escolhida, se ela cobrar)."""
@@ -943,10 +983,17 @@ class JanelaCaixa(QMainWindow):
                 self.venda_id = vid
                 self.recarregar()
 
-    def transferir_varias(self) -> None:
+    def transferir_varias(self, destino_chave: str | None = None) -> None:
         if not self._pode_operar():
             return
-        destino = self._pedir_posicao("Transferir várias", "Mesa ou comanda de destino:")
+        if destino_chave:                       # T num cartão do painel: ele é o destino
+            try:
+                destino = self.ctx.caixa.ler_posicao(destino_chave)
+            except ErroNegocio as e:
+                self.dialogos.aviso("Transferir várias", str(e))
+                return
+        else:
+            destino = self._pedir_posicao("Transferir várias", "Mesa ou comanda de destino:")
         if destino is None:
             return
         def origens(texto):
@@ -1735,9 +1782,31 @@ class JanelaCaixa(QMainWindow):
             self.ctx.caixa.cancelar_venda(v["id"], "mesa vazia descartada")
             self.venda_id = None
 
-    def _mesa_escolhida(self, item: QListWidgetItem) -> None:
-        self.ent_pos.setText(str(item.data(Qt.UserRole)))
+    def _tile_escolhido(self, chave: str) -> None:
+        self.ent_pos.setText(chave)
         self.chamar_posicao()
+
+    def _transferir_do_painel(self, chave: str) -> None:
+        """T no painel: pede as origens e transfere várias posições para o cartão escolhido."""
+        self.transferir_varias(chave)
+
+    def _digitar_posicao(self, caractere: str) -> None:
+        """Com o foco nos cartões, digitar um número ou C já começa a marcar a posição."""
+        self.ent_pos.setFocus()
+        self.ent_pos.setText(caractere.upper())
+        self.ent_pos.setCursorPosition(len(self.ent_pos.text()))
+
+    def eventFilter(self, obj, ev):
+        if obj is getattr(self, "ent_pos", None) and ev.type() == QEvent.KeyPress and ev.key() == Qt.Key_Down \
+                and self.com_mesas:
+            self.cartoes.focar(self._chave_atual())
+            return True
+        return super().eventFilter(obj, ev)
+
+    def resizeEvent(self, ev) -> None:
+        super().resizeEvent(ev)
+        if getattr(self, "cartoes", None) is not None:
+            self.cartoes.definir_colunas(3 if self.width() >= 1560 else 2 if self.width() >= 1100 else 1)
 
     def ir_para_balcao(self) -> None:
         self.ent_pos.setText("0")
