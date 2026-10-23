@@ -17,7 +17,8 @@ from PySide6.QtWidgets import (
 from src.controllers.config_controller import modulos_desligados
 from src.controllers.fila_impressao_controller import ServicoFilaImpressao
 from src.controllers.telegram_controller import ServicoTelegram
-from src.core import licenca, registro
+from src.controllers.mesas_modelo import montar_tiles
+from src.core import formatacao as fmt, licenca, registro
 from src.core.erros import ErroNegocio
 from src.database.conexao import BancoDados, caminho_padrao
 from src.sync.ponte import ServicoPonte
@@ -261,6 +262,22 @@ class JanelaPrincipal(QMainWindow):
         conteudo.addWidget(tema.texto(
             "Caixa, estoque, relatórios e gestão em uma única interface.", "suave"))
         self.indicadores = {}
+        self.kpis = {}
+        self.faixa_noite = QWidget()          # a noite ao vivo (casas com mesas e comandas): números grandes no alto
+        noite = QHBoxLayout(self.faixa_noite)
+        noite.setContentsMargins(0, 0, 0, 0)
+        for chave, titulo in (("abertas", "POSIÇÕES ABERTAS"), ("acertos", "AGUARDANDO ACERTO"),
+                              ("aberto", "EM ABERTO NA CASA"), ("comissoes", "COMISSÕES A PAGAR")):
+            cartao = QFrame()
+            cartao.setObjectName("kpi")
+            caixa = QVBoxLayout(cartao)
+            caixa.setContentsMargins(16, 12, 16, 12)
+            caixa.addWidget(tema.texto(titulo, "suave"))
+            valor = tema.texto("0", "kpi_valor", quebra=False)
+            caixa.addWidget(valor)
+            self.kpis[chave] = (cartao, valor)
+            noite.addWidget(cartao, 1)
+        conteudo.addWidget(self.faixa_noite)
         for chave, titulo in (("turno", "CAIXA"), ("licenca", "LICENÇA"),
                               ("backup", "PROTEÇÃO DOS DADOS"), ("impressao", "RECUPERAÇÃO DA IMPRESSÃO"),
                               ("sync", "NUVEM E SERVIÇOS")):
@@ -300,6 +317,37 @@ class JanelaPrincipal(QMainWindow):
         self._atualizacoes_timer.setInterval(60000)
         self._atualizacoes_timer.timeout.connect(self.consultar_atualizacoes)
         self.atualizar()
+
+    def _atualizar_noite(self) -> None:
+        """Os números da noite no alto do menu: só para casas que usam mesas e comandas."""
+        usa = self.ctx.banco.cfg_bool("usar_mesas", True)
+        self.faixa_noite.setVisible(usa)
+        if not usa:
+            return
+        try:
+            mesas = self.ctx.caixa.mesas()
+            balcao = self.ctx.caixa.balcao_aberto()
+            recebidos = {r["venda_id"]: r["recebido"] for r in self.ctx.banco.todos(
+                """SELECT p.venda_id, SUM(p.valor_cent) AS recebido FROM pagamentos_venda p
+                   JOIN vendas v ON v.id = p.venda_id
+                   WHERE v.modalidade = 'mesa' AND v.status IN ('aberta', 'conta_enviada') GROUP BY p.venda_id""")}
+            for m in mesas:
+                m["recebido_cent"] = recebidos.get(m["id"], 0)
+            tiles = montar_tiles(mesas, balcao)
+            acertos = sum(t["estado"] in {"conta", "acerto"} for t in tiles)
+            aberto = sum(m["total_cent"] for m in mesas) + (balcao["total_cent"] if balcao else 0)
+            garotas = self.ctx.comissoes.pendentes_por_garota() if self.ctx.comissoes.ligada() else []
+        except Exception:  # noqa: BLE001 - o menu nunca pode cair por causa de um indicador
+            return
+        self.kpis["abertas"][1].setText(str(len(mesas)))
+        self.kpis["acertos"][1].setText(str(acertos))
+        self.kpis["acertos"][1].setObjectName("kpi_alerta" if acertos else "kpi_valor")
+        self.kpis["aberto"][1].setText(fmt.fmt_brl(aberto))
+        self.kpis["comissoes"][0].setVisible(self.ctx.comissoes.ligada())
+        self.kpis["comissoes"][1].setText(fmt.fmt_brl(sum(g["total_cent"] for g in garotas)))
+        for _, valor in self.kpis.values():          # reaplica o estilo: o nome do objeto mudou
+            valor.style().unpolish(valor)
+            valor.style().polish(valor)
 
     def atualizar(self):
         if self.ctx.operador is None:
@@ -349,6 +397,7 @@ class JanelaPrincipal(QMainWindow):
             "cad_composicao" not in desligados and self.ctx.pode("cad_composicao"))
         self.botoes["auditoria"].setEnabled(
             operador.nivel == 4 and self.ctx.pode("rel_auditoria") and "rel_auditoria" not in desligados)
+        self._atualizar_noite()
         turno = self.ctx.turnos.atual()
         self.indicadores["turno"].setText(
             f"Turno {turno['id']} aberto. Operações disponíveis em Abrir caixa."

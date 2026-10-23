@@ -143,5 +143,43 @@ class TesteCartoesNoCaixa(BaseCaixaQt if BaseCaixaQt else object):
         self.assertEqual(j._chave_atual(), "M5")
 
 
+@unittest.skipIf(BaseCaixaQt is None, "PySide6 indisponível")
+class TesteVisualNoiteDaBoate(BaseCaixaQt if BaseCaixaQt else object):
+    def test_caixa_usa_o_estilo_noturno_no_modo_escuro_e_o_claro_no_claro(self):
+        j = self.janela()
+        self.assertIn("#0a1029", j.styleSheet())
+        self.banco.cfg_set("tema_visual", "claro")
+        j.carregar_mesas()
+        self.assertNotIn("#0a1029", j.styleSheet())
+        self.banco.cfg_set("tema_visual", "escuro")
+        j.carregar_mesas()
+        self.assertIn("#0a1029", j.styleSheet())
+
+    def test_comissao_marcada_tem_cor_de_fundo_e_de_texto_por_modo(self):
+        from src.ui_qt.caixa import LINHAS_COMISSAO
+        for modo, (a_pagar, paga, texto) in LINHAS_COMISSAO.items():
+            self.assertTrue(all(c.startswith("#") and len(c) == 7 for c in (a_pagar, paga, texto)), modo)
+
+    def test_menu_mostra_os_numeros_da_noite(self):
+        from src.ui_qt.app import App, JanelaPrincipal
+        skol = self.novo_produto("SKOL", 800, codigo="10", estoque=True, qt=10)
+        self.abrir_turno()
+        for pos, comanda in ((5, False), (12, True)):
+            vid, _ = self.ctx.caixa.abrir_mesa(pos, comanda=comanda)
+            self.ctx.caixa.adicionar_item(vid, skol, 1)
+        self.ctx.caixa.enviar_conta(self.ctx.caixa.abrir_mesa(12, comanda=True)[0])
+        app = App(self.banco, self.aplicacao)
+        app.ctx = self.ctx
+        menu = JanelaPrincipal(app)
+        self.addCleanup(menu.deleteLater)
+        menu._atualizar_noite()
+        self.assertEqual(menu.kpis["abertas"][1].text(), "2")
+        self.assertEqual(menu.kpis["acertos"][1].text(), "1")
+        self.assertEqual(menu.kpis["aberto"][1].text(), "R$ 17,60")
+        self.banco.cfg_set("usar_mesas", "N")
+        menu._atualizar_noite()
+        self.assertTrue(menu.faixa_noite.isHidden())
+
+
 if __name__ == "__main__":
     unittest.main()

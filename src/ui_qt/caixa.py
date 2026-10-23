@@ -63,6 +63,45 @@ QPushButton:disabled { background: #c9ced6; color: #6b7480; }
 """
 
 
+ESTILO_NOITE = """
+QMainWindow, QWidget#fundo { background: #0a1029; }
+QWidget { color: #f1f5f9; font-family: 'Segoe UI'; }
+QFrame#cartao { background: #111a40; border: 1px solid #25336e; border-radius: 12px; }
+QLabel { background: transparent; color: #f1f5f9; }
+QLabel#titulo { font-size: 16pt; font-weight: bold; color: #f1f5f9; }
+QLabel#total { font-size: 30pt; font-weight: bold; color: #52dfb4; }
+QLabel#troco { font-size: 16pt; font-weight: bold; color: #78abff; }
+QLabel#mudo { color: #94a8bd; }
+QLabel#alerta { color: #ffd078; font-weight: bold; }
+QLabel#status { padding: 4px; }
+QLineEdit, QComboBox, QSpinBox { background: #0a1030; color: #f1f5f9; border: 1px solid #2f4180; border-radius: 6px;
+                                 padding: 6px; min-height: 20px; }
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border: 2px solid #78abff; }
+QComboBox QAbstractItemView { background: #0a1030; color: #f1f5f9; selection-background-color: #2a4fb0; }
+QPushButton { background: #17224f; color: #f1f5f9; border: 1px solid #2f4180; border-radius: 6px; padding: 7px 14px; }
+QPushButton:hover { background: #26367c; }
+QPushButton:focus { border: 2px solid #78abff; }
+QPushButton#primario { background: #17805a; border-color: #52dfb4; font-weight: bold; padding: 8px 14px; }
+QPushButton#primario:hover { background: #1b9a6e; }
+QPushButton#perigo { background: #b83a45; border-color: #ff8d9b; }
+QPushButton#perigo:hover { background: #d04955; }
+QPushButton:disabled, QPushButton#primario:disabled, QPushButton#perigo:disabled {
+    background: #141c3d; color: #5d6b94; border-color: #1f2a5c; }
+QTableWidget, QListWidget { background: #0a1030; alternate-background-color: #141e4a; color: #f1f5f9;
+                            gridline-color: #25336e; border: 1px solid #25336e; border-radius: 8px;
+                            selection-background-color: #2a4fb0; selection-color: #ffffff; }
+QHeaderView::section { background: #17224f; color: #b3c2d1; padding: 8px; border: 0; font-weight: bold; }
+QPlainTextEdit { background: #0a1030; color: #f1f5f9; border: 1px solid #25336e; }
+QMenu { background: #111a40; color: #f1f5f9; border: 1px solid #2f4180; }
+QMenu::item:selected { background: #2a4fb0; }
+QScrollBar:vertical { background: transparent; width: 12px; }
+QScrollBar::handle:vertical { background: #2f4180; border-radius: 5px; min-height: 28px; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+"""
+# fundo das linhas de comissão marcada na comanda da garota: (a pagar, paga) e o texto de cada uma, por modo
+LINHAS_COMISSAO = {"claro": ("#fff1d6", "#e8f3ea", "#1d2733"), "escuro": ("#4a3a12", "#12382a", "#f1f5f9")}
+
+
 def _fmt_qtd(q) -> str:
     """Quantidade com até 4 casas, sem zeros sobrando: 1 -> '1', 0.5 -> '0,5', 1.2345 -> '1,2345'."""
     texto = fmt.fmt_qtd(q, fmt.CASAS_QTD)
@@ -195,7 +234,7 @@ class JanelaCaixa(QMainWindow):
         self.leitor = self._leitor_da_maquina()     # modo leitor óptico (F3): item sem fração entra com quantidade 1
         self.setWindowTitle(f"Caixa - {self._nome_loja()}")
         self.setAttribute(Qt.WA_DeleteOnClose, False)
-        self.setStyleSheet(ESTILO)
+        self._aplicar_estilo()
         self.resize(1240, 760)
         self._montar()
         self.recarregar_tudo()
@@ -658,7 +697,9 @@ class JanelaCaixa(QMainWindow):
             for col, texto in enumerate(valores):
                 celula = QTableWidgetItem(str(texto))
                 celula.setData(Qt.UserRole, f"c{c['id']}")
-                celula.setBackground(QColor(COR_COMISSAO_PAGA if paga else COR_COMISSAO))
+                a_pagar, ja_paga, texto_cor = LINHAS_COMISSAO[self._modo_visual()]
+                celula.setBackground(QColor(ja_paga if paga else a_pagar))
+                celula.setForeground(QColor(texto_cor))
                 if col >= 3:
                     celula.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.tabela.setItem(linha, col, celula)
@@ -776,6 +817,13 @@ class JanelaCaixa(QMainWindow):
     def _modo_visual(self) -> str:
         return "claro" if self.ctx.banco.cfg("tema_visual") == "claro" else "escuro"
 
+    def _aplicar_estilo(self) -> None:
+        """Noite de boate (azul-marinho) no modo escuro; o estilo claro de sempre no modo claro. Só reaplica se o modo mudou."""
+        modo = self._modo_visual()
+        if modo != getattr(self, "_estilo_modo", None):
+            self._estilo_modo = modo
+            self.setStyleSheet(ESTILO_NOITE if modo == "escuro" else ESTILO)
+
     def _estilo_painel_cartoes(self) -> None:
         """O painel dos cartões é escuro (o visual da boate) no modo escuro e claro no modo claro, dentro do caixa claro."""
         modo = self._modo_visual()
@@ -819,6 +867,7 @@ class JanelaCaixa(QMainWindow):
                WHERE v.modalidade = 'mesa' AND v.status IN ('aberta', 'conta_enviada') GROUP BY p.venda_id""")}
         for mesa in mesas:
             mesa["recebido_cent"] = recebidos.get(mesa["id"], 0)
+        self._aplicar_estilo()
         self._estilo_painel_cartoes()
         self.cartoes.atualizar(mesas, self.ctx.caixa.balcao_aberto(), self._chave_atual(), garotas)
 
