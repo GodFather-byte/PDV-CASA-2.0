@@ -28,6 +28,9 @@
 - **Claro/escuro escolhido pelo cliente:** botão "Mudar para o modo claro/escuro" no topo do menu
   (`JanelaPrincipal.alternar_tema`); grava `tema_visual`, aplica no programa todo e refaz o caixa aberto na hora.
   A mesma opção continua em Configurações > Aparência.
+- **Esc/F4 no caixa (como no Tk):** Esc desfaz o que está digitado (comissão, código, quantidade); sem nada
+  pendente volta ao "marcar comanda" (cartões recarregados e campo da posição selecionado); no campo da posição
+  volta ao balcão e a mesa continua aberta; nos cartões volta ao campo da posição (`JanelaCaixa.esc_caixa`).
 - Não portado ainda: PgUp/PgDn para navegar entre comandas; a opção `painel_mesas_fixo` (o Qt sempre mostra o painel).
 
 ## Testes
