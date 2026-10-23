@@ -160,6 +160,23 @@ class TesteVisualNoiteDaBoate(BaseCaixaQt if BaseCaixaQt else object):
         for modo, (a_pagar, paga, texto) in LINHAS_COMISSAO.items():
             self.assertTrue(all(c.startswith("#") and len(c) == 7 for c in (a_pagar, paga, texto)), modo)
 
+    def test_cliente_alterna_claro_e_escuro_no_menu_e_o_caixa_aberto_acompanha(self):
+        from src.ui_qt.app import App, JanelaPrincipal
+        app = App(self.banco, self.aplicacao)
+        app.ctx = self.ctx
+        menu = JanelaPrincipal(app)
+        self.addCleanup(menu.deleteLater)
+        caixa = self.janela()
+        menu.janelas["caixa"] = caixa
+        self.assertIn("claro", menu.btn_tema.text())            # em uso: escuro; o botão oferece o claro
+        menu.btn_tema.click()
+        self.assertEqual(self.banco.cfg("tema_visual"), "claro")
+        self.assertIn("escuro", menu.btn_tema.text())
+        self.assertNotIn("#0a1029", caixa.styleSheet())
+        menu.btn_tema.click()
+        self.assertEqual(self.banco.cfg("tema_visual"), "escuro")
+        self.assertIn("#0a1029", caixa.styleSheet())
+
     def test_menu_mostra_os_numeros_da_noite(self):
         from src.ui_qt.app import App, JanelaPrincipal
         skol = self.novo_produto("SKOL", 800, codigo="10", estoque=True, qt=10)

@@ -197,7 +197,12 @@ class JanelaPrincipal(QMainWindow):
         layout = QHBoxLayout(central)
         lateral = QVBoxLayout()
         lateral.addWidget(tema.texto("WILLPDV", "marca"))
-        lateral.addWidget(tema.texto(f"Versão {VERSAO}\nInterface Qt • piloto", "suave"))
+        lateral.addWidget(tema.texto(f"Versão {VERSAO}", "suave"))
+        self.btn_tema = QPushButton()
+        self.btn_tema.setAccessibleName("Alternar entre modo claro e modo escuro")
+        self.btn_tema.clicked.connect(self.alternar_tema)
+        lateral.addWidget(self.btn_tema)
+        self._rotular_tema()
         self.busca_modulos = QLineEdit()
         self.busca_modulos.setPlaceholderText("Buscar módulo…")
         self.busca_modulos.setClearButtonEnabled(True)
@@ -317,6 +322,32 @@ class JanelaPrincipal(QMainWindow):
         self._atualizacoes_timer.setInterval(60000)
         self._atualizacoes_timer.timeout.connect(self.consultar_atualizacoes)
         self.atualizar()
+
+    def _modo_tema(self) -> str:
+        return "claro" if self.ctx.banco.cfg("tema_visual") == "claro" else "escuro"
+
+    def _rotular_tema(self) -> None:
+        """O botão oferece o modo que ainda não está em uso."""
+        self.btn_tema.setText("Mudar para o modo escuro" if self._modo_tema() == "claro" else "Mudar para o modo claro")
+
+    def alternar_tema(self) -> None:
+        """O cliente escolhe claro ou escuro; vale para o programa todo e fica gravado para as próximas aberturas."""
+        novo = "escuro" if self._modo_tema() == "claro" else "claro"
+        try:
+            self.ctx.config.salvar_config({"tema_visual": novo})
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return
+        tema.aplicar(QApplication.instance(), novo)
+        for janela in list(self.janelas.values()):          # telas já abertas refazem o visual na hora
+            for nome in ("_aplicar_estilo", "_estilo_painel_cartoes", "recarregar"):
+                refazer = getattr(janela, nome, None)
+                if callable(refazer):
+                    try:
+                        refazer()
+                    except Exception:  # noqa: BLE001 - trocar a cor nunca pode derrubar uma tela aberta
+                        logging.getLogger("pdv.qt").exception("Falha ao refazer o visual de %s.", nome)
+        self._rotular_tema()
 
     def _atualizar_noite(self) -> None:
         """Os números da noite no alto do menu: só para casas que usam mesas e comandas."""

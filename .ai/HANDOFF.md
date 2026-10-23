@@ -25,6 +25,9 @@
   `ESTILO_NOITE` (azul-marinho, destaques neon) no modo escuro e o estilo claro no modo claro
   (`JanelaCaixa._aplicar_estilo`). O menu principal ganhou a faixa "noite ao vivo" (posições abertas, aguardando
   acerto, em aberto na casa, comissões a pagar) para casas com mesas (`JanelaPrincipal._atualizar_noite`).
+- **Claro/escuro escolhido pelo cliente:** botão "Mudar para o modo claro/escuro" no topo do menu
+  (`JanelaPrincipal.alternar_tema`); grava `tema_visual`, aplica no programa todo e refaz o caixa aberto na hora.
+  A mesma opção continua em Configurações > Aparência.
 - Não portado ainda: PgUp/PgDn para navegar entre comandas; a opção `painel_mesas_fixo` (o Qt sempre mostra o painel).
 
 ## Testes
