@@ -264,6 +264,87 @@ class TesteTrocaDeComandaPelasSetas(BaseCaixaQt if BaseCaixaQt else object):
 
 
 @unittest.skipIf(BaseCaixaQt is None, "PySide6 indisponível")
+class TesteEnterFechaAConta(BaseCaixaQt if BaseCaixaQt else object):
+    """O fluxo clássico: Enter (código vazio) -> forma -> Enter -> valor -> Enter -> Enter fecha."""
+
+    def setUp(self):
+        super().setUp()
+        self.skol = self.novo_produto("SKOL", 800, codigo="10", estoque=True, qt=30)
+        self.abrir_turno()
+        self.j = self.janela()
+        self.j.activateWindow()
+        self.aplicacao.processEvents()
+
+    def tecla(self, widget, tecla, texto=""):
+        QTest.keyClick(widget, tecla) if not texto else QTest.keyClicks(widget, texto)
+        self.aplicacao.processEvents()
+
+    def comanda_com_itens(self, qtd=1):
+        self.j.ent_pos.setText("12")
+        self.j.btn_chamar.click()
+        for _ in range(qtd):
+            self.j.ent_codigo.setText("10")
+            self.j.btn_lancar.click()
+        self.j.ent_codigo.setFocus()
+        return self.j.venda_id
+
+    def test_enter_vazio_forma_valor_enter_fecha_a_comanda(self):
+        vid = self.comanda_com_itens()
+        self.tecla(self.j.ent_codigo, Qt.Key_Return)                    # 1) Enter com o código vazio
+        self.assertIs(self.j.focusWidget(), self.j.cmb_forma)
+        self.tecla(self.j.cmb_forma, Qt.Key_1, "1")                     # 2) o número da forma (1 = Dinheiro) já vai ao valor
+        self.assertEqual(self.j.cmb_forma.currentText(), "Dinheiro")
+        self.assertIs(self.j.focusWidget(), self.j.ent_valor)
+        self.assertEqual(self.j.ent_valor.text(), "8,80")               # o que falta já vem sugerido
+        self.tecla(self.j.ent_valor, Qt.Key_Return)                     # 3) Enter lança o pagamento
+        self.assertIs(self.j.focusWidget(), self.j.btn_fechar_venda)
+        self.tecla(self.j.btn_fechar_venda, Qt.Key_Return)              # 4) Enter fecha
+        self.assertEqual(self.ctx.caixa.obter(vid)["status"], "fechada")
+
+    def test_inicial_da_forma_escolhe_e_enter_confirma(self):
+        self.comanda_com_itens()
+        self.tecla(self.j.ent_codigo, Qt.Key_Return)
+        self.tecla(self.j.cmb_forma, Qt.Key_P, "p")                     # P = Pix
+        self.assertEqual(self.j.cmb_forma.currentText(), "Pix")
+        self.assertIs(self.j.focusWidget(), self.j.cmb_forma)           # a inicial só escolhe; o Enter confirma
+        self.tecla(self.j.cmb_forma, Qt.Key_Return)
+        self.assertIs(self.j.focusWidget(), self.j.ent_valor)
+
+    def test_pagamento_parcial_volta_para_a_lista_de_formas(self):
+        self.comanda_com_itens(qtd=2)                                   # R$ 17,60
+        self.tecla(self.j.ent_codigo, Qt.Key_Return)
+        self.tecla(self.j.cmb_forma, Qt.Key_1, "1")
+        self.j.ent_valor.setText("10,00")
+        self.tecla(self.j.ent_valor, Qt.Key_Return)
+        self.assertIs(self.j.focusWidget(), self.j.cmb_forma)           # ainda falta: próxima forma
+        self.assertEqual(self.j.ent_valor.text(), "7,60")
+
+    def test_enter_vazio_com_a_conta_ja_paga_fecha_direto(self):
+        vid = self.comanda_com_itens()
+        self.j.ent_valor.setText("8,80")
+        self.j.btn_receber.click()
+        self.j.ent_codigo.setFocus()
+        self.tecla(self.j.ent_codigo, Qt.Key_Return)
+        self.assertEqual(self.ctx.caixa.obter(vid)["status"], "fechada")
+
+    def test_esc_volta_um_passo_de_cada_vez(self):
+        self.comanda_com_itens()
+        self.tecla(self.j.ent_codigo, Qt.Key_Return)
+        self.tecla(self.j.cmb_forma, Qt.Key_1, "1")
+        self.j.esc_caixa()
+        self.assertIs(self.j.focusWidget(), self.j.cmb_forma)           # do valor para a forma
+        self.j.esc_caixa()
+        self.assertIs(self.j.focusWidget(), self.j.ent_codigo)          # da forma para os itens
+        self.assertIsNotNone(self.j.venda_id)                            # sem fechar nem perder a conta
+
+    def test_enter_vazio_sem_itens_nao_abre_o_pagamento(self):
+        self.j.ent_codigo.setFocus()
+        self.tecla(self.j.ent_codigo, Qt.Key_Return)
+        self.assertIsNot(self.j.focusWidget(), self.j.cmb_forma)
+        self.assertIn("ao menos um item", " ".join(self.j.dialogos.avisos))
+
+
+@unittest.skipIf(BaseCaixaQt is None, "PySide6 indisponível")
 class TesteVisualNoiteDaBoate(BaseCaixaQt if BaseCaixaQt else object):
     def test_caixa_usa_o_estilo_noturno_no_modo_escuro_e_o_claro_no_claro(self):
         j = self.janela()
