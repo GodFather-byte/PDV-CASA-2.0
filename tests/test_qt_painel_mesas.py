@@ -209,6 +209,61 @@ class TesteEscVoltaAoMarcarComanda(BaseCaixaQt if BaseCaixaQt else object):
 
 
 @unittest.skipIf(BaseCaixaQt is None, "PySide6 indisponível")
+class TesteTrocaDeComandaPelasSetas(BaseCaixaQt if BaseCaixaQt else object):
+    def setUp(self):
+        super().setUp()
+        skol = self.novo_produto("SKOL", 800, codigo="10", estoque=True, qt=20)
+        self.abrir_turno()
+        for pos, comanda in ((5, False), (12, True), (13, True)):
+            vid, _ = self.ctx.caixa.abrir_mesa(pos, comanda=comanda)
+            self.ctx.caixa.adicionar_item(vid, skol, 1)
+        self.j = self.janela()
+        self.j.activateWindow()
+        self.j.ent_codigo.setFocus()
+        self.aplicacao.processEvents()                   # os atalhos da janela só valem com ela ativa
+
+    def tecla(self, widget, tecla):
+        QTest.keyClick(widget, tecla)
+        self.aplicacao.processEvents()
+
+    def test_setas_no_codigo_vazio_andam_pela_lista_dos_cartoes_e_esc_volta(self):
+        self.assertEqual(self.j._chave_atual(), "0")
+        self.tecla(self.j.ent_codigo, Qt.Key_Right)
+        self.assertEqual(self.j._chave_atual(), "M5")
+        self.tecla(self.j.ent_codigo, Qt.Key_Right)
+        self.tecla(self.j.ent_codigo, Qt.Key_Right)
+        self.assertEqual(self.j._chave_atual(), "13")
+        self.assertIs(self.j.focusWidget(), self.j.ent_codigo)               # o foco fica pronto para lançar
+        self.tecla(self.j.ent_codigo, Qt.Key_Right)                          # na ponta não dá a volta
+        self.assertEqual(self.j._chave_atual(), "13")
+        self.assertIn("última", self.j.lbl_status.text())
+        self.tecla(self.j.ent_codigo, Qt.Key_Left)
+        self.assertEqual(self.j._chave_atual(), "12")
+        self.j.esc_caixa()                                                   # Esc volta ao marcar comanda
+        self.assertIs(self.j.focusWidget(), self.j.ent_pos)
+
+    def test_seta_com_texto_digitado_continua_movendo_o_cursor(self):
+        self.j.ent_codigo.setText("ab")
+        self.tecla(self.j.ent_codigo, Qt.Key_Left)
+        self.assertEqual(self.j._chave_atual(), "0")                         # não trocou de comanda
+        self.assertEqual(self.j.ent_codigo.text(), "ab")
+
+    def test_botoes_e_pgup_pgdn_fazem_o_mesmo(self):
+        self.j.btn_proxima.click()
+        self.assertEqual(self.j._chave_atual(), "M5")
+        self.tecla(self.j.ent_codigo, Qt.Key_PageDown)
+        self.assertEqual(self.j._chave_atual(), "12")
+        self.tecla(self.j.ent_codigo, Qt.Key_PageUp)
+        self.j.btn_anterior.click()
+        self.assertEqual(self.j._chave_atual(), "0")
+
+    def test_navegacao_respeita_a_aba_escolhida(self):
+        self.j.cartoes._escolher_aba("Abertas")                              # sem o balcão
+        self.j.navegar_comanda(1)
+        self.assertEqual(self.j._chave_atual(), "M5")
+
+
+@unittest.skipIf(BaseCaixaQt is None, "PySide6 indisponível")
 class TesteVisualNoiteDaBoate(BaseCaixaQt if BaseCaixaQt else object):
     def test_caixa_usa_o_estilo_noturno_no_modo_escuro_e_o_claro_no_claro(self):
         j = self.janela()

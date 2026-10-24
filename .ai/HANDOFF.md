@@ -31,7 +31,14 @@
 - **Esc/F4 no caixa (como no Tk):** Esc desfaz o que está digitado (comissão, código, quantidade); sem nada
   pendente volta ao "marcar comanda" (cartões recarregados e campo da posição selecionado); no campo da posição
   volta ao balcão e a mesa continua aberta; nos cartões volta ao campo da posição (`JanelaCaixa.esc_caixa`).
-- Não portado ainda: PgUp/PgDn para navegar entre comandas; a opção `painel_mesas_fixo` (o Qt sempre mostra o painel).
+- **Fechamento de caixa no modelo clássico (Qt):** "Trocar turno" volta a seguir o fluxo do Tk: conferir a
+  maquininha (forma/qtd/valor, sem o dinheiro esperado) -> valor da gaveta -> confirmação com os avisos (mesas
+  abertas, comissão a pagar) -> conferência por forma -> fecha, backup, impressão das vias -> resumo
+  `PainelFechamento` (SOBRA/FALTA/CAIXA CONFERIDO, Imprimir, Gera Arquivo Texto, Conferência do turno). A página
+  de fechamento do Qt foi removida (`PAGINA_FECHAMENTO` não existe mais).
+- **Trocar de comanda pelas setas:** com o código vazio, ← → (ou ◀ ▶, PgUp/PgDn) vão à comanda anterior/seguinte
+  da lista dos cartões (respeita aba e busca); Esc volta a "marcar comanda". `JanelaCaixa.navegar_comanda`.
+- Não portado ainda: a opção `painel_mesas_fixo` (o Qt sempre mostra o painel).
 
 ## Testes
 

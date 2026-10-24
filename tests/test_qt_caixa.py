@@ -17,7 +17,7 @@ from tests.base import BaseTeste
 if QApplication is not None:
     from src.controllers.cadastro_controller import CadastroController
     from src.controllers.contexto import Contexto
-    from src.ui_qt.caixa import (JanelaCaixa, PAGINA_ABERTURA, PAGINA_FECHAMENTO, PAGINA_VENDA, _fmt_qtd,
+    from src.ui_qt.caixa import (JanelaCaixa, PAGINA_ABERTURA, PAGINA_VENDA, _fmt_qtd,
                                  ler_dinheiro)
 
 
@@ -27,6 +27,8 @@ class DialogosFalsos:
     def __init__(self):
         self.confirmacoes, self.textos, self.escolhas = [], [], []
         self.avisos, self.erros, self.perguntas = [], [], []
+        self.maquininhas, self.paineis = [], []
+        self.maquininha_ok = True
 
     def aviso(self, titulo, texto):
         self.avisos.append(texto)
@@ -48,6 +50,13 @@ class DialogosFalsos:
 
     def escolher(self, titulo, rotulo, opcoes):
         return self.escolhas.pop(0) if self.escolhas else None
+
+    def maquininha(self, maq):
+        self.maquininhas.append(maq)
+        return self.maquininha_ok
+
+    def painel_fechamento(self, ctx, res, vias, **ganchos):
+        self.paineis.append((res, vias))
 
 
 @unittest.skipIf(QApplication is None, "PySide6 não instalado")
@@ -165,20 +174,22 @@ class TestTurnoQt(BaseCaixaQt):
         j.ent_valor.setText("8,00")
         j.btn_receber.click()
         j.btn_fechar_venda.click()
-        j.btn_trocar_turno.click()
-        self.assertEqual(j.paginas.currentIndex(), PAGINA_FECHAMENTO)
-        j.ent_gaveta.setText("108,00")
+        j.dialogos.textos = ["108,00"]
         j.dialogos.confirmacoes = [False]
-        j.btn_confirmar_turno.click()
+        j.btn_trocar_turno.click()                       # a maquininha é conferida antes da gaveta; "Não" na confirmação
+        self.assertEqual(len(j.dialogos.maquininhas), 1)
         self.assertIsNotNone(self.ctx.turnos.atual())
+        self.assertNotIn("esperado", " ".join(j.dialogos.perguntas).lower())      # o esperado não é revelado
+        j.dialogos.textos = ["108,00"]
         j.dialogos.confirmacoes = [True]
         declarados = {self.tipo("Dinheiro"): 10800, self.tipo("Cartão Débito"): 0,
                       self.tipo("Cartão Crédito"): 0, self.tipo("Pix"): 0}
         with patch("src.controllers.utilitario_controller.UtilitarioController.backup_automatico", return_value="ok"), \
                 patch("src.ui_qt.fechamento.coletar", return_value={
                     "informados_por_forma": declarados, "justificativa": ""}) as conferencia:
-            j.btn_confirmar_turno.click()
+            j.btn_trocar_turno.click()
         conferencia.assert_called_once_with(self.ctx, self.banco.valor("SELECT id FROM turnos"), 10800, parent=j)
+        self.assertEqual(len(j.dialogos.paineis), 1)     # o resumo do turno aparece depois de fechar
         self.assertIsNone(self.ctx.turnos.atual())
         self.assertEqual(self.banco.valor("SELECT valor_final_cent FROM turnos"), 10800)
         self.assertEqual(j.paginas.currentIndex(), PAGINA_ABERTURA)
