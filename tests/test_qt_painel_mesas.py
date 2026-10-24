@@ -345,6 +345,86 @@ class TesteEnterFechaAConta(BaseCaixaQt if BaseCaixaQt else object):
 
 
 @unittest.skipIf(BaseCaixaQt is None, "PySide6 indisponível")
+class TesteQuantidadeEFormaPadrao(BaseCaixaQt if BaseCaixaQt else object):
+    def setUp(self):
+        super().setUp()
+        self.skol = self.novo_produto("SKOL", 800, codigo="10", estoque=True, qt=50)
+        self.abrir_turno()
+        self.j = self.janela()
+        self.j.activateWindow()
+        self.aplicacao.processEvents()
+        self.j.ent_pos.setText("12")
+        self.j.btn_chamar.click()
+
+    def enter(self, widget):
+        QTest.keyClick(widget, Qt.Key_Return)
+        self.aplicacao.processEvents()
+
+    def itens(self):
+        return self.ctx.caixa.itens(self.j.venda_id)
+
+    def test_codigo_e_enter_leva_a_quantidade_e_o_segundo_enter_lanca(self):
+        self.j.ent_codigo.setText("10")
+        self.enter(self.j.ent_codigo)
+        self.assertEqual(self.itens(), [])                               # ainda não lançou
+        self.assertIs(self.j.focusWidget(), self.j.ent_qtd)
+        self.assertIn("SKOL", self.j.lbl_status.text())
+        self.assertIn("quantidade", self.j.lbl_status.text())
+        self.j.ent_qtd.setText("3")
+        self.enter(self.j.ent_qtd)
+        self.assertEqual([(i["quantidade"]) for i in self.itens()], [3])
+        self.assertIs(self.j.focusWidget(), self.j.ent_codigo)           # pronto para o próximo produto
+        self.assertEqual(self.j.ent_qtd.text(), "1")
+
+    def test_enter_direto_na_quantidade_sem_mexer_lanca_uma_unidade(self):
+        self.j.ent_codigo.setText("10")
+        self.enter(self.j.ent_codigo)
+        self.enter(self.j.ent_qtd)
+        self.assertEqual([i["quantidade"] for i in self.itens()], [1])
+
+    def test_seis_asterisco_codigo_e_modo_leitor_lancam_direto(self):
+        self.j.ent_codigo.setText("6*10")
+        self.enter(self.j.ent_codigo)
+        self.assertEqual([i["quantidade"] for i in self.itens()], [6])
+        self.j.leitor = True                                              # F3: cada leitura é uma unidade
+        self.j.ent_codigo.setText("10")
+        self.enter(self.j.ent_codigo)
+        self.assertEqual(sorted(i["quantidade"] for i in self.itens()), [1, 6])
+
+    def test_esc_na_quantidade_desiste_do_produto(self):
+        self.j.ent_codigo.setText("10")
+        self.enter(self.j.ent_codigo)
+        self.j.esc_caixa()
+        self.assertEqual(self.j.ent_codigo.text(), "")
+        self.assertIs(self.j.focusWidget(), self.j.ent_codigo)
+        self.assertEqual(self.itens(), [])
+
+    def test_botao_lancar_continua_lancando_na_hora(self):
+        self.j.ent_codigo.setText("10")
+        self.j.ent_qtd.setText("2")
+        self.j.btn_lancar.click()
+        self.assertEqual([i["quantidade"] for i in self.itens()], [2])
+
+    def test_forma_de_pagamento_volta_ao_dinheiro_depois_de_fechar_a_venda(self):
+        self.assertEqual(self.j.cmb_forma.currentText(), "Dinheiro")
+        self.j.ent_codigo.setText("10")
+        self.j.btn_lancar.click()
+        self.j.cmb_forma.setCurrentIndex(self.j.cmb_forma.findText("Pix"))
+        self.j.btn_receber.click()
+        self.assertEqual(self.j.cmb_forma.currentText(), "Pix")          # durante a venda a escolha fica
+        self.j.btn_fechar_venda.click()
+        self.assertEqual(self.ctx.caixa.obter(self.ctx.banco.valor("SELECT id FROM vendas ORDER BY id DESC LIMIT 1"))["status"],
+                         "fechada")
+        self.assertEqual(self.j.cmb_forma.currentText(), "Dinheiro")     # a próxima venda começa em Dinheiro
+
+    def test_forma_volta_ao_dinheiro_ao_trocar_de_comanda(self):
+        self.j.cmb_forma.setCurrentIndex(self.j.cmb_forma.findText("Cartão Débito"))
+        self.j.ent_pos.setText("13")
+        self.j.btn_chamar.click()
+        self.assertEqual(self.j.cmb_forma.currentText(), "Dinheiro")
+
+
+@unittest.skipIf(BaseCaixaQt is None, "PySide6 indisponível")
 class TesteVisualNoiteDaBoate(BaseCaixaQt if BaseCaixaQt else object):
     def test_caixa_usa_o_estilo_noturno_no_modo_escuro_e_o_claro_no_claro(self):
         j = self.janela()
