@@ -51,8 +51,8 @@ class DialogosFalsos:
     def escolher(self, titulo, rotulo, opcoes):
         return self.escolhas.pop(0) if self.escolhas else None
 
-    def maquininha(self, maq):
-        self.maquininhas.append(maq)
+    def maquininha(self, maq, lancamentos=None):
+        self.maquininhas.append((maq, lancamentos))
         return self.maquininha_ok
 
     def painel_fechamento(self, ctx, res, vias, **ganchos):
@@ -182,13 +182,8 @@ class TestTurnoQt(BaseCaixaQt):
         self.assertNotIn("esperado", " ".join(j.dialogos.perguntas).lower())      # o esperado não é revelado
         j.dialogos.textos = ["108,00"]
         j.dialogos.confirmacoes = [True]
-        declarados = {self.tipo("Dinheiro"): 10800, self.tipo("Cartão Débito"): 0,
-                      self.tipo("Cartão Crédito"): 0, self.tipo("Pix"): 0}
-        with patch("src.controllers.utilitario_controller.UtilitarioController.backup_automatico", return_value="ok"), \
-                patch("src.ui_qt.fechamento.coletar", return_value={
-                    "informados_por_forma": declarados, "justificativa": ""}) as conferencia:
-            j.btn_trocar_turno.click()
-        conferencia.assert_called_once_with(self.ctx, self.banco.valor("SELECT id FROM turnos"), 10800, parent=j)
+        with patch("src.controllers.utilitario_controller.UtilitarioController.backup_automatico", return_value="ok"):
+            j.btn_trocar_turno.click()                   # só a gaveta é digitada: nada de valor por forma
         self.assertEqual(len(j.dialogos.paineis), 1)     # o resumo do turno aparece depois de fechar
         self.assertIsNone(self.ctx.turnos.atual())
         self.assertEqual(self.banco.valor("SELECT valor_final_cent FROM turnos"), 10800)

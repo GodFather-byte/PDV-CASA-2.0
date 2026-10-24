@@ -8,31 +8,24 @@ from tests.test_qt_app import BaseQt
 
 
 class TesteIntegracaoFechamentoQt(BaseCaixaQt):
-    def fechamento(self, valor="100,00"):
+    def fechamento(self, valor="100,00", *textos):
         self.abrir_turno()
         janela = self.janela()
-        janela.dialogos.textos = [valor]
+        janela.dialogos.textos = [valor, *textos]
         janela.dialogos.confirmacoes = [True]
         return janela
 
-    def test_cancelar_conferencia_preserva_turno_e_nao_faz_backup(self):
+    def test_nao_conferir_a_maquininha_preserva_turno_e_nao_faz_backup(self):
         janela = self.fechamento()
-        with patch("src.ui_qt.fechamento.coletar", return_value=None) as conferencia, \
-                patch.object(self.ctx.utilitarios, "backup_automatico") as backup:
+        janela.dialogos.maquininha_ok = False
+        with patch.object(self.ctx.utilitarios, "backup_automatico") as backup:
             janela.ir_para_fechamento()
-        conferencia.assert_called_once()
         backup.assert_not_called()
         self.assertIsNotNone(self.ctx.turnos.atual())
 
-    def test_conferencia_e_motivo_chegam_ao_fechamento_e_fita(self):
-        janela = self.fechamento("90,00")
-        declarados = {r["tipo_id"]: 9000 if r["dinheiro"] else 0
-                      for r in self.ctx.turnos.formas_conferencia(
-                          self.ctx.turnos.atual()["id"], self.ctx.operador_id)}
-        with patch("src.ui_qt.fechamento.coletar", return_value={
-                "informados_por_forma": declarados,
-                "justificativa": "Falta constatada na contagem física"}), \
-                patch.object(self.ctx.utilitarios, "backup_automatico", return_value="backup-falso"), \
+    def test_diferenca_na_gaveta_pede_o_motivo_e_ele_chega_a_fita(self):
+        janela = self.fechamento("90,00", "Falta constatada na contagem física")
+        with patch.object(self.ctx.utilitarios, "backup_automatico", return_value="backup-falso"), \
                 patch.object(janela, "_documento_fechamento") as documento:
             janela.ir_para_fechamento()
         self.assertIsNone(self.ctx.turnos.atual())
@@ -40,6 +33,22 @@ class TesteIntegracaoFechamentoQt(BaseCaixaQt):
         fita = self.ctx.impressao.fechamento(resumo)
         self.assertIn("Falta constatada na contagem física", fita)
         self.assertIn("FALTOU R$ 10,00", fita)
+        self.assertIn("FALTA de R$ 10,00", janela.dialogos.perguntas[-1])      # a diferença só aparece depois de declarar
+
+    def test_cancelar_o_motivo_da_diferenca_nao_fecha_o_turno(self):
+        janela = self.fechamento("90,00", None)
+        with patch.object(self.ctx.utilitarios, "backup_automatico") as backup:
+            janela.ir_para_fechamento()
+        backup.assert_not_called()
+        self.assertIsNotNone(self.ctx.turnos.atual())
+
+    def test_gaveta_certa_fecha_sem_pedir_motivo(self):
+        janela = self.fechamento("100,00")
+        with patch.object(self.ctx.utilitarios, "backup_automatico", return_value="ok"):
+            janela.ir_para_fechamento()
+        self.assertIsNone(self.ctx.turnos.atual())
+        self.assertEqual(len(janela.dialogos.paineis), 1)
+        self.assertEqual(self.banco.valor("SELECT resultado_cent FROM turnos"), 0)
 
 
 class TesteIntegracaoBackupQt(BaseQt):

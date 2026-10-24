@@ -41,6 +41,14 @@
 - **Enter fecha a conta (como no Tk):** com o código vazio, Enter vai ao pagamento (`JanelaCaixa.ir_para_pagamento`):
   forma (setas, número 1-9 ou inicial; Enter confirma) -> valor (já sugerido) -> Enter lança -> Enter fecha. Conta
   já paga: Enter fecha direto. Pagamento parcial volta à lista de formas. Esc volta um passo (valor -> forma -> itens).
+- **Fechar o turno sem digitar forma por forma:** `ir_para_fechamento` não usa mais `ui_qt/fechamento.coletar`
+  (continua no código, sem uso no caixa). Fluxo: tela "Conferir maquininha" (totais de débito/crédito/Pix e cada
+  lançamento, `TurnoController.maquininha_lancamentos`; botão "Confere com a maquininha") -> só o valor da gaveta ->
+  confirmação -> se a gaveta tiver diferença, pede o motivo -> fecha. Cartão/Pix entram como informados = lançados
+  (o operador confirmou na tela da maquininha); com cheque/ticket físico no turno só a gaveta é declarada. O resumo
+  final ganhou o quadro "Conferir na maquininha" (qtd e valor por forma e total).
+- **Modo claro mais confortável:** fundo cinza-azulado (#e8ecf1), cartões off-white (#f5f7fa), texto grafite
+  (#1e2a3c), bordas suaves e cartões das mesas em tons pastel mais calmos (`tema.py`, `caixa.py`, `painel_mesas.py`).
 - Não portado ainda: a opção `painel_mesas_fixo` (o Qt sempre mostra o painel).
 
 ## Testes
