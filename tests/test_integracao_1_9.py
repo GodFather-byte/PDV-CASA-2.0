@@ -11,8 +11,7 @@ class TesteIntegracaoFechamentoQt(BaseCaixaQt):
     def fechamento(self, valor="100,00"):
         self.abrir_turno()
         janela = self.janela()
-        janela.ir_para_fechamento()
-        janela.ent_gaveta.setText(valor)
+        janela.dialogos.textos = [valor]
         janela.dialogos.confirmacoes = [True]
         return janela
 
@@ -20,7 +19,7 @@ class TesteIntegracaoFechamentoQt(BaseCaixaQt):
         janela = self.fechamento()
         with patch("src.ui_qt.fechamento.coletar", return_value=None) as conferencia, \
                 patch.object(self.ctx.utilitarios, "backup_automatico") as backup:
-            janela.fechar_turno()
+            janela.ir_para_fechamento()
         conferencia.assert_called_once()
         backup.assert_not_called()
         self.assertIsNotNone(self.ctx.turnos.atual())
@@ -35,7 +34,7 @@ class TesteIntegracaoFechamentoQt(BaseCaixaQt):
                 "justificativa": "Falta constatada na contagem física"}), \
                 patch.object(self.ctx.utilitarios, "backup_automatico", return_value="backup-falso"), \
                 patch.object(janela, "_documento_fechamento") as documento:
-            janela.fechar_turno()
+            janela.ir_para_fechamento()
         self.assertIsNone(self.ctx.turnos.atual())
         resumo = documento.call_args.args[0]
         fita = self.ctx.impressao.fechamento(resumo)

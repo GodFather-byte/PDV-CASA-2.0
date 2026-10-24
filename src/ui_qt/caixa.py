@@ -41,7 +41,7 @@ from src.core.valor_pagamento import LIMITE_TROCO_CENT, ler_valor_pagamento
 from src.ui_qt import comissao
 from src.ui_qt.painel_mesas import CORES as CORES_MESAS, PainelMesas
 
-PAGINA_SEM_OPERADOR, PAGINA_ABERTURA, PAGINA_VENDA, PAGINA_FECHAMENTO = range(4)
+PAGINA_SEM_OPERADOR, PAGINA_ABERTURA, PAGINA_VENDA = range(3)
 TENTATIVAS_SUPERVISOR = 3
 VERDE, AMBAR, VERMELHO = "#1f7a3d", "#a15c00", "#b32020"
 COR_COMISSAO, COR_COMISSAO_PAGA = "#fff1d6", "#e8f3ea"      # fundo das linhas de comissão marcada na comanda da garota
@@ -150,6 +150,16 @@ class Dialogos:
         caixa.setEscapeButton(nao)
         caixa.exec()
         return caixa.clickedButton() is sim
+
+    def maquininha(self, maq: dict) -> bool:
+        """Conferência do que foi lançado em cartão e Pix, antes de contar a gaveta. False = desistiu de fechar."""
+        from src.ui_qt.fechamento_turno import DialogoMaquininha
+        return DialogoMaquininha(maq, self.pai).exec() == QDialog.Accepted
+
+    def painel_fechamento(self, ctx, res: dict, vias: int, **ganchos) -> None:
+        """O resumo do turno depois de fechado (sobra/falta, recebimentos), com Imprimir, arquivo texto e conferência."""
+        from src.ui_qt.fechamento_turno import PainelFechamento
+        PainelFechamento(ctx, res, vias, parent=self.pai, **ganchos).exec()
 
     def _entrada(self, titulo: str, rotulo: str) -> QInputDialog:
         dlg = QInputDialog(self.pai)
@@ -273,13 +283,14 @@ class JanelaCaixa(QMainWindow):
         self.paginas.addWidget(self._pagina_sem_operador())
         self.paginas.addWidget(self._pagina_abertura())
         self.paginas.addWidget(self._pagina_venda())
-        self.paginas.addWidget(self._pagina_fechamento())
         geral.addWidget(self.paginas, 1)
         self.lbl_status = _rotulo("", "status")
         geral.addWidget(self.lbl_status)
         self.setCentralWidget(fundo)
         atalho = QShortcut(QKeySequence("F12"), self)
         atalho.activated.connect(self.fechar_venda)
+        for tecla, passo in ((Qt.Key_PageUp, -1), (Qt.Key_PageDown, 1)):
+            QShortcut(QKeySequence(tecla), self).activated.connect(lambda p=passo: self.navegar_comanda(p))
         esc = QShortcut(QKeySequence(Qt.Key_Escape), self)
         esc.activated.connect(self.esc_caixa)
         for tecla, acao in (("F4", self.foco_posicao), ("F5", self.caderneta), ("F6", self.entrega),
@@ -358,7 +369,24 @@ class JanelaCaixa(QMainWindow):
 
         centro, c_cen = _cartao()
         self.lbl_venda = _rotulo("Balcão", "titulo")
-        c_cen.addWidget(self.lbl_venda)
+        titulo_venda = QHBoxLayout()
+        titulo_venda.addWidget(self.lbl_venda, 1)
+        self.btn_anterior = QPushButton("◀")
+        self.btn_proxima = QPushButton("▶")
+        for botao, passo, dica in ((self.btn_anterior, -1, "Comanda anterior (seta para a esquerda ou PgUp)"),
+                                   (self.btn_proxima, 1, "Próxima comanda (seta para a direita ou PgDn)")):
+            botao.setFixedWidth(40)
+            botao.setFocusPolicy(Qt.NoFocus)
+            botao.setToolTip(dica)
+            botao.clicked.connect(lambda _=False, p=passo: self.navegar_comanda(p))
+            titulo_venda.addWidget(botao)
+        c_cen.addLayout(titulo_venda)
+        self.lbl_dica_nav = _rotulo("← → mudam de comanda  ·  Esc volta para marcar a comanda", "mudo")
+        c_cen.addWidget(self.lbl_dica_nav)
+        if not self.com_mesas:
+            self.btn_anterior.hide()
+            self.btn_proxima.hide()
+            self.lbl_dica_nav.hide()
         self.lbl_aviso_venda = _rotulo("", "alerta")
         self.lbl_aviso_venda.hide()
         c_cen.addWidget(self.lbl_aviso_venda)
@@ -370,6 +398,7 @@ class JanelaCaixa(QMainWindow):
         self.ent_codigo = QLineEdit()
         self.ent_codigo.setPlaceholderText("Código, código de barras, nome ou 6*código")
         self.ent_codigo.returnPressed.connect(self._enter_codigo)
+        self.ent_codigo.installEventFilter(self)
         self.ent_codigo.textEdited.connect(self._esconder_produtos)
         self.ent_codigo.textEdited.connect(self._comissao_nome)
         entrada.addWidget(self.ent_codigo, 1, 0)
@@ -504,39 +533,6 @@ class JanelaCaixa(QMainWindow):
         c_dir.addWidget(self.btn_trocar_turno)
         grade.addWidget(dir_)
         return pagina
-    def _pagina_fechamento(self) -> QWidget:
-        pagina = QWidget()
-        externo = QVBoxLayout(pagina)
-        quadro, caixa = _cartao()
-        quadro.setMaximumWidth(620)
-        caixa.addWidget(_rotulo("Troca de turno", "titulo"))
-        caixa.addWidget(_rotulo("Confira primeiro o que foi lançado em cartão e Pix com o fechamento da maquininha. "
-                                "Depois conte a gaveta e digite o valor encontrado (o esperado não é mostrado).", "mudo"))
-        self.txt_maquininha = QPlainTextEdit()
-        self.txt_maquininha.setReadOnly(True)
-        self.txt_maquininha.setMaximumHeight(140)
-        caixa.addWidget(self.txt_maquininha)
-        self.lbl_avisos_turno = _rotulo("", "alerta")
-        caixa.addWidget(self.lbl_avisos_turno)
-        form = QFormLayout()
-        self.ent_gaveta = QLineEdit()
-        self.ent_gaveta.setPlaceholderText("0,00")
-        form.addRow("Valor na gaveta (+ cheques/tickets) R$:", self.ent_gaveta)
-        caixa.addLayout(form)
-        botoes = QHBoxLayout()
-        self.btn_voltar_venda = QPushButton("Voltar ao caixa")
-        self.btn_voltar_venda.clicked.connect(self.voltar_para_venda)
-        botoes.addWidget(self.btn_voltar_venda)
-        botoes.addStretch(1)
-        self.btn_confirmar_turno = QPushButton("Encerrar turno")
-        self.btn_confirmar_turno.setObjectName("perigo")
-        self.btn_confirmar_turno.clicked.connect(self.fechar_turno)
-        botoes.addWidget(self.btn_confirmar_turno)
-        caixa.addLayout(botoes)
-        externo.addWidget(quadro, alignment=Qt.AlignHCenter | Qt.AlignTop)
-        externo.addStretch(1)
-        return pagina
-
     # ========================================================= utilidades
     def avisar(self, texto: str, cor: str = VERDE) -> None:
         self.lbl_status.setText(texto)
@@ -637,8 +633,7 @@ class JanelaCaixa(QMainWindow):
         if self.venda() is None:
             balcao = self.ctx.caixa.balcao_aberto()       # retoma o balcão interrompido (queda de energia, saída do caixa)
             self.venda_id = balcao["id"] if balcao else None
-        if self.paginas.currentIndex() != PAGINA_FECHAMENTO:
-            self.paginas.setCurrentIndex(PAGINA_VENDA)
+        self.paginas.setCurrentIndex(PAGINA_VENDA)
         padrao = self.ctx.caixa.padrao_posicao()
         comum, outra = exemplos(padrao)
         self.lbl_dica_pos.setText(f"{rotulo_do_campo(padrao)}. Ex.: {comum} ou {outra}; 0 volta ao balcão.")
@@ -1846,11 +1841,33 @@ class JanelaCaixa(QMainWindow):
         self.ent_pos.setCursorPosition(len(self.ent_pos.text()))
 
     def eventFilter(self, obj, ev):
-        if obj is getattr(self, "ent_pos", None) and ev.type() == QEvent.KeyPress and ev.key() == Qt.Key_Down \
-                and self.com_mesas:
-            self.cartoes.focar(self._chave_atual())
-            return True
+        if ev.type() == QEvent.KeyPress and self.com_mesas:
+            tecla = ev.key()
+            if obj is getattr(self, "ent_pos", None) and tecla == Qt.Key_Down:
+                self.cartoes.focar(self._chave_atual())
+                return True
+            if obj is getattr(self, "ent_codigo", None) and tecla in (Qt.Key_Left, Qt.Key_Right) \
+                    and not self.ent_codigo.text() and not self.modo_comissao and not ev.modifiers():
+                self.navegar_comanda(-1 if tecla == Qt.Key_Left else 1)      # sem nada digitado, as setas trocam de comanda
+                return True
         return super().eventFilter(obj, ev)
+
+    def navegar_comanda(self, passo: int) -> None:
+        """Seta para a esquerda/direita (ou ◀ ▶, PgUp/PgDn): vai para a comanda, mesa ou garota anterior ou seguinte da lista dos
+        cartões, que respeita a aba e a busca escolhidas. É o jeito de passar pelas contas sem voltar ao campo da posição."""
+        if not self.com_mesas or not self._pode_operar():
+            return
+        self.carregar_mesas()
+        atual = self._chave_atual()
+        destino = self.cartoes.vizinha(atual, passo)
+        if destino is None:
+            self.avisar("Não há comandas neste filtro.")
+        elif destino == atual:
+            self.avisar("Esta é a última comanda da lista." if passo > 0 else "Esta é a primeira comanda da lista.")
+        else:
+            self._tile_escolhido(destino)
+            if self.venda_id is not None or destino == "0":
+                self.ent_codigo.setFocus()
 
     def resizeEvent(self, ev) -> None:
         super().resizeEvent(ev)
@@ -2540,6 +2557,8 @@ class JanelaCaixa(QMainWindow):
 
     # ========================================================= troca de turno
     def ir_para_fechamento(self) -> None:
+        """Troca de turno no modelo clássico: 1) confere a maquininha, 2) o operador declara a gaveta SEM ver o esperado,
+        3) confirma (com os avisos), 4) conferência por forma, 5) fecha, faz o backup e mostra o resumo."""
         if not self._pronto() or self._ocupado:
             return
         v = self.venda()
@@ -2552,13 +2571,50 @@ class JanelaCaixa(QMainWindow):
             return
         self.venda_id = None
         turno = self._turno()
+        if turno is None:
+            self.dialogos.aviso("Troca de turno", "Não há turno aberto.")
+            self.recarregar_tudo()
+            return
         maq = self.ctx.turnos.maquininha(turno["id"])
-        linhas = [f"{r['tipo']}: {r['qtd']} lançamento(s), {fmt.fmt_brl(r['valor'])}" for r in maq["linhas"]]
-        self.txt_maquininha.setPlainText("\n".join(linhas) or "Nenhum lançamento em cartão ou Pix neste turno.")
-        self.lbl_avisos_turno.setText(self._avisos_turno().strip())
-        self.ent_gaveta.clear()
-        self.paginas.setCurrentIndex(PAGINA_FECHAMENTO)
-        self.ent_gaveta.setFocus()
+        if maq["linhas"] and not self.dialogos.maquininha(maq):      # sem forma fora da gaveta, não há o que conferir
+            self.recarregar_tudo()
+            return
+        valor = self._pedir_valor_da_gaveta()
+        if valor is None:
+            self.recarregar_tudo()
+            return
+        if not self.dialogos.confirmar("Troca de turno", f"Confirma {fmt.fmt_brl(valor)} como valor final?\n"
+                                       "Depois de confirmar o turno é encerrado e não pode ser acertado."
+                                       + self._avisos_turno(), padrao_sim=False):
+            self.recarregar_tudo()
+            return
+        from src.ui_qt.fechamento import coletar
+        ok, conferencia = self._executar(coletar, self.ctx, turno["id"], valor, parent=self)
+        if not ok or conferencia is None:
+            self.recarregar_tudo()
+            return
+        ok, res = self._executar(self.ctx.turnos.fechar, turno["id"], self.ctx.operador_id, valor, **conferencia)
+        if not ok:
+            self.recarregar_tudo()
+            return
+        if self.ctx.utilitarios.backup_automatico("troca de turno") is None:
+            self.dialogos.aviso("Backup", "O turno foi fechado, mas o BACKUP automático falhou.\n"
+                                          "Faça um backup manual em Utilitários > Backup de dados e confira a pasta/disco.")
+        self._documento_fechamento(res)
+        self.recarregar_tudo()
+        self.avisar(f"Turno {turno['numero']} encerrado.", AMBAR)
+
+    def _pedir_valor_da_gaveta(self) -> int | None:
+        """O valor contado na gaveta (+ cheques/tickets), em centavos; pergunta de novo se digitou algo inválido. None = desistiu."""
+        while True:
+            texto = self.dialogos.pedir_texto("Troca de turno", "Digite o valor encontrado na gaveta (+ cheques/tickets):",
+                                              padrao="0,00")
+            if texto is None:
+                return None
+            try:
+                return ler_dinheiro(texto, permitir_zero=True)
+            except ValueError as e:
+                self.dialogos.aviso("Troca de turno", str(e))
 
     def _avisos_turno(self) -> str:
         aviso = ""
@@ -2567,65 +2623,31 @@ class JanelaCaixa(QMainWindow):
             nomes = ", ".join(p["nome"] for p in abertas[:6]) + (", ..." if len(abertas) > 6 else "")
             aviso = (f"\n\nATENÇÃO: {len(abertas)} mesa(s)/comanda(s) aberta(s), "
                      f"{fmt.fmt_brl(sum(p['total_cent'] for p in abertas))}:\n{nomes}.\nElas continuam abertas no próximo turno.")
-        a_pagar = self.ctx.comissoes.pendentes_por_garota()
+        a_pagar = self.ctx.comissoes.pendentes_por_garota() if self.ctx.comissoes.ligada() else []
         if a_pagar:
             aviso += (f"\n\nComissão das garotas a pagar: {fmt.fmt_brl(sum(p['total_cent'] for p in a_pagar))} "
                       f"({len(a_pagar)} garota(s)).\nSe vai pagar com dinheiro da gaveta, responda Não, pague "
                       "(botão Comissões) e conte o caixa de novo.")
         return aviso
 
-    def voltar_para_venda(self) -> None:
-        self.paginas.setCurrentIndex(PAGINA_VENDA)
-        self.recarregar_tudo()
-        self.ent_codigo.setFocus()
-
-    def fechar_turno(self) -> None:
-        if self._ocupado or self.paginas.currentIndex() != PAGINA_FECHAMENTO:
-            return
-        turno = self._turno()
-        if turno is None:
-            self.recarregar_tudo()
-            return
-        try:
-            valor = ler_dinheiro(self.ent_gaveta.text(), permitir_zero=True)
-        except ValueError as e:
-            self.dialogos.aviso("Troca de turno", str(e))
-            return
-        if not self.dialogos.confirmar("Troca de turno", f"Confirma {fmt.fmt_brl(valor)} como valor final?\n"
-                                       "Depois de confirmar o turno é encerrado e não pode ser acertado."
-                                       + self._avisos_turno(), padrao_sim=False):
-            return
-        from src.ui_qt.fechamento import coletar
-        ok, conferencia = self._executar(coletar, self.ctx, turno["id"], valor, parent=self)
-        if not ok or conferencia is None:
-            return
-        ok, res = self._executar(self.ctx.turnos.fechar, turno["id"], self.ctx.operador_id, valor, **conferencia)
-        if not ok:
-            return
-        if self.ctx.utilitarios.backup_automatico("troca de turno") is None:
-            self.dialogos.aviso("Backup", "O turno foi fechado, mas o BACKUP automático falhou.\n"
-                                          "Faça um backup manual em Utilitários > Backup de dados e confira a pasta/disco.")
-        self._documento_fechamento(res)
-        self.paginas.setCurrentIndex(PAGINA_VENDA)
-        self.recarregar_tudo()
-        self.avisar(f"Turno {turno['numero']} encerrado.", AMBAR)
-
     def _documento_fechamento(self, res: dict) -> None:
-        """O fechamento sai na impressora (se configurado) ou é mostrado na tela; erro aqui não desfaz o turno fechado."""
+        """Ao trocar o turno o fechamento sai sozinho na impressora (as vias configuradas, com a assinatura do caixa e do
+        gerente) e o resumo aparece na tela. Erro aqui não desfaz o turno já fechado."""
+        vias = 0
         try:
-            texto = self.ctx.impressao.fechamento(res)
-            nome = f"fechamento_turno_{res['turno']['numero']}"
             if self.ctx.banco.cfg_bool("imprimir_fechamento_ao_trocar", True) and not self.ctx.impressao.deve_mostrar_na_tela():
                 vias = max(1, min(self.ctx.banco.cfg_int("vias_fechamento", 1), 3))
                 try:
-                    self.ctx.impressao.enviar(texto, nome, tipo="fechamento", copias=vias)
-                    return
+                    self.ctx.impressao.enviar(self.ctx.impressao.fechamento(res),
+                                              f"fechamento_turno_{res['turno']['numero']}", tipo="fechamento", copias=vias)
                 except ErroImpressao as e:
-                    self.dialogos.erro("Impressão", f"O fechamento não foi impresso: {e}\nMostrando na tela.")
-            self._mostrar("Fechamento do turno", texto)
+                    vias = 0
+                    self.dialogos.erro("Impressão", f"O fechamento não foi impresso: {e}\nUse o botão Imprimir Fechamento.")
+            self.dialogos.painel_fechamento(self.ctx, res, vias, emitir=self._emitir, mostrar=self._mostrar,
+                                            avisar=self.dialogos.aviso)
         except Exception as e:  # noqa: BLE001 - o turno já está fechado
             self._registrar_falha(e)
-            self.dialogos.erro("Fechamento", f"O turno foi fechado, mas o relatório não pôde ser preparado:\n{e}")
+            self.dialogos.erro("Fechamento", f"O turno foi fechado, mas o resumo não pôde ser preparado:\n{e}")
 
     # ========================================================= sair
     def closeEvent(self, evento) -> None:
