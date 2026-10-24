@@ -381,7 +381,7 @@ class JanelaCaixa(QMainWindow):
             botao.clicked.connect(lambda _=False, p=passo: self.navegar_comanda(p))
             titulo_venda.addWidget(botao)
         c_cen.addLayout(titulo_venda)
-        self.lbl_dica_nav = _rotulo("← → mudam de comanda  ·  Esc volta para marcar a comanda", "mudo")
+        self.lbl_dica_nav = _rotulo("← → mudam de comanda  ·  Enter com o código vazio paga  ·  Esc volta", "mudo")
         c_cen.addWidget(self.lbl_dica_nav)
         if not self.com_mesas:
             self.btn_anterior.hide()
@@ -497,6 +497,7 @@ class JanelaCaixa(QMainWindow):
         form = QFormLayout()
         self.cmb_forma = QComboBox()
         self.cmb_forma.currentIndexChanged.connect(lambda _i: self._sugerir_valor())
+        self.cmb_forma.installEventFilter(self)
         form.addRow("Forma:", self.cmb_forma)
         self.ent_valor = QLineEdit()
         self.ent_valor.returnPressed.connect(self.receber)
@@ -527,6 +528,7 @@ class JanelaCaixa(QMainWindow):
         self.btn_fechar_venda = QPushButton("Fechar venda (F12)")
         self.btn_fechar_venda.setObjectName("primario")
         self.btn_fechar_venda.clicked.connect(self.fechar_venda)
+        self.btn_fechar_venda.installEventFilter(self)
         c_dir.addWidget(self.btn_fechar_venda)
         self.btn_trocar_turno = QPushButton("Trocar turno")
         self.btn_trocar_turno.clicked.connect(self.ir_para_fechamento)
@@ -1611,8 +1613,56 @@ class JanelaCaixa(QMainWindow):
         """Enter no campo do código: no modo comissão vai para o valor; senão lança o produto."""
         if self.modo_comissao:
             self._comissao_ir_ao_valor()
+        elif not self.ent_codigo.text().strip() and self._pronto() and not self._ocupado:
+            self.ir_para_pagamento()
         else:
             self.lancar_item()
+
+    def ir_para_pagamento(self) -> None:
+        """Enter com o código vazio, como no caixa clássico, leva ao pagamento pelo teclado: forma (setas, número ou inicial)
+        -> Enter -> valor -> Enter -> Enter fecha. Conta já paga por inteiro: o Enter fecha direto."""
+        v = self.venda()
+        itens = self.ctx.caixa.itens(v["id"]) if v else []
+        if v is None or not (itens or v["modalidade"] == "caderneta" or v["prepago"]) or (
+                v["modalidade"] == "caderneta" and itens):
+            self.fechar_venda()          # nada a receber aqui: comissão da garota, caderneta ou o aviso de sempre (como F12)
+            return
+        pago = sum(p["valor_cent"] for p in self.ctx.caixa.pagamentos(v["id"]))
+        if itens and pago > 0 and pago >= v["total_cent"]:
+            self.fechar_venda()
+            return
+        self.avisar("Forma de pagamento: setas, o número ou a inicial. Enter confirma.", AMBAR)
+        self.cmb_forma.setFocus()
+
+    def _forma_escolhida(self) -> None:
+        """Enter (ou o número da forma) na lista de formas: o foco vai para o valor, já selecionado para digitar por cima."""
+        self.ent_valor.setFocus()
+        self.ent_valor.selectAll()
+
+    def _tecla_forma(self, ev) -> bool:
+        """Teclas da lista de formas: Enter confirma; 1 a 9 escolhe a forma pelo número; uma letra escolhe pela inicial (a da
+        última palavra vale primeiro: Cartão Crédito = C, Cartão Débito = D, Pix = P). Devolve True quando tratou a tecla."""
+        tecla, texto = ev.key(), ev.text()
+        if tecla in (Qt.Key_Return, Qt.Key_Enter):
+            self._forma_escolhida()
+            return True
+        if len(texto) == 1 and texto.isdigit():
+            n = int(texto)
+            if 1 <= n <= self.cmb_forma.count():
+                self.cmb_forma.setCurrentIndex(n - 1)
+                self._forma_escolhida()
+            return True
+        if len(texto) == 1 and texto.isalpha() and not ev.modifiers() & (Qt.ControlModifier | Qt.AltModifier):
+            letra, total, atual = texto.lower(), self.cmb_forma.count(), self.cmb_forma.currentIndex()
+            ordem = [i for i in list(range(atual + 1, total)) + list(range(0, atual + 1))]
+            palavras = {i: self.cmb_forma.itemText(i).lower().split() for i in ordem}
+            for acerta in (lambda ps: ps[-1].startswith(letra), lambda ps: any(w.startswith(letra) for w in ps)):
+                achou = next((i for i in ordem if palavras[i] and acerta(palavras[i])), None)
+                if achou is not None:
+                    self.cmb_forma.setCurrentIndex(achou)
+                    break
+            return True
+        return False
 
     def lancar_item(self) -> None:
         if not self._pronto() or self._ocupado:
@@ -1846,6 +1896,11 @@ class JanelaCaixa(QMainWindow):
             if obj is getattr(self, "ent_pos", None) and tecla == Qt.Key_Down:
                 self.cartoes.focar(self._chave_atual())
                 return True
+            if obj is getattr(self, "cmb_forma", None) and self._tecla_forma(ev):
+                return True
+            if obj is getattr(self, "btn_fechar_venda", None) and tecla in (Qt.Key_Return, Qt.Key_Enter):
+                self.fechar_venda()                                          # no botão de fechar, Enter fecha
+                return True
             if obj is getattr(self, "ent_codigo", None) and tecla in (Qt.Key_Left, Qt.Key_Right) \
                     and not self.ent_codigo.text() and not self.modo_comissao and not ev.modifiers():
                 self.navegar_comanda(-1 if tecla == Qt.Key_Left else 1)      # sem nada digitado, as setas trocam de comanda
@@ -1889,13 +1944,21 @@ class JanelaCaixa(QMainWindow):
         self.ent_pos.selectAll()
 
     def esc_caixa(self) -> None:
-        """Esc, do mais perto para o mais longe: desfaz a comissão ou o item que está sendo digitado; sem nada pendente,
-        volta ao 'marcar comanda'; já no campo da posição, volta ao balcão (a mesa aberta continua gravada)."""
-        if self._cancelamento_autorizado is not None or self.modo_comissao or not self.com_mesas:
+        """Esc, do mais perto para o mais longe: desfaz a comissão ou o item que está sendo digitado; no pagamento volta um
+        passo (valor -> forma -> itens); sem nada pendente, volta ao 'marcar comanda'; já no campo da posição, volta ao
+        balcão (a mesa aberta continua gravada)."""
+        if self._cancelamento_autorizado is not None or self.modo_comissao:
             self.cancelar_modo_comissao()
             return
         foco = self.focusWidget()
-        if foco is self.ent_pos:
+        if foco is self.ent_valor:
+            self.cmb_forma.setFocus()
+        elif foco in (self.cmb_forma, self.btn_fechar_venda):
+            self.ent_codigo.setFocus()
+            self.avisar("")
+        elif not self.com_mesas:
+            self.cancelar_modo_comissao()
+        elif foco is self.ent_pos:
             self._esc_posicao()
         elif foco is not None and self.painel_mesas.isAncestorOf(foco):      # nos cartões ou na busca: volta ao campo da posição
             self.foco_posicao()
@@ -2039,8 +2102,10 @@ class JanelaCaixa(QMainWindow):
             self._divisao = None if atual + 1 >= len(partes) or liq.get("falta", 0) <= 0 else (v["id"], partes, atual + 1)
         self.recarregar()
         if liq.get("falta", 0) == 0:
-            self.avisar(f"Pagamento completo. Troco {fmt.fmt_brl(liq.get('troco', 0))}. Feche a venda (F12).")
+            self.avisar(f"Pagamento completo. Troco {fmt.fmt_brl(liq.get('troco', 0))}. Enter fecha a venda (F12).")
             self.btn_fechar_venda.setFocus()
+        else:
+            self.cmb_forma.setFocus()                  # ainda falta: próxima forma, como na janela de pagamento clássica
 
     def remover_pagamento(self) -> None:
         if not self._pronto() or self._ocupado or self._fechando_venda:

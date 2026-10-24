@@ -38,6 +38,9 @@
   de fechamento do Qt foi removida (`PAGINA_FECHAMENTO` não existe mais).
 - **Trocar de comanda pelas setas:** com o código vazio, ← → (ou ◀ ▶, PgUp/PgDn) vão à comanda anterior/seguinte
   da lista dos cartões (respeita aba e busca); Esc volta a "marcar comanda". `JanelaCaixa.navegar_comanda`.
+- **Enter fecha a conta (como no Tk):** com o código vazio, Enter vai ao pagamento (`JanelaCaixa.ir_para_pagamento`):
+  forma (setas, número 1-9 ou inicial; Enter confirma) -> valor (já sugerido) -> Enter lança -> Enter fecha. Conta
+  já paga: Enter fecha direto. Pagamento parcial volta à lista de formas. Esc volta um passo (valor -> forma -> itens).
 - Não portado ainda: a opção `painel_mesas_fixo` (o Qt sempre mostra o painel).
 
 ## Testes
