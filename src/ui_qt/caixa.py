@@ -48,18 +48,18 @@ COR_COMISSAO, COR_COMISSAO_PAGA = "#fff1d6", "#e8f3ea"      # fundo das linhas d
 QTD_ANTES_DO_CODIGO = re.compile(r"(\d+(?:[.,]\d+)?)\s*\*\s*(\S.*)")
 
 ESTILO = """
-QWidget#fundo { background: #f4f5f7; }
-QFrame#cartao { background: #ffffff; border: 1px solid #d5d9e0; border-radius: 6px; }
-QLabel#titulo { font-size: 16pt; font-weight: bold; color: #1d2733; }
-QLabel#total { font-size: 28pt; font-weight: bold; color: #1d2733; }
-QLabel#troco { font-size: 16pt; font-weight: bold; color: #1f5fb3; }
-QLabel#mudo { color: #5b6573; }
-QLabel#alerta { color: #a15c00; font-weight: bold; }
+QWidget#fundo { background: #e8ecf1; }
+QFrame#cartao { background: #f5f7fa; border: 1px solid #c8d1dd; border-radius: 8px; }
+QLabel#titulo { font-size: 16pt; font-weight: bold; color: #1e2a3c; }
+QLabel#total { font-size: 28pt; font-weight: bold; color: #1e2a3c; }
+QLabel#troco { font-size: 16pt; font-weight: bold; color: #2d5fb0; }
+QLabel#mudo { color: #4d5c74; }
+QLabel#alerta { color: #8a5200; font-weight: bold; }
 QLabel#status { padding: 4px; }
 QPushButton { padding: 6px 12px; }
-QPushButton#primario { background: #1f7a3d; color: white; font-weight: bold; border-radius: 4px; padding: 8px 14px; }
-QPushButton#perigo { background: #b32020; color: white; border-radius: 4px; padding: 6px 12px; }
-QPushButton:disabled { background: #c9ced6; color: #6b7480; }
+QPushButton#primario { background: #2b7d52; color: #f7faf8; font-weight: bold; border-radius: 4px; padding: 8px 14px; }
+QPushButton#perigo { background: #b03a3a; color: #fbf6f6; border-radius: 4px; padding: 6px 12px; }
+QPushButton:disabled { background: #d5dbe4; color: #77849a; }
 """
 
 
@@ -99,7 +99,7 @@ QScrollBar::handle:vertical { background: #2f4180; border-radius: 5px; min-heigh
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 """
 # fundo das linhas de comissão marcada na comanda da garota: (a pagar, paga) e o texto de cada uma, por modo
-LINHAS_COMISSAO = {"claro": ("#fff1d6", "#e8f3ea", "#1d2733"), "escuro": ("#4a3a12", "#12382a", "#f1f5f9")}
+LINHAS_COMISSAO = {"claro": ("#f6e8c6", "#dcebdf", "#1e2a3c"), "escuro": ("#4a3a12", "#12382a", "#f1f5f9")}
 
 
 def _fmt_qtd(q) -> str:
@@ -151,10 +151,11 @@ class Dialogos:
         caixa.exec()
         return caixa.clickedButton() is sim
 
-    def maquininha(self, maq: dict) -> bool:
-        """Conferência do que foi lançado em cartão e Pix, antes de contar a gaveta. False = desistiu de fechar."""
+    def maquininha(self, maq: dict, lancamentos: list[dict] | None = None) -> bool:
+        """Conferência do que foi lançado em cartão e Pix (totais e cada lançamento), antes de contar a gaveta.
+        False = o operador disse que não confere (ou desistiu) e o turno não fecha."""
         from src.ui_qt.fechamento_turno import DialogoMaquininha
-        return DialogoMaquininha(maq, self.pai).exec() == QDialog.Accepted
+        return DialogoMaquininha(maq, lancamentos, self.pai).exec() == QDialog.Accepted
 
     def painel_fechamento(self, ctx, res: dict, vias: int, **ganchos) -> None:
         """O resumo do turno depois de fechado (sobra/falta, recebimentos), com Imprimir, arquivo texto e conferência."""
@@ -2622,8 +2623,9 @@ class JanelaCaixa(QMainWindow):
 
     # ========================================================= troca de turno
     def ir_para_fechamento(self) -> None:
-        """Troca de turno no modelo clássico: 1) confere a maquininha, 2) o operador declara a gaveta SEM ver o esperado,
-        3) confirma (com os avisos), 4) conferência por forma, 5) fecha, faz o backup e mostra o resumo."""
+        """Troca de turno no modelo clássico: 1) confere a maquininha (totais e cada lançamento de cartão e Pix), 2) o operador
+        declara só a gaveta, SEM ver o esperado, 3) confirma (com os avisos), 4) se a gaveta tiver diferença, escreve o motivo,
+        5) fecha, faz o backup, imprime as vias e mostra o resumo. Não pede o valor de cada forma separadamente."""
         if not self._pronto() or self._ocupado:
             return
         v = self.venda()
@@ -2641,24 +2643,25 @@ class JanelaCaixa(QMainWindow):
             self.recarregar_tudo()
             return
         maq = self.ctx.turnos.maquininha(turno["id"])
-        if maq["linhas"] and not self.dialogos.maquininha(maq):      # sem forma fora da gaveta, não há o que conferir
-            self.recarregar_tudo()
+        if maq["linhas"] and not self.dialogos.maquininha(maq, self.ctx.turnos.maquininha_lancamentos(turno["id"])):
+            self.recarregar_tudo()                    # não confere com a maquininha: nada é fechado
             return
         valor = self._pedir_valor_da_gaveta()
         if valor is None:
             self.recarregar_tudo()
             return
+        declaracao = self._declaracao_do_fechamento(turno["id"], valor)
         if not self.dialogos.confirmar("Troca de turno", f"Confirma {fmt.fmt_brl(valor)} como valor final?\n"
                                        "Depois de confirmar o turno é encerrado e não pode ser acertado."
                                        + self._avisos_turno(), padrao_sim=False):
             self.recarregar_tudo()
             return
-        from src.ui_qt.fechamento import coletar
-        ok, conferencia = self._executar(coletar, self.ctx, turno["id"], valor, parent=self)
-        if not ok or conferencia is None:
+        justificativa = self._justificar_diferenca(turno["id"], declaracao, valor)
+        if justificativa is None:
             self.recarregar_tudo()
             return
-        ok, res = self._executar(self.ctx.turnos.fechar, turno["id"], self.ctx.operador_id, valor, **conferencia)
+        ok, res = self._executar(self.ctx.turnos.fechar, turno["id"], self.ctx.operador_id, valor,
+                                 informados_por_forma=declaracao, justificativa=justificativa)
         if not ok:
             self.recarregar_tudo()
             return
@@ -2668,6 +2671,36 @@ class JanelaCaixa(QMainWindow):
         self._documento_fechamento(res)
         self.recarregar_tudo()
         self.avisar(f"Turno {turno['numero']} encerrado.", AMBAR)
+
+    def _declaracao_do_fechamento(self, turno_id: int, valor_gaveta: int) -> dict[int, int] | None:
+        """O operador só digita a gaveta. Cartão e Pix já foram conferidos na tela da maquininha (ele confirmou que bate), então
+        entram como informados iguais ao lançado no sistema; o dinheiro é o valor da gaveta. Com cheque/ticket físico no turno
+        não dá para repartir a gaveta: devolve None e só a gaveta é declarada (as outras formas ficam 'não informadas')."""
+        formas = self.ctx.turnos.formas_conferencia(turno_id, self.ctx.operador_id)
+        if sum(1 for f in formas if f["na_gaveta"] and not f["dinheiro"]):
+            return None
+        previa = self.ctx.turnos.conferencia_fechamento(turno_id, self.ctx.operador_id, valor_gaveta)
+        lancado = {l["tipo_id"]: l["esperado_cent"] for l in previa["linhas"]}
+        return {f["tipo_id"]: valor_gaveta if f["dinheiro"] else lancado[f["tipo_id"]] for f in formas}
+
+    def _justificar_diferenca(self, turno_id: int, declaracao: dict[int, int] | None, valor_gaveta: int) -> str | None:
+        """Sem diferença: texto vazio. Com diferença na gaveta (sobra ou falta) o fechamento só segue com o motivo escrito; a
+        diferença só é mostrada depois de o operador declarar a gaveta. None = desistiu (o turno continua aberto)."""
+        previa = self.ctx.turnos.conferencia_fechamento(turno_id, self.ctx.operador_id, valor_gaveta,
+                                                        informados_por_forma=declaracao)
+        if not previa["tem_diferenca"]:
+            return ""
+        diferenca = previa["gaveta"]["diferenca_cent"]
+        quadro = "SOBRA" if diferenca > 0 else "FALTA"
+        pergunta = (f"A gaveta tem {quadro} de {fmt.fmt_brl(abs(diferenca))}.\n"
+                    "Escreva o motivo para concluir (ou cancele e conte de novo):")
+        while True:
+            texto = self.dialogos.pedir_texto("Diferença no caixa", pergunta)
+            if texto is None:
+                return None
+            if texto.strip():
+                return texto.strip()
+            self.dialogos.aviso("Diferença no caixa", "Informe o motivo da diferença para concluir.")
 
     def _pedir_valor_da_gaveta(self) -> int | None:
         """O valor contado na gaveta (+ cheques/tickets), em centavos; pergunta de novo se digitou algo inválido. None = desistiu."""

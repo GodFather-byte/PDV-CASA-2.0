@@ -446,7 +446,7 @@ class TestAppQt(BaseQt):
         self.banco.cfg_set("tema_visual", "claro")
         app = self.app()
         app.iniciar(servicos=False)
-        self.assertIn("#f3f6fa", self.aplicacao.styleSheet())
+        self.assertIn("#e8ecf1", self.aplicacao.styleSheet())
         from src.ui_qt import tema
         tema.aplicar(self.aplicacao)
 

@@ -7,6 +7,14 @@ justificativa o operador ativo pode concluir, sem precisar modificar os valores
 para fazer o caixa bater. Não foi criada permissão nova: o caixa permanece
 disponível aos perfis atuais, inclusive nível zero.
 
+## Fluxo do caixa Qt (a partir da 1.9.1)
+
+O caixa **não pede mais o valor de cada forma**. "Trocar turno" mostra a conferência da maquininha (totais e cada
+lançamento de cartão e Pix, com o botão "Confere com a maquininha"), pede só o valor da gaveta e, se houver diferença
+nela, o motivo. Cartão e Pix entram como informados iguais ao lançado no sistema, porque o operador acabou de
+conferi-los. Com cheque ou ticket físico no turno só a gaveta é declarada (as outras formas ficam "não informadas").
+O diálogo por forma (`coletar`) continua disponível abaixo, mas o caixa não o usa.
+
 ## Integração Qt
 
 Diálogos especializados disponíveis:

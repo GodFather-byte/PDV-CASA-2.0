@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
-                               QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QPushButton,
+                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from src.controllers import conferencia_turno
 from src.core import formatacao as fmt
@@ -31,7 +31,7 @@ def _negrito(texto: str, direita: bool = False) -> QLabel:
 class DialogoMaquininha(QDialog):
     """Antes de contar a gaveta: o que foi lançado no turno em cartão e Pix, para comparar com o fechamento do lote."""
 
-    def __init__(self, maq: dict, parent: QWidget | None = None):
+    def __init__(self, maq: dict, lancamentos: list[dict] | None = None, parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle("Conferir maquininha")
         raiz = QVBoxLayout(self)
@@ -59,21 +59,41 @@ class DialogoMaquininha(QDialog):
         grade.addWidget(total, fim + 1, 2)
         grade.setColumnStretch(0, 1)
         raiz.addLayout(grade)
-        aviso = QLabel("Se algum valor não bate, cancele e confira os pagamentos antes de fechar o turno.")
+        self.tabela = QTableWidget(0, 4)
+        self.tabela.setHorizontalHeaderLabels(["Forma", "Hora", "Cupom / posição", "Valor (R$)"])
+        self.tabela.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tabela.setSelectionMode(QAbstractItemView.NoSelection)
+        self.tabela.verticalHeader().hide()
+        self.tabela.horizontalHeader().setStretchLastSection(True)
+        for lanc in lancamentos or []:
+            linha = self.tabela.rowCount()
+            self.tabela.insertRow(linha)
+            local = f"{lanc['local']}  (cupom {lanc['cupom']})" if lanc.get("cupom") else lanc["local"]
+            for col, texto in enumerate((lanc["tipo"], fmt.fmt_datahora(lanc["criado_em"])[11:16], local,
+                                         fmt.fmt_num(lanc["valor"]))):
+                celula = QTableWidgetItem(str(texto))
+                if col == 3:
+                    celula.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.tabela.setItem(linha, col, celula)
+        self.tabela.setMinimumHeight(150)
+        self.tabela.setVisible(bool(lancamentos))
+        raiz.addWidget(self.tabela)
+        aviso = QLabel("Compare cada forma (e cada lançamento) com o comprovante da maquininha. Se algum valor não bate, "
+                       "cancele e confira os pagamentos antes de fechar o turno.")
         aviso.setWordWrap(True)
         raiz.addWidget(aviso)
         botoes = QHBoxLayout()
         botoes.addStretch(1)
-        cancelar = QPushButton("Cancelar")
+        cancelar = QPushButton("Não confere / cancelar")
         cancelar.clicked.connect(self.reject)
         botoes.addWidget(cancelar)
-        self.btn_continuar = QPushButton("Continuar")
+        self.btn_continuar = QPushButton("Confere com a maquininha")
         self.btn_continuar.setObjectName("primario")
         self.btn_continuar.setDefault(True)
         self.btn_continuar.clicked.connect(self.accept)
         botoes.addWidget(self.btn_continuar)
         raiz.addLayout(botoes)
-        self.setMinimumWidth(440)
+        self.setMinimumWidth(520)
 
 
 def dados_do_turno(ctx, res: dict) -> list[tuple[str, str]]:
@@ -167,6 +187,20 @@ class PainelFechamento(QDialog):
             g_dir.addWidget(_negrito(valor, direita=True), i, 1)
         quadros.addWidget(dir_)
         raiz.addLayout(quadros)
+        maq = res.get("maquininha") or (ctx.turnos.maquininha(res["turno"]["id"]) if res["turno"].get("id") else None)
+        if maq and maq["linhas"]:
+            conferir = QGroupBox("Conferir na maquininha (cartão e Pix lançados neste turno)")
+            g_maq = QGridLayout(conferir)
+            for i, r in enumerate(maq["linhas"]):
+                g_maq.addWidget(QLabel(f"{r['tipo']}  ({r['qtd']})"), i, 0)
+                g_maq.addWidget(_negrito(fmt.fmt_num(r["valor"]), direita=True), i, 1)
+            fim = len(maq["linhas"])
+            g_maq.addWidget(_negrito(f"TOTAL  ({maq['qtd']})"), fim, 0)
+            total = _negrito(fmt.fmt_brl(maq["total"]), direita=True)
+            total.setStyleSheet("font-weight: bold; font-size: 13pt;")
+            g_maq.addWidget(total, fim, 1)
+            g_maq.setColumnStretch(0, 1)
+            raiz.addWidget(conferir)
         resultado = res["resultado"]
         cor = "#17805a" if resultado >= 0 else "#b83a45"
         self.faixa = QLabel(f"Resultado: {fmt.fmt_brl(resultado)}  -  {rotulo_do_resultado(resultado)}")

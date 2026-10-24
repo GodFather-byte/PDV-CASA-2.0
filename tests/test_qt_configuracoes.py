@@ -402,7 +402,7 @@ class TestConfiguracoesQt(BaseTeste):
         janela.abas.setCurrentIndex(SECOES.index("parametros"))
         self.definir(janela, "parametros", "tema_visual", "claro")
         self.assertTrue(janela.salvar())
-        self.assertIn("#f3f6fa", self.aplicacao.styleSheet())
+        self.assertIn("#e8ecf1", self.aplicacao.styleSheet())
         self.assertNotIn("#101827", self.aplicacao.styleSheet())
         tema.aplicar(self.aplicacao, "escuro")
         self.assertEqual(self.aplicacao.styleSheet(), tema.ESTILO)

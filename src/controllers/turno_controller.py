@@ -10,6 +10,7 @@ from src.controllers import conferencia_turno, notificacoes
 from src.core import formatacao as fmt
 from src.core import licenca
 from src.core.erros import ErroNegocio
+from src.core.posicao import padrao_valido, rotulo as rotulo_posicao
 
 # Pagamento que conta no turno `?` (aliases p = pagamentos_venda, v = vendas). Vale o turno em que o dinheiro ENTROU:
 # o adiantamento de uma mesa fica no turno que o recebeu, mesmo que a conta feche no seguinte, e a mesa ainda aberta
@@ -143,6 +144,24 @@ class TurnoController:
             nome = self.banco.valor("SELECT tipo FROM tipos_pagamento WHERE id = ?", (tipo_id,), "")
             linhas.append({"tipo_id": tipo_id, "tipo": nome, "qtd": r["qtd"], "valor": r["valor"]})
         return {"linhas": linhas, "qtd": sum(l["qtd"] for l in linhas), "total": sum(l["valor"] for l in linhas)}
+
+    def maquininha_lancamentos(self, turno_id: int) -> list[dict]:
+        """Cada pagamento do turno nas formas que não ficam na gaveta (cartão, Pix...), na ordem das formas e da hora: o operador
+        confere um a um com o comprovante da maquininha. Mesmo critério de `maquininha`, que dá só os totais por forma."""
+        padrao = padrao_valido(self.banco.cfg("posicao_padrao", "comanda"))
+        saida = []
+        for r in self.banco.todos(
+                f"""SELECT t.id AS tipo_id, t.tipo, p.criado_em, v.cupom, v.modalidade, v.comanda, v.posicao,
+                           p.valor_cent - p.troco_cent AS valor
+                    FROM pagamentos_venda p JOIN vendas v ON v.id = p.venda_id
+                    JOIN tipos_pagamento t ON t.id = p.tipo_pagamento_id
+                    WHERE {RECEBIDO_NO_TURNO} AND t.na_gaveta = 0 ORDER BY t.ordem, t.tipo, p.id""", (turno_id,)):
+            local = (rotulo_posicao(r["comanda"], r["posicao"], padrao) if r["modalidade"] == "mesa"
+                     else "Balcão" if r["modalidade"] == "balcao" else "Caderneta" if r["modalidade"] == "caderneta"
+                     else f"Entrega {r['posicao']}")
+            saida.append({"tipo_id": r["tipo_id"], "tipo": r["tipo"], "criado_em": r["criado_em"], "cupom": r["cupom"],
+                          "local": local, "valor": r["valor"]})
+        return saida
 
     def sangria_do_horario(self, turno_id: int, agora: datetime | None = None) -> str | None:
         """Sangria por horário (Configurações > Caixa > *Horários de sangria*, ex.: "02:00, 04:30"): devolve o horário

@@ -49,13 +49,15 @@ def aplicar(aplicacao: QApplication, aparencia: str = "escuro") -> None:
     aplicacao.setStyle("Fusion")
     estilo = ESTILO
     if aparencia == "claro":
+        # Claro confortável: fundo cinza-azulado suave e cartões em off-white (nada de branco puro em áreas grandes),
+        # texto azul-grafite em vez de preto e bordas discretas, para cansar menos a vista em turnos longos.
         cores = {
-            "#101827": "#f3f6fa", "#e6edf7": "#152238", "#1b2739": "#ffffff",
-            "#324158": "#bbc9d9", "#5ee2bb": "#006c55", "#afbdd1": "#40536d",
-            "#ffd28a": "#875000", "#24364d": "#e1e9f2", "#405570": "#a2b2c7",
-            "#304864": "#cedded", "#187e65": "#b0e4d2", "#32b38e": "#168567",
-            "#8190a6": "#64748b", "#1b2534": "#e5eaf0", "#182437": "#ffffff",
-            "#1d2d43": "#edf3f9",
+            "#101827": "#e8ecf1", "#e6edf7": "#1e2a3c", "#1b2739": "#f5f7fa",
+            "#324158": "#c8d1dd", "#5ee2bb": "#0b6b53", "#afbdd1": "#4d5c74",
+            "#ffd28a": "#7d4b00", "#24364d": "#dde4ed", "#405570": "#b4c0cf",
+            "#304864": "#cfd9e6", "#187e65": "#bfe3d3", "#32b38e": "#2f9a7c",
+            "#8190a6": "#66748a", "#1b2534": "#dfe4eb", "#182437": "#fbfcfd",
+            "#1d2d43": "#eef1f5",
         }
         for original, nova in cores.items():
             estilo = estilo.replace(original, nova)

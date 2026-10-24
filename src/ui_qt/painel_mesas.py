@@ -34,13 +34,13 @@ ESTADOS = {
         "acerto": {"fundo": "#33280f", "borda": "#a8832b", "texto": "#ffcf6e"},
     },
     "claro": {
-        "consumindo": {"fundo": "#e8eefc", "borda": "#8ea6e0", "texto": "#2a4a9a"},
-        "parada": {"fundo": "#fde8ee", "borda": "#d98aa1", "texto": "#a82c55"},
-        "conta": {"fundo": "#fdf1d6", "borda": "#d6a93a", "texto": "#7a5200"},
-        "balcao": {"fundo": "#dff5ec", "borda": "#59b894", "texto": "#0b6e4d"},
-        "garota": {"fundo": "#d9f3f1", "borda": "#4fb5aa", "texto": "#0a6259"},
-        "parcial": {"fundo": "#ece6fb", "borda": "#9b84e0", "texto": "#5a3fb0"},
-        "acerto": {"fundo": "#fdf1d6", "borda": "#d6a93a", "texto": "#7a5200"},
+        "consumindo": {"fundo": "#e3eaf7", "borda": "#9db0d8", "texto": "#2a4a8f"},
+        "parada": {"fundo": "#f7e5ea", "borda": "#d2899f", "texto": "#9c2b50"},
+        "conta": {"fundo": "#f6ebd0", "borda": "#cfa43d", "texto": "#74500a"},
+        "balcao": {"fundo": "#dcefe5", "borda": "#6ab597", "texto": "#0b6648"},
+        "garota": {"fundo": "#d7ebe8", "borda": "#59b0a6", "texto": "#0a5d55"},
+        "parcial": {"fundo": "#e8e3f5", "borda": "#9d8bd8", "texto": "#54409e"},
+        "acerto": {"fundo": "#f6ebd0", "borda": "#cfa43d", "texto": "#74500a"},
     },
 }
 CORES = {
@@ -48,10 +48,10 @@ CORES = {
                "ambar": "#ffd078", "vermelho": "#ff8d9b", "cartao": "#1a2735", "cartao2": "#233548",
                "sobre_marca": "#0b1330", "campo": "#0a1030", "borda": "#2f4180",
                "quadro": "#0a1029", "quadro_borda": "#25336e"},
-    "claro": {"texto": "#1c2438", "suave": "#4f5b78", "mudo": "#5a6580", "azul": "#2a5bd7", "verde": "#0b7d59",
-              "ambar": "#8f5a00", "vermelho": "#c4343f", "cartao": "#ffffff", "cartao2": "#e4ebfb",
-              "sobre_marca": "#ffffff", "campo": "#ffffff", "borda": "#a2b2c7",
-              "quadro": "#eef1f8", "quadro_borda": "#cfd7ea"},
+    "claro": {"texto": "#1e2a3c", "suave": "#4d5c74", "mudo": "#66748a", "azul": "#3560c4", "verde": "#0b6b53",
+              "ambar": "#7d4b00", "vermelho": "#b3303b", "cartao": "#f5f7fa", "cartao2": "#e3e9f1",
+              "sobre_marca": "#f7f9fc", "campo": "#fbfcfd", "borda": "#b4c0cf",
+              "quadro": "#dfe5ec", "quadro_borda": "#c1ccd9"},
 }
 
 
