@@ -79,11 +79,53 @@ class TesteComandaDaGarotaVazia(BaseCaixaQt):
         self.j.fechar_venda()
         self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
 
-    def test_comanda_de_cliente_vazia_continua_pedindo_um_item(self):
-        self.chamar("13")                                   # 13 não é garota cadastrada
+    def test_garota_sem_cadastro_tambem_fecha(self):
+        self.banco.executar("DELETE FROM garotas")                             # casa que identifica as garotas só pelo número
+        vid = self.chamar("45")
+        self.j.dialogos.escolhas = []
+        self.j.dialogos.confirmacoes = [True]
+        self.j.fechar_venda()
+        self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
+        self.assertNotIn("Lance ao menos", " ".join(self.j.dialogos.avisos))
+
+    def test_numero_nao_cadastrado_fecha_com_a_dica_do_1002(self):
+        vid = self.chamar("13")                                                # 13 não está no cadastro (só a 12)
+        self.j.dialogos.confirmacoes = [True]
+        self.j.fechar_venda()
+        self.assertIn("1002", self.j.dialogos.perguntas[-1])                   # cliente sem consumo usa o 1002
+        self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
+
+    def test_botao_fechar_venda_fica_habilitado_na_comanda_vazia_e_fecha(self):
+        self.banco.cfg_set("comissao_pede_shows", "N")
+        self.assertFalse(self.j.btn_fechar_venda.isEnabled())                  # balcão vazio: nada a fechar
+        vid = self.chamar()
+        self.assertTrue(self.j.btn_fechar_venda.isEnabled())                   # comanda vazia: pode fechar
+        self.j.dialogos.confirmacoes = [True]
+        self.j.btn_fechar_venda.click()
+        self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
+        self.assertFalse(self.j.btn_fechar_venda.isEnabled())
+        self.chamar("M5")
+        self.assertFalse(self.j.btn_fechar_venda.isEnabled())                  # mesa vazia continua sem fechar
+
+    def test_receber_numa_comanda_vazia_tambem_fecha(self):
+        self.banco.cfg_set("comissao_pede_shows", "N")
+        vid = self.chamar()
+        self.j.dialogos.confirmacoes = [True]
+        self.j.receber()                                                       # o Enter no valor chama receber()
+        self.assertNotIn("Lance ao menos", " ".join(self.j.dialogos.avisos))
+        self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
+
+    def test_mesa_vazia_continua_pedindo_um_item(self):
+        self.chamar("M5")
         self.j.fechar_venda()
         self.assertIn("ao menos um item", self.j.dialogos.avisos[-1])
         self.assertIsNotNone(self.j.venda_id)
+
+    def test_sem_o_modulo_das_garotas_comanda_vazia_continua_pedindo_item(self):
+        self.banco.cfg_set("usar_garotas", "N")
+        self.chamar("13")
+        self.j.fechar_venda()
+        self.assertIn("ao menos um item", self.j.dialogos.avisos[-1])
 
     def test_enter_com_o_codigo_vazio_fecha_a_comanda_da_garota(self):
         self.banco.cfg_set("comissao_pede_shows", "N")
