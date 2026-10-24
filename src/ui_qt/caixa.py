@@ -771,7 +771,8 @@ class JanelaCaixa(QMainWindow):
         caderneta = bool(v and v["modalidade"] == "caderneta")
         self.btn_receber.setEnabled(not caderneta if tem_itens else caderneta)
         self.btn_remover_pag.setEnabled(bool(pags))
-        self.btn_fechar_venda.setEnabled(tem_itens or caderneta or bool(v and v["prepago"]))
+        self.btn_fechar_venda.setEnabled(tem_itens or caderneta or bool(v and v["prepago"])
+                                         or self._comanda_vazia_de_garota(v))      # comanda vazia fecha sem lançamento
         self._sugerir_valor()
         self.carregar_mesas()
         self._modulos_visiveis()
@@ -2088,6 +2089,9 @@ class JanelaCaixa(QMainWindow):
         if not self._pronto() or self._ocupado or self._fechando_venda:
             return
         v = self.venda()
+        if v is not None and not self.ctx.caixa.itens(v["id"]) and self._comanda_vazia_de_garota(v):
+            self.fechar_venda()                       # nada a receber: comanda vazia só fecha (ou acerta os shows)
+            return
         if v is None or (not self.ctx.caixa.itens(v["id"]) and v["modalidade"] != "caderneta"):
             self.dialogos.aviso("Pagamento", "Lance ao menos um item antes de receber.")
             return
@@ -2400,9 +2404,9 @@ class JanelaCaixa(QMainWindow):
         return any(c["status"] == "pendente" for c in self.comissao_marcada)
 
     def _comanda_vazia_de_garota(self, v: dict | None) -> bool:
-        """Comanda de uma garota cadastrada (a comanda tem o número dela) e sem nada lançado: pode ser fechada mesmo assim."""
-        return bool(v and v["modalidade"] == "mesa" and v["comanda"] and self.ctx.comissoes.ligada()
-                    and self.ctx.comissoes.garota(v["posicao"]) is not None)
+        """Comanda (não mesa) sem nada lançado, numa casa que usa garotas: pode ser fechada mesmo assim. Qualquer número vale
+        como comanda de garota (o cadastro das garotas é opcional), então não depende de a garota estar cadastrada."""
+        return bool(v and v["modalidade"] == "mesa" and v["comanda"] and self.ctx.comissoes.ligada())
 
     def _fechar_comanda_da_garota_vazia(self, v: dict) -> None:
         """A comanda da garota sem consumo nem comissão marcada fecha sem lançamento nenhum. Se a casa acerta shows e a garota
@@ -2416,7 +2420,8 @@ class JanelaCaixa(QMainWindow):
                 return
         nome = self.ctx.comissoes.nome(v["posicao"])
         quem = f"a comanda {v['posicao']}" + (f" ({nome})" if nome else "")
-        if not self.dialogos.confirmar("Comanda da garota", f"Fechar {quem} sem nada lançado?"):
+        dica = "" if nome else "\n\nCliente que sai sem consumir: use o código 1002 (imprime o ticket de saída)."
+        if not self.dialogos.confirmar("Comanda sem lançamentos", f"Fechar {quem} sem nada lançado?{dica}"):
             self.ent_codigo.setFocus()
             return
         ok, _ = self._executar(self.ctx.caixa.cancelar_venda, v["id"], "comanda de garota fechada sem lançamentos")

@@ -49,10 +49,12 @@
   final ganhou o quadro "Conferir na maquininha" (qtd e valor por forma e total).
 - **Modo claro mais confortável:** fundo cinza-azulado (#e8ecf1), cartões off-white (#f5f7fa), texto grafite
   (#1e2a3c), bordas suaves e cartões das mesas em tons pastel mais calmos (`tema.py`, `caixa.py`, `painel_mesas.py`).
-- **Comanda da garota sem nada lançado fecha:** F12/Enter na comanda de uma garota cadastrada, sem consumo nem comissão
-  marcada, não trava mais no aviso "Lance ao menos um item". Com shows ligados e garota ativa abre o acerto dos shows
-  (como sempre) e, se desistir dele, pergunta se é para só fechar; senão pede confirmação e libera a comanda
-  (`JanelaCaixa._fechar_comanda_da_garota_vazia`). Comanda de cliente vazia continua pedindo item (a saída é o 1002).
+- **Comanda sem nada lançado fecha (casas com garotas):** qualquer comanda (não mesa) vazia pode ser fechada: o botão
+  Fechar venda fica habilitado, e F12/Enter/Receber não travam mais no aviso "Lance ao menos um item". Qualquer número vale
+  como garota (o cadastro é opcional). Com shows ligados e garota cadastrada ativa abre o acerto dos shows (como sempre)
+  e, desistindo, pergunta se é para só fechar; senão pede confirmação (sem cadastro a pergunta lembra o código 1002 para
+  cliente sem consumo). Mesa vazia e casa sem o módulo das garotas continuam pedindo item
+  (`JanelaCaixa._fechar_comanda_da_garota_vazia`).
 - **Código + Enter leva à quantidade (como no Tk):** Enter no código escolhe o produto, mostra nome e preço e leva ao
   campo da quantidade (selecionada); o segundo Enter (ou o botão Lançar) lança. Direto, sem pausa: "6*código", modo
   leitor (F3) e produto de balança (pesa). `JanelaCaixa.lancar_item(pedir_quantidade=True)`. Esc desiste do produto.
