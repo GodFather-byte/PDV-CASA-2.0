@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 
 from src.controllers.config_controller import CAMPOS_CONFIG, CAMPOS_LOJA
 from src.controllers.integracoes_controller import IntegracoesController
+from src.core import edicao
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.core.identidade_visual import preview_logotipo
 from src.sync import painel_envio, ponte
@@ -86,6 +87,7 @@ class JanelaConfiguracoes(QDialog):
             "sincronização de vendas nem contrata serviços automaticamente.",
             "suave"))
         self.abas = QTabWidget()
+        fora_da_edicao = edicao.atual().fora_das_configuracoes()
         for secao, titulo in (("loja", "Identificação e contatos"),
                               ("preferencias", "Preferências de venda/caixa"),
                               ("parametros", "Parâmetros e módulos"),
@@ -95,6 +97,8 @@ class JanelaConfiguracoes(QDialog):
             formulario.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
             for campo in CAMPOS[secao]:
                 chave, rotulo, tipo = campo[:3]
+                if chave in fora_da_edicao:           # opção que não existe nesta edição (adega: mesas, garotas...)
+                    continue
                 if tipo == "sn":
                     editor = QCheckBox("Sim")
                 elif tipo == "escolha":
@@ -237,9 +241,7 @@ class JanelaConfiguracoes(QDialog):
 
     def _valores(self, secao):
         valores = {}
-        for campo in CAMPOS[secao]:
-            chave = campo[0]
-            editor = self.campos[secao][chave]
+        for chave, editor in self.campos[secao].items():      # só os campos que esta edição mostra
             if isinstance(editor, QCheckBox):
                 valor = "S" if editor.isChecked() else "N"
             elif isinstance(editor, QComboBox):

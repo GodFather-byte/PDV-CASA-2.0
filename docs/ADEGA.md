@@ -19,7 +19,8 @@ Diagnóstico, melhorias entregues, plano em fases e próxima evolução:
 
 ## Na instalação (ordem sugerida)
 
-1. **Primeiro acesso:** nome da loja e perfil **Adega / depósito de bebidas**. O perfil liga o caixa só de balcão, o
+1. **Primeiro acesso:** nome da loja e perfil **Adega / depósito de bebidas** (na edição **E&A Superações** o perfil
+   já vem aplicado e as opções de boate nem aparecem; ver `src/core/edicao.py`). O perfil liga o caixa só de balcão, o
    delivery, a caderneta (fiado), o desconto e o agrupamento de leituras repetidas; cria as categorias BEBIDAS
    (Cervejas, Destilados, Vinhos e espumantes, Refrigerantes, Águas e sucos, Energéticos) e CONVENIÊNCIA (Gelo e carvão,
    Tabacaria, Petiscos, Descartáveis). Tudo ajustável depois em Configurações.

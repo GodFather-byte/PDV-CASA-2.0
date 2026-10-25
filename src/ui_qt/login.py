@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QInputDialog, QLineEdit, QPushButton, QVBoxLayout,
 )
 
-from src.core import licenca
+from src.core import edicao, licenca
 from src.core.erros import ErroNegocio
 from src.sync import licenca_nuvem
 from src.ui_qt.tema import texto
@@ -67,7 +67,8 @@ class JanelaLogin(QDialog):
         self._fila = None
         self._cancelamento = Event()
         self._thread = None
-        self.setWindowTitle("WillPDV • Entrada Qt")
+        ed = edicao.atual()
+        self.setWindowTitle(f"{ed.nome} • {ed.titulo_entrada}")
         self.setMinimumSize(680, 470)
         layout = QHBoxLayout(self)
         marca = QVBoxLayout()

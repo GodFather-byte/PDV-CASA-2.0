@@ -5,11 +5,32 @@ python -m src.app --sync   ou   WillPDV.exe --sync
 
 Com `--autoteste [arquivo] [--rede]` confere se o programa instalado está inteiro (ver src/autoteste.py) e encerra.
 Com `--homologacao [arquivo.json]` exercita retomada e fechamento em banco descartável, sem hardware.
+Com `--edicao ea_superacoes` abre a edição E&A Superações (adega) em vez do WillPDV (ver src/core/edicao.py).
 A interface é Qt (PySide6).
 """
+import os
 import sys
 
+
+def _tirar_edicao(argv: list[str]) -> list[str]:
+    """`--edicao X` (ou `--edicao=X`) vira a variável PDV_EDICAO e sai dos argumentos (o X não é o arquivo do autoteste)."""
+    resto, i = [], 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--edicao" and i + 1 < len(argv):
+            os.environ["PDV_EDICAO"] = argv[i + 1]
+            i += 2
+            continue
+        if arg.startswith("--edicao="):
+            os.environ["PDV_EDICAO"] = arg.split("=", 1)[1]
+        else:
+            resto.append(arg)
+        i += 1
+    return resto
+
+
 if __name__ == "__main__":
+    sys.argv[1:] = _tirar_edicao(sys.argv[1:])
     if "--homologacao" in sys.argv[1:]:
         from src.homologacao import executar
         resto = [a for a in sys.argv[1:] if not a.startswith("--")]

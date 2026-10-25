@@ -70,6 +70,21 @@
   Retomar depurando num Python 3.10 com Tk+Qt (ver PR #24, commits `f848ae0` a `8315eec`).
 - Não portado ainda: a opção `painel_mesas_fixo` (o Qt sempre mostra o painel).
 
+## Edição E&A Superações (PDV só de adega)
+
+- O mesmo código gera duas edições (`src/core/edicao.py`): **WillPDV** (completo, igual a antes) e **E&A Superações**
+  (adega). A palavra "edição" foi escolhida porque "produto" no código é item à venda.
+- Qual roda: variável `PDV_EDICAO`; no executável, `edicao.txt` ao lado do .exe (fase 3 grava no build); senão WillPDV.
+  Do código-fonte: `python -m src.app --edicao ea_superacoes` ou `iniciar_ea_superacoes.bat`.
+- A adega: marca, logotipo e ícone próprios (`instalador/ea-superacoes-logo.png` e `.ico`, com a grafia corrigida para
+  SUPERAÇÕES), pasta de dados `%LOCALAPPDATA%\EA-SUPERACOES` no executável, perfil Adega aplicado na primeira entrada
+  (`edicao.preparar`, chamado em `App.iniciar`; marca `edicao` no config), mesas/garotas/portaria/rodízio/pré-pago sempre
+  desligados (voltam a N a cada entrada e `salvar_config` recusa ligar), opções de mesas/garotas/comissão/portaria fora das
+  Configurações, sem o botão Cozinha/Bar no menu e sem o botão Comissões no caixa (este some em qualquer casa sem garotas).
+- **Fase 3 (não feita):** instalador próprio (`AppId` novo, `E&A-Superacoes-Setup-<versão>.exe`, gravar `edicao.txt`,
+  ícone no .exe, imagens do assistente), licença própria no gerador de licenças e CI gerando os dois instaladores.
+- Cupom continua NÃO FISCAL (confirmado pelo dono); NFC-e não está ativa.
+
 ## Testes
 
 - Os testes de telas Tk foram removidos por script (classes/métodos que citavam tkinter, `src.ui`, `ui_robo`).
