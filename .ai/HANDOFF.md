@@ -81,8 +81,18 @@
   (`edicao.preparar`, chamado em `App.iniciar`; marca `edicao` no config), mesas/garotas/portaria/rodízio/pré-pago sempre
   desligados (voltam a N a cada entrada e `salvar_config` recusa ligar), opções de mesas/garotas/comissão/portaria fora das
   Configurações, sem o botão Cozinha/Bar no menu e sem o botão Comissões no caixa (este some em qualquer casa sem garotas).
-- **Fase 3 (não feita):** instalador próprio (`AppId` novo, `E&A-Superacoes-Setup-<versão>.exe`, gravar `edicao.txt`,
-  ícone no .exe, imagens do assistente), licença própria no gerador de licenças e CI gerando os dois instaladores.
+- **Fase 3 (feita):** `python build_pdv.py --edicao ea_superacoes` gera `dist/EASuperacoes/EASuperacoes.exe` (com `edicao.txt`,
+  ícone e logotipo no pacote) e `instalador/saida/EASuperacoes-Setup-<versão>.exe` (`instalador/EASuperacoes.iss`, `AppId`
+  próprio, instala ao lado do WillPDV, imagens `ea-superacoes-assistente*.bmp`). O CI (`build-windows.yml`) tem o job `adega`
+  (autoteste no .exe e no instalado, instalação silenciosa, atualização por cima com o programa aberto) e publica na Release
+  `ultima-versao-adega`. O autoteste agora mostra a edição e confere se a marca dela veio no pacote.
+- **Licença por edição:** o código assinado leva o campo `edicao` (só nas licenças da adega; as do WillPDV continuam
+  idênticas). `licenca.ativar`/`estado` recusam licença de outra edição. Emissão: WillPDV Licenças (escolha do programa na aba
+  Emitir; coluna Programa nas lojas; conferência mostra o programa) e `python -m tools.gerar_licenca emitir --edicao ea_superacoes`.
+  Limites: versões antigas do WillPDV não conhecem o campo e aceitariam uma licença da adega; a **central do Telegram**
+  (`licenciador/central.py`) ainda emite só licença do WillPDV, então um caixa E&A com a ponte ligada recusaria a renovação
+  automática (emitir pelo WillPDV Licenças até a central saber a edição de cada caixa).
+- Conferir no Windows real: o "&" do nome no assistente do Inno (pode aparecer sublinhado) e o ícone no .exe.
 - Cupom continua NÃO FISCAL (confirmado pelo dono); NFC-e não está ativa.
 
 ## Testes

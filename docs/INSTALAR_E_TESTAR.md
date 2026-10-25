@@ -163,6 +163,11 @@ ainda não tem o par de chaves, veja "WillPDV Licenças: o gerador de licenças"
 
 4. O instalador sai em `instalador\saida\WillPDV-Setup-<versão>.exe`; o autoteste deve terminar em "TUDO CERTO".
 
+**E&A Superações (edição só de adega):** o mesmo passo a passo com `python build_pdv.py --edicao ea_superacoes`. Sai
+`dist\EASuperacoes\EASuperacoes.exe` e `instalador\saida\EASuperacoes-Setup-<versão>.exe`. Instala ao lado do WillPDV (outro
+programa no Windows, dados em `%LOCALAPPDATA%\EA-SUPERACOES`) e pede licença própria, emitida para o programa E&A Superações.
+No GitHub, a cada push na main, ele vai para a Release **ultima-versao-adega** (link fixo).
+
 ## Para quem mantém o sistema
 
 - A cada versão nova: suba o número em `src/versao.py` e faça o push. O nome do artifact leva a versão e o commit.

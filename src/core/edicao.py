@@ -6,6 +6,7 @@ o que some das Configurações e do menu por não fazer sentido numa adega.
 
 Qual edição roda: a variável PDV_EDICAO; no executável, o arquivo `edicao.txt` ao lado dele (gravado pelo build); senão o
 WillPDV. No código-fonte: `python -m src.app --edicao ea_superacoes` (ou `iniciar_ea_superacoes.bat`).
+Executável e instalador de cada edição: `python build_pdv.py --edicao ea_superacoes` (WillPDV sem a opção).
 """
 from __future__ import annotations
 
@@ -43,6 +44,8 @@ class Edicao:
     menu_oculto: frozenset = frozenset()               # botões do menu principal que não aparecem
     sufixo_titulo: str = ""            # complemento do título da janela principal
     titulo_entrada: str = "Entrada"    # título da tela de entrada (depois do nome)
+    executavel: str = "WillPDV"        # nome do .exe e da pasta em dist/ (sem acento nem &: o instalador usa no cmd)
+    script_instalador: str = "WillPDV.iss"     # em instalador/ (Inno Setup)
 
     def fora_das_configuracoes(self) -> frozenset:
         return self.ocultas | frozenset(self.fixas)
@@ -55,7 +58,8 @@ EDICOES = {
         "ea_superacoes", "E&A Superações", "E&A SUPERAÇÕES", "ea-superacoes.ico", "ea-superacoes-logo.png",
         "EA-SUPERACOES", perfil="adega",
         fixas={"usar_mesas": "N", "usar_garotas": "N", "usar_portaria": "N", "usar_rodizio": "N", "usar_prepago": "N"},
-        ocultas=CHAVES_CASA_NOTURNA, menu_oculto=frozenset({"cozinha"})),
+        ocultas=CHAVES_CASA_NOTURNA, menu_oculto=frozenset({"cozinha"}),
+        executavel="EASuperacoes", script_instalador="EASuperacoes.iss"),
 }
 
 

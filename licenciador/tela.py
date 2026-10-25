@@ -11,7 +11,7 @@ from tkinter import filedialog, ttk
 
 from licenciador import nucleo
 from licenciador.nucleo import Configuracao, ErroLicenciador, Historico
-from src.core import backup_seguro
+from src.core import backup_seguro, edicao
 from src.core import formatacao as fmt
 from licenciador import icone, tema
 from licenciador.tema import COR, Grade
@@ -75,32 +75,39 @@ class Janela(tk.Tk):
         self.ent_loja = ttk.Combobox(f, textvariable=self.var_loja, values=self.historico.lojas(), width=42)
         self.ent_loja.grid(row=1, column=0, columnspan=3, sticky="we", pady=(2, 12))
 
-        ttk.Label(f, text="Tipo de licença", style="Rotulo.TLabel").grid(row=2, column=0, sticky="w")
+        ttk.Label(f, text="Programa (a licença só abre este)", style="Rotulo.TLabel").grid(row=2, column=0, sticky="w")
+        self.var_edicao = tk.StringVar(value=edicao.PADRAO)
+        programas = ttk.Frame(f)
+        programas.grid(row=3, column=0, columnspan=3, sticky="w", pady=(2, 8))
+        for valor, nome in nucleo.PROGRAMAS.items():
+            ttk.Radiobutton(programas, text=nome, value=valor, variable=self.var_edicao).pack(side="left", padx=(0, 18))
+
+        ttk.Label(f, text="Tipo de licença", style="Rotulo.TLabel").grid(row=4, column=0, sticky="w")
         self.var_tipo = tk.StringVar(value="mensal")
         quadro = ttk.Frame(f)
-        quadro.grid(row=3, column=0, columnspan=3, sticky="w", pady=(2, 8))
+        quadro.grid(row=5, column=0, columnspan=3, sticky="w", pady=(2, 8))
         for valor in nucleo.TIPOS:
             ttk.Radiobutton(quadro, text=nucleo.ROTULO[valor], value=valor, variable=self.var_tipo,
                             command=self.atualizar_validade).pack(side="left", padx=(0, 18))
 
         self.lbl_qtd = ttk.Label(f, text="Quantos meses", style="Rotulo.TLabel")
-        self.lbl_qtd.grid(row=4, column=0, sticky="w")
+        self.lbl_qtd.grid(row=6, column=0, sticky="w")
         self.var_qtd = tk.StringVar(value="1")
         self.spin = ttk.Spinbox(f, from_=1, to=nucleo.MAX_MESES, textvariable=self.var_qtd, width=6, command=self.atualizar_validade)
-        self.spin.grid(row=5, column=0, sticky="w", pady=(2, 4))
+        self.spin.grid(row=7, column=0, sticky="w", pady=(2, 4))
         self.var_qtd.trace_add("write", lambda *_: self.atualizar_validade())
         self.lbl_validade = ttk.Label(f, text="", font=tema.FONTE_B, foreground=COR["marinho2"])
-        self.lbl_validade.grid(row=5, column=1, sticky="w", padx=14)
+        self.lbl_validade.grid(row=7, column=1, sticky="w", padx=14)
 
         self.btn_gerar = ttk.Button(f, text="Gerar licença", style="Ok.TButton", command=self.gerar)
-        self.btn_gerar.grid(row=6, column=0, sticky="w", pady=(14, 8))
+        self.btn_gerar.grid(row=8, column=0, sticky="w", pady=(14, 8))
 
-        ttk.Label(f, text="Código para mandar ao cliente", style="Rotulo.TLabel").grid(row=7, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(f, text="Código para mandar ao cliente", style="Rotulo.TLabel").grid(row=9, column=0, sticky="w", pady=(8, 0))
         self.txt_codigo = tk.Text(f, height=6, wrap="char", font=tema.FONTE_MONO, bg="white", relief="solid", bd=1)
-        self.txt_codigo.grid(row=8, column=0, columnspan=3, sticky="nsew", pady=(2, 6))
+        self.txt_codigo.grid(row=10, column=0, columnspan=3, sticky="nsew", pady=(2, 6))
         self.txt_codigo.configure(state="disabled")
         botoes = ttk.Frame(f)
-        botoes.grid(row=9, column=0, columnspan=3, sticky="w")
+        botoes.grid(row=11, column=0, columnspan=3, sticky="w")
         self.btn_copiar = ttk.Button(botoes, text="Copiar código", command=lambda: self.copiar(lambda e: e.codigo, "Código copiado."))
         self.btn_copiar.pack(side="left")
         self.btn_msg = ttk.Button(botoes, text="Copiar mensagem pronta para o cliente",
@@ -109,9 +116,9 @@ class Janela(tk.Tk):
         self.btn_salvar = ttk.Button(botoes, text="Salvar em arquivo...", command=self.salvar_arquivo)
         self.btn_salvar.pack(side="left")
         self.lbl_status = ttk.Label(f, text="", foreground=COR["ok"])
-        self.lbl_status.grid(row=10, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        self.lbl_status.grid(row=12, column=0, columnspan=3, sticky="w", pady=(8, 0))
         f.columnconfigure(2, weight=1)
-        f.rowconfigure(8, weight=1)
+        f.rowconfigure(10, weight=1)
         self._botoes_codigo(False)
 
     def _botoes_codigo(self, ligado: bool) -> None:
@@ -147,13 +154,15 @@ class Janela(tk.Tk):
         self.txt_codigo.configure(state="disabled")
         self._botoes_codigo(True)
         vence = "sem vencimento" if e.tipo == "permanente" else f"válida até {e.expira_em.strftime(BR)}"
-        self.lbl_status.configure(text=f"Licença {e.descricao.lower()} de {e.loja}, {vence}. Guardada no histórico.")
+        self.lbl_status.configure(text=f"Licença {e.descricao.lower()} do {e.programa} para {e.loja}, {vence}. "
+                                       "Guardada no histórico.")
         self.ent_loja.configure(values=self.historico.lojas())
         self.atualizar_lojas()
         self._backup_automatico()
 
     def _emitir(self) -> nucleo.Emitida:
-        e = nucleo.emitir(self.var_loja.get(), self.var_tipo.get(), self.quantidade(), self.arquivo_chave)
+        e = nucleo.emitir(self.var_loja.get(), self.var_tipo.get(), self.quantidade(), self.arquivo_chave,
+                          edicao_programa=self.var_edicao.get())
         self.historico.adicionar(e)
         return e
 
@@ -181,7 +190,7 @@ class Janela(tk.Tk):
         self.abas.add(f, text="  Lojas e vencimentos  ")
         ttk.Label(f, text="Cada loja aparece uma vez, com a licença mais nova. Quem vence primeiro fica no alto.",
                   foreground=COR["suave"]).pack(anchor="w")
-        self.grade = Grade(f, [("loja", "Loja", 230, "w"), ("tipo", "Tipo", 130, "w"), ("emitida", "Emitida em", 100, "center"),
+        self.grade = Grade(f, [("loja", "Loja", 200, "w"), ("programa", "Programa", 130, "w"), ("tipo", "Tipo", 120, "w"), ("emitida", "Emitida em", 100, "center"),
                                ("vence", "Vence em", 100, "center"), ("situacao", "Situação", 150, "w")], altura=12)
         self.grade.pack(fill="both", expand=True, pady=8)
         self.grade.tag("vencida", foreground=COR["perigo"])
@@ -197,7 +206,7 @@ class Janela(tk.Tk):
         self.grade.limpar()
         for codigo, d in self._linhas.items():
             tag = ("vencida",) if d["situacao"] == "Vencida" else ("vence",) if d["situacao"].startswith("Vence") else ()
-            self.grade.adicionar([d["loja"], nucleo.ROTULO.get(d["tipo"], d["tipo"]), _br(d["emitida_em"]),
+            self.grade.adicionar([d["loja"], d["programa"], nucleo.ROTULO.get(d["tipo"], d["tipo"]), _br(d["emitida_em"]),
                                   "—" if d["permanente"] else _br(d["expira_em"]), d["situacao"]], iid=codigo, tags=tag)
         self.atualizar_aviso_vencimentos()
 
@@ -221,6 +230,7 @@ class Janela(tk.Tk):
             tema.aviso(self, "Escolha uma loja na lista.", "Renovar")
             return
         self.var_loja.set(d["loja"])
+        self.var_edicao.set(d["edicao"])
         self.var_tipo.set(d["tipo"])
         self.var_qtd.set(str(d["quantidade"] or 1))
         self.atualizar_validade()
@@ -262,7 +272,7 @@ class Janela(tk.Tk):
         cor = COR["perigo"] if r["situacao"] == "Vencida" else COR["ok"]
         validade = "sem vencimento" if r["permanente"] else f"vence em {r['expira_em'].strftime(BR)}"
         self.lbl_conferido.configure(
-            text=f"Assinatura conferida.\nLoja: {r['loja']}\nEmitida em {r['emitida_em'].strftime(BR)}, {validade}\n{r['situacao']}", foreground=cor)
+            text=f"Assinatura conferida.\nLoja: {r['loja']}\nPrograma: {r['programa']}\nEmitida em {r['emitida_em'].strftime(BR)}, {validade}\n{r['situacao']}", foreground=cor)
 
     # ----------------------------------------------------------------- chave
     def _aba_chave(self) -> None:

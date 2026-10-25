@@ -115,6 +115,55 @@ class TestePrepararBanco(unittest.TestCase):
         self.assertTrue(self.banco.cfg_bool("usar_garotas"))
 
 
+class TesteLicencaPorEdicao(unittest.TestCase):
+    """Cada edição tem a sua licença: a edição vai dentro do código assinado."""
+    SEMENTE = bytes(range(32))
+
+    def setUp(self):
+        from src.core import ed25519
+        self.publica = ed25519.chave_publica(self.SEMENTE)
+        self.banco = BancoDados(":memory:")
+        self.banco.cfg_set("licenca_exigir", "S")
+        self.addCleanup(self.banco.fechar)
+        self.hoje = __import__("datetime").date(2026, 10, 25)
+
+    def codigo(self, edicao_programa="willpdv", loja="ADEGA-1"):
+        from src.core import licenca
+        return licenca.gerar_licenca(self.SEMENTE, loja, 30, self.hoje, edicao_programa)
+
+    def test_licenca_do_willpdv_continua_sem_o_campo_da_edicao(self):
+        import base64, json
+        from src.core import licenca
+        carga = self.codigo().split(".")[1]
+        dados = json.loads(base64.urlsafe_b64decode(carga + "=" * (-len(carga) % 4)))
+        self.assertNotIn("edicao", dados)                          # o mesmo formato das licenças já entregues
+        self.assertEqual(licenca.ler_licenca(self.codigo(), self.publica)["edicao"], "willpdv")
+        self.assertEqual(licenca.ler_licenca(self.codigo("ea_superacoes"), self.publica)["edicao"], "ea_superacoes")
+        with self.assertRaises(ValueError):
+            licenca.gerar_licenca(self.SEMENTE, "ADEGA-1", 30, self.hoje, "adega")
+
+    def test_adega_so_aceita_a_licenca_da_adega(self):
+        from src.core import licenca
+        with patch.dict(os.environ, ADEGA):
+            with self.assertRaises(licenca.LicencaInvalida) as erro:
+                licenca.ativar(self.banco, self.codigo(), self.hoje, self.publica)
+            self.assertIn("WillPDV", str(erro.exception))
+            lic = licenca.ativar(self.banco, self.codigo("ea_superacoes"), self.hoje, self.publica)
+            self.assertEqual(lic["edicao"], "ea_superacoes")
+            self.assertEqual(licenca.estado(self.banco, self.hoje, self.publica).situacao, "ok")
+
+    def test_willpdv_nao_aceita_a_licenca_da_adega(self):
+        from src.core import licenca
+        with sem_variavel():
+            with self.assertRaises(licenca.LicencaInvalida) as erro:
+                licenca.ativar(self.banco, self.codigo("ea_superacoes"), self.hoje, self.publica)
+            self.assertIn("E&A Superações", str(erro.exception))
+            self.banco.cfg_set("licenca_token", self.codigo("ea_superacoes"))     # gravada por fora: não vale
+            estado = licenca.estado(self.banco, self.hoje, self.publica)
+        self.assertEqual(estado.situacao, "sem_licenca")
+        self.assertIn("E&A Superações", estado.mensagem)
+
+
 try:
     from tests.test_qt_app import BaseQt
     from src.ui_qt.app import App, JanelaPrincipal
