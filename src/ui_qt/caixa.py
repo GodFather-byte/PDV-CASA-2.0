@@ -522,9 +522,8 @@ class JanelaCaixa(QMainWindow):
         self.lbl_troco = _rotulo("0,00", "troco")
         c_dir.addWidget(self.lbl_troco)
         c_dir.addWidget(_rotulo("Forma de pagamento (1-9, setas ou a inicial)", "mudo"))
-        self.cmb_forma = SeletorForma()
+        self.cmb_forma = QComboBox()   # EXPERIMENTO de CI
         self.cmb_forma.currentIndexChanged.connect(lambda _i: self._sugerir_valor())
-        self.cmb_forma.escolhida.connect(lambda _i: self._forma_escolhida())
         self.cmb_forma.installEventFilter(self)
         c_dir.addWidget(self.cmb_forma)
         c_dir.addWidget(_rotulo("Valor recebido (R$)", "mudo"))
