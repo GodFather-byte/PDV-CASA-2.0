@@ -67,14 +67,18 @@ class TesteSeletorForma(BaseCaixaQt):
 
 class TesteTelaCheia(BaseCaixaQt):
     def test_alterna_e_volta(self):
+        # Sem janela real em tela cheia: sem gerenciador de janelas (xvfb do CI) isso só traz instabilidade; o estado é simulado.
         self.abrir_turno()
         j = self.janela()
-        self.assertFalse(j.isFullScreen())
+        estado = {"cheia": False}
+        j.showFullScreen = lambda: estado.update(cheia=True)
+        j.showNormal = lambda: estado.update(cheia=False)
+        j.isFullScreen = lambda: estado["cheia"]
         j.alternar_tela_cheia()
-        self.assertTrue(j.isFullScreen())
+        self.assertTrue(estado["cheia"])
         self.assertIn("Sair", j.btn_tela_cheia.text())
         j.alternar_tela_cheia()
-        self.assertFalse(j.isFullScreen())
+        self.assertFalse(estado["cheia"])
         self.assertNotIn("Sair", j.btn_tela_cheia.text())
 
     def test_config_padrao_liga_a_tela_cheia(self):
