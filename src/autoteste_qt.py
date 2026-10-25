@@ -28,8 +28,9 @@ def _backup_seguro(pasta: Path) -> str:
 
 
 def executar(saida: str | None = None) -> int:
+    from src.core import edicao
     from src.versao import VERSAO
-    linhas = [f"WillPDV {VERSAO} — autoteste Qt"]
+    linhas = [f"{edicao.atual().nome} {VERSAO} — autoteste Qt"]
     resultado = 0
     try:
         from src.ui_qt.app import autoteste
