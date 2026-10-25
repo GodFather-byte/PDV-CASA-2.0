@@ -60,6 +60,12 @@
   leitor (F3) e produto de balança (pesa). `JanelaCaixa.lancar_item(pedir_quantidade=True)`. Esc desiste do produto.
 - **Forma de pagamento recomeça em Dinheiro** a cada venda: ao fechar a venda e ao trocar de comanda
   (`JanelaCaixa._forma_padrao`); dentro da mesma venda a escolha fica.
+- **Caixa mais legível e em tela cheia:** a forma de pagamento deixou de ser lista suspensa e virou botões grandes numerados
+  (`ui_qt/seletor_forma.py`, `SeletorForma`: 1-9, setas, inicial, clique leva ao valor; mesma API do combo). Valor recebido
+  (16pt) e troco (22pt) maiores; painel direito com 360px. O caixa abre em tela cheia (config `caixa_tela_cheia`, padrão "S",
+  em Configurações > Aparência); Ctrl+F alterna, botões "Tela cheia" e "Fechar caixa" no cabeçalho
+  (`JanelaCaixa.aplicar_tela_cheia`, chamado por `abrir_caixa` em `app.py`). Modo claro com contornos mais definidos
+  (bordas dos quadros, botões, campos e cartões das mesas mais escuras).
 - Não portado ainda: a opção `painel_mesas_fixo` (o Qt sempre mostra o painel).
 
 ## Testes

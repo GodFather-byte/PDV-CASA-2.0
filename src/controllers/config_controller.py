@@ -50,6 +50,7 @@ CAMPOS_MAQUINA = [
 CAMPOS_CONFIG = [
     ("tema_visual", "Aparência do programa", "escolha", "Aparência",
      [("escuro", "Modo escuro (fundo escuro, o padrão)"), ("claro", "Modo claro (fundo claro)")]),
+    ("caixa_tela_cheia", "Abrir o caixa em tela cheia (Ctrl+F alterna)", "sn", "Aparência"),
     ("mensagem_rodape", "Mensagem de rodape do cupom", "texto", "Impressao"),
     ("posicao_padrao", "Número digitado sem letra no caixa é", "escolha", "Mesas e serviço",
      [("comanda", "Comanda (a mesa é M + número, ex.: M5)"), ("mesa", "Mesa (a comanda é C + número, ex.: C2)")]),

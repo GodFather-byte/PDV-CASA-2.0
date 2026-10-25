@@ -49,6 +49,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Venda, itens, pagamento, mesas e comandas | `caixa_controller.py` |
 | Cartões de mesas, comandas, garotas e balcão no caixa (visual da boate) | modelo `mesas_modelo.py` (`montar_tiles`); desenho e teclado em `ui_qt/painel_mesas.py`; ligação em `ui_qt/caixa.py` (`carregar_mesas`) |
 | Turno, numeração de cupom, fechamento | `turno_controller.py`, `conferencia_turno.py` |
+| Seletor de forma de pagamento (botões) e tela cheia do caixa | `ui_qt/seletor_forma.py`; `ui_qt/caixa.py` (`aplicar_tela_cheia`) |
 | Troca de turno no modelo clássico (maquininha, gaveta, confirmação, resumo sobra/falta) | `ui_qt/caixa.py` (`ir_para_fechamento`), `ui_qt/fechamento_turno.py` (`DialogoMaquininha`, `PainelFechamento`) |
 | Conferência por forma e justificativa | `ui_qt/fechamento.py`; contrato em `docs/FECHAMENTO_EXPLICATIVO.md` |
 | Devolução por cupom e troca auditadas | API única em `caixa_controller.py`, ledger em `devolucoes_controller.py`; `ui_qt/devolucoes.py`; `docs/DEVOLUCOES.md` |

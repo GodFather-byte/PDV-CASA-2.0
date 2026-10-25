@@ -501,7 +501,11 @@ class JanelaPrincipal(QMainWindow):
             return
         try:
             from src.ui_qt.caixa import JanelaCaixa
-            return self._unica("caixa", lambda: JanelaCaixa(self.ctx, self))
+            nova = "caixa" not in self.janelas
+            janela = self._unica("caixa", lambda: JanelaCaixa(self.ctx, self))
+            if nova and self.ctx.banco.cfg("caixa_tela_cheia") != "N":
+                janela.aplicar_tela_cheia(True)
+            return janela
         except Exception as erro:
             logging.getLogger("pdv.qt").exception("Falha ao abrir o caixa Qt.")
             self.mensagem.setText(f"Não foi possível abrir o caixa Qt: {erro}. Consulte o log e reinicie o programa.")
