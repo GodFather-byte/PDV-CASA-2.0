@@ -267,7 +267,8 @@ class JanelaCaixa(QMainWindow):
         try:
             return self.ctx.config.nome_loja()
         except Exception:  # noqa: BLE001 - o título não pode impedir o caixa de abrir
-            return "WillPDV"
+            from src.core import edicao
+            return edicao.atual().nome
 
     # ================================================================ layout
     def _montar(self) -> None:
@@ -462,6 +463,7 @@ class JanelaCaixa(QMainWindow):
         botoes.addWidget(self.btn_pagar_garota)
         self.btn_comissoes = QPushButton("Comissões")
         self.btn_comissoes.clicked.connect(self.abrir_comissoes)
+        self.btn_comissoes.setVisible(self.ctx.banco.cfg_bool("usar_garotas", True))     # só casa com garotas
         botoes.addWidget(self.btn_comissoes)
         c_cen.addLayout(botoes)
         self.btn_operacoes = QPushButton("Operações do caixa")

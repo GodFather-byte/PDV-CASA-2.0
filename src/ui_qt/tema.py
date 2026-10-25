@@ -62,7 +62,9 @@ def aplicar(aplicacao: QApplication, aparencia: str = "escuro") -> None:
         for original, nova in cores.items():
             estilo = estilo.replace(original, nova)
     aplicacao.setStyleSheet(estilo)
-    aplicacao.setApplicationName("WillPDV • Qt piloto")
+    from src.core import edicao
+    ed = edicao.atual()
+    aplicacao.setApplicationName(f"{ed.nome}{ed.sufixo_titulo}")
 
 
 def texto(conteudo: str, nome: str = "", quebra: bool = True) -> QLabel:

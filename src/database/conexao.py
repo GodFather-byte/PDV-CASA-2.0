@@ -38,9 +38,10 @@ def normalizar(texto) -> str | None:
 def _raiz_dados() -> Path:
     """Pasta do banco, de Backup/ e de impressao/. No código-fonte é a raiz do projeto. No executável
     do PyInstaller o código fica em `_internal`, que a atualização substitui, então os dados vão para
-    %LOCALAPPDATA%\\WILL-PDV e sobrevivem às versões."""
+    %LOCALAPPDATA%\\WILL-PDV (cada edição na sua pasta, ver src/core/edicao.py) e sobrevivem às versões."""
     if getattr(sys, "frozen", False):
-        return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "WILL-PDV"
+        from src.core import edicao
+        return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / edicao.atual().pasta_dados
     return Path(__file__).resolve().parents[2]
 
 

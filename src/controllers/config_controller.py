@@ -312,10 +312,15 @@ class ConfigController:
         from src.sync import ponte
         chaves_ponte = (ponte.CHAVE_ATIVA, ponte.CHAVE_CAIXA_ID, ponte.CHAVE_TOKEN, "api_url")
         ponte_antes = {c: self.banco.cfg(c) for c in chaves_ponte}
+        from src.core import edicao
+        ed = edicao.atual()
         with self.banco.transacao():
             for chave, valor in valores.items():
                 if chave not in _TIPO_CONFIG:
                     raise ErroNegocio(f"Configuração desconhecida: {chave}")
+                ligado = str(valor).strip().upper() in ("S", "1", "SIM", "TRUE")
+                if chave in ed.fixas and ("S" if ligado else "N") != ed.fixas[chave]:
+                    raise ErroNegocio(f"O {ed.nome} não tem esta opção ({chave}): ela fica sempre desligada.")
                 tipo = _TIPO_CONFIG[chave]
                 v = str(valor).strip()
                 if tipo == "sn":

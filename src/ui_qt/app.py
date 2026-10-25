@@ -6,11 +6,11 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QTimer
-from PySide6.QtGui import QIcon, QKeySequence, QShortcut
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
-    QLineEdit, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget,
+    QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget,
     QScrollArea,
 )
 
@@ -18,7 +18,7 @@ from src.controllers.config_controller import modulos_desligados
 from src.controllers.fila_impressao_controller import ServicoFilaImpressao
 from src.controllers.telegram_controller import ServicoTelegram
 from src.controllers.mesas_modelo import montar_tiles
-from src.core import formatacao as fmt, licenca, registro
+from src.core import edicao, formatacao as fmt, licenca, registro
 from src.core.erros import ErroNegocio
 from src.database.conexao import BancoDados, caminho_padrao
 from src.sync.ponte import ServicoPonte
@@ -189,14 +189,21 @@ class JanelaPrincipal(QMainWindow):
         self.janelas = {}
         self._atualizacoes = None
         self._fechamento_autorizado = False
-        self.setWindowTitle(f"WillPDV • {self.ctx.config.nome_loja()} • Qt piloto")
+        self.edicao = edicao.atual()
+        self.setWindowTitle(self._titulo())
         self.resize(1180, 760)
         self.setMinimumSize(850, 600)
         central = QWidget()
         self.setCentralWidget(central)
         layout = QHBoxLayout(central)
         lateral = QVBoxLayout()
-        lateral.addWidget(tema.texto("WILLPDV", "marca"))
+        self.logo_edicao = QLabel()
+        if self.edicao.logotipo:
+            imagem = QPixmap(str(edicao.pasta_recursos() / self.edicao.logotipo))
+            if not imagem.isNull():
+                self.logo_edicao.setPixmap(imagem.scaledToWidth(160, Qt.TransformationMode.SmoothTransformation))
+                lateral.addWidget(self.logo_edicao)
+        lateral.addWidget(tema.texto(self.edicao.marca, "marca"))
         lateral.addWidget(tema.texto(f"Versão {VERSAO}", "suave"))
         self.btn_tema = QPushButton()
         self.btn_tema.setAccessibleName("Alternar entre modo claro e modo escuro")
@@ -244,6 +251,8 @@ class JanelaPrincipal(QMainWindow):
             botao = QPushButton(titulo)
             botao.clicked.connect(acao)
             self.botoes[chave] = botao
+            if chave in self.edicao.menu_oculto:          # não existe nesta edição: nem aparece
+                continue
             lateral.addWidget(botao)
         self.busca_modulos.textChanged.connect(self.filtrar_modulos)
         lateral.addStretch()
@@ -322,6 +331,9 @@ class JanelaPrincipal(QMainWindow):
         self._atualizacoes_timer.setInterval(60000)
         self._atualizacoes_timer.timeout.connect(self.consultar_atualizacoes)
         self.atualizar()
+
+    def _titulo(self) -> str:
+        return f"{self.edicao.nome} • {self.ctx.config.nome_loja()}{self.edicao.sufixo_titulo}"
 
     def _modo_tema(self) -> str:
         return "claro" if self.ctx.banco.cfg("tema_visual") == "claro" else "escuro"
@@ -466,8 +478,8 @@ class JanelaPrincipal(QMainWindow):
     def filtrar_modulos(self, texto):
         from src.database.conexao import normalizar
         busca = normalizar(texto.strip())
-        for botao in self.botoes.values():
-            botao.setVisible(not busca or busca in normalizar(botao.text()))
+        for chave, botao in self.botoes.items():
+            botao.setVisible(chave not in self.edicao.menu_oculto and (not busca or busca in normalizar(botao.text())))
 
     def focar_busca(self):
         self.busca_modulos.setFocus()
@@ -634,8 +646,7 @@ class JanelaPrincipal(QMainWindow):
             from src.ui_qt.configuracoes import JanelaCadastroLoja
             janela = self._unica(
                 "cadastro_loja", lambda: JanelaCadastroLoja(self.ctx, self))
-            janela.accepted.connect(lambda: self.setWindowTitle(
-                f"WillPDV • {self.ctx.config.nome_loja()} • Qt piloto"))
+            janela.accepted.connect(lambda: self.setWindowTitle(self._titulo()))
             return janela
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
@@ -864,6 +875,7 @@ class App:
         self._gancho = self._erro_na_tela
         sys.excepthook = self._gancho
         self._servicos_habilitados = servicos and self.banco.caminho != ":memory:"
+        edicao.preparar(self.banco)                 # adega: perfil na primeira entrada e módulos de boate sempre desligados
         tema.aplicar(self.aplicacao, self.banco.cfg("tema_visual") or "escuro")
         if self._servicos_habilitados:
             idade = self.ctx.utilitarios.idade_backup_horas()
@@ -943,7 +955,7 @@ class App:
         if self._finalizada:
             return True
         if confirmar and QMessageBox.question(
-                self.principal, "Fechar WillPDV", "Fechar o programa? O turno aberto será preservado.",
+                self.principal, f"Fechar {edicao.atual().nome}", "Fechar o programa? O turno aberto será preservado.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return False
@@ -997,7 +1009,8 @@ def preparar_inicio(parent=None):
     caminho = caminho_padrao()
     trava = InstanciaUnica(caminho)
     if not trava.adquirir():
-        QMessageBox.warning(parent, "WillPDV", "O WillPDV já está aberto neste computador. Use a janela existente.")
+        nome = edicao.atual().nome
+        QMessageBox.warning(parent, nome, f"O {nome} já está aberto neste computador. Use a janela existente.")
         return None
     try:
         resultado = protecao.preparar_banco(
@@ -1008,7 +1021,7 @@ def preparar_inicio(parent=None):
             trava.liberar()
             return None
         if resultado == "restaurado":
-            QMessageBox.information(parent, "WillPDV", "Backup restaurado. O programa abrirá com os dados dele.")
+            QMessageBox.information(parent, edicao.atual().nome, "Backup restaurado. O programa abrirá com os dados dele.")
         return trava
     except BaseException:
         trava.liberar()
@@ -1016,10 +1029,10 @@ def preparar_inicio(parent=None):
 
 
 def aplicar_icone(aplicacao) -> bool:
-    """Ícone do WillPDV em todas as janelas (barra de título e de tarefas). Ícone é enfeite: nunca impede o caixa de abrir."""
+    """Ícone da edição (WillPDV ou E&A Superações) em todas as janelas (barra de título e de tarefas). Ícone é enfeite: nunca
+    impede o caixa de abrir."""
     try:
-        base = Path(getattr(sys, "_MEIPASS", "")) if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[2] / "instalador"
-        arquivo = base / "willpdv.ico"
+        arquivo = edicao.pasta_recursos() / edicao.atual().icone
         if not arquivo.is_file():
             return False
         aplicacao.setWindowIcon(QIcon(str(arquivo)))
@@ -1053,8 +1066,9 @@ def main():
         return aplicacao.exec()
     except Exception:
         registro.registrar_excecao(*sys.exc_info(), "início Qt")
-        QMessageBox.critical(None, "WillPDV • Falha no início",
-                             "Não foi possível iniciar o WillPDV. Consulte o log e reinicie o programa.")
+        nome = edicao.atual().nome
+        QMessageBox.critical(None, f"{nome} • Falha no início",
+                             f"Não foi possível iniciar o {nome}. Consulte o log e reinicie o programa.")
         return 1
     finally:
         if not ciclo_transferido:

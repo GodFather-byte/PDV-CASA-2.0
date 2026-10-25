@@ -9,6 +9,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Comando | O que abre |
 |---|---|
 | `python -m src.app` | PDV (`--sync`: segundo plano com a nuvem; `--autoteste`: autoteste) |
+| `python -m src.app --edicao ea_superacoes` | Edição E&A Superações (adega); `iniciar_ea_superacoes.bat` no Windows |
 | `python -m src.app --autoteste-qt [arquivo]` | Mesmo autoteste Qt (alias de `--autoteste`) |
 | `python -m src.app --homologacao [arquivo.json]` | Cinco cenários de recuperação em banco fictício descartável; sem rede ou hardware |
 | `python -m licenciador.app` | Gerador de licenças |
@@ -37,7 +38,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `licenciador/` | `nucleo.py` (regras), `tela.py` (janela), `app.py`, `autoteste.py`; central própria em `central.py` (SQLite/emissão/ponte), `central_bot.py`, `central_cli.py`, `central_tela.py` |
 | `backend/` | FastAPI: `main.py` (rotas), `ponte.py` (central técnica, caixas aprovados e entrega de licenças assinadas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobrancas.py` (Asaas), `operacao_asaas.py` e `worker_asaas.py` (fila, agenda e indicadores), `painel.py` (painel do dono: envio, um retrato por caixa, senha, sessão, consultas e limpeza automática) e `painel_web/` (a PWA servida em `/painel/`) |
 | `tools/` | `gerar_licenca.py`, `gerar_logos.py` (não vão no instalador do PDV) |
-| `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`) e imagens |
+| `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`) e imagens (`ea-superacoes-*`: marca da edição adega) |
 | `tests/` | Um `test_*.py` por assunto; `base.py` (banco em memória, relógio controlável); `ui_robo.py` (robô das janelas modais) |
 | `docs/` | Guias por assunto (lista abaixo) |
 | `.github/workflows/` | `testes.yml` (suíte), `build-windows.yml` (instaladores) e `nuvem-deploy.yml` (testa a nuvem e aciona o deploy no Render) |
@@ -49,6 +50,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Venda, itens, pagamento, mesas e comandas | `caixa_controller.py` |
 | Cartões de mesas, comandas, garotas e balcão no caixa (visual da boate) | modelo `mesas_modelo.py` (`montar_tiles`); desenho e teclado em `ui_qt/painel_mesas.py`; ligação em `ui_qt/caixa.py` (`carregar_mesas`) |
 | Turno, numeração de cupom, fechamento | `turno_controller.py`, `conferencia_turno.py` |
+| Edição do programa (WillPDV ou E&A Superações/adega): marca, pasta de dados, perfil fixo, opções escondidas | `src/core/edicao.py`; usada em `ui_qt/app.py`, `ui_qt/configuracoes.py`, `config_controller.salvar_config`, `database/conexao.py` |
 | Tela cheia do caixa (Ctrl+F, config `caixa_tela_cheia`) | `ui_qt/caixa.py` (`aplicar_tela_cheia`), `ui_qt/app.py` (`abrir_caixa`) |
 | Troca de turno no modelo clássico (maquininha, gaveta, confirmação, resumo sobra/falta) | `ui_qt/caixa.py` (`ir_para_fechamento`), `ui_qt/fechamento_turno.py` (`DialogoMaquininha`, `PainelFechamento`) |
 | Conferência por forma e justificativa | `ui_qt/fechamento.py`; contrato em `docs/FECHAMENTO_EXPLICATIVO.md` |
