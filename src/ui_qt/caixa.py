@@ -523,7 +523,7 @@ class JanelaCaixa(QMainWindow):
         c_dir.addWidget(self.lbl_troco)
         c_dir.addWidget(_rotulo("Forma de pagamento (1-9, setas ou a inicial)", "mudo"))
         self.cmb_forma = SeletorForma()
-        self.cmb_forma.escolhida.connect(lambda _i: self._forma_escolhida())
+        self.cmb_forma.escolhida.connect(self._forma_clicada)
         self.cmb_forma.currentIndexChanged.connect(lambda _i: self._sugerir_valor())
         self.cmb_forma.installEventFilter(self)
         c_dir.addWidget(self.cmb_forma)
@@ -1685,6 +1685,9 @@ class JanelaCaixa(QMainWindow):
         self.avisar("Forma de pagamento: setas, o número ou a inicial. Enter confirma.", AMBAR)
         self.cmb_forma.setFocus()
 
+    def _forma_clicada(self, _indice: int) -> None:
+        self._forma_escolhida()
+
     def _forma_escolhida(self) -> None:
         """Enter (ou o número da forma) na lista de formas: o foco vai para o valor, já selecionado para digitar por cima."""
         self.ent_valor.setFocus()
@@ -1696,6 +1699,10 @@ class JanelaCaixa(QMainWindow):
         tecla, texto = ev.key(), ev.text()
         if tecla in (Qt.Key_Return, Qt.Key_Enter):
             self._forma_escolhida()
+            return True
+        passo = {Qt.Key_Left: -1, Qt.Key_Right: 1, Qt.Key_Up: -self.cmb_forma.colunas, Qt.Key_Down: self.cmb_forma.colunas}.get(tecla)
+        if passo is not None:
+            self.cmb_forma.mover(passo)
             return True
         if len(texto) == 1 and texto.isdigit():
             n = int(texto)

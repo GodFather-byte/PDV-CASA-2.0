@@ -1,13 +1,14 @@
 """Seletor da forma de pagamento: um botão grande por forma (Dinheiro, Débito, Crédito, Pix...), com o número de cada uma.
 
-Substitui a lista suspensa. A forma escolhida fica destacada; o número (1 a 9), a inicial ou as setas escolhem pelo teclado, e o
-clique escolhe e já leva ao valor. Tem os mesmos métodos que o caixa usava da lista suspensa (`addItem`, `currentText`,
-`setCurrentIndex`, `findText`...), então o resto do caixa não muda.
+Substitui a lista suspensa. A forma escolhida fica destacada; o número (1 a 9), a inicial ou as setas escolhem pelo teclado
+(tratadas pelo caixa, que filtra os eventos deste widget), e o clique escolhe e já leva ao valor. Tem os mesmos métodos que o
+caixa usava da lista suspensa (`addItem`, `currentText`, `setCurrentIndex`, `findText`...), então o resto do caixa não muda.
+Os botões ficam só no `QButtonGroup` (sem lista de widgets nem funções anônimas guardadas em Python).
 """
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QGridLayout, QPushButton, QWidget
+from PySide6.QtWidgets import QButtonGroup, QGridLayout, QPushButton, QWidget
 
 
 class SeletorForma(QWidget):
@@ -16,11 +17,13 @@ class SeletorForma(QWidget):
 
     def __init__(self, parent: QWidget | None = None, colunas: int = 2):
         super().__init__(parent)
-        self._colunas = max(1, colunas)
-        self._botoes: list[QPushButton] = []
+        self.colunas = max(1, colunas)
         self._textos: list[str] = []
         self._dados: list = []
         self._indice = -1
+        self._grupo = QButtonGroup(self)
+        self._grupo.setExclusive(False)     # a marcação é feita aqui: clicar de novo na atual não a desmarca
+        self._grupo.idClicked.connect(self._clicou)
         self._grade = QGridLayout(self)
         self._grade.setContentsMargins(0, 0, 0, 0)
         self._grade.setSpacing(6)
@@ -30,28 +33,29 @@ class SeletorForma(QWidget):
 
     # ------------------------------------------------------------ como a lista suspensa
     def addItem(self, texto: str, dado=None) -> None:
-        i = len(self._botoes)
-        botao = QPushButton(f"{i + 1}  ·  {texto}" if i < 9 else texto)
+        i = len(self._textos)
+        botao = QPushButton(f"{i + 1}  ·  {texto}" if i < 9 else texto, self)
         botao.setObjectName("forma")
         botao.setCheckable(True)
-        botao.setFocusPolicy(Qt.NoFocus)            # o foco fica no seletor, que trata o teclado
+        botao.setFocusPolicy(Qt.NoFocus)            # o foco fica no seletor, que recebe o teclado
         botao.setCursor(Qt.PointingHandCursor)
-        botao.clicked.connect(lambda _=False, k=i: self._clicou(k))
-        self._botoes.append(botao)
+        self._grupo.addButton(botao, i)
         self._textos.append(texto)
         self._dados.append(dado)
-        self._grade.addWidget(botao, i // self._colunas, i % self._colunas)
+        self._grade.addWidget(botao, i // self.colunas, i % self.colunas)
         if self._indice < 0:
             self.setCurrentIndex(0)
 
     def clear(self) -> None:
-        for botao in self._botoes:
+        for botao in self._grupo.buttons():
+            self._grupo.removeButton(botao)
             self._grade.removeWidget(botao)
+            botao.setParent(None)
             botao.deleteLater()
-        self._botoes, self._textos, self._dados, self._indice = [], [], [], -1
+        self._textos, self._dados, self._indice = [], [], -1
 
     def count(self) -> int:
-        return len(self._botoes)
+        return len(self._textos)
 
     def itemText(self, i: int) -> str:
         return self._textos[i] if 0 <= i < len(self._textos) else ""
@@ -75,26 +79,24 @@ class SeletorForma(QWidget):
         return next((i for i, d in enumerate(self._dados) if d == dado), -1)
 
     def setCurrentIndex(self, i: int) -> None:
-        if not 0 <= i < len(self._botoes) or i == self._indice:
-            for k, botao in enumerate(self._botoes):          # reafirma a marcação (ex.: o clique desmarcaria a atual)
-                botao.setChecked(k == self._indice)
-            return
-        self._indice = i
-        for k, botao in enumerate(self._botoes):
-            botao.setChecked(k == i)
-        self.currentIndexChanged.emit(i)
+        if 0 <= i < len(self._textos):
+            mudou = i != self._indice
+            self._indice = i
+            for botao in self._grupo.buttons():
+                botao.setChecked(self._grupo.id(botao) == i)
+            if mudou:
+                self.currentIndexChanged.emit(i)
+        else:                                          # índice inválido: só reafirma a marcação atual
+            for botao in self._grupo.buttons():
+                botao.setChecked(self._grupo.id(botao) == self._indice)
 
-    # ------------------------------------------------------------ mouse e teclado
+    def mover(self, passo: int) -> None:
+        """Setas: um passo na grade (±1 na linha, ±colunas entre linhas); não passa das pontas."""
+        novo = self._indice + passo
+        if 0 <= novo < len(self._textos):
+            self.setCurrentIndex(novo)
+
+    # ------------------------------------------------------------ mouse
     def _clicou(self, i: int) -> None:
         self.setCurrentIndex(i)
         self.escolhida.emit(i)
-
-    def keyPressEvent(self, ev) -> None:
-        tecla = ev.key()
-        passo = {Qt.Key_Left: -1, Qt.Key_Right: 1, Qt.Key_Up: -self._colunas, Qt.Key_Down: self._colunas}.get(tecla)
-        if passo is None:
-            ev.ignore()
-            return
-        novo = self._indice + passo
-        if 0 <= novo < len(self._botoes):
-            self.setCurrentIndex(novo)

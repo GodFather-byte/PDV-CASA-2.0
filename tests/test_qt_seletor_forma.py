@@ -27,34 +27,37 @@ class TesteSeletorForma(BaseCaixaQt):
         s = self.novo_seletor("Dinheiro", "Cartão Débito", "Pix")
         self.assertEqual(s.count(), 3)
         self.assertEqual(s.currentText(), "Dinheiro")
-        self.assertEqual([b.text() for b in s._botoes], ["1  ·  Dinheiro", "2  ·  Cartão Débito", "3  ·  Pix"])
+        self.assertEqual([b.text() for b in s._grupo.buttons()], ["1  ·  Dinheiro", "2  ·  Cartão Débito", "3  ·  Pix"])
         self.assertEqual(s.findText("Pix"), 2)
         self.assertEqual(s.findData(len("Pix")), 2)
         vistos = []
         s.currentIndexChanged.connect(vistos.append)
-        s._botoes[1].click()
+        s._grupo.button(1).click()
         self.assertEqual((s.currentText(), vistos), ("Cartão Débito", [1]))
-        self.assertTrue(s._botoes[1].isChecked() and not s._botoes[0].isChecked())
-        s._botoes[1].click()                               # clicar de novo não desmarca
-        self.assertTrue(s._botoes[1].isChecked())
+        self.assertTrue(s._grupo.button(1).isChecked() and not s._grupo.button(0).isChecked())
+        s._grupo.button(1).click()                               # clicar de novo não desmarca
+        self.assertTrue(s._grupo.button(1).isChecked())
 
-    def test_setas_mudam_a_forma(self):
-        s = self.novo_seletor("Dinheiro", "Cartão Débito", "Cartão Crédito", "Pix")
-        s.show()
-        QTest.keyClick(s, Qt.Key_Right)
-        self.assertEqual(s.currentIndex(), 1)
-        QTest.keyClick(s, Qt.Key_Down)
-        self.assertEqual(s.currentIndex(), 3)
-        QTest.keyClick(s, Qt.Key_Left)
-        QTest.keyClick(s, Qt.Key_Up)
-        self.assertEqual(s.currentIndex(), 0)
+    def test_setas_mudam_a_forma_no_caixa(self):
+        self.abrir_turno()
+        j = self.janela()
+        j.activateWindow()
+        j.cmb_forma.setFocus()
+        self.aplicacao.processEvents()
+        QTest.keyClick(j.cmb_forma, Qt.Key_Right)
+        self.assertEqual(j.cmb_forma.currentIndex(), 1)
+        QTest.keyClick(j.cmb_forma, Qt.Key_Down)
+        self.assertEqual(j.cmb_forma.currentIndex(), min(3, j.cmb_forma.count() - 1))
+        QTest.keyClick(j.cmb_forma, Qt.Key_Left)
+        QTest.keyClick(j.cmb_forma, Qt.Key_Up)
+        self.assertEqual(j.cmb_forma.currentIndex(), 0)
 
     def test_caixa_usa_o_seletor_e_o_clique_leva_ao_valor(self):
         self.abrir_turno()
         j = self.janela()
         self.assertIsInstance(j.cmb_forma, SeletorForma)
         self.assertEqual(j.cmb_forma.currentText().strip().casefold(), "dinheiro")
-        j.cmb_forma._botoes[1].click()
+        j.cmb_forma._grupo.button(1).click()
         self.assertEqual(j.focusWidget(), j.ent_valor)
 
     def test_valor_e_troco_maiores(self):
