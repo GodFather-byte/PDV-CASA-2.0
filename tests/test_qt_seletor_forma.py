@@ -15,10 +15,16 @@ from src.ui_qt.seletor_forma import SeletorForma
 
 
 class TesteSeletorForma(BaseCaixaQt):
-    def test_um_botao_por_forma_com_o_numero_e_dinheiro_marcado(self):
+    def novo_seletor(self, *formas):
         s = SeletorForma()
-        for nome in ("Dinheiro", "Cartão Débito", "Pix"):
+        self.addCleanup(s.deleteLater)           # sem dono: destrói no teste, não na coleta de lixo do fim do processo
+        self.addCleanup(s.close)
+        for nome in formas:
             s.addItem(nome, len(nome))
+        return s
+
+    def test_um_botao_por_forma_com_o_numero_e_dinheiro_marcado(self):
+        s = self.novo_seletor("Dinheiro", "Cartão Débito", "Pix")
         self.assertEqual(s.count(), 3)
         self.assertEqual(s.currentText(), "Dinheiro")
         self.assertEqual([b.text() for b in s._botoes], ["1  ·  Dinheiro", "2  ·  Cartão Débito", "3  ·  Pix"])
@@ -33,9 +39,7 @@ class TesteSeletorForma(BaseCaixaQt):
         self.assertTrue(s._botoes[1].isChecked())
 
     def test_setas_mudam_a_forma(self):
-        s = SeletorForma()
-        for nome in ("Dinheiro", "Cartão Débito", "Cartão Crédito", "Pix"):
-            s.addItem(nome)
+        s = self.novo_seletor("Dinheiro", "Cartão Débito", "Cartão Crédito", "Pix")
         s.show()
         QTest.keyClick(s, Qt.Key_Right)
         self.assertEqual(s.currentIndex(), 1)
