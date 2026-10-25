@@ -40,7 +40,6 @@ from src.controllers.caixa_controller import LIMITE_PARTES_DIVISAO
 from src.core.valor_pagamento import LIMITE_TROCO_CENT, ler_valor_pagamento
 from src.ui_qt import comissao
 from src.ui_qt.painel_mesas import CORES as CORES_MESAS, PainelMesas
-from src.ui_qt.seletor_forma import SeletorForma
 
 PAGINA_SEM_OPERADOR, PAGINA_ABERTURA, PAGINA_VENDA = range(3)
 TENTATIVAS_SUPERVISOR = 3
@@ -54,15 +53,11 @@ QFrame#cartao { background: #f7f9fb; border: 2px solid #aab7c8; border-radius: 1
 QLabel#titulo { font-size: 16pt; font-weight: bold; color: #1e2a3c; }
 QLabel#total { font-size: 30pt; font-weight: bold; color: #1e2a3c; }
 QLabel#troco { font-size: 22pt; font-weight: bold; color: #2d5fb0; }
-QPushButton#forma { background: #ffffff; color: #1e2a3c; border: 2px solid #aab7c8; border-radius: 8px;
-                    padding: 9px 6px; font-size: 11pt; font-weight: bold; }
-QPushButton#forma:hover { border-color: #5a7fb8; }
-QPushButton#forma:checked { background: #2b7d52; color: #ffffff; border-color: #1d5c3b; }
-QWidget#seletor_forma:focus { border: 2px solid #1f4fa3; border-radius: 10px; }
 QLabel#mudo { color: #4d5c74; }
 QLabel#alerta { color: #8a5200; font-weight: bold; }
 QLabel#status { padding: 4px; }
 QPushButton { padding: 6px 12px; }
+QComboBox#forma { font-size: 13pt; font-weight: bold; min-height: 28px; }
 QLineEdit#valor { font-size: 16pt; font-weight: bold; min-height: 30px; padding: 6px; }
 QPushButton { border: 1px solid #8e9db2; border-radius: 6px; background: #ffffff; }
 QPushButton:hover { border-color: #5a7fb8; }
@@ -80,12 +75,8 @@ QLabel { background: transparent; color: #f1f5f9; }
 QLabel#titulo { font-size: 16pt; font-weight: bold; color: #f1f5f9; }
 QLabel#total { font-size: 30pt; font-weight: bold; color: #52dfb4; }
 QLabel#troco { font-size: 22pt; font-weight: bold; color: #78abff; }
+QComboBox#forma { font-size: 13pt; font-weight: bold; min-height: 28px; }
 QLineEdit#valor { font-size: 16pt; font-weight: bold; min-height: 30px; }
-QPushButton#forma { background: #0f1740; color: #f1f5f9; border: 2px solid #2f4180; border-radius: 8px;
-                    padding: 9px 6px; font-size: 11pt; font-weight: bold; }
-QPushButton#forma:hover { border-color: #78abff; }
-QPushButton#forma:checked { background: #17805a; color: #ffffff; border-color: #52dfb4; }
-QWidget#seletor_forma:focus { border: 2px solid #78abff; border-radius: 10px; }
 QLabel#mudo { color: #94a8bd; }
 QLabel#alerta { color: #ffd078; font-weight: bold; }
 QLabel#status { padding: 4px; }
@@ -521,9 +512,9 @@ class JanelaCaixa(QMainWindow):
         c_dir.addWidget(self.lbl_falta_rotulo)
         self.lbl_troco = _rotulo("0,00", "troco")
         c_dir.addWidget(self.lbl_troco)
-        c_dir.addWidget(_rotulo("Forma de pagamento (1-9, setas ou a inicial)", "mudo"))
-        self.cmb_forma = SeletorForma()
-        self.cmb_forma.escolhida.connect(self._forma_clicada)
+        c_dir.addWidget(_rotulo("Forma de pagamento (setas, número 1-9 ou inicial)", "mudo"))
+        self.cmb_forma = QComboBox()
+        self.cmb_forma.setObjectName("forma")
         self.cmb_forma.currentIndexChanged.connect(lambda _i: self._sugerir_valor())
         self.cmb_forma.installEventFilter(self)
         c_dir.addWidget(self.cmb_forma)
@@ -1685,9 +1676,6 @@ class JanelaCaixa(QMainWindow):
         self.avisar("Forma de pagamento: setas, o número ou a inicial. Enter confirma.", AMBAR)
         self.cmb_forma.setFocus()
 
-    def _forma_clicada(self, _indice: int) -> None:
-        self._forma_escolhida()
-
     def _forma_escolhida(self) -> None:
         """Enter (ou o número da forma) na lista de formas: o foco vai para o valor, já selecionado para digitar por cima."""
         self.ent_valor.setFocus()
@@ -1699,10 +1687,6 @@ class JanelaCaixa(QMainWindow):
         tecla, texto = ev.key(), ev.text()
         if tecla in (Qt.Key_Return, Qt.Key_Enter):
             self._forma_escolhida()
-            return True
-        passo = {Qt.Key_Left: -1, Qt.Key_Right: 1, Qt.Key_Up: -self.cmb_forma.colunas, Qt.Key_Down: self.cmb_forma.colunas}.get(tecla)
-        if passo is not None:
-            self.cmb_forma.mover(passo)
             return True
         if len(texto) == 1 and texto.isdigit():
             n = int(texto)
