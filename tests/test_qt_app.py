@@ -487,6 +487,9 @@ class TestAppQt(BaseQt):
                 super().__init__(parent)
                 chamadas.append((ctx, parent))
 
+            def aplicar_tela_cheia(self, ligada):
+                pass
+
         modulo = types.ModuleType("src.ui_qt.caixa")
         modulo.JanelaCaixa = CaixaFalso
         with patch.dict(sys.modules, {"src.ui_qt.caixa": modulo}):

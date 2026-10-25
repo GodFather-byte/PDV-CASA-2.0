@@ -49,16 +49,20 @@ QTD_ANTES_DO_CODIGO = re.compile(r"(\d+(?:[.,]\d+)?)\s*\*\s*(\S.*)")
 
 ESTILO = """
 QWidget#fundo { background: #e8ecf1; }
-QFrame#cartao { background: #f5f7fa; border: 1px solid #c8d1dd; border-radius: 8px; }
+QFrame#cartao { background: #f7f9fb; border: 2px solid #aab7c8; border-radius: 10px; }
 QLabel#titulo { font-size: 16pt; font-weight: bold; color: #1e2a3c; }
-QLabel#total { font-size: 28pt; font-weight: bold; color: #1e2a3c; }
-QLabel#troco { font-size: 16pt; font-weight: bold; color: #2d5fb0; }
+QLabel#total { font-size: 30pt; font-weight: bold; color: #1e2a3c; }
+QLabel#troco { font-size: 22pt; font-weight: bold; color: #2d5fb0; }
 QLabel#mudo { color: #4d5c74; }
 QLabel#alerta { color: #8a5200; font-weight: bold; }
 QLabel#status { padding: 4px; }
 QPushButton { padding: 6px 12px; }
-QPushButton#primario { background: #2b7d52; color: #f7faf8; font-weight: bold; border-radius: 4px; padding: 8px 14px; }
-QPushButton#perigo { background: #b03a3a; color: #fbf6f6; border-radius: 4px; padding: 6px 12px; }
+QComboBox#forma { font-size: 13pt; font-weight: bold; min-height: 28px; }
+QLineEdit#valor { font-size: 16pt; font-weight: bold; min-height: 30px; padding: 6px; }
+QPushButton { border: 1px solid #8e9db2; border-radius: 6px; background: #ffffff; }
+QPushButton:hover { border-color: #5a7fb8; }
+QPushButton#primario { background: #2b7d52; color: #f7faf8; font-weight: bold; border: 1px solid #1d5c3b; border-radius: 6px; padding: 8px 14px; }
+QPushButton#perigo { background: #b03a3a; color: #fbf6f6; border: 1px solid #8a2626; border-radius: 6px; padding: 6px 12px; }
 QPushButton:disabled { background: #d5dbe4; color: #77849a; }
 """
 
@@ -70,7 +74,9 @@ QFrame#cartao { background: #111a40; border: 1px solid #25336e; border-radius: 1
 QLabel { background: transparent; color: #f1f5f9; }
 QLabel#titulo { font-size: 16pt; font-weight: bold; color: #f1f5f9; }
 QLabel#total { font-size: 30pt; font-weight: bold; color: #52dfb4; }
-QLabel#troco { font-size: 16pt; font-weight: bold; color: #78abff; }
+QLabel#troco { font-size: 22pt; font-weight: bold; color: #78abff; }
+QComboBox#forma { font-size: 13pt; font-weight: bold; min-height: 28px; }
+QLineEdit#valor { font-size: 16pt; font-weight: bold; min-height: 30px; }
 QLabel#mudo { color: #94a8bd; }
 QLabel#alerta { color: #ffd078; font-weight: bold; }
 QLabel#status { padding: 4px; }
@@ -280,6 +286,15 @@ class JanelaCaixa(QMainWindow):
         cabecalho.addWidget(self.lbl_cabecalho, 1)
         self.lbl_leitor = _rotulo("LEITOR ÓPTICO ATIVO" if self.leitor else "", "mudo")
         cabecalho.addWidget(self.lbl_leitor)
+        self.btn_tela_cheia = QPushButton("Tela cheia (Ctrl+F)")
+        self.btn_tela_cheia.setFocusPolicy(Qt.NoFocus)
+        self.btn_tela_cheia.clicked.connect(self.alternar_tela_cheia)
+        cabecalho.addWidget(self.btn_tela_cheia)
+        self.btn_voltar_menu = QPushButton("Fechar caixa")
+        self.btn_voltar_menu.setToolTip("Fecha a janela do caixa e volta ao menu (o turno continua aberto)")
+        self.btn_voltar_menu.setFocusPolicy(Qt.NoFocus)
+        self.btn_voltar_menu.clicked.connect(self.close)
+        cabecalho.addWidget(self.btn_voltar_menu)
         geral.addLayout(cabecalho)
         self.paginas = QStackedWidget()
         self.paginas.addWidget(self._pagina_sem_operador())
@@ -295,6 +310,7 @@ class JanelaCaixa(QMainWindow):
             QShortcut(QKeySequence(tecla), self).activated.connect(lambda p=passo: self.navegar_comanda(p))
         esc = QShortcut(QKeySequence(Qt.Key_Escape), self)
         esc.activated.connect(self.esc_caixa)
+        QShortcut(QKeySequence("Ctrl+F"), self).activated.connect(self.alternar_tela_cheia)
         for tecla, acao in (("F4", self.foco_posicao), ("F5", self.caderneta), ("F6", self.entrega),
                             ("F8", self.pre_conta), ("F9", self.repique),
                             ("F10", self.transferir_mesa), ("F2", self.balanca), ("F11", self.gaveta),
@@ -485,7 +501,7 @@ class JanelaCaixa(QMainWindow):
         grade.addWidget(centro, 1)
 
         dir_, c_dir = _cartao()
-        dir_.setFixedWidth(320)
+        dir_.setFixedWidth(360)
         self.lbl_total_rotulo = _rotulo("Total (R$)", "mudo")
         c_dir.addWidget(self.lbl_total_rotulo)
         self.lbl_total = _rotulo("0,00", "total")
@@ -496,15 +512,18 @@ class JanelaCaixa(QMainWindow):
         c_dir.addWidget(self.lbl_falta_rotulo)
         self.lbl_troco = _rotulo("0,00", "troco")
         c_dir.addWidget(self.lbl_troco)
-        form = QFormLayout()
+        c_dir.addWidget(_rotulo("Forma de pagamento (setas, número 1-9 ou inicial)", "mudo"))
         self.cmb_forma = QComboBox()
+        self.cmb_forma.setObjectName("forma")
         self.cmb_forma.currentIndexChanged.connect(lambda _i: self._sugerir_valor())
         self.cmb_forma.installEventFilter(self)
-        form.addRow("Forma:", self.cmb_forma)
+        c_dir.addWidget(self.cmb_forma)
+        c_dir.addWidget(_rotulo("Valor recebido (R$)", "mudo"))
         self.ent_valor = QLineEdit()
+        self.ent_valor.setObjectName("valor")
+        self.ent_valor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.ent_valor.returnPressed.connect(self.receber)
-        form.addRow("Valor (R$):", self.ent_valor)
-        c_dir.addLayout(form)
+        c_dir.addWidget(self.ent_valor)
         self.btn_receber = QPushButton("Receber")
         self.btn_receber.clicked.connect(self.receber)
         c_dir.addWidget(self.btn_receber)
@@ -825,6 +844,17 @@ class JanelaCaixa(QMainWindow):
 
     def _modo_visual(self) -> str:
         return "claro" if self.ctx.banco.cfg("tema_visual") == "claro" else "escuro"
+
+    def aplicar_tela_cheia(self, ligada: bool) -> None:
+        """Caixa ocupando a tela toda (sem moldura) ou de volta à janela comum. O botão do cabeçalho mostra a ação seguinte."""
+        if ligada:
+            self.showFullScreen()
+        else:
+            self.showNormal()
+        self.btn_tela_cheia.setText("Sair da tela cheia (Ctrl+F)" if ligada else "Tela cheia (Ctrl+F)")
+
+    def alternar_tela_cheia(self) -> None:
+        self.aplicar_tela_cheia(not self.isFullScreen())
 
     def _aplicar_estilo(self) -> None:
         """Noite de boate (azul-marinho) no modo escuro; o estilo claro de sempre no modo claro. Só reaplica se o modo mudou."""

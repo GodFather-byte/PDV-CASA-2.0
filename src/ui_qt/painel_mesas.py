@@ -34,13 +34,13 @@ ESTADOS = {
         "acerto": {"fundo": "#33280f", "borda": "#a8832b", "texto": "#ffcf6e"},
     },
     "claro": {
-        "consumindo": {"fundo": "#e3eaf7", "borda": "#9db0d8", "texto": "#2a4a8f"},
-        "parada": {"fundo": "#f7e5ea", "borda": "#d2899f", "texto": "#9c2b50"},
-        "conta": {"fundo": "#f6ebd0", "borda": "#cfa43d", "texto": "#74500a"},
-        "balcao": {"fundo": "#dcefe5", "borda": "#6ab597", "texto": "#0b6648"},
-        "garota": {"fundo": "#d7ebe8", "borda": "#59b0a6", "texto": "#0a5d55"},
-        "parcial": {"fundo": "#e8e3f5", "borda": "#9d8bd8", "texto": "#54409e"},
-        "acerto": {"fundo": "#f6ebd0", "borda": "#cfa43d", "texto": "#74500a"},
+        "consumindo": {"fundo": "#e3eaf7", "borda": "#7f96c8", "texto": "#2a4a8f"},
+        "parada": {"fundo": "#f7e5ea", "borda": "#c06f8a", "texto": "#9c2b50"},
+        "conta": {"fundo": "#f6ebd0", "borda": "#b88a1c", "texto": "#74500a"},
+        "balcao": {"fundo": "#dcefe5", "borda": "#4a9a7a", "texto": "#0b6648"},
+        "garota": {"fundo": "#d7ebe8", "borda": "#3a9a8e", "texto": "#0a5d55"},
+        "parcial": {"fundo": "#e8e3f5", "borda": "#8470c8", "texto": "#54409e"},
+        "acerto": {"fundo": "#f6ebd0", "borda": "#b88a1c", "texto": "#74500a"},
     },
 }
 CORES = {
@@ -50,8 +50,8 @@ CORES = {
                "quadro": "#0a1029", "quadro_borda": "#25336e"},
     "claro": {"texto": "#1e2a3c", "suave": "#4d5c74", "mudo": "#66748a", "azul": "#3560c4", "verde": "#0b6b53",
               "ambar": "#7d4b00", "vermelho": "#b3303b", "cartao": "#f5f7fa", "cartao2": "#e3e9f1",
-              "sobre_marca": "#f7f9fc", "campo": "#fbfcfd", "borda": "#b4c0cf",
-              "quadro": "#dfe5ec", "quadro_borda": "#c1ccd9"},
+              "sobre_marca": "#f7f9fc", "campo": "#fbfcfd", "borda": "#97a6bb",
+              "quadro": "#dfe5ec", "quadro_borda": "#a9b6c7"},
 }
 
 

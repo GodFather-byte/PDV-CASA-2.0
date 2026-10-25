@@ -53,9 +53,9 @@ def aplicar(aplicacao: QApplication, aparencia: str = "escuro") -> None:
         # texto azul-grafite em vez de preto e bordas discretas, para cansar menos a vista em turnos longos.
         cores = {
             "#101827": "#e8ecf1", "#e6edf7": "#1e2a3c", "#1b2739": "#f5f7fa",
-            "#324158": "#c8d1dd", "#5ee2bb": "#0b6b53", "#afbdd1": "#4d5c74",
-            "#ffd28a": "#7d4b00", "#24364d": "#dde4ed", "#405570": "#b4c0cf",
-            "#304864": "#cfd9e6", "#187e65": "#bfe3d3", "#32b38e": "#2f9a7c",
+            "#324158": "#a9b6c7", "#5ee2bb": "#0b6b53", "#afbdd1": "#4d5c74",
+            "#ffd28a": "#7d4b00", "#24364d": "#dde4ed", "#405570": "#8e9db2",
+            "#304864": "#b9c6d8", "#187e65": "#bfe3d3", "#32b38e": "#2f9a7c",
             "#8190a6": "#66748a", "#1b2534": "#dfe4eb", "#182437": "#fbfcfd",
             "#1d2d43": "#eef1f5",
         }
