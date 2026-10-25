@@ -25,6 +25,8 @@ class SeletorForma(QWidget):
         self._grade.setContentsMargins(0, 0, 0, 0)
         self._grade.setSpacing(6)
         self.setFocusPolicy(Qt.StrongFocus)
+        self.setObjectName("seletor_forma")
+        self.setAttribute(Qt.WA_StyledBackground, True)     # a borda do foco vem do estilo (sem repolir botões por código)
 
     # ------------------------------------------------------------ como a lista suspensa
     def addItem(self, texto: str, dado=None) -> None:
@@ -34,7 +36,6 @@ class SeletorForma(QWidget):
         botao.setCheckable(True)
         botao.setFocusPolicy(Qt.NoFocus)            # o foco fica no seletor, que trata o teclado
         botao.setCursor(Qt.PointingHandCursor)
-        botao.setProperty("foco", False)
         botao.clicked.connect(lambda _=False, k=i: self._clicou(k))
         self._botoes.append(botao)
         self._textos.append(texto)
@@ -97,17 +98,3 @@ class SeletorForma(QWidget):
         novo = self._indice + passo
         if 0 <= novo < len(self._botoes):
             self.setCurrentIndex(novo)
-
-    def _marcar_foco(self, com_foco: bool) -> None:
-        for botao in self._botoes:
-            botao.setProperty("foco", com_foco)
-            botao.style().unpolish(botao)
-            botao.style().polish(botao)
-
-    def focusInEvent(self, ev) -> None:
-        super().focusInEvent(ev)
-        self._marcar_foco(True)
-
-    def focusOutEvent(self, ev) -> None:
-        super().focusOutEvent(ev)
-        self._marcar_foco(False)

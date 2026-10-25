@@ -58,7 +58,7 @@ QPushButton#forma { background: #ffffff; color: #1e2a3c; border: 2px solid #aab7
                     padding: 9px 6px; font-size: 11pt; font-weight: bold; }
 QPushButton#forma:hover { border-color: #5a7fb8; }
 QPushButton#forma:checked { background: #2b7d52; color: #ffffff; border-color: #1d5c3b; }
-QPushButton#forma[foco="true"]:checked { border: 3px solid #1f4fa3; }
+QWidget#seletor_forma:focus { border: 2px solid #1f4fa3; border-radius: 10px; }
 QLabel#mudo { color: #4d5c74; }
 QLabel#alerta { color: #8a5200; font-weight: bold; }
 QLabel#status { padding: 4px; }
@@ -85,7 +85,7 @@ QPushButton#forma { background: #0f1740; color: #f1f5f9; border: 2px solid #2f41
                     padding: 9px 6px; font-size: 11pt; font-weight: bold; }
 QPushButton#forma:hover { border-color: #78abff; }
 QPushButton#forma:checked { background: #17805a; color: #ffffff; border-color: #52dfb4; }
-QPushButton#forma[foco="true"]:checked { border: 3px solid #ffffff; }
+QWidget#seletor_forma:focus { border: 2px solid #78abff; border-radius: 10px; }
 QLabel#mudo { color: #94a8bd; }
 QLabel#alerta { color: #ffd078; font-weight: bold; }
 QLabel#status { padding: 4px; }
@@ -522,7 +522,8 @@ class JanelaCaixa(QMainWindow):
         self.lbl_troco = _rotulo("0,00", "troco")
         c_dir.addWidget(self.lbl_troco)
         c_dir.addWidget(_rotulo("Forma de pagamento (1-9, setas ou a inicial)", "mudo"))
-        self.cmb_forma = QComboBox()   # EXPERIMENTO de CI
+        self.cmb_forma = SeletorForma()
+        self.cmb_forma.escolhida.connect(lambda _i: self._forma_escolhida())
         self.cmb_forma.currentIndexChanged.connect(lambda _i: self._sugerir_valor())
         self.cmb_forma.installEventFilter(self)
         c_dir.addWidget(self.cmb_forma)
