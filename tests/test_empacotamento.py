@@ -48,7 +48,7 @@ class TesteWorkflowDeBuild(unittest.TestCase):
 
     def test_so_a_publicacao_na_release_escreve_no_repositorio(self):
         self.assertIn("permissions:\n  contents: read", self.texto)
-        self.assertEqual(self.texto.count("contents: write"), 2)             # os dois jobs de publicação (tag v* e "última versão")
+        self.assertEqual(self.texto.count("contents: write"), 3)             # publicação: tag v*, "última versão" e a da adega
         antes_da_publicacao = self.texto[:self.texto.index("  publicar:")]      # build e licenciador só leem o repositório
         self.assertNotIn("contents: write", antes_da_publicacao)
 
@@ -69,20 +69,32 @@ class TesteWorkflowDeBuild(unittest.TestCase):
         self.assertGreaterEqual(self.texto.count("--autoteste"), 4)   # PDV: no .exe e no instalado; licenças: no .exe e no instalado
 
 
+    def test_adega_tem_job_proprio_com_os_mesmos_autotestes_e_release_propria(self):
+        job = self.texto[self.texto.index("  adega:"):self.texto.index("  publicar:")]
+        for trecho in ("python build_pdv.py --edicao ea_superacoes", "EASuperacoes-Setup-*.exe", "edicao.txt", "--autoteste",
+                       "--autoteste-qt", "/VERYSILENT", "--sync", "EASuperacoes-Instalador-", "EASuperacoes-Portatil-"):
+            self.assertIn(trecho, job)
+        self.assertNotIn("contents: write", job)
+        release = self.texto[self.texto.index("  ultima_versao_adega:"):]
+        for trecho in ("needs: adega", "if: github.ref == 'refs/heads/main'", "ultima-versao-adega", "EASuperacoes-Instalador.exe"):
+            self.assertIn(trecho, release)
+
+
 class TesteInstaladores(unittest.TestCase):
     pasta = Path(__file__).resolve().parents[1] / "instalador"
 
     def test_scripts_do_inno_em_utf8_com_bom_e_appids_diferentes(self):
         ids = []
-        for nome in ("WillPDV.iss", "WillLicencas.iss"):
+        for nome in ("WillPDV.iss", "WillLicencas.iss", "EASuperacoes.iss"):
             bruto = (self.pasta / nome).read_bytes()
             self.assertTrue(bruto.startswith(b"\xef\xbb\xbf"), f"{nome} precisa de BOM: sem ele o Inno lê os acentos como ANSI")
             ids.append([l for l in bruto.decode("utf-8-sig").splitlines() if l.startswith("AppId=")][0])
-        self.assertNotEqual(*ids)                                     # os dois instalam lado a lado
+        self.assertEqual(len(set(ids)), 3)                            # os três instalam lado a lado
 
     def test_logotipos_existem_e_os_scripts_apontam_para_eles(self):
         import re
-        for nome, prefixo in (("WillPDV.iss", "willpdv"), ("WillLicencas.iss", "willlicencas")):
+        for nome, prefixo in (("WillPDV.iss", "willpdv"), ("WillLicencas.iss", "willlicencas"),
+                              ("EASuperacoes.iss", "ea-superacoes")):
             texto = (self.pasta / nome).read_text(encoding="utf-8-sig")
             for arquivo in (f"{prefixo}-assistente.bmp", f"{prefixo}-assistente-pequena.bmp"):
                 self.assertIn(arquivo, texto)
@@ -93,7 +105,7 @@ class TesteInstaladores(unittest.TestCase):
 
     def test_imagens_do_assistente_tem_o_tamanho_do_inno(self):
         import struct
-        for prefixo in ("willpdv", "willlicencas"):
+        for prefixo in ("willpdv", "willlicencas", "ea-superacoes"):
             for nome, esperado in ((f"{prefixo}-assistente.bmp", (164, 314)), (f"{prefixo}-assistente-pequena.bmp", (55, 55))):
                 cab = (self.pasta / nome).read_bytes()[:30]
                 self.assertEqual(cab[:2], b"BM")
@@ -133,3 +145,23 @@ class TesteChavesForaDoRepositorio(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_instalador_da_adega_usa_o_executavel_e_a_pasta_da_edicao(self):
+        from src.core import edicao
+        ed = edicao.EDICOES["ea_superacoes"]
+        texto = (self.pasta / ed.script_instalador).read_text(encoding="utf-8-sig")
+        self.assertIn(f'#define Exe "{ed.executavel}.exe"', texto)
+        self.assertIn(f'#define Pasta "{ed.executavel}"', texto)
+        self.assertIn('#define Nome "E&A Superações"', texto)
+        self.assertIn("OutputBaseFilename=EASuperacoes-Setup-", texto)
+        self.assertTrue(ed.executavel.isascii() and ed.executavel.isalnum())    # vai no cmd do [Code]: sem & nem acento
+
+
+class TesteBuildPorEdicao(unittest.TestCase):
+    def test_build_escolhe_a_edicao_pela_linha_de_comando(self):
+        import build_pdv
+        self.assertEqual(build_pdv.edicao_escolhida([]).chave, "willpdv")
+        self.assertEqual(build_pdv.edicao_escolhida(["--edicao", "ea_superacoes"]).executavel, "EASuperacoes")
+        self.assertEqual(build_pdv.edicao_escolhida(["--sem-instalador", "--edicao=ea_superacoes"]).chave, "ea_superacoes")
+        with self.assertRaises(SystemExit):
+            build_pdv.edicao_escolhida(["--edicao", "adega"])

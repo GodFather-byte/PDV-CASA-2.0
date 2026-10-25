@@ -6,6 +6,7 @@ Não faz parte do instalador. A chave privada fica FORA do repositório (padrão
   python -m tools.gerar_licenca novo-par                           # uma única vez
   python -m tools.gerar_licenca emitir --loja CASAVERDE-01 --dias 30
   python -m tools.gerar_licenca emitir --loja CASAVERDE-01 --permanente     # sem vencimento na prática (100 anos)
+  python -m tools.gerar_licenca emitir --loja ADEGA-01 --dias 30 --edicao ea_superacoes   # licença do E&A Superações
   python -m tools.gerar_licenca ver CODIGO
 """
 from __future__ import annotations
@@ -16,7 +17,7 @@ import secrets
 import sys
 from pathlib import Path
 
-from src.core import ed25519, licenca
+from src.core import ed25519, edicao, licenca
 
 
 DIAS_PERMANENTE = licenca.MAX_DIAS
@@ -51,19 +52,19 @@ def novo_par(arquivo: Path) -> None:
     print(ed25519.chave_publica(semente).hex())
 
 
-def emitir(arquivo: Path, loja: str, dias: int) -> None:
+def emitir(arquivo: Path, loja: str, dias: int, edicao_programa: str = edicao.PADRAO) -> None:
     semente = _ler_semente(arquivo)
     if ed25519.chave_publica(semente).hex() != licenca.CHAVE_PUBLICA_HEX:
         raise SystemExit("Esta chave privada não corresponde à CHAVE_PUBLICA_HEX de src/core/licenca.py; "
                          "os clientes rejeitariam o código.")
-    codigo = licenca.gerar_licenca(semente, loja, dias)
+    codigo = licenca.gerar_licenca(semente, loja, dias, edicao_programa=edicao_programa)
     lic = licenca.ler_licenca(codigo)
-    print(f"Loja: {lic['loja']}\nVálida até: {lic['expira_em'].strftime('%d/%m/%Y')} (inclusive)\n\n{codigo}")
+    print(f"Loja: {lic['loja']}\nPrograma: {licenca.nome_da_edicao(lic['edicao'])}\nVálida até: {lic['expira_em'].strftime('%d/%m/%Y')} (inclusive)\n\n{codigo}")
 
 
 def ver(codigo: str) -> None:
     lic = licenca.ler_licenca(codigo)
-    print(f"Assinatura OK. Loja: {lic['loja']} | emitida em {lic['emitida_em'].strftime('%d/%m/%Y')} "
+    print(f"Assinatura OK. Loja: {lic['loja']} | programa {licenca.nome_da_edicao(lic['edicao'])} | emitida em {lic['emitida_em'].strftime('%d/%m/%Y')} "
           f"| válida até {lic['expira_em'].strftime('%d/%m/%Y')}")
 
 
@@ -76,6 +77,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--loja", required=True, help="chave da loja (a mesma de Configurações > Nuvem)")
     p.add_argument("--dias", type=int, default=30)
     p.add_argument("--permanente", action="store_true", help=f"sem vencimento na prática: {DIAS_PERMANENTE} dias (100 anos)")
+    p.add_argument("--edicao", choices=sorted(edicao.EDICOES), default=edicao.PADRAO,
+                   help="para qual programa (willpdv ou ea_superacoes); a licença só abre esse")
     p.add_argument("--arquivo", type=Path, default=None)
     p = sub.add_parser("ver", help="confere a assinatura de um código")
     p.add_argument("codigo")
@@ -84,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.comando == "novo-par":
             novo_par(args.arquivo or _arquivo_padrao())
         elif args.comando == "emitir":
-            emitir(args.arquivo or _arquivo_padrao(), args.loja, DIAS_PERMANENTE if args.permanente else args.dias)
+            emitir(args.arquivo or _arquivo_padrao(), args.loja, DIAS_PERMANENTE if args.permanente else args.dias, args.edicao)
         else:
             ver(args.codigo)
     except (ValueError, licenca.LicencaInvalida) as e:

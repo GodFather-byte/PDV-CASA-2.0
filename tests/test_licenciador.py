@@ -188,6 +188,32 @@ class TesteHistorico(BaseLicenciador):
         self.assertEqual(len(self.historico.todas()), 1)
 
 
+class TesteLicencaDaAdega(BaseLicenciador):
+    """Licença por programa: WillPDV ou E&A Superações (a edição vai dentro do código assinado)."""
+
+    def test_emite_para_a_adega_e_a_mensagem_fala_do_programa_certo(self):
+        e = nucleo.emitir("ADEGA-1", "mensal", 1, self.chave, HOJE, edicao_programa="ea_superacoes")
+        self.assertEqual((e.edicao, e.programa), ("ea_superacoes", "E&A Superações"))
+        self.assertEqual(licenca.ler_licenca(e.codigo)["edicao"], "ea_superacoes")
+        self.assertIn("Licença do E&A Superações", nucleo.mensagem_para_o_cliente(e))
+        self.assertEqual(nucleo.conferir(e.codigo, HOJE)["programa"], "E&A Superações")
+        w = nucleo.emitir("BOATE", "mensal", 1, self.chave, HOJE)
+        self.assertEqual((w.edicao, w.programa), ("willpdv", "WillPDV"))
+        self.assertIn("Licença do WillPDV", nucleo.mensagem_para_o_cliente(w))
+        with self.assertRaises(ErroLicenciador):
+            nucleo.emitir("ADEGA-1", "mensal", 1, self.chave, HOJE, edicao_programa="adega")
+
+    def test_historico_separa_a_mesma_loja_por_programa_e_le_os_registros_antigos(self):
+        self.historico.adicionar(nucleo.emitir("CASA", "mensal", 1, self.chave, HOJE))
+        self.historico.adicionar(nucleo.emitir("CASA", "mensal", 2, self.chave, HOJE, edicao_programa="ea_superacoes"))
+        antigos = self.historico.todas()
+        del antigos[0]["edicao"]                                   # registro gravado antes das edições
+        self.historico._gravar(antigos)
+        linhas = self.historico.situacao_das_lojas(HOJE)
+        self.assertEqual(sorted((l["loja"], l["programa"]) for l in linhas),
+                         [("CASA", "E&A Superações"), ("CASA", "WillPDV")])
+
+
 @unittest.skipUnless(_tk_disponivel(), "sem ambiente gráfico")
 class TesteTela(BaseLicenciador):
     def setUp(self):
@@ -258,6 +284,22 @@ class TesteTela(BaseLicenciador):
         self.assertIn("Ainda não há chave", j.aviso_chave.cget("text"))
         self.assertFalse(j.btn_criar.instate(["disabled"]))          # dá para criar quando não existe
         self.assertTrue(self.janela.btn_criar.instate(["disabled"]))  # e não quando já existe
+
+    def test_gerar_para_a_adega_renovar_e_conferir_mostram_o_programa(self):
+        j = self.janela
+        j.var_loja.set("ADEGA-1"); j.var_edicao.set("ea_superacoes")
+        j.var_tipo.set("mensal"); j.var_qtd.set("1"); j.atualizar_validade()
+        j.gerar(); j.update()
+        self.assertIn("E&A Superações", j.lbl_status.cget("text"))
+        registro = self.historico.todas()[0]
+        self.assertEqual(registro["edicao"], "ea_superacoes")
+        j.var_edicao.set("willpdv")
+        j.grade.selecionar(registro["codigo"])
+        j.renovar(); j.update()
+        self.assertEqual(j.var_edicao.get(), "ea_superacoes")
+        j.txt_conferir.insert("1.0", registro["codigo"])
+        j.conferir()
+        self.assertIn("Programa: E&A Superações", j.lbl_conferido.cget("text"))
 
     def test_remover_do_historico(self):
         e = nucleo.emitir("BAR", "mensal", 1, self.chave)

@@ -12,6 +12,10 @@ Para uma falha de licença nunca parar a loja no meio do serviço:
   * voltar o relógio do Windows não reabre o prazo (vale a maior data já vista); essa data avança no máximo
     SALTO_MAXIMO_DIAS por uso, para uma data errada no futuro não travar a loja de vez.
 
+Cada edição do programa (src/core/edicao.py) tem a sua licença: a edição vai dentro do código assinado (campo `edicao`,
+ausente nas licenças do WillPDV, que continuam com o mesmo formato de antes). Licença do WillPDV não abre o E&A Superações
+e vice-versa.
+
 A exigência só vale no executável (PyInstaller) ou com `licenca_exigir = S` nas configurações;
 rodando do código-fonte, como no desenvolvimento e nos testes, o sistema não pede licença.
 """
@@ -23,7 +27,7 @@ import sys
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from src.core import ed25519
+from src.core import ed25519, edicao
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
 
@@ -70,9 +74,13 @@ def _b64_decodificar(texto: str) -> bytes:
     return base64.urlsafe_b64decode(texto + "=" * (-len(texto) % 4))
 
 
-def gerar_licenca(semente: bytes, loja: str, dias: int, hoje: date | None = None) -> str:
-    """Código válido até `hoje + dias` (inclusive). Uso exclusivo do fornecedor, com a chave privada."""
+def gerar_licenca(semente: bytes, loja: str, dias: int, hoje: date | None = None,
+                  edicao_programa: str = edicao.PADRAO) -> str:
+    """Código válido até `hoje + dias` (inclusive), para a edição `edicao_programa` do programa. Uso exclusivo do fornecedor,
+    com a chave privada."""
     loja = (loja or "").strip()
+    if edicao_programa not in edicao.EDICOES:
+        raise ValueError(f"Edição desconhecida: {edicao_programa}.")
     if not loja:
         raise ValueError("Informe a chave da loja.")
     if dias < 1:
@@ -81,12 +89,14 @@ def gerar_licenca(semente: bytes, loja: str, dias: int, hoje: date | None = None
         raise ValueError(f"A validade máxima é {MAX_DIAS} dias (use --permanente).")
     hoje = hoje or date.today()
     dados = {"loja": loja, "emitida_em": hoje.isoformat(), "expira_em": (hoje + timedelta(days=dias)).isoformat()}
+    if edicao_programa != edicao.PADRAO:              # a do WillPDV fica sem o campo: o mesmo código de sempre
+        dados["edicao"] = edicao_programa
     corpo = f"{PREFIXO}.{_b64(json.dumps(dados, separators=(',', ':'), sort_keys=True).encode('utf-8'))}"
     return f"{corpo}.{_b64(ed25519.assinar(semente, corpo.encode('ascii')))}"
 
 
 def ler_licenca(codigo: str, chave_publica: bytes | None = None) -> dict:
-    """Confere a assinatura e devolve {'loja', 'emitida_em', 'expira_em'}. Não olha o prazo nem a loja."""
+    """Confere a assinatura e devolve {'loja', 'emitida_em', 'expira_em', 'edicao'}. Não olha o prazo, a loja nem a edição."""
     partes = "".join((codigo or "").split()).split(".")
     if len(partes) != 3 or partes[0] != PREFIXO:
         raise LicencaInvalida("Formato de licença inválido. Cole o código inteiro, sem espaços extras.")
@@ -101,7 +111,7 @@ def ler_licenca(codigo: str, chave_publica: bytes | None = None) -> dict:
     try:
         dados = json.loads(carga)
         return {"loja": str(dados["loja"]), "emitida_em": date.fromisoformat(dados["emitida_em"]),
-                "expira_em": date.fromisoformat(dados["expira_em"])}
+                "expira_em": date.fromisoformat(dados["expira_em"]), "edicao": str(dados.get("edicao", edicao.PADRAO))}
     except (ValueError, KeyError, TypeError):
         raise LicencaInvalida("Os dados da licença estão ilegíveis.") from None
 
@@ -112,6 +122,16 @@ def exigida(banco) -> bool:
     if getattr(sys, "frozen", False):
         return True
     return banco.cfg("licenca_exigir").strip().upper() in ("S", "1", "SIM", "TRUE")
+
+
+def nome_da_edicao(chave: str) -> str:
+    """Nome do programa de uma licença; edição que esta versão não conhece aparece pela chave."""
+    return edicao.EDICOES[chave].nome if chave in edicao.EDICOES else chave
+
+
+def desta_edicao(lic: dict) -> bool:
+    """A licença é do programa que está rodando (WillPDV ou E&A Superações)."""
+    return lic["edicao"] == edicao.atual().chave
 
 
 def mesma_loja(a: str, b: str) -> bool:
@@ -165,6 +185,9 @@ def estado(banco, hoje: date | None = None, chave_publica: bytes | None = None) 
     loja = banco.cfg("chave_loja").strip()
     if loja and not mesma_loja(lic["loja"], loja):
         return Estado("sem_licenca", mensagem="A licença guardada neste caixa pertence a outra loja.")
+    if not desta_edicao(lic):
+        return Estado("sem_licenca", mensagem=f"A licença guardada neste caixa é do {nome_da_edicao(lic['edicao'])}, "
+                                              f"não do {edicao.atual().nome}.")
     venc = lic["expira_em"]
     dias = (venc - _hoje(banco, hoje)).days
     if dias > AVISO_DIAS:
@@ -199,13 +222,13 @@ def turno_vale_como_isencao(banco, turno: dict | None, hoje: date | None = None)
 
 
 def _guardada(banco, chave_publica: bytes | None) -> dict | None:
-    """A licença guardada, só se ainda validar (assinatura e loja); senão None."""
+    """A licença guardada, só se ainda validar (assinatura, loja e edição); senão None."""
     try:
         lic = ler_licenca(banco.cfg("licenca_token"), chave_publica)
     except LicencaInvalida:
         return None
     loja = banco.cfg("chave_loja").strip()
-    return lic if not loja or mesma_loja(lic["loja"], loja) else None
+    return lic if (not loja or mesma_loja(lic["loja"], loja)) and desta_edicao(lic) else None
 
 
 def ativar(banco, codigo: str, hoje: date | None = None, chave_publica: bytes | None = None) -> dict:
@@ -215,6 +238,9 @@ def ativar(banco, codigo: str, hoje: date | None = None, chave_publica: bytes | 
     loja = banco.cfg("chave_loja").strip()
     if loja and not mesma_loja(lic["loja"], loja):
         raise LicencaInvalida(f"Esta licença é da loja '{lic['loja']}', e este caixa está configurado como '{loja}'.")
+    if not desta_edicao(lic):
+        raise LicencaInvalida(f"Esta licença é do {nome_da_edicao(lic['edicao'])}. Peça ao fornecedor a licença do "
+                              f"{edicao.atual().nome}.")
     if lic["expira_em"] < _hoje(banco, hoje):
         raise LicencaExpirada(f"Esta licença já venceu em {_br(lic['expira_em'])}.")
     anterior = _guardada(banco, chave_publica)       # só vale como comparação se ainda validar (chave ou loja trocada, não)

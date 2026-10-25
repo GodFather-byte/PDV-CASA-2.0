@@ -78,6 +78,17 @@ def _bibliotecas() -> list[str]:
             f"SQLite {sqlite3.sqlite_version}, Qt/PySide6 {PySide6.__version__}, {ssl.OPENSSL_VERSION}"]
 
 
+def _edicao() -> list[str]:
+    """Qual edição o programa abre (WillPDV ou E&A Superações) e se a marca dela veio no pacote."""
+    from src.core import edicao
+    ed = edicao.atual()
+    pasta = edicao.pasta_recursos()
+    faltando = [nome for nome in (ed.icone, ed.logotipo) if nome and not (pasta / nome).is_file()]
+    if faltando:
+        raise RuntimeError(f"{ed.nome}: faltam no pacote: {', '.join(faltando)}")
+    return [f"{ed.nome} (dados em {ed.pasta_dados}): ícone{' e logotipo' if ed.logotipo else ''} no pacote"]
+
+
 def _banco_e_telas(pasta: Path) -> list[str]:
     """Abre a interface Qt com banco efêmero (sem tocar nos dados da loja) e confere o backup criptografado."""
     from src.autoteste_qt import _backup_seguro
@@ -102,9 +113,10 @@ def _rede() -> list[str]:
 
 def executar(saida: str | None = None, rede: bool = False) -> int:
     """Roda os testes, escreve o relatório em `saida` (e na tela, se houver console) e devolve 0 (tudo certo) ou 1."""
+    from src.core import edicao
     from src.versao import VERSAO
-    linhas = [f"WillPDV {VERSAO} — autoteste"]
-    etapas = [("módulos", _modulos), ("bibliotecas", _bibliotecas)]
+    linhas = [f"{edicao.atual().nome} {VERSAO} — autoteste"]
+    etapas = [("módulos", _modulos), ("bibliotecas", _bibliotecas), ("edição", _edicao)]
     ok = True
     with tempfile.TemporaryDirectory(prefix="willpdv_autoteste_") as pasta:
         etapas.append(("telas", lambda: _banco_e_telas(Path(pasta))))

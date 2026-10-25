@@ -23,7 +23,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `python -m backend.lojas painel LOJA [senha]` | Senha do painel do dono no celular (app em `/painel/` da nuvem); o dono também a troca no PDV (Configurações > Nuvem) |
 | `python -m backend.lojas limpar-painel` | Apaga já o que passou da retenção do painel (vendas > 120 dias, sessões vencidas, caixas parados); a nuvem também faz sozinha |
 | `python -m tools.gerar_icones_painel` | Ícones PNG da PWA do painel (só biblioteca padrão) |
-| `python build_pdv.py` / `build_licenciador.py` | Executável (PyInstaller) e instalador (Inno Setup) |
+| `python build_pdv.py` / `build_licenciador.py` | Executável (PyInstaller) e instalador (Inno Setup); `build_pdv.py --edicao ea_superacoes` gera o E&A Superações |
 
 ## Pastas
 
@@ -38,7 +38,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `licenciador/` | `nucleo.py` (regras), `tela.py` (janela), `app.py`, `autoteste.py`; central própria em `central.py` (SQLite/emissão/ponte), `central_bot.py`, `central_cli.py`, `central_tela.py` |
 | `backend/` | FastAPI: `main.py` (rotas), `ponte.py` (central técnica, caixas aprovados e entrega de licenças assinadas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobrancas.py` (Asaas), `operacao_asaas.py` e `worker_asaas.py` (fila, agenda e indicadores), `painel.py` (painel do dono: envio, um retrato por caixa, senha, sessão, consultas e limpeza automática) e `painel_web/` (a PWA servida em `/painel/`) |
 | `tools/` | `gerar_licenca.py`, `gerar_logos.py` (não vão no instalador do PDV) |
-| `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`) e imagens (`ea-superacoes-*`: marca da edição adega) |
+| `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`, `EASuperacoes.iss`) e imagens (`ea-superacoes-*`: marca da edição adega) |
 | `tests/` | Um `test_*.py` por assunto; `base.py` (banco em memória, relógio controlável); `ui_robo.py` (robô das janelas modais) |
 | `docs/` | Guias por assunto (lista abaixo) |
 | `.github/workflows/` | `testes.yml` (suíte), `build-windows.yml` (instaladores) e `nuvem-deploy.yml` (testa a nuvem e aciona o deploy no Render) |

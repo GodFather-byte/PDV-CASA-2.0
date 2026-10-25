@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from src.core import ed25519, licenca
+from src.core import ed25519, edicao, licenca
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
 
@@ -23,6 +23,8 @@ MAX_MESES = 60
 MAX_DIAS_TESTE = 90
 TIPOS = ("mensal", "permanente", "teste")
 ROTULO = {"mensal": "Mensal", "permanente": "Permanente", "teste": "Teste"}
+# Para qual programa é a licença (a edição vai dentro do código assinado; ver src/core/edicao.py).
+PROGRAMAS = {chave: ed.nome for chave, ed in edicao.EDICOES.items()}
 
 
 class ErroLicenciador(ErroNegocio):
@@ -130,6 +132,11 @@ class Emitida:
     quantidade: int
     emitida_em: date
     expira_em: date
+    edicao: str = edicao.PADRAO
+
+    @property
+    def programa(self) -> str:
+        return PROGRAMAS.get(self.edicao, self.edicao)
 
     @property
     def descricao(self) -> str:
@@ -155,10 +162,13 @@ def validade(tipo: str, quantidade: int, hoje: date | None = None) -> date:
     raise ErroLicenciador("Escolha o tipo de licença.")
 
 
-def emitir(loja: str, tipo: str, quantidade: int = 1, arquivo: Path | None = None, hoje: date | None = None) -> Emitida:
+def emitir(loja: str, tipo: str, quantidade: int = 1, arquivo: Path | None = None, hoje: date | None = None,
+           edicao_programa: str = edicao.PADRAO) -> Emitida:
     loja = " ".join((loja or "").split())
     if not loja:
         raise ErroLicenciador("Informe o nome (chave) da loja. É o mesmo que fica em Configurações do PDV.")
+    if edicao_programa not in PROGRAMAS:
+        raise ErroLicenciador("Escolha para qual programa é a licença.")
     hoje = hoje or date.fromisoformat(fmt.hoje())
     expira = validade(tipo, quantidade, hoje)
     estado = estado_chave(arquivo)
@@ -166,9 +176,10 @@ def emitir(loja: str, tipo: str, quantidade: int = 1, arquivo: Path | None = Non
         raise ErroLicenciador(estado.mensagem)
     semente = _ler_semente(arquivo or arquivo_chave())
     dias = (expira - hoje).days
-    codigo = licenca.gerar_licenca(semente, loja, dias, hoje)
+    codigo = licenca.gerar_licenca(semente, loja, dias, hoje, edicao_programa)
     lic = licenca.ler_licenca(codigo)                              # confere de volta, com a chave pública do PDV
-    return Emitida(codigo, lic["loja"], tipo, quantidade if tipo != "permanente" else 0, lic["emitida_em"], lic["expira_em"])
+    return Emitida(codigo, lic["loja"], tipo, quantidade if tipo != "permanente" else 0, lic["emitida_em"], lic["expira_em"],
+                   lic["edicao"])
 
 
 def conferir(codigo: str, hoje: date | None = None) -> dict:
@@ -182,7 +193,8 @@ def conferir(codigo: str, hoje: date | None = None) -> dict:
     permanente = (lic["expira_em"] - lic["emitida_em"]).days >= licenca.MAX_DIAS - 1
     situacao = ("Permanente" if permanente else "Vencida" if dias < 0 else "Vence hoje" if dias == 0
                 else f"Válida: faltam {dias} dia{'s' if dias != 1 else ''}")
-    return {**lic, "dias": dias, "permanente": permanente, "situacao": situacao}
+    return {**lic, "dias": dias, "permanente": permanente, "situacao": situacao,
+            "programa": PROGRAMAS.get(lic["edicao"], lic["edicao"])}
 
 
 # ---------------------------------------------------------------- histórico
@@ -208,7 +220,7 @@ class Historico:
     def adicionar(self, e: Emitida) -> None:
         itens = self.todas()
         itens.append({"loja": e.loja, "tipo": e.tipo, "quantidade": e.quantidade, "emitida_em": e.emitida_em.isoformat(),
-                      "expira_em": e.expira_em.isoformat(), "codigo": e.codigo})
+                      "expira_em": e.expira_em.isoformat(), "codigo": e.codigo, "edicao": e.edicao})
         self._gravar(itens)
 
     def remover(self, codigo: str) -> None:
@@ -218,11 +230,13 @@ class Historico:
         return sorted({d["loja"] for d in self.todas()}, key=str.casefold)
 
     def situacao_das_lojas(self, hoje: date | None = None) -> list[dict]:
-        """Uma linha por loja: a licença mais nova dela, com os dias que faltam. Quem vence primeiro aparece primeiro."""
+        """Uma linha por loja e programa: a licença mais nova, com os dias que faltam. Quem vence primeiro aparece primeiro.
+        Registros de antes das edições não têm `edicao`: são do WillPDV."""
         hoje = hoje or date.fromisoformat(fmt.hoje())
-        ultima: dict[str, dict] = {}
+        ultima: dict[tuple, dict] = {}
         for d in self.todas():
-            chave = d["loja"].casefold()
+            d = {**d, "edicao": d.get("edicao") or edicao.PADRAO}
+            chave = (d["loja"].casefold(), d["edicao"])
             if chave not in ultima or (d["expira_em"], d["emitida_em"]) > (ultima[chave]["expira_em"], ultima[chave]["emitida_em"]):
                 ultima[chave] = d
         linhas = []
@@ -230,7 +244,7 @@ class Historico:
             expira = date.fromisoformat(d["expira_em"])
             dias = (expira - hoje).days
             permanente = d["tipo"] == "permanente"
-            linhas.append({**d, "dias": dias, "permanente": permanente,
+            linhas.append({**d, "dias": dias, "permanente": permanente, "programa": PROGRAMAS.get(d["edicao"], d["edicao"]),
                            "situacao": "Permanente" if permanente else "Vencida" if dias < 0 else "Vence hoje" if dias == 0
                            else f"Vence em {dias} dia{'s' if dias != 1 else ''}" if dias <= licenca.AVISO_DIAS else "Em dia"})
         return sorted(linhas, key=lambda x: (x["permanente"], x["dias"]))
@@ -419,5 +433,5 @@ def restaurar_historico(origem: Path, historico: "Historico") -> int:
 def mensagem_para_o_cliente(e: Emitida) -> str:
     """Texto pronto para mandar (WhatsApp, e-mail...) com o código e como ativar."""
     validade_txt = "sem vencimento" if e.tipo == "permanente" else f"válida até {e.expira_em.strftime('%d/%m/%Y')}"
-    return (f"Licença do WillPDV — {e.loja} ({validade_txt}).\n\n{e.codigo}\n\n"
-            "Como ativar: na tela de entrada do WillPDV, toque em \"Código de licença...\", cole o código inteiro e confirme.")
+    return (f"Licença do {e.programa} — {e.loja} ({validade_txt}).\n\n{e.codigo}\n\n"
+            f"Como ativar: na tela de entrada do {e.programa}, toque em \"Código de licença...\", cole o código inteiro e confirme.")
