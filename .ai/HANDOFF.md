@@ -2,7 +2,7 @@
 
 ## Estado
 
-- PDV **1.9.0**, esquema **29**. **A interface do PDV é só Qt (PySide6).** O Tk do PDV foi removido
+- PDV **1.9.0**, esquema **30**. **A interface do PDV é só Qt (PySide6).** O Tk do PDV foi removido
   (`src/ui/` apagado; o histórico está no git). `python -m src.app` abre o Qt; `--qt`/`--tk` não existem.
 - **Gerador de licenças (`licenciador/`) continua em Tkinter**, por decisão do dono. Ele guarda seus próprios
   `tema.py`, `icone.py` e `paleta.py`. É a única parte do repositório que ainda precisa de tkinter
@@ -60,6 +60,13 @@
   recibo de acerto R$ 0,00). E todo acerto feito pelo F12 numa comanda sem consumo (zerado, só shows ou só comissão) fecha a
   comanda junto (`_acertar_e_fechar_comanda` / `_tirar_comanda_vazia`); antes ela ficava aberta e vazia nos cartões.
   Testes em `tests/test_qt_comanda_garota_vazia.py` usam a janela real do acerto (os antigos a trocavam por um valor pronto).
+- **Acerto da garota (Qt), repaginado:** a janela do acerto (F12 na comanda dela) tem o campo **Nome dela** (vem do cadastro,
+  pode digitar ou trocar). O nome vai só para o acerto (`acertos_garotas.nome`, esquema 30), o recibo, a sangria e os shows do
+  fechamento; o cadastro não muda (o número da comanda pode ser de outra garota em outra noite). Shows continuam no mesmo
+  lugar (o cursor começa neles). O recibo e o comprovante de saída voltaram a sair com o estilo `recibo_garota`/`saida_garota`
+  (linhas da garota, título, data, totais e "Conta fechada" em dobro de altura); o Qt mandava como `comprovante` comum.
+- **Comanda com comissão fica rosa:** `cores_do_cartao` (painel_mesas.py) pinta de rosa o cartão da comanda com comissão a
+  pagar (com ou sem consumo); a pílula continua com a situação. O "Parada" ficou avermelhado para não confundir com o rosa.
 - **Código + Enter leva à quantidade (como no Tk):** Enter no código escolhe o produto, mostra nome e preço e leva ao
   campo da quantidade (selecionada); o segundo Enter (ou o botão Lançar) lança. Direto, sem pausa: "6*código", modo
   leitor (F3) e produto de balança (pesa). `JanelaCaixa.lancar_item(pedir_quantidade=True)`. Esc desiste do produto.

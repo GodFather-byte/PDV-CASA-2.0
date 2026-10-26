@@ -26,19 +26,19 @@ FONTE = "Segoe UI"
 ESTADOS = {
     "escuro": {
         "consumindo": {"fundo": "#121b45", "borda": "#34479a", "texto": "#9ab9ff"},
-        "parada": {"fundo": "#34182b", "borda": "#a24a6b", "texto": "#ff8fa6"},
+        "parada": {"fundo": "#3a1c1a", "borda": "#b8544c", "texto": "#ff9a8f"},
         "conta": {"fundo": "#33280f", "borda": "#a8832b", "texto": "#ffcf6e"},
         "balcao": {"fundo": "#0f2c2a", "borda": "#2e8f6c", "texto": "#5fe0b0"},
-        "garota": {"fundo": "#0d3036", "borda": "#2a9d92", "texto": "#4fd8c6"},
+        "garota": {"fundo": "#4a1240", "borda": "#ff5fb4", "texto": "#ffa3d6"},      # rosa: comanda com comissão
         "parcial": {"fundo": "#211c4a", "borda": "#7d63d6", "texto": "#c4b1ff"},
         "acerto": {"fundo": "#33280f", "borda": "#a8832b", "texto": "#ffcf6e"},
     },
     "claro": {
         "consumindo": {"fundo": "#e3eaf7", "borda": "#7f96c8", "texto": "#2a4a8f"},
-        "parada": {"fundo": "#f7e5ea", "borda": "#c06f8a", "texto": "#9c2b50"},
+        "parada": {"fundo": "#f6e4e0", "borda": "#c0655a", "texto": "#9c3328"},
         "conta": {"fundo": "#f6ebd0", "borda": "#b88a1c", "texto": "#74500a"},
         "balcao": {"fundo": "#dcefe5", "borda": "#4a9a7a", "texto": "#0b6648"},
-        "garota": {"fundo": "#d7ebe8", "borda": "#3a9a8e", "texto": "#0a5d55"},
+        "garota": {"fundo": "#f9cbe4", "borda": "#d23c8c", "texto": "#8e1452"},
         "parcial": {"fundo": "#e8e3f5", "borda": "#8470c8", "texto": "#54409e"},
         "acerto": {"fundo": "#f6ebd0", "borda": "#b88a1c", "texto": "#74500a"},
     },
@@ -90,6 +90,12 @@ def detalhes(t: dict) -> tuple[str, str, str]:
     if t.get("garota"):
         return ident, f"Comissão R$ {t['garota']}", "garota"
     return ident, "", ""
+
+
+def cores_do_cartao(t: dict, modo: str) -> dict:
+    """Fundo, borda e texto do cartão: a comanda que recebeu comissão (a pagar) fica rosa, como o cartão da garota; a pílula
+    continua mostrando a situação dela (aberta, parada, conta...)."""
+    return ESTADOS[modo]["garota" if t.get("garota") else t["estado"]]
 
 
 def _fonte(pontos: float, negrito: bool = False) -> QFont:
@@ -190,8 +196,8 @@ class GradeCartoes(QWidget):
         p.drawLine(QPointF(cx, cy), QPointF(cx + 3, cy))
 
     def _selo_garota(self, p: QPainter, cx: float, cy: float) -> None:
-        p.setPen(QPen(QColor("#075247"), 1))
-        p.setBrush(QColor("#0b7a6b"))
+        p.setPen(QPen(QColor("#8a1556"), 1))
+        p.setBrush(QColor("#d6388a"))
         p.drawEllipse(QPointF(cx, cy), 8, 8)
         estrela = QPolygonF()
         for i in range(10):
@@ -242,9 +248,10 @@ class GradeCartoes(QWidget):
             return
         x, y, w, h = self.celula(i)
         e = ESTADOS[self.modo][t["estado"]]
+        rosa = cores_do_cartao(t, self.modo)
         atual = t["chave"] == self.atual
         x1, y1, x2, y2 = x + 4, y + 4, x + w - 4, y + h - 4
-        self._cartao(p, x1, y1, x2, y2, 14, e["fundo"], self._cor("azul") if atual else e["borda"], 3 if atual else 1)
+        self._cartao(p, x1, y1, x2, y2, 14, rosa["fundo"], self._cor("azul") if atual else rosa["borda"], 3 if atual else 1)
         pad = 12
         esquerda, direita = x1 + pad, x2 - pad
         rotulo_tipo = ROTULOS_TIPO[t["tipo"]] + (f" {t['rotulo']}" if t["tipo"] == "garota" and t.get("nome") else "")
@@ -265,7 +272,7 @@ class GradeCartoes(QWidget):
         if ident:
             self._texto(p, esquerda, y1 + 64, ident, _fonte(9), self._cor("suave"), largura_max=x2 - pad - esquerda)
         if aviso:
-            cor = e["texto"] if tom == "garota" else self._cor(tom)
+            cor = rosa["texto"] if tom == "garota" else self._cor(tom)
             self._texto(p, esquerda, y1 + 79, aviso, _fonte(8, True), cor, largura_max=x2 - pad - esquerda)
         baixo = y2 - 17
         largura_pilula = self._pilula(p, esquerda, baixo, e, t["estado"])

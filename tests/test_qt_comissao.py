@@ -381,7 +381,19 @@ class TestComissaoQt(BaseCaixaQt):
         dlg.tudo_no_pix()
         dlg.confirmar()
         self.assertEqual(dlg.resultado, self.acerto(do_caixa=True, shows=2, valor_show_cent=5000,
-                                                  vale_cent=2000, pix_cent=9500))
+                                                  vale_cent=2000, pix_cent=9500, nome="ANA"))
+
+    def test_dialogo_real_traz_o_nome_do_cadastro_e_deixa_digitar_outro(self):
+        from src.ui_qt.comissao import DialogoAcerto
+        self.banco.cfg_set("comissao_pede_shows", "S")
+        dlg = DialogoAcerto(self.janela(), self.ctx, 180, "ANA", 0, 0)
+        self.assertEqual(dlg.ent_nome.text(), "ANA")
+        dlg.ent_nome.setText("  Bia  Souza ")
+        dlg.ent_qtd.setText("2")
+        dlg.grupo_show.buttons()[0].setChecked(True)
+        dlg.confirmar()
+        self.assertEqual(dlg.resultado["nome"], "Bia Souza")
+        self.assertEqual(dlg.resultado["shows"], 2)
 
     def test_dialogo_real_sem_comissao_nem_shows_fecha_zerado_no_segundo_pagar(self):
         from src.ui_qt.comissao import DialogoAcerto
@@ -391,7 +403,7 @@ class TestComissaoQt(BaseCaixaQt):
         self.assertIsNone(dlg.resultado)                                       # o primeiro só avisa
         self.assertIn("R$ 0,00", dlg.lbl_msg.text())
         dlg.confirmar()
-        self.assertEqual(dlg.resultado, self.acerto(zerado=True))
+        self.assertEqual(dlg.resultado, self.acerto(zerado=True, nome="ANA"))
 
 
 class TestSaidaQt(BaseCaixaQt):

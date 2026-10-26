@@ -39,8 +39,9 @@ _ESTILOS = {
     "saida": {"negrito_linhas": 6, "grande_prefixos": ("FAVOR ENTREGAR", "TICKET NA SAIDA", "DATA:", "CARTAO:", "MESA:")},
     "via_comissao": {"negrito_linhas": 1, "grande_prefixos": ("Valor desta", "Pontos desta")},
     # Pagamento da garota: o recibo e o comprovante de saída da gaveta saem com as linhas que ela confere em letra mais alta.
-    "recibo_garota": {"negrito_linhas": 1, "grande_prefixos": ("Garota:", "COMISSÃO", "SHOWS", "TOTAL PAGO", "Dinheiro", "Vale",
-                                                              "Pix", "Saiu do dinheiro", "Pago fora")},
+    "recibo_garota": {"negrito_linhas": 1, "grande_prefixos": ("RECIBO", "Garota:", "Pago em:", "COMISSÃO", "SHOWS", "TOTAL PAGO",
+                                                              "Dinheiro", "Vale", "Pix", "Saiu do dinheiro", "Pago fora",
+                                                              "Conta fechada")},
     "saida_garota": {"negrito_linhas": 1, "grande_prefixos": ("Valor", "Motivo:", "Operador:")},
     "relatorio": {"negrito_linhas": 1},
 }
