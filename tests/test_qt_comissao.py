@@ -18,7 +18,7 @@ class TestComissaoQt(BaseCaixaQt):
         return self.ctx.comissoes.lancar(numero, cent, self.turno, self.ctx.operador_id)
 
     def acerto(self, **valores):
-        return dict(do_caixa=False, shows=0, valor_show_cent=0, pix_cent=0, vale_cent=0) | valores
+        return dict(do_caixa=False, shows=0, valor_show_cent=0, pix_cent=0, vale_cent=0, zerado=False) | valores
 
     def comanda(self, j):
         j.ent_pos.setText("180")
@@ -382,6 +382,16 @@ class TestComissaoQt(BaseCaixaQt):
         dlg.confirmar()
         self.assertEqual(dlg.resultado, self.acerto(do_caixa=True, shows=2, valor_show_cent=5000,
                                                   vale_cent=2000, pix_cent=9500))
+
+    def test_dialogo_real_sem_comissao_nem_shows_fecha_zerado_no_segundo_pagar(self):
+        from src.ui_qt.comissao import DialogoAcerto
+        self.banco.cfg_set("comissao_pede_shows", "S")
+        dlg = DialogoAcerto(self.janela(), self.ctx, 180, "ANA", 0, 0)
+        dlg.confirmar()
+        self.assertIsNone(dlg.resultado)                                       # o primeiro só avisa
+        self.assertIn("R$ 0,00", dlg.lbl_msg.text())
+        dlg.confirmar()
+        self.assertEqual(dlg.resultado, self.acerto(zerado=True))
 
 
 class TestSaidaQt(BaseCaixaQt):

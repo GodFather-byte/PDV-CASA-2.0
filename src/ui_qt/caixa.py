@@ -2301,7 +2301,7 @@ class JanelaCaixa(QMainWindow):
         if v is None or (not itens and v["modalidade"] != "caderneta" and not v["prepago"]):
             so_comissao = v is not None and self._a_pagar_na_comanda()
             if so_comissao and self._comissao_na_linha():
-                self.pagar_comissao(v["posicao"])     # comanda da garota só com comissão: F12 paga a ela
+                self._acertar_e_fechar_comanda(v)     # comanda da garota só com comissão: F12 paga a ela e fecha a comanda
                 return
             if v is not None and not so_comissao and self._comanda_vazia_de_garota(v):
                 self._fechar_comanda_da_garota_vazia(v)    # garota sem nada lançado: acerta os shows ou só fecha a comanda
@@ -2442,27 +2442,39 @@ class JanelaCaixa(QMainWindow):
 
     def _fechar_comanda_da_garota_vazia(self, v: dict) -> None:
         """A comanda da garota sem consumo nem comissão marcada fecha sem lançamento nenhum. Se a casa acerta shows e a garota
-        está ativa, abre primeiro o acerto dos shows (como sempre); desistindo dele, pergunta se é para só fechar a comanda."""
-        if self._acerto_so_de_shows(v):
-            pag = comissao.pagar_garota(self, int(v["posicao"]))
-            if pag is not None:
-                self.recarregar()
-                self.avisar(comissao.texto_pagamento(pag))
-                self.ent_codigo.setFocus()
-                return
+        está ativa, abre primeiro o acerto dos shows (como sempre; sem shows, o acerto fecha a conta dela sem valor) e a
+        comanda fecha junto; desistindo dele, pergunta se é para só fechar a comanda."""
+        if self._acerto_so_de_shows(v) and self._acertar_e_fechar_comanda(v):
+            return
         nome = self.ctx.comissoes.nome(v["posicao"])
         quem = f"a comanda {v['posicao']}" + (f" ({nome})" if nome else "")
         dica = "" if nome else "\n\nCliente que sai sem consumir: use o código 1002 (imprime o ticket de saída)."
         if not self.dialogos.confirmar("Comanda sem lançamentos", f"Fechar {quem} sem nada lançado?{dica}"):
             self.ent_codigo.setFocus()
             return
-        ok, _ = self._executar(self.ctx.caixa.cancelar_venda, v["id"], "comanda de garota fechada sem lançamentos")
-        if not ok:
-            return
-        self.venda_id = None
-        self._limpar_entrada()
+        self._tirar_comanda_vazia(v, f"Comanda {v['posicao']} fechada, sem lançamentos.")
+
+    def _acertar_e_fechar_comanda(self, v: dict) -> bool:
+        """Acerta a garota da comanda (comissão marcada e/ou shows, ou a conta zerada) e, sem consumo lançado, a comanda dela sai
+        dos cartões na mesma hora: antes ela ficava aberta, vazia, depois do acerto. Devolve False se o acerto não aconteceu."""
+        pag = comissao.pagar_garota(self, int(v["posicao"]))
+        if pag is None:
+            self.ent_codigo.setFocus()
+            return False
+        self._tirar_comanda_vazia(v, comissao.texto_pagamento(pag))
+        return True
+
+    def _tirar_comanda_vazia(self, v: dict, texto: str) -> None:
+        """Fecha a comanda sem consumo (a venda vazia some; com item cancelado vira cupom cancelado) e volta ao balcão."""
+        if not self.ctx.caixa.itens(v["id"]) and not self.ctx.caixa.pagamentos(v["id"]):
+            ok, _ = self._executar(self.ctx.caixa.cancelar_venda, v["id"], "comanda de garota fechada sem lançamentos")
+            if not ok:
+                self.recarregar()
+                return
+            self.venda_id = None
+            self._limpar_entrada()
         self.recarregar()
-        self.avisar(f"Comanda {v['posicao']} fechada, sem lançamentos.")
+        self.avisar(texto)
         self.ent_codigo.setFocus()
 
     def _acerto_so_de_shows(self, v: dict | None) -> bool:

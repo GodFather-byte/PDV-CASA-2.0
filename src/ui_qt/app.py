@@ -1162,7 +1162,8 @@ def autoteste(pasta: Path) -> list[str]:
         acerto = DialogoAcerto(caixa, app.ctx, 180, "", 1500, 1)
         acerto.ent_pix.setText("15,00")
         acerto.confirmar()
-        if acerto.resultado != {"do_caixa": False, "shows": 0, "valor_show_cent": 0, "pix_cent": 1500, "vale_cent": 0}:
+        if acerto.resultado != {"do_caixa": False, "shows": 0, "valor_show_cent": 0, "pix_cent": 1500, "vale_cent": 0,
+                                 "zerado": False}:
             raise RuntimeError("O diálogo Qt de acerto não validou o pagamento.")
         caixa.liberar_saida()
         if caixa.venda_id is not None or banco.cfg_int("ultimo_ticket_saida", 0) != 1:
