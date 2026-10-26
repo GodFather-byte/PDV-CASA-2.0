@@ -100,10 +100,7 @@ def pagar_garota(caixa, numero: int) -> dict | None:
     ctx = caixa.ctx
     if not caixa._autorizar("caixa_pagar_comissao", "exigir_senha_sangria", "Pagar comissão exige autorização:"):
         return None
-    itens = ctx.comissoes.lancamentos(numero)
-    if not itens and not ctx.comissoes.pede_shows():
-        caixa.dialogos.aviso("Comissão", f"A garota {numero} não tem comissão pendente.")
-        return None
+    itens = ctx.comissoes.lancamentos(numero)       # sem comissão a janela abre igual: shows, nome ou a conta zerada
     escolha = caixa._dialogo_acerto(numero, ctx.comissoes.nome(numero), sum(i["valor_cent"] for i in itens), len(itens),
                                     ctx.banco.cfg_bool("comissao_paga_do_caixa", False))
     if escolha is None:

@@ -170,6 +170,67 @@ class TesteComandaDaGarotaVazia(BaseCaixaQt):
         self.assertEqual(self.j.ctx.comissoes.nome(12), "BIA")                  # o cadastro não muda
         self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
 
+    def _enter(self):
+        self.j.ent_codigo.setFocus()
+        QTest.keyClick(self.j.ent_codigo, Qt.Key_Return)
+        self.aplicacao.processEvents()
+
+    def test_enter_abre_o_acerto_mesmo_sem_cadastro_e_sem_comissao(self):
+        """O que ainda acontecia no balcão: garota sem cadastro (o número basta) e sem comissão: o Enter só perguntava se
+        fechava a comanda, sem abrir o acerto para lançar os shows."""
+        self.banco.executar("DELETE FROM garotas")
+        vid = self.chamar("45")
+        troca, dialogos = self._acerto_de_verdade(0)
+        self.j.dialogos.confirmacoes = [False]                                 # Esc no acerto e "não" para só fechar
+        with troca:
+            self._enter()
+        self.assertEqual(len(dialogos), 1)                                     # a janela do acerto abriu
+        self.assertEqual(dialogos[0].ent_nome.text(), "")
+        self.assertIsNotNone(dialogos[0].ent_qtd)                              # com os shows
+        self.assertEqual(self.j.venda_id, vid)                                 # desistiu: nada mudou ainda
+
+    def test_enter_sem_cadastro_acerta_shows_com_nome_e_fecha_a_comanda(self):
+        self.banco.executar("DELETE FROM garotas")
+        vid = self.chamar("45")
+        from src.ui_qt.comissao import DialogoAcerto
+
+        def abrir(numero, nome, comissao_cent, quantidade, do_caixa_padrao=False):
+            dlg = DialogoAcerto(self.j, self.j.ctx, numero, nome, comissao_cent, quantidade, do_caixa_padrao)
+            dlg.ent_nome.setText("Bia")
+            dlg.ent_qtd.setText("2")
+            dlg.grupo_show.buttons()[0].setChecked(True)
+            dlg.confirmar()
+            resultado = dlg.resultado
+            dlg.deleteLater()
+            return resultado
+        with patch.object(self.j, "_dialogo_acerto", side_effect=abrir), patch.object(self.j, "_emitir") as emitir:
+            self._enter()
+        a = self.banco.um("SELECT garota, shows_qtd, nome FROM acertos_garotas")
+        self.assertEqual(tuple(a), (45, 2, "Bia"))
+        self.assertIn("Garota: 45 Bia", emitir.call_args[0][1])
+        self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
+        self.assertIsNone(self.j.venda_id)
+
+    def test_sem_shows_na_casa_o_enter_tambem_abre_o_acerto_e_fecha_zerado(self):
+        self.banco.cfg_set("comissao_pede_shows", "N")
+        self.banco.executar("DELETE FROM garotas")
+        vid = self.chamar("45")
+        troca, dialogos = self._acerto_de_verdade(2)
+        with troca, patch.object(self.j, "_emitir"):
+            self._enter()
+        self.assertIsNone(dialogos[0].ent_qtd)                                 # sem o quadro dos shows
+        self.assertEqual(self.banco.valor("SELECT total_cent FROM acertos_garotas WHERE garota = 45"), 0)
+        self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
+
+    def test_botao_pagar_garota_aparece_na_comanda_vazia_sem_cadastro_e_fecha_ela(self):
+        self.banco.executar("DELETE FROM garotas")
+        vid = self.chamar("45")
+        self.assertTrue(self.j.btn_pagar_garota.isVisibleTo(self.j))
+        troca, _ = self._acerto_de_verdade(2)
+        with troca, patch.object(self.j, "_emitir"):
+            self.j.btn_pagar_garota.click()
+        self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
+
     def test_um_pagar_so_avisa_e_nao_grava_nada(self):
         vid = self.chamar()
         troca, _ = self._acerto_de_verdade(1)

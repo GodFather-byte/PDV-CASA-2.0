@@ -90,6 +90,9 @@ class BaseCaixaQt(BaseTeste):
     def janela(self):
         j = JanelaCaixa(self.ctx)
         j.dialogos = DialogosFalsos()
+        # A janela do acerto é modal: sem troca explícita no teste (patch.object), ela "desiste" (Esc) e anota que abriu.
+        j.acertos_abertos = []
+        j._dialogo_acerto = lambda *args, **kw: j.acertos_abertos.append(args) or None
         j.show()
         self.janelas.append(j)
         return j

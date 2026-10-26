@@ -785,7 +785,7 @@ class JanelaCaixa(QMainWindow):
         self._aviso_comissao(v)
         tem_itens = bool(itens)
         pode_pagar_garota = bool(v) and self._comissao_na_linha() and (
-            self._a_pagar_na_comanda() or (not tem_itens and self._acerto_so_de_shows(v)))
+            self._a_pagar_na_comanda() or (not tem_itens and self._comanda_vazia_de_garota(v)))
         self.btn_pagar_garota.setVisible(pode_pagar_garota)
         self.btn_cancelar_item.setEnabled(tem_itens or self._a_pagar_na_comanda())
         self.btn_cancelar_venda.setEnabled(v is not None)
@@ -2441,10 +2441,10 @@ class JanelaCaixa(QMainWindow):
         return bool(v and v["modalidade"] == "mesa" and v["comanda"] and self.ctx.comissoes.ligada())
 
     def _fechar_comanda_da_garota_vazia(self, v: dict) -> None:
-        """A comanda da garota sem consumo nem comissão marcada fecha sem lançamento nenhum. Se a casa acerta shows e a garota
-        está ativa, abre primeiro o acerto dos shows (como sempre; sem shows, o acerto fecha a conta dela sem valor) e a
-        comanda fecha junto; desistindo dele, pergunta se é para só fechar a comanda."""
-        if self._acerto_so_de_shows(v) and self._acertar_e_fechar_comanda(v):
+        """F12/Enter na comanda da garota sem consumo nem comissão marcada: abre SEMPRE o acerto (shows, nome, vale, Pix; sem
+        nada, fecha a conta dela sem valor), esteja ela cadastrada ou não, e a comanda fecha junto. Desistindo do acerto (Esc),
+        pergunta se é para só fechar a comanda (a de um cliente sem consumo também chega aqui)."""
+        if self._acertar_e_fechar_comanda(v):           # sempre abre o acerto: cadastrada ou não, com ou sem shows
             return
         nome = self.ctx.comissoes.nome(v["posicao"])
         quem = f"a comanda {v['posicao']}" + (f" ({nome})" if nome else "")
@@ -2476,14 +2476,6 @@ class JanelaCaixa(QMainWindow):
         self.recarregar()
         self.avisar(texto)
         self.ent_codigo.setFocus()
-
-    def _acerto_so_de_shows(self, v: dict | None) -> bool:
-        """Comanda vazia de uma garota cadastrada e ativa: dá para acertar com ela só os shows (sem comissão marcada)."""
-        if not v or v["modalidade"] != "mesa" or not v["comanda"] or not self._comissao_na_linha() \
-                or not self.ctx.comissoes.pede_shows():
-            return False
-        g = self.ctx.comissoes.garota(v["posicao"])
-        return g is not None and bool(g["ativo"])
 
     def _dialogo_comissao(self, sugerida: str = "") -> tuple[int, int] | None:
         """Ponto de troca dos testes: a janela do código 50. Devolve (número da garota, centavos) ou None."""
@@ -2640,6 +2632,9 @@ class JanelaCaixa(QMainWindow):
             v = self.venda()
             if not (v and v["modalidade"] == "mesa" and v["comanda"]):
                 self.dialogos.aviso("Comissão", "Chame a comanda da garota para pagar (ou use o botão Comissões).")
+                return
+            if not self.ctx.caixa.itens(v["id"]):
+                self._acertar_e_fechar_comanda(v)      # comanda sem consumo: acerta e a comanda fecha junto
                 return
             numero = v["posicao"]
         pag = comissao.pagar_garota(self, int(numero))
