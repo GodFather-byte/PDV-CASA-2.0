@@ -2546,10 +2546,8 @@ class JanelaCaixa(QMainWindow):
             desc = "COMISSÃO - digite a garota"
         elif g is not None:
             desc = f"COMISSÃO - {g['nome']}" + ("" if g["ativo"] else " (inativa)")
-        elif self.ctx.comissoes.cadastro_vazio():
-            desc = f"COMISSÃO - garota {n}"
         else:
-            desc = "COMISSÃO - não cadastrada"
+            desc = f"COMISSÃO - garota {n}"              # sem cadastro: lança direto (o cadastro é opcional)
         self.lbl_comissao_nome.setText(desc)
 
     def _comissao_ir_ao_valor(self) -> None:

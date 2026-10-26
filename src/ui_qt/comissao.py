@@ -23,14 +23,11 @@ VERMELHO, MUDO = "#b32020", "#5b6573"
 
 # ===================================================================== regras de tela (as mesmas do caixa clássico)
 def conferir_lancamento(dialogos, ctx, numero: int, cent: int) -> str | None:
-    """As perguntas antes de lançar: garota não cadastrada, inativa e valor alto. Devolve None se tudo foi confirmado, ou o
-    campo a corrigir ('numero' ou 'valor') quando o operador respondeu Não."""
+    """As perguntas antes de lançar: garota inativa e valor alto. Número sem cadastro lança direto, sem perguntar (o cadastro
+    das garotas é opcional: qualquer comanda vale). Devolve None se tudo foi confirmado, ou o campo a corrigir ('numero' ou
+    'valor') quando o operador respondeu Não."""
     g = ctx.comissoes.garota(numero)
-    if g is None and not ctx.comissoes.cadastro_vazio():
-        if not dialogos.confirmar("Garota não cadastrada", f"A garota {numero} não está cadastrada.\n"
-                                                           "Lançar a comissão assim mesmo?", padrao_sim=False):
-            return "numero"
-    elif g is not None and not g["ativo"]:
+    if g is not None and not g["ativo"]:
         if not dialogos.confirmar("Garota inativa", f"A garota {numero} - {g['nome']} está inativa.\n"
                                                     "Lançar a comissão assim mesmo?", padrao_sim=False):
             return "numero"
@@ -41,7 +38,7 @@ def conferir_lancamento(dialogos, ctx, numero: int, cent: int) -> str | None:
 
 
 def descrever_garota(ctx, texto: str) -> tuple[str, bool]:
-    """(texto, é_alerta) para mostrar ao lado do número digitado: nome, '(inativa)', 'não cadastrada' ou vazio."""
+    """(texto, é_alerta) para mostrar ao lado do número digitado: nome, '(inativa)' ou vazio (sem cadastro não é alerta)."""
     texto = (texto or "").strip()
     try:
         n = ctx.comissoes.validar_numero(texto) if texto else None
@@ -50,8 +47,6 @@ def descrever_garota(ctx, texto: str) -> tuple[str, bool]:
     g = ctx.comissoes.garota(n) if n is not None else None
     if g is not None:
         return g["nome"] + ("" if g["ativo"] else " (inativa)"), not g["ativo"]
-    if n is not None and not ctx.comissoes.cadastro_vazio():
-        return "não cadastrada", True
     return "", False
 
 
@@ -184,7 +179,7 @@ def _botoes(dlg: QDialog, caixa: QVBoxLayout, texto_ok: str, ao_ok) -> QPushButt
 
 class DialogoComissao(QDialog):
     """A janela do código 50: número da garota (já preenchido com o da comanda) e valor. `resultado` = (número, centavos).
-    As perguntas de exceção (não cadastrada, inativa, valor alto) ficam com quem abre, em `lancar`."""
+    As perguntas de exceção (inativa, valor alto) ficam com quem abre, em `lancar`."""
 
     def __init__(self, pai: QWidget, ctx, sugerida: str = ""):
         super().__init__(pai)
