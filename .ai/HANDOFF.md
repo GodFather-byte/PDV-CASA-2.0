@@ -54,7 +54,12 @@
   como garota (o cadastro é opcional). Com shows ligados e garota cadastrada ativa abre o acerto dos shows (como sempre)
   e, desistindo, pergunta se é para só fechar; senão pede confirmação (sem cadastro a pergunta lembra o código 1002 para
   cliente sem consumo). Mesa vazia e casa sem o módulo das garotas continuam pedindo item
-  (`JanelaCaixa._fechar_comanda_da_garota_vazia`).
+  (`JanelaCaixa._fechar_comanda_da_garota_vazia`). **Correção (o que ainda travava no balcão):** com shows ligados (padrão)
+  e garota cadastrada, a janela do acerto (`DialogoAcerto`) recusava Pagar sem shows ("informe os shows"). Agora, como no
+  Tk, o primeiro Pagar avisa e o segundo fecha a conta dela sem valor (`zerado` -> `comissoes.pagar(permitir_zerado=True)`,
+  recibo de acerto R$ 0,00). E todo acerto feito pelo F12 numa comanda sem consumo (zerado, só shows ou só comissão) fecha a
+  comanda junto (`_acertar_e_fechar_comanda` / `_tirar_comanda_vazia`); antes ela ficava aberta e vazia nos cartões.
+  Testes em `tests/test_qt_comanda_garota_vazia.py` usam a janela real do acerto (os antigos a trocavam por um valor pronto).
 - **Código + Enter leva à quantidade (como no Tk):** Enter no código escolhe o produto, mostra nome e preço e leva ao
   campo da quantidade (selecionada); o segundo Enter (ou o botão Lançar) lança. Direto, sem pausa: "6*código", modo
   leitor (F3) e produto de balança (pesa). `JanelaCaixa.lancar_item(pedir_quantidade=True)`. Esc desiste do produto.

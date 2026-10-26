@@ -111,11 +111,11 @@ def pagar_garota(caixa, numero: int) -> dict | None:
     turno = ctx.turnos.atual()
     ok, pag = caixa._executar(ctx.comissoes.pagar, numero, turno["id"] if turno else None, ctx.operador_id,
                               escolha["do_caixa"], escolha["shows"], escolha["valor_show_cent"], escolha["pix_cent"],
-                              escolha["vale_cent"])
+                              escolha["vale_cent"], permitir_zerado=bool(escolha.get("zerado")))
     if not ok:
         return None
     try:
-        caixa._emitir("Recibo de acerto" if pag["shows"] else "Recibo de comissão",
+        caixa._emitir("Recibo de acerto" if pag["shows"] or not pag["quantidade"] else "Recibo de comissão",
                       ctx.impressao.recibo_comissao(pag, ctx.operador.nome), f"recibo_comissao_{numero}",
                       tipo="comprovante", abrir_gaveta=pag["tirou_do_caixa"])
         if pag["tirou_do_caixa"]:
@@ -145,6 +145,8 @@ def cancelar_lancamento(caixa, lancamento_id: int, rotulo: str) -> bool:
 
 def texto_pagamento(pag: dict) -> str:
     """A frase do status depois do acerto, como no caixa clássico."""
+    if not pag["total_cent"] and not pag["quantidade"]:
+        return f"Conta da garota {pag['garota']} fechada sem valor a pagar."
     if not pag["shows"]:
         return f"Comissão de {fmt.fmt_brl(pag['total_cent'])} paga à garota {pag['garota']}."
     return (f"Acerto de {fmt.fmt_brl(pag['total_cent'])} pago à garota {pag['garota']} "
@@ -256,6 +258,7 @@ class DialogoAcerto(QDialog):
         self.quantidade = quantidade
         self.pede_shows = ctx.comissoes.pede_shows()
         self.resultado: dict | None = None
+        self._zerado_confirmado = False                     # o primeiro Pagar sem nada avisa; o segundo fecha a conta zerada
         self.setWindowTitle("Pagar comissão")
         caixa = QVBoxLayout(self)
         titulo = QLabel(f"Garota {numero} {nome}".strip())
@@ -388,8 +391,12 @@ class DialogoAcerto(QDialog):
         except ErroNegocio as e:
             self.lbl_msg.setText(str(e))
             return
-        if not self.quantidade and not n:
-            self.lbl_msg.setText("Esta garota não tem comissão marcada: informe os shows para acertar.")
+        zerado = not self.quantidade and not n
+        if zerado and not self._zerado_confirmado:
+            # Como no caixa clássico: sem comissão nem shows, a conta dela fecha sem valor (R$ 0,00), mas só no segundo Pagar
+            self._zerado_confirmado = True
+            self.lbl_msg.setText("Esta garota não tem comissão nem shows. Tecle Pagar (Enter) de novo para fechar a conta "
+                                 "dela sem valor (R$ 0,00), ou informe os shows.")
             if self.ent_qtd is not None:
                 self.ent_qtd.setFocus()
             return
@@ -405,7 +412,7 @@ class DialogoAcerto(QDialog):
             self.ent_pix.setFocus()
             return
         self.resultado = {"do_caixa": self.chk_do_caixa.isChecked(), "shows": n, "valor_show_cent": v, "pix_cent": pix,
-                          "vale_cent": vale}
+                          "vale_cent": vale, "zerado": zerado}
         self.accept()
 
 

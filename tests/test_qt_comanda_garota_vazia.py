@@ -127,6 +127,66 @@ class TesteComandaDaGarotaVazia(BaseCaixaQt):
         self.j.fechar_venda()
         self.assertIn("ao menos um item", self.j.dialogos.avisos[-1])
 
+    def _acerto_de_verdade(self, cliques: int):
+        """Troca a janela modal do acerto pela própria DialogoAcerto, sem exec(): só aperta Pagar `cliques` vezes."""
+        from src.ui_qt.comissao import DialogoAcerto
+        dialogos = []
+
+        def abrir(numero, nome, comissao_cent, quantidade, do_caixa_padrao=False):
+            dlg = DialogoAcerto(self.j, self.j.ctx, numero, nome, comissao_cent, quantidade, do_caixa_padrao)
+            dialogos.append(dlg)
+            for _ in range(cliques):
+                dlg.confirmar()
+            resultado = dlg.resultado
+            dlg.deleteLater()
+            return resultado
+        return patch.object(self.j, "_dialogo_acerto", side_effect=abrir), dialogos
+
+    def test_acerto_sem_shows_fecha_a_conta_zerada_e_a_comanda(self):
+        """O que travava no balcão: com shows ligados, Pagar sem shows recusava ("informe os shows") e a comanda não fechava."""
+        vid = self.chamar()
+        troca, dialogos = self._acerto_de_verdade(2)
+        with troca, patch.object(self.j, "_emitir") as emitir:
+            self.j.fechar_venda()
+        self.assertIn("R$ 0,00", dialogos[0].lbl_msg.text())                   # o primeiro Pagar avisa; o segundo fecha
+        acerto = self.banco.um("SELECT garota, total_cent, shows_qtd FROM acertos_garotas")
+        self.assertEqual(tuple(acerto), (12, 0, 0))
+        self.assertEqual(emitir.call_args[0][0], "Recibo de acerto")
+        self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
+        self.assertIsNone(self.j.venda_id)
+        self.assertEqual([t["chave"] for t in self.j.cartoes.tiles()], ["0"])
+        self.assertIn("fechada sem valor", self.j.lbl_status.text())
+        self.assertEqual(self.j.dialogos.avisos, [])
+
+    def test_um_pagar_so_avisa_e_nao_grava_nada(self):
+        vid = self.chamar()
+        troca, _ = self._acerto_de_verdade(1)
+        self.j.dialogos.confirmacoes = [False]                                 # desistiu: nem acerto, nem fechar
+        with troca:
+            self.j.fechar_venda()
+        self.assertIsNone(self.banco.um("SELECT id FROM acertos_garotas"))
+        self.assertEqual(self.j.venda_id, vid)
+
+    def test_acerto_com_shows_tambem_fecha_a_comanda(self):
+        vid = self.chamar()
+        acerto = {"do_caixa": False, "shows": 2, "valor_show_cent": 5000, "pix_cent": 0, "vale_cent": 0, "zerado": False}
+        with patch.object(self.j, "_dialogo_acerto", return_value=acerto), patch.object(self.j, "_emitir"):
+            self.j.fechar_venda()
+        self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
+        self.assertIsNone(self.j.venda_id)
+
+    def test_comanda_so_com_comissao_paga_e_fecha(self):
+        self.banco.cfg_set("comissao_na_linha", "S")
+        vid = self.chamar()
+        self.j.ctx.comissoes.lancar(12, 3000, self.j._turno()["id"], self.j.ctx.operador_id)
+        self.j.recarregar()
+        acerto = {"do_caixa": False, "shows": 0, "valor_show_cent": 0, "pix_cent": 0, "vale_cent": 0, "zerado": False}
+        with patch.object(self.j, "_dialogo_acerto", return_value=acerto), patch.object(self.j, "_emitir"):
+            self.j.fechar_venda()
+        self.assertEqual(self.banco.valor("SELECT total_cent FROM acertos_garotas"), 3000)
+        self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
+        self.assertIsNone(self.j.venda_id)
+
     def test_enter_com_o_codigo_vazio_fecha_a_comanda_da_garota(self):
         self.banco.cfg_set("comissao_pede_shows", "N")
         vid = self.chamar()
