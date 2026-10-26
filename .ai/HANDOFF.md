@@ -73,6 +73,14 @@
 - **Comissão em número sem cadastro lança direto:** tirada a pergunta "A garota N não está cadastrada. Lançar assim mesmo?"
   (`comissao.conferir_lancamento`) e o aviso vermelho "não cadastrada"; a linha mostra "COMISSÃO - garota N". Continuam as
   perguntas de garota inativa e de valor alto.
+- **Coluna do meio do caixa repaginada (o layout de 3 colunas não mudou):** etiqueta do tipo da venda (`lbl_etq_venda`:
+  BALCÃO/COMANDA/MESA/CADERNETA/ENTREGA e GAROTA em rosa, cores em `ETIQUETAS`); título sem o número repetido
+  ("Comanda 130 · Aberta"); campo do código maior; quantidade com − e + (`_mudar_qtd`, nunca abaixo de 1); o produto achado
+  aparece antes do Enter que lança (`lbl_achado`: nome, estoque se controla, qtd × preço = total); tabela `#itens` com Produto
+  esticado, sem rolagem lateral, linhas de 34 px e zebra; o item recém-lançado fica verde/negrito (`_ultimo_item_id`, até o
+  próximo); comissão em rosa (`LINHAS_COMISSAO`); lista vazia com orientação (`lbl_vazio` no viewport); atalhos como teclas
+  (`lbl_dica_nav` agora é a fileira de `QLabel#tecla`, `TECLAS_DICA`); botões com ícone e cor (`#cancelar`, `#rosa`,
+  `#neutro`) e "Operações do caixa" na mesma linha. Testes em `tests/test_qt_caixa_visual.py`.
 - **Relógio no caixa:** com a tela cheia a barra do Windows some; o topo do caixa ganhou `RelogioCaixa` (`ui_qt/relogio.py`):
   hora:minuto grande, segundos ao lado, "SEG · 26/10/2026" embaixo, QTimer de 1 s, só QLabels (sem desenho próprio). Cores
   pelos estilos `relogio_*` do caixa (claro e noite).
