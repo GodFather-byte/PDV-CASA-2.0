@@ -73,6 +73,9 @@
 - **Comissão em número sem cadastro lança direto:** tirada a pergunta "A garota N não está cadastrada. Lançar assim mesmo?"
   (`comissao.conferir_lancamento`) e o aviso vermelho "não cadastrada"; a linha mostra "COMISSÃO - garota N". Continuam as
   perguntas de garota inativa e de valor alto.
+- **Relógio no caixa:** com a tela cheia a barra do Windows some; o topo do caixa ganhou `RelogioCaixa` (`ui_qt/relogio.py`):
+  hora:minuto grande, segundos ao lado, "SEG · 26/10/2026" embaixo, QTimer de 1 s, só QLabels (sem desenho próprio). Cores
+  pelos estilos `relogio_*` do caixa (claro e noite).
 - **Comanda com comissão fica rosa:** `cores_do_cartao` (painel_mesas.py) pinta de rosa o cartão da comanda com comissão a
   pagar (com ou sem consumo); a pílula continua com a situação. O "Parada" ficou avermelhado para não confundir com o rosa.
 - **Código + Enter leva à quantidade (como no Tk):** Enter no código escolhe o produto, mostra nome e preço e leva ao
