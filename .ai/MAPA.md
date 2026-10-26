@@ -52,6 +52,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Turno, numeração de cupom, fechamento | `turno_controller.py`, `conferencia_turno.py` |
 | Edição do programa (WillPDV ou E&A Superações/adega): marca, pasta de dados, perfil fixo, opções escondidas | `src/core/edicao.py`; usada em `ui_qt/app.py`, `ui_qt/configuracoes.py`, `config_controller.salvar_config`, `database/conexao.py` |
 | Tela cheia do caixa (Ctrl+F, config `caixa_tela_cheia`) | `ui_qt/caixa.py` (`aplicar_tela_cheia`), `ui_qt/app.py` (`abrir_caixa`) |
+| Relógio no topo do caixa (hora, segundos, dia e data) | `ui_qt/relogio.py` (`RelogioCaixa`); estilos `relogio_*` em `ui_qt/caixa.py` |
 | Troca de turno no modelo clássico (maquininha, gaveta, confirmação, resumo sobra/falta) | `ui_qt/caixa.py` (`ir_para_fechamento`), `ui_qt/fechamento_turno.py` (`DialogoMaquininha`, `PainelFechamento`) |
 | Conferência por forma e justificativa | `ui_qt/fechamento.py`; contrato em `docs/FECHAMENTO_EXPLICATIVO.md` |
 | Devolução por cupom e troca auditadas | API única em `caixa_controller.py`, ledger em `devolucoes_controller.py`; `ui_qt/devolucoes.py`; `docs/DEVOLUCOES.md` |

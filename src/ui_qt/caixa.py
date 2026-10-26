@@ -40,6 +40,7 @@ from src.controllers.caixa_controller import LIMITE_PARTES_DIVISAO
 from src.core.valor_pagamento import LIMITE_TROCO_CENT, ler_valor_pagamento
 from src.ui_qt import comissao
 from src.ui_qt.painel_mesas import CORES as CORES_MESAS, PainelMesas
+from src.ui_qt.relogio import RelogioCaixa
 
 PAGINA_SEM_OPERADOR, PAGINA_ABERTURA, PAGINA_VENDA = range(3)
 TENTATIVAS_SUPERVISOR = 3
@@ -64,6 +65,10 @@ QPushButton:hover { border-color: #5a7fb8; }
 QPushButton#primario { background: #2b7d52; color: #f7faf8; font-weight: bold; border: 1px solid #1d5c3b; border-radius: 6px; padding: 8px 14px; }
 QPushButton#perigo { background: #b03a3a; color: #fbf6f6; border: 1px solid #8a2626; border-radius: 6px; padding: 6px 12px; }
 QPushButton:disabled { background: #d5dbe4; color: #77849a; }
+QFrame#relogio { background: #ffffff; border: 2px solid #aab7c8; border-radius: 12px; }
+QLabel#relogio_hora { font-size: 24pt; font-weight: bold; color: #1e2a3c; font-family: 'Segoe UI'; }
+QLabel#relogio_seg { font-size: 12pt; font-weight: bold; color: #2d5fb0; padding-bottom: 5px; }
+QLabel#relogio_data { font-size: 9pt; font-weight: bold; color: #4d5c74; letter-spacing: 1px; }
 """
 
 
@@ -80,6 +85,10 @@ QLineEdit#valor { font-size: 16pt; font-weight: bold; min-height: 30px; }
 QLabel#mudo { color: #94a8bd; }
 QLabel#alerta { color: #ffd078; font-weight: bold; }
 QLabel#status { padding: 4px; }
+QFrame#relogio { background: #111a40; border: 1px solid #2f4180; border-radius: 12px; }
+QLabel#relogio_hora { font-size: 24pt; font-weight: bold; color: #f1f5f9; }
+QLabel#relogio_seg { font-size: 12pt; font-weight: bold; color: #52dfb4; padding-bottom: 5px; }
+QLabel#relogio_data { font-size: 9pt; font-weight: bold; color: #94a8bd; letter-spacing: 1px; }
 QLineEdit, QComboBox, QSpinBox { background: #0a1030; color: #f1f5f9; border: 1px solid #2f4180; border-radius: 6px;
                                  padding: 6px; min-height: 20px; }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border: 2px solid #78abff; }
@@ -285,6 +294,9 @@ class JanelaCaixa(QMainWindow):
             self.logo_loja.setPixmap(imagem)
             cabecalho.addWidget(self.logo_loja)
         cabecalho.addWidget(self.lbl_cabecalho, 1)
+        self.relogio = RelogioCaixa()                   # em tela cheia a barra do Windows some: a hora fica aqui
+        cabecalho.addWidget(self.relogio)
+        cabecalho.addSpacing(8)
         self.lbl_leitor = _rotulo("LEITOR ÓPTICO ATIVO" if self.leitor else "", "mudo")
         cabecalho.addWidget(self.lbl_leitor)
         self.btn_tela_cheia = QPushButton("Tela cheia (Ctrl+F)")
