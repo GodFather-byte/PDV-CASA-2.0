@@ -72,7 +72,7 @@ QLabel#relogio_data { font-size: 9pt; font-weight: bold; color: #4d5c74; letter-
 QLineEdit#codigo { font-size: 14pt; min-height: 34px; padding: 4px 10px; border: 2px solid #aab7c8; border-radius: 8px; background: #ffffff; }
 QLineEdit#codigo:focus { border-color: #2b7d52; }
 QLineEdit#quantidade { font-size: 14pt; font-weight: bold; min-height: 34px; border: 2px solid #aab7c8; border-radius: 8px; background: #ffffff; }
-QPushButton#passo { font-size: 15pt; font-weight: bold; min-width: 34px; max-width: 34px; min-height: 34px; padding: 0; }
+QPushButton#passo { font-size: 15pt; font-weight: bold; min-width: 36px; max-width: 36px; min-height: 34px; padding: 0; text-align: center; }
 QLabel#achado { background: #e3f3ea; border: 1px solid #2b7d52; border-radius: 8px; padding: 6px 12px; color: #1e2a3c; font-size: 11pt; }
 QTableWidget#itens { font-size: 12pt; background: #ffffff; alternate-background-color: #eef2f7; border: 1px solid #aab7c8; border-radius: 8px; }
 QTableWidget#itens QHeaderView::section { background: #dfe5ec; color: #4d5c74; font-weight: bold; padding: 6px; border: 0; }
@@ -108,7 +108,7 @@ QLabel#relogio_data { font-size: 9pt; font-weight: bold; color: #94a8bd; letter-
 QLineEdit#codigo { font-size: 14pt; min-height: 34px; padding: 4px 10px; border: 2px solid #2f4180; border-radius: 8px; }
 QLineEdit#codigo:focus { border: 2px solid #52dfb4; }
 QLineEdit#quantidade { font-size: 14pt; font-weight: bold; min-height: 34px; border: 2px solid #2f4180; border-radius: 8px; }
-QPushButton#passo { font-size: 15pt; font-weight: bold; min-width: 34px; max-width: 34px; min-height: 34px; padding: 0; }
+QPushButton#passo { font-size: 15pt; font-weight: bold; min-width: 36px; max-width: 36px; min-height: 34px; padding: 0; text-align: center; }
 QLabel#achado { background: #123a35; border: 1px solid #52dfb4; border-radius: 8px; padding: 6px 12px; color: #f1f5f9; font-size: 11pt; }
 QTableWidget#itens { font-size: 12pt; }
 QLabel#vazio { color: #94a8bd; font-size: 12pt; background: transparent; }
@@ -517,7 +517,7 @@ class JanelaCaixa(QMainWindow):
         c_cen.addWidget(self.lista_produtos)
         self.tabela = QTableWidget(0, 6)
         self.tabela.setObjectName("itens")
-        self.tabela.setHorizontalHeaderLabels(["Código", "Produto", "Un.", "Preço (R$)", "Qtd.", "Total (R$)"])
+        self.tabela.setHorizontalHeaderLabels(["Código", "Produto", "Un.", "Preço", "Qtd.", "Total"])
         self.tabela.setAlternatingRowColors(True)
         self.tabela.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)      # o produto se ajusta: sem rolagem para o lado
         self.tabela.verticalHeader().setDefaultSectionSize(34)
@@ -536,7 +536,7 @@ class JanelaCaixa(QMainWindow):
         cabecalho_itens = self.tabela.horizontalHeader()
         for coluna in (0, 2, 4):                      # código, unidade e quantidade: do tamanho do que mostram
             cabecalho_itens.setSectionResizeMode(coluna, QHeaderView.ResizeToContents)
-        for coluna, largura in ((3, 100), (5, 110)):
+        for coluna, largura in ((3, 82), (5, 92)):       # estreitas: o Produto fica com o espaço que sobra
             cabecalho_itens.setSectionResizeMode(coluna, QHeaderView.Fixed)
             self.tabela.setColumnWidth(coluna, largura)
         cabecalho_itens.setSectionResizeMode(1, QHeaderView.Stretch)
@@ -574,7 +574,6 @@ class JanelaCaixa(QMainWindow):
         self.btn_comissoes.setObjectName("rosa")
         self.btn_comissoes.clicked.connect(self.abrir_comissoes)
         self.btn_comissoes.setVisible(self.ctx.banco.cfg_bool("usar_garotas", True))     # só casa com garotas
-        botoes.addWidget(self.btn_comissoes)
         self.btn_operacoes = QPushButton("☰ Operações do caixa")
         self.btn_operacoes.setObjectName("neutro")
         menu = QMenu(self.btn_operacoes)
@@ -610,7 +609,12 @@ class JanelaCaixa(QMainWindow):
                 self.acoes[chave].setVisible(False)
             self.acoes["pre_conta"].setText("Emitir pedido de entrega (F8)")
         c_cen.addLayout(botoes)
-        c_cen.addWidget(self.btn_operacoes)           # numa linha própria: na mesma linha dos outros não cabe em 1366
+        # Comissões e Operações numa segunda linha: todos numa linha só não cabem num monitor de 1366 pontos (com o estilo do
+        # programa a janela passava da tela e cortava o painel do pagamento).
+        linha_operacoes = QHBoxLayout()
+        linha_operacoes.addWidget(self.btn_comissoes)
+        linha_operacoes.addWidget(self.btn_operacoes, 1)
+        c_cen.addLayout(linha_operacoes)
         grade.addWidget(centro, 1)
 
         dir_, c_dir = _cartao()
@@ -816,7 +820,10 @@ class JanelaCaixa(QMainWindow):
                     nome += f" — {detalhe_preco}"
             if it["observacao"]:
                 nome += f" — {it['observacao']}"
-            valores = [it["codigo"], nome, it["unidade"], fmt.fmt_num(it["preco_unit_cent"]), _fmt_qtd(it["quantidade"]),
+            codigo = str(it["codigo"] or "")
+            if codigo.isdigit():
+                codigo = codigo.lstrip("0") or "0"   # o cadastro guarda 13 dígitos ("0000000000101"); na lista basta "101"
+            valores = [codigo, nome, it["unidade"], fmt.fmt_num(it["preco_unit_cent"]), _fmt_qtd(it["quantidade"]),
                        fmt.fmt_num(it["total_cent"])]
             nova = int(it["id"]) == self._ultimo_item_id
             for col, texto in enumerate(valores):

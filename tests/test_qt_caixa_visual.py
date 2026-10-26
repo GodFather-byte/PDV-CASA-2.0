@@ -67,6 +67,11 @@ class TesteColunaDoMeio(BaseCaixaQt):
         self.assertFalse(self.j.tabela.item(0, 1).font().bold())               # o anterior volta ao normal
         self.assertTrue(self.j.tabela.item(1, 1).font().bold())
 
+    def test_codigo_aparece_sem_os_zeros_do_cadastro(self):
+        self.lancar(self.j, "101")
+        self.assertEqual(self.banco.valor("SELECT codigo FROM produtos WHERE id = ?", (self.skol,)), "0000000000101")
+        self.assertEqual(self.j.tabela.item(0, 0).text(), "101")
+
     def test_lista_vazia_orienta_e_some_com_o_primeiro_item(self):
         self.assertTrue(self.j.lbl_vazio.isVisibleTo(self.j))
         self.assertIn("Passe o leitor", self.j.lbl_vazio.text())
@@ -91,9 +96,15 @@ class TesteCaixaCabeNoMonitor(BaseCaixaQt):
     """O monitor do balcão tem 1366 pontos de largura: a janela não pode exigir mais que isso, senão estica para fora da tela
     e corta o painel do pagamento (aconteceu na comanda da garota com comissão, com os quatro botões de baixo visíveis)."""
 
+    def tearDown(self):
+        self.aplicacao.setStyleSheet("")                 # o estilo do programa não pode vazar para os outros testes
+        super().tearDown()
+
     def test_comanda_da_garota_com_comissao_cabe_em_1366_nos_dois_modos(self):
+        from src.ui_qt import tema
         self.abrir_turno()
         for modo in ("claro", "escuro"):
+            tema.aplicar(self.aplicacao, modo)           # mede com o estilo de verdade do programa (botões e letras maiores)
             self.banco.cfg_set("tema_visual", modo)
             j = self.janela()
             j.resize(1366, 768)
