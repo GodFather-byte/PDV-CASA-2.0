@@ -80,7 +80,11 @@
   esticado, sem rolagem lateral, linhas de 34 px e zebra; o item recém-lançado fica verde/negrito (`_ultimo_item_id`, até o
   próximo); comissão em rosa (`LINHAS_COMISSAO`); lista vazia com orientação (`lbl_vazio` no viewport); atalhos como teclas
   (`lbl_dica_nav` agora é a fileira de `QLabel#tecla`, `TECLAS_DICA`); botões com ícone e cor (`#cancelar`, `#rosa`,
-  `#neutro`) e "Operações do caixa" na mesma linha. Testes em `tests/test_qt_caixa_visual.py`.
+  `#neutro`); "Operações do caixa" em linha própria. Testes em `tests/test_qt_caixa_visual.py`.
+  **Largura:** o monitor do balcão tem 1366 pontos. A primeira versão exigia 1771 (fileira de atalhos longa + 5 botões numa
+  linha) e a janela esticava para fora da tela; o painel dos cartões ainda passava a 3 colunas e piorava. Agora: 4 atalhos curtos,
+  botões com padding menor e Operações embaixo; mínimo ~1309. `TesteCaixaCabeNoMonitor` exige ≤ 1340 nos dois modos, na
+  comanda da garota com comissão (o caso com mais botões).
 - **Relógio no caixa:** com a tela cheia a barra do Windows some; o topo do caixa ganhou `RelogioCaixa` (`ui_qt/relogio.py`):
   hora:minuto grande, segundos ao lado, "SEG · 26/10/2026" embaixo, QTimer de 1 s, só QLabels (sem desenho próprio). Cores
   pelos estilos `relogio_*` do caixa (claro e noite).

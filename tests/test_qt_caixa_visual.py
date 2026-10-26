@@ -76,7 +76,7 @@ class TesteColunaDoMeio(BaseCaixaQt):
     def test_atalhos_como_teclas_e_tabela_sem_rolagem_para_o_lado(self):
         from PySide6.QtWidgets import QLabel
         teclas = [l.text() for l in self.j.lbl_dica_nav.findChildren(QLabel) if l.objectName() == "tecla"]
-        self.assertEqual(teclas, ["Enter", "F12", "Esc", "Del", "← →", "F3"])
+        self.assertEqual(teclas, ["Enter", "F12", "Esc", "Del"])
         self.assertEqual(self.j.tabela.horizontalScrollBarPolicy(), Qt.ScrollBarAlwaysOff)
         self.assertIn(self.j.btn_operacoes.objectName(), ("neutro",))
         self.assertEqual(self.j.btn_cancelar_venda.objectName(), "cancelar")
@@ -85,3 +85,28 @@ class TesteColunaDoMeio(BaseCaixaQt):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TesteCaixaCabeNoMonitor(BaseCaixaQt):
+    """O monitor do balcão tem 1366 pontos de largura: a janela não pode exigir mais que isso, senão estica para fora da tela
+    e corta o painel do pagamento (aconteceu na comanda da garota com comissão, com os quatro botões de baixo visíveis)."""
+
+    def test_comanda_da_garota_com_comissao_cabe_em_1366_nos_dois_modos(self):
+        self.abrir_turno()
+        for modo in ("claro", "escuro"):
+            self.banco.cfg_set("tema_visual", modo)
+            j = self.janela()
+            j.resize(1366, 768)
+            self.aplicacao.processEvents()
+            self.assertLessEqual(j.minimumSizeHint().width(), 1340, f"balcão vazio, modo {modo}")   # com folga
+            j.ent_pos.setText("122")
+            j.btn_chamar.click()
+            for valor in (3000, 1500, 3000):
+                self.ctx.comissoes.lancar(122, valor, j._turno()["id"], self.ctx.operador_id)
+            j.recarregar()
+            self.aplicacao.processEvents()
+            self.assertTrue(j.btn_pagar_garota.isVisibleTo(j))
+            self.assertLessEqual(j.minimumSizeHint().width(), 1340, f"comanda da garota, modo {modo}")
+            self.assertLessEqual(j.width(), 1366)
+            self.banco.executar("DELETE FROM comissoes_garotas")
+            j.close()

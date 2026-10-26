@@ -79,9 +79,9 @@ QTableWidget#itens QHeaderView::section { background: #dfe5ec; color: #4d5c74; f
 QLabel#vazio { color: #4d5c74; font-size: 12pt; background: transparent; }
 QLabel#tecla { background: #ffffff; color: #1e2a3c; border: 1px solid #9fb0c6; border-bottom: 3px solid #9fb0c6; border-radius: 5px; padding: 0 6px; font-size: 8pt; font-weight: bold; }
 QLabel#dica { color: #4d5c74; font-size: 9pt; }
-QPushButton#cancelar { background: #ffffff; color: #b03a3a; border: 1px solid #b03a3a; font-weight: bold; }
+QPushButton#cancelar { background: #ffffff; color: #b03a3a; border: 1px solid #b03a3a; font-weight: bold; padding: 6px 8px; }
 QPushButton#cancelar:hover { background: #fbecec; }
-QPushButton#rosa { background: #fbe0ee; color: #a3215f; border: 1px solid #d6488f; font-weight: bold; }
+QPushButton#rosa { background: #fbe0ee; color: #a3215f; border: 1px solid #d6488f; font-weight: bold; padding: 6px 8px; }
 QPushButton#rosa:hover { background: #f8cfe4; }
 QPushButton#neutro { font-weight: bold; }
 QPushButton#cancelar:disabled, QPushButton#rosa:disabled { background: transparent; color: #a9b4c4; border-color: #c3ccd8; }
@@ -114,9 +114,9 @@ QTableWidget#itens { font-size: 12pt; }
 QLabel#vazio { color: #94a8bd; font-size: 12pt; background: transparent; }
 QLabel#tecla { background: #17224f; color: #f1f5f9; border: 1px solid #3a4f9a; border-bottom: 3px solid #3a4f9a; border-radius: 5px; padding: 0 6px; font-size: 8pt; font-weight: bold; }
 QLabel#dica { color: #94a8bd; font-size: 9pt; }
-QPushButton#cancelar { background: transparent; color: #ff8d9b; border: 1px solid #d04955; font-weight: bold; }
+QPushButton#cancelar { background: transparent; color: #ff8d9b; border: 1px solid #d04955; font-weight: bold; padding: 7px 8px; }
 QPushButton#cancelar:hover { background: #3a1626; }
-QPushButton#rosa { background: #3a1236; color: #ff9fd0; border: 1px solid #a2407a; font-weight: bold; }
+QPushButton#rosa { background: #3a1236; color: #ff9fd0; border: 1px solid #a2407a; font-weight: bold; padding: 7px 8px; }
 QPushButton#rosa:hover { background: #4d1848; }
 QPushButton#neutro { font-weight: bold; }
 QPushButton#cancelar:disabled, QPushButton#rosa:disabled { background: transparent; color: #4a5888; border-color: #2a3566; }
@@ -156,8 +156,9 @@ ETIQUETAS = {
                "comanda": ("#121b45", "#9ab9ff", "#34479a"), "mesa": ("#211c4a", "#c4b1ff", "#7d63d6"),
                "outra": ("#33280f", "#ffcf6e", "#a8832b")},
 }
-TECLAS_DICA = (("Enter", "código vazio paga"), ("F12", "fechar venda"), ("Esc", "voltar"), ("Del", "cancelar item"),
-               ("← →", "outra comanda"), ("F3", "leitor"))
+# Só os quatro do dia a dia e com textos curtos: a fileira não pode alargar o caixa num monitor de 1366 pontos (as setas
+# de comanda já estão nos botões ◀ ▶ e o F3 no menu de Operações).
+TECLAS_DICA = (("Enter", "paga"), ("F12", "fecha"), ("Esc", "volta"), ("Del", "cancela item"))
 
 
 def _fmt_qtd(q) -> str:
@@ -525,7 +526,6 @@ class JanelaCaixa(QMainWindow):
         self.lbl_vazio = _rotulo("Passe o leitor ou digite o código do produto\n\n"
                                  "Para lançar várias de uma vez: 6*101 lança 6 do produto 101", "vazio")
         self.lbl_vazio.setAlignment(Qt.AlignCenter)
-        self.lbl_vazio.setWordWrap(False)
         self.lbl_vazio.setAttribute(Qt.WA_TransparentForMouseEvents)
         vazio.addWidget(self.lbl_vazio, 0, Qt.AlignCenter)
         self.tabela.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -546,8 +546,6 @@ class JanelaCaixa(QMainWindow):
         dicas.setContentsMargins(0, 2, 0, 2)
         dicas.setSpacing(4)
         for tecla, oque in TECLAS_DICA:
-            if tecla == "← →" and not self.com_mesas:
-                continue
             rotulo_tecla = QLabel(tecla)
             rotulo_tecla.setObjectName("tecla")
             dicas.addWidget(rotulo_tecla)
@@ -558,26 +556,26 @@ class JanelaCaixa(QMainWindow):
         dicas.addStretch(1)
         c_cen.addWidget(self.lbl_dica_nav)
         botoes = QHBoxLayout()
-        self.btn_cancelar_item = QPushButton("✕  Cancelar item")
+        self.btn_cancelar_item = QPushButton("✕ Cancelar item")
         self.btn_cancelar_item.setObjectName("cancelar")
         self.btn_cancelar_item.clicked.connect(self.cancelar_item)
         botoes.addWidget(self.btn_cancelar_item)
-        self.btn_cancelar_venda = QPushButton("✕  Cancelar venda")
+        self.btn_cancelar_venda = QPushButton("✕ Cancelar venda")
         self.btn_cancelar_venda.setObjectName("cancelar")
         self.btn_cancelar_venda.clicked.connect(self.cancelar_venda)
         botoes.addWidget(self.btn_cancelar_venda)
         botoes.addStretch(1)
-        self.btn_pagar_garota = QPushButton("★  Pagar a garota")
+        self.btn_pagar_garota = QPushButton("★ Pagar garota")
         self.btn_pagar_garota.setObjectName("rosa")
         self.btn_pagar_garota.clicked.connect(lambda: self.pagar_comissao())
         self.btn_pagar_garota.hide()
         botoes.addWidget(self.btn_pagar_garota)
-        self.btn_comissoes = QPushButton("★  Comissões")
+        self.btn_comissoes = QPushButton("★ Comissões")
         self.btn_comissoes.setObjectName("rosa")
         self.btn_comissoes.clicked.connect(self.abrir_comissoes)
         self.btn_comissoes.setVisible(self.ctx.banco.cfg_bool("usar_garotas", True))     # só casa com garotas
         botoes.addWidget(self.btn_comissoes)
-        self.btn_operacoes = QPushButton("☰  Operações do caixa")
+        self.btn_operacoes = QPushButton("☰ Operações do caixa")
         self.btn_operacoes.setObjectName("neutro")
         menu = QMenu(self.btn_operacoes)
         self.acoes = {}
@@ -611,8 +609,8 @@ class JanelaCaixa(QMainWindow):
                           "repique", "consultar_comanda", "rodizio", "recarga", "nomear"):
                 self.acoes[chave].setVisible(False)
             self.acoes["pre_conta"].setText("Emitir pedido de entrega (F8)")
-        botoes.addWidget(self.btn_operacoes)          # na mesma linha dos outros botões
         c_cen.addLayout(botoes)
+        c_cen.addWidget(self.btn_operacoes)           # numa linha própria: na mesma linha dos outros não cabe em 1366
         grade.addWidget(centro, 1)
 
         dir_, c_dir = _cartao()
