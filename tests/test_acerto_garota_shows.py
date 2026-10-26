@@ -319,3 +319,55 @@ class TesteValeDaGarota(BaseComissao):
         recibo = ImpressaoController(self.banco).recibo_comissao(p, "ADM")
         self.assertIn("Vale (já recebido)", recibo)
         self.assertNotIn("Pix", recibo)
+
+
+class TesteNomeNoAcerto(BaseComissao):
+    """O nome digitado no acerto vai para o acerto e o recibo; o cadastro não muda (o número pode ser de outra garota)."""
+
+    def test_nome_digitado_sai_no_recibo_e_na_sangria_sem_mexer_no_cadastro(self):
+        self.garota(180, "MARIA")
+        p = self.com.pagar(180, self.turno, self.adm, shows=2, valor_show_cent=5000, nome="  Bia   Souza ")
+        self.assertEqual(p["nome"], "Bia Souza")
+        self.assertEqual(self.banco.valor("SELECT nome FROM acertos_garotas"), "Bia Souza")
+        self.assertEqual(self.banco.valor("SELECT descricao FROM movimentos_caixa"), "Acerto garota 180 Bia Souza")
+        self.assertIn("Garota: 180 Bia Souza", ImpressaoController(self.banco).recibo_comissao(p, "ADM"))
+        self.assertEqual(self.com.nome(180), "MARIA")
+        self.assertEqual(self.com.shows_do_turno(self.turno)["por_garota"][0]["nome"], "Bia Souza")
+
+    def test_sem_nome_usa_o_do_cadastro_e_sem_cadastro_fica_vazio(self):
+        self.garota(180, "MARIA")
+        self.assertEqual(self.com.pagar(180, self.turno, self.adm, shows=1, valor_show_cent=5000)["nome"], "MARIA")
+        p = self.com.pagar(45, self.turno, self.adm, shows=1, valor_show_cent=5000, nome="")
+        self.assertEqual(p["nome"], "")
+        self.assertIsNone(self.banco.valor("SELECT nome FROM acertos_garotas WHERE garota = 45"))
+
+    def test_conta_zerada_com_nome_tem_o_recibo_em_letra_mais_alta(self):
+        from src.controllers.impressao_controller import _ESTILOS
+        from src.hardware import impressora_termica as term
+        p = self.com.pagar(77, self.turno, self.adm, permitir_zerado=True, nome="Ana")
+        recibo = ImpressaoController(self.banco).recibo_comissao(p, "ADM")
+        dados = term.texto_para_escpos(recibo, **_ESTILOS["recibo_garota"])
+        for linha in ("Garota: 77 Ana", "Conta fechada", "RECIBO DE ACERTO"):
+            posicao = dados.index(linha.encode("cp850"))
+            self.assertIn(term.TAMANHO_ALTO, dados[max(0, posicao - 40):posicao], linha)
+
+    def test_banco_da_versao_29_ganha_a_coluna_do_nome(self):
+        import tempfile
+        from pathlib import Path
+        from src.database.conexao import BancoDados
+        from src.database.esquema import VERSAO_ESQUEMA
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = str(Path(pasta) / "v29.db")
+            b = BancoDados(caminho)
+            colunas = [r[1] for r in b.todos("PRAGMA table_info(acertos_garotas)") if r[1] != "nome"]
+            b.executar(f"CREATE TABLE _antiga AS SELECT {', '.join(colunas)} FROM acertos_garotas")   # como era até a v29
+            b.executar("DROP TABLE acertos_garotas")
+            b.executar("ALTER TABLE _antiga RENAME TO acertos_garotas")
+            b.executar("PRAGMA user_version = 29")
+            b.fechar()
+            b = BancoDados(caminho)
+            try:
+                self.assertEqual(b.valor("PRAGMA user_version"), VERSAO_ESQUEMA)
+                self.assertIn("nome", [r[1] for r in b.todos("PRAGMA table_info(acertos_garotas)")])
+            finally:
+                b.fechar()

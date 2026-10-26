@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 29
+VERSAO_ESQUEMA = 30
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -664,7 +664,8 @@ TABELAS = [
         movimento_id INTEGER REFERENCES movimentos_caixa(id),
         tirou_do_caixa INTEGER NOT NULL DEFAULT 0,
         pix_cent INTEGER NOT NULL DEFAULT 0,
-        vale_cent INTEGER NOT NULL DEFAULT 0
+        vale_cent INTEGER NOT NULL DEFAULT 0,
+        nome TEXT
     )""",
     "CREATE INDEX IF NOT EXISTS ix_acertos_garota ON acertos_garotas(garota, criado_em)",
     "CREATE INDEX IF NOT EXISTS ix_acertos_turno ON acertos_garotas(turno_id)",
@@ -923,6 +924,10 @@ AUDITORIA = [
 # (ver BancoDados._migrar). Bancos novos já nascem na VERSAO_ESQUEMA e não as executam. Cada passo é um
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 MIGRACOES = {
+    # O nome da garota digitado no acerto (o número da comanda pode ser de outra garota em outra noite: o cadastro não muda).
+    30: [
+        ("coluna", "acertos_garotas", "nome", "TEXT"),
+    ],
     # Fila de impressão: 'enviando' gravado antes do envio e 'incerto' após interrupção (conferir o papel; sem
     # reenvio cego). O SQLite não altera CHECK: a tabela é refeita com os mesmos dados, ids e sequência.
     29: _migracao_fila_impressao_v29(),

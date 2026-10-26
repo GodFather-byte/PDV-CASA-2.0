@@ -8,7 +8,7 @@ try:
     from PySide6.QtGui import QPixmap
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
-    from src.ui_qt.painel_mesas import ALTURA, LARGURA, PainelMesas, detalhes
+    from src.ui_qt.painel_mesas import ALTURA, ESTADOS, LARGURA, PainelMesas, cores_do_cartao, detalhes
 except ImportError:                                   # pragma: no cover - sem PySide6 o painel Qt não roda
     PainelMesas = None
 
@@ -18,6 +18,22 @@ from src.controllers.mesas_modelo import idade, montar_tiles
 def mesa(rotulo, total=1000, comanda=True, status="aberta", inativa=False, minutos=3, **extra):
     return {"id": hash(rotulo) % 10_000, "rotulo": rotulo, "comanda": comanda, "status": status, "inativa": inativa,
             "total_cent": total, "minutos_parada": minutos, "n_itens": 1, **extra}
+
+
+@unittest.skipIf(PainelMesas is None, "PySide6 não instalado")
+class TesteComandaComComissaoFicaRosa(unittest.TestCase):
+    def test_comanda_que_recebeu_comissao_fica_rosa_e_as_outras_nao(self):
+        tiles = {t["chave"]: t for t in montar_tiles(
+            [mesa("101"), mesa("180"), mesa("M5", comanda=False, inativa=True, minutos=50)], None,
+            [{"rotulo": "180", "total_cent": 3000}, {"rotulo": "212", "total_cent": 1500}])}
+        for modo in ("escuro", "claro"):
+            rosa = ESTADOS[modo]["garota"]
+            self.assertEqual(cores_do_cartao(tiles["180"], modo), rosa)        # comanda com consumo e comissão a pagar
+            self.assertEqual(cores_do_cartao(tiles["212"], modo), rosa)        # comanda só com a comissão
+            self.assertNotEqual(cores_do_cartao(tiles["101"], modo), rosa)
+            self.assertNotEqual(cores_do_cartao(tiles["M5"], modo), rosa)
+            self.assertNotEqual(ESTADOS[modo]["parada"]["fundo"], rosa["fundo"])
+        self.assertEqual(tiles["180"]["estado"], "consumindo")                 # a pílula continua mostrando a situação
 
 
 class TesteModeloDosCartoes(unittest.TestCase):

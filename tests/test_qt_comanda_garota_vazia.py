@@ -158,6 +158,18 @@ class TesteComandaDaGarotaVazia(BaseCaixaQt):
         self.assertIn("fechada sem valor", self.j.lbl_status.text())
         self.assertEqual(self.j.dialogos.avisos, [])
 
+    def test_nome_digitado_no_acerto_vai_para_o_recibo_com_letra_mais_alta(self):
+        vid = self.chamar()
+        acerto = {"do_caixa": False, "shows": 3, "valor_show_cent": 5000, "pix_cent": 0, "vale_cent": 0, "zerado": False,
+                  "nome": "Bia Souza"}
+        with patch.object(self.j, "_dialogo_acerto", return_value=acerto), patch.object(self.j, "_emitir") as emitir:
+            self.j.fechar_venda()
+        titulo, texto, _nome = emitir.call_args[0][:3]
+        self.assertEqual(emitir.call_args.kwargs["tipo"], "recibo_garota")    # o estilo com as linhas em letra alta
+        self.assertIn("Garota: 12 Bia Souza", texto)
+        self.assertEqual(self.j.ctx.comissoes.nome(12), "BIA")                  # o cadastro não muda
+        self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
+
     def test_um_pagar_so_avisa_e_nao_grava_nada(self):
         vid = self.chamar()
         troca, _ = self._acerto_de_verdade(1)

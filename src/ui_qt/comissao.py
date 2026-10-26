@@ -111,20 +111,20 @@ def pagar_garota(caixa, numero: int) -> dict | None:
     turno = ctx.turnos.atual()
     ok, pag = caixa._executar(ctx.comissoes.pagar, numero, turno["id"] if turno else None, ctx.operador_id,
                               escolha["do_caixa"], escolha["shows"], escolha["valor_show_cent"], escolha["pix_cent"],
-                              escolha["vale_cent"], permitir_zerado=bool(escolha.get("zerado")))
+                              escolha["vale_cent"], permitir_zerado=bool(escolha.get("zerado")), nome=escolha.get("nome"))
     if not ok:
         return None
     try:
         caixa._emitir("Recibo de acerto" if pag["shows"] or not pag["quantidade"] else "Recibo de comissão",
                       ctx.impressao.recibo_comissao(pag, ctx.operador.nome), f"recibo_comissao_{numero}",
-                      tipo="comprovante", abrir_gaveta=pag["tirou_do_caixa"])
+                      tipo="recibo_garota", abrir_gaveta=pag["tirou_do_caixa"])
         if pag["tirou_do_caixa"]:
             # O dinheiro saiu da gaveta: sai também o comprovante da saída financeira (o mesmo da sangria), só com o que saiu
             # do caixa (o Pix não passa por ela). A gaveta já foi aberta pelo recibo.
             caixa._emitir("Comprovante de saída",
                           ctx.impressao.comprovante_movimento("saida", pag["dinheiro_cent"], pag["movimento_descricao"],
                                                               ctx.operador.nome),
-                          f"saida_comissao_{numero}", tipo="comprovante")
+                          f"saida_comissao_{numero}", tipo="saida_garota")
     except Exception as e:  # noqa: BLE001 - o pagamento já está gravado: falha do papel nunca pode parecer falha do acerto
         caixa._registrar_falha(e)
         caixa.dialogos.erro("Impressão", f"O pagamento foi gravado, mas o recibo não pôde ser preparado:\n{e}")
@@ -247,7 +247,8 @@ class DialogoComissao(QDialog):
 class DialogoAcerto(QDialog):
     """O acerto da garota: a comissão marcada e, se a casa pergunta (`comissao_pede_shows`), os shows que o OPERADOR lança aqui
     (nada é contado sozinho), o vale que ela já pegou, a parte paga por Pix e se o dinheiro sai da gaveta.
-    `resultado` = {"do_caixa", "shows", "valor_show_cent", "pix_cent", "vale_cent"}, como o `dialogo_pagar` do caixa clássico.
+    `resultado` = {"do_caixa", "shows", "valor_show_cent", "pix_cent", "vale_cent", "zerado", "nome"}, como o `dialogo_pagar` do
+    caixa clássico. O nome vem do cadastro (se houver) e o operador pode digitar ou trocar: ele vai só para o acerto e o recibo.
     O vale é descontado do total e não sai do caixa de novo; o Pix é sobre o que sobra depois do vale e nunca passa pela gaveta."""
 
     def __init__(self, pai: QWidget, ctx, numero: int, nome: str, comissao_cent: int, quantidade: int,
@@ -261,9 +262,18 @@ class DialogoAcerto(QDialog):
         self._zerado_confirmado = False                     # o primeiro Pagar sem nada avisa; o segundo fecha a conta zerada
         self.setWindowTitle("Pagar comissão")
         caixa = QVBoxLayout(self)
-        titulo = QLabel(f"Garota {numero} {nome}".strip())
+        titulo = QLabel(f"Garota {numero}")
         titulo.setFont(QFont("Segoe UI", 12, QFont.Bold))
         caixa.addWidget(titulo)
+        linha_nome = QHBoxLayout()
+        linha_nome.addWidget(QLabel("Nome dela:"))
+        self.ent_nome = _campo(260, 14)
+        self.ent_nome.setMaxLength(60)
+        self.ent_nome.setPlaceholderText("opcional: sai no recibo")
+        self.ent_nome.setText(nome or "")
+        linha_nome.addWidget(self.ent_nome)
+        linha_nome.addStretch(1)
+        caixa.addLayout(linha_nome)
         caixa.addWidget(_mudo(f"{quantidade} lançamento(s) de comissão a pagar" if quantidade else "Sem comissão marcada"))
         lbl_com = QLabel(f"Comissão: {fmt.fmt_brl(comissao_cent)}")
         lbl_com.setFont(QFont("Georgia", 14, QFont.Bold))
@@ -336,7 +346,7 @@ class DialogoAcerto(QDialog):
         self.lbl_msg.setStyleSheet(f"color: {VERMELHO};")
         caixa.addWidget(self.lbl_msg)
         _botoes(self, caixa, "Pagar", self.confirmar)
-        for campo in (self.ent_qtd, self.ent_vale, self.ent_pix):
+        for campo in (self.ent_nome, self.ent_qtd, self.ent_vale, self.ent_pix):
             if campo is not None:
                 campo.returnPressed.connect(self.confirmar)
         self.calcular()
@@ -412,7 +422,7 @@ class DialogoAcerto(QDialog):
             self.ent_pix.setFocus()
             return
         self.resultado = {"do_caixa": self.chk_do_caixa.isChecked(), "shows": n, "valor_show_cent": v, "pix_cent": pix,
-                          "vale_cent": vale, "zerado": zerado}
+                          "vale_cent": vale, "zerado": zerado, "nome": " ".join(self.ent_nome.text().split())}
         self.accept()
 
 

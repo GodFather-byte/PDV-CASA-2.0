@@ -225,7 +225,7 @@ class ComissaoController:
 
     def pagar(self, garota, turno_id: int | None, operador_id: int | None, tirar_do_caixa: bool = True,
               shows: int = 0, valor_show_cent: int = 0, pix_cent: int = 0, vale_cent: int = 0,
-              permitir_zerado: bool = False) -> dict:
+              permitir_zerado: bool = False, nome: str | None = None) -> dict:
         """Acerta a garota: paga TUDO que está pendente e, se o operador lançou, os shows (`shows` x `valor_show_cent`). Com
         `tirar_do_caixa` registra a saída do dinheiro no turno (uma sangria 'Comissão garota 180 NOME'), então a conferência da
         gaveta já conta com ela. Só shows, sem comissão pendente, também é um acerto válido. Devolve o resumo do pagamento:
@@ -240,7 +240,10 @@ class ComissaoController:
 
         `permitir_zerado` deixa fechar a conta da garota que não tem comissão pendente nem shows (acerto de R$ 0,00, só para
         registrar o fechamento e dar o recibo). Só a tela passa True, depois de o operador confirmar; sem ele, chamar de novo
-        com a conta já acertada continua sendo recusado, então um clique repetido não grava um segundo acerto."""
+        com a conta já acertada continua sendo recusado, então um clique repetido não grava um segundo acerto.
+
+        `nome` é o nome que o operador digitou no acerto: fica gravado só neste acerto e sai no recibo (o cadastro não muda,
+        porque o número da comanda pode ser de outra garota em outra noite). Vazio: o nome do cadastro, se houver."""
         n = self.validar_numero(garota)
         shows, valor_show_cent = self.validar_shows(shows, valor_show_cent)
         pix_cent = int(pix_cent or 0)
@@ -262,7 +265,7 @@ class ComissaoController:
             if pix_cent > a_pagar:
                 raise ErroNegocio(f"O Pix ({fmt.fmt_brl(pix_cent)}) não pode ser maior que o total a pagar ({fmt.fmt_brl(a_pagar)}).")
             dinheiro = a_pagar - pix_cent
-            nome = self.nome(n)
+            nome = " ".join((nome or "").split())[:60] or self.nome(n)
             movimento, descricao = None, ""
             if tirar_do_caixa and dinheiro > 0:
                 if turno_id is None:
@@ -280,7 +283,7 @@ class ComissaoController:
             acerto = self.banco.inserir("acertos_garotas", {
                 "garota": n, "turno_id": turno_id, "operador_id": operador_id, "criado_em": agora, "comissao_cent": comissao,
                 "shows_qtd": shows, "show_valor_cent": valor_show_cent, "shows_cent": shows_cent, "total_cent": total,
-                "movimento_id": movimento, "tirou_do_caixa": int(tirou), "pix_cent": pix_cent, "vale_cent": vale_cent})
+                "movimento_id": movimento, "tirou_do_caixa": int(tirou), "pix_cent": pix_cent, "vale_cent": vale_cent, "nome": nome or None})
             self.banco.log("comissao_paga", f"garota {n} {fmt.fmt_brl(total)} ({len(itens)} lançamentos"
                            + (f", {shows} shows de {fmt.fmt_brl(valor_show_cent)}" if shows else "") + ")"
                            + (f" Pix {fmt.fmt_brl(pix_cent)}" if pix_cent else "")
@@ -298,7 +301,7 @@ class ComissaoController:
     def shows_do_turno(self, turno_id: int) -> dict:
         """Shows pagos nas contas das garotas neste turno: quantidade, total e o de cada garota (para o fechamento)."""
         linhas = [dict(r) for r in self.banco.todos(
-            """SELECT a.garota, COALESCE(g.nome, '') AS nome, SUM(a.shows_qtd) AS shows, SUM(a.shows_cent) AS total_cent
+            """SELECT a.garota, COALESCE(MAX(a.nome), g.nome, '') AS nome, SUM(a.shows_qtd) AS shows, SUM(a.shows_cent) AS total_cent
                FROM acertos_garotas a LEFT JOIN garotas g ON g.numero = a.garota
                WHERE a.turno_id = ? AND a.shows_qtd > 0 GROUP BY a.garota ORDER BY a.garota""", (turno_id,))]
         return {"quantidade": sum(l["shows"] for l in linhas), "total_cent": sum(l["total_cent"] for l in linhas),
