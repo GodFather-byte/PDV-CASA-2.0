@@ -65,6 +65,14 @@
   fechamento; o cadastro não muda (o número da comanda pode ser de outra garota em outra noite). Shows continuam no mesmo
   lugar (o cursor começa neles). O recibo e o comprovante de saída voltaram a sair com o estilo `recibo_garota`/`saida_garota`
   (linhas da garota, título, data, totais e "Conta fechada" em dobro de altura); o Qt mandava como `comprovante` comum.
+- **Enter/F12 na comanda vazia da garota abre SEMPRE o acerto:** antes só abria com garota cadastrada, ativa e shows ligados;
+  sem cadastro (o comum: o número basta) só perguntava se fechava, sem tela para os shows. Agora `_fechar_comanda_da_garota_vazia`
+  chama o acerto direto (shows, nome, vale, Pix ou conta zerada) e, no Esc, pergunta se é só fechar. `pagar_garota` não recusa
+  mais garota sem comissão; o botão "Pagar garota" aparece em toda comanda vazia (casa com garotas) e também fecha a comanda.
+  Nos testes, `BaseCaixaQt.janela` troca a janela modal do acerto por um "desistiu" que anota em `j.acertos_abertos`.
+- **Comissão em número sem cadastro lança direto:** tirada a pergunta "A garota N não está cadastrada. Lançar assim mesmo?"
+  (`comissao.conferir_lancamento`) e o aviso vermelho "não cadastrada"; a linha mostra "COMISSÃO - garota N". Continuam as
+  perguntas de garota inativa e de valor alto.
 - **Comanda com comissão fica rosa:** `cores_do_cartao` (painel_mesas.py) pinta de rosa o cartão da comanda com comissão a
   pagar (com ou sem consumo); a pílula continua com a situação. O "Parada" ficou avermelhado para não confundir com o rosa.
 - **Código + Enter leva à quantidade (como no Tk):** Enter no código escolhe o produto, mostra nome e preço e leva ao

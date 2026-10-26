@@ -187,6 +187,27 @@ class TestComissaoQt(BaseCaixaQt):
         self.assertTrue(j.lbl_comissao_nome.isHidden())
         self.assertEqual(self.contar("itens_venda"), 0)
 
+    def test_comanda_sem_cadastro_lanca_direto_sem_perguntar(self):
+        """Com outras garotas cadastradas, a comanda 180 (sem cadastro) lança a comissão sem o "Lançar assim mesmo?"."""
+        self.banco.cfg_set("comissao_na_linha", "S")
+        self.garota(numero=12)                                                 # o cadastro não está vazio
+        j = self.janela()
+        self.comanda(j)
+        self.lancar(j, self.ctx.comissoes.codigo())
+        self.assertEqual(j.lbl_comissao_nome.text(), "COMISSÃO - garota 180")
+        j.ent_qtd.setText("2")
+        j.btn_lancar.click()                                                   # DialogosFalsos falha se perguntar algo
+        self.assertEqual(j.dialogos.perguntas, [])
+        self.assertEqual(self.ctx.comissoes.pendente(180), self.ctx.comissoes.para_centavos("2"))
+
+    def test_janela_da_comissao_sem_cadastro_tambem_nao_pergunta(self):
+        from src.ui_qt.comissao import conferir_lancamento, descrever_garota
+        self.garota(numero=12)
+        j = self.janela()
+        self.assertIsNone(conferir_lancamento(j.dialogos, self.ctx, 99, 1000))
+        self.assertEqual(j.dialogos.perguntas, [])
+        self.assertEqual(descrever_garota(self.ctx, "99"), ("", False))       # sem o aviso vermelho "não cadastrada"
+
     def test_modo_na_linha_em_reais(self):
         self.banco.cfg_set("comissao_na_linha", "S")
         self.banco.cfg_set("comissao_em_pontos", "N")
@@ -217,11 +238,16 @@ class TestComissaoQt(BaseCaixaQt):
             j.lancar_comissao()
         dialogo.assert_called_once_with("180")
 
-    def test_excecoes_de_cadastro_e_valor_exigem_confirmacao(self):
+    def test_inativa_e_valor_alto_exigem_confirmacao_e_sem_cadastro_nao(self):
         from src.controllers.comissao_controller import LIMITE_CONFIRMAR_CENT
         self.garota(181, ativo=0)
         j = self.janela()
-        for numero, valor in ((180, 1500), (181, 1500), (181, LIMITE_CONFIRMAR_CENT + 1)):
+        with patch.object(j, "_dialogo_comissao", side_effect=[(180, 1500), None]):
+            j.lancar_comissao()                                                # 180 sem cadastro: lança direto
+        self.assertEqual(j.dialogos.perguntas, [])
+        self.assertEqual(self.ctx.comissoes.pendente(180), 1500)
+        self.banco.executar("DELETE FROM comissoes_garotas")
+        for numero, valor in ((181, 1500), (181, LIMITE_CONFIRMAR_CENT + 1)):
             j.dialogos.confirmacoes = [False]
             with patch.object(j, "_dialogo_comissao", side_effect=[(numero, valor), None]):
                 j.lancar_comissao()
