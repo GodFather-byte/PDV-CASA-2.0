@@ -69,6 +69,22 @@ QFrame#relogio { background: #ffffff; border: 2px solid #aab7c8; border-radius: 
 QLabel#relogio_hora { font-size: 24pt; font-weight: bold; color: #1e2a3c; font-family: 'Segoe UI'; }
 QLabel#relogio_seg { font-size: 12pt; font-weight: bold; color: #2d5fb0; padding-bottom: 5px; }
 QLabel#relogio_data { font-size: 9pt; font-weight: bold; color: #4d5c74; letter-spacing: 1px; }
+QLineEdit#codigo { font-size: 14pt; min-height: 34px; padding: 4px 10px; border: 2px solid #aab7c8; border-radius: 8px; background: #ffffff; }
+QLineEdit#codigo:focus { border-color: #2b7d52; }
+QLineEdit#quantidade { font-size: 14pt; font-weight: bold; min-height: 34px; border: 2px solid #aab7c8; border-radius: 8px; background: #ffffff; }
+QPushButton#passo { font-size: 15pt; font-weight: bold; min-width: 34px; max-width: 34px; min-height: 34px; padding: 0; }
+QLabel#achado { background: #e3f3ea; border: 1px solid #2b7d52; border-radius: 8px; padding: 6px 12px; color: #1e2a3c; font-size: 11pt; }
+QTableWidget#itens { font-size: 12pt; background: #ffffff; alternate-background-color: #eef2f7; border: 1px solid #aab7c8; border-radius: 8px; }
+QTableWidget#itens QHeaderView::section { background: #dfe5ec; color: #4d5c74; font-weight: bold; padding: 6px; border: 0; }
+QLabel#vazio { color: #4d5c74; font-size: 12pt; background: transparent; }
+QLabel#tecla { background: #ffffff; color: #1e2a3c; border: 1px solid #9fb0c6; border-bottom: 3px solid #9fb0c6; border-radius: 5px; padding: 0 6px; font-size: 8pt; font-weight: bold; }
+QLabel#dica { color: #4d5c74; font-size: 9pt; }
+QPushButton#cancelar { background: #ffffff; color: #b03a3a; border: 1px solid #b03a3a; font-weight: bold; }
+QPushButton#cancelar:hover { background: #fbecec; }
+QPushButton#rosa { background: #fbe0ee; color: #a3215f; border: 1px solid #d6488f; font-weight: bold; }
+QPushButton#rosa:hover { background: #f8cfe4; }
+QPushButton#neutro { font-weight: bold; }
+QPushButton#cancelar:disabled, QPushButton#rosa:disabled { background: transparent; color: #a9b4c4; border-color: #c3ccd8; }
 """
 
 
@@ -89,6 +105,21 @@ QFrame#relogio { background: #111a40; border: 1px solid #2f4180; border-radius: 
 QLabel#relogio_hora { font-size: 24pt; font-weight: bold; color: #f1f5f9; }
 QLabel#relogio_seg { font-size: 12pt; font-weight: bold; color: #52dfb4; padding-bottom: 5px; }
 QLabel#relogio_data { font-size: 9pt; font-weight: bold; color: #94a8bd; letter-spacing: 1px; }
+QLineEdit#codigo { font-size: 14pt; min-height: 34px; padding: 4px 10px; border: 2px solid #2f4180; border-radius: 8px; }
+QLineEdit#codigo:focus { border: 2px solid #52dfb4; }
+QLineEdit#quantidade { font-size: 14pt; font-weight: bold; min-height: 34px; border: 2px solid #2f4180; border-radius: 8px; }
+QPushButton#passo { font-size: 15pt; font-weight: bold; min-width: 34px; max-width: 34px; min-height: 34px; padding: 0; }
+QLabel#achado { background: #123a35; border: 1px solid #52dfb4; border-radius: 8px; padding: 6px 12px; color: #f1f5f9; font-size: 11pt; }
+QTableWidget#itens { font-size: 12pt; }
+QLabel#vazio { color: #94a8bd; font-size: 12pt; background: transparent; }
+QLabel#tecla { background: #17224f; color: #f1f5f9; border: 1px solid #3a4f9a; border-bottom: 3px solid #3a4f9a; border-radius: 5px; padding: 0 6px; font-size: 8pt; font-weight: bold; }
+QLabel#dica { color: #94a8bd; font-size: 9pt; }
+QPushButton#cancelar { background: transparent; color: #ff8d9b; border: 1px solid #d04955; font-weight: bold; }
+QPushButton#cancelar:hover { background: #3a1626; }
+QPushButton#rosa { background: #3a1236; color: #ff9fd0; border: 1px solid #a2407a; font-weight: bold; }
+QPushButton#rosa:hover { background: #4d1848; }
+QPushButton#neutro { font-weight: bold; }
+QPushButton#cancelar:disabled, QPushButton#rosa:disabled { background: transparent; color: #4a5888; border-color: #2a3566; }
 QLineEdit, QComboBox, QSpinBox { background: #0a1030; color: #f1f5f9; border: 1px solid #2f4180; border-radius: 6px;
                                  padding: 6px; min-height: 20px; }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border: 2px solid #78abff; }
@@ -114,7 +145,19 @@ QScrollBar::handle:vertical { background: #2f4180; border-radius: 5px; min-heigh
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 """
 # fundo das linhas de comissão marcada na comanda da garota: (a pagar, paga) e o texto de cada uma, por modo
-LINHAS_COMISSAO = {"claro": ("#f6e8c6", "#dcebdf", "#1e2a3c"), "escuro": ("#4a3a12", "#12382a", "#f1f5f9")}
+LINHAS_COMISSAO = {"claro": ("#fbe0ee", "#dcebdf", "#8e1452"), "escuro": ("#4a1240", "#12382a", "#ffc4e4")}   # rosa: comissão
+LINHA_NOVA = {"claro": ("#d6efe0", "#0b5a3c"), "escuro": ("#123a35", "#7cf0c8")}     # o item que acabou de ser lançado
+# Etiqueta da venda no alto da coluna do meio: (fundo, texto, borda) por tipo e modo. A da garota é rosa, como o cartão dela.
+ETIQUETAS = {
+    "claro": {"garota": ("#fbe0ee", "#a3215f", "#d6488f"), "balcao": ("#dcefe5", "#0b6648", "#4a9a7a"),
+              "comanda": ("#e3eaf7", "#2a4a8f", "#7f96c8"), "mesa": ("#e8e3f5", "#54409e", "#8470c8"),
+              "outra": ("#f6ebd0", "#74500a", "#b88a1c")},
+    "escuro": {"garota": ("#4a1240", "#ffa3d6", "#ff5fb4"), "balcao": ("#0f2c2a", "#5fe0b0", "#2e8f6c"),
+               "comanda": ("#121b45", "#9ab9ff", "#34479a"), "mesa": ("#211c4a", "#c4b1ff", "#7d63d6"),
+               "outra": ("#33280f", "#ffcf6e", "#a8832b")},
+}
+TECLAS_DICA = (("Enter", "código vazio paga"), ("F12", "fechar venda"), ("Esc", "voltar"), ("Del", "cancelar item"),
+               ("← →", "outra comanda"), ("F3", "leitor"))
 
 
 def _fmt_qtd(q) -> str:
@@ -399,8 +442,11 @@ class JanelaCaixa(QMainWindow):
             self.cartoes.hide()
 
         centro, c_cen = _cartao()
+        self.lbl_etq_venda = QLabel("BALCÃO")         # o tipo da venda em destaque (rosa na comanda da garota)
+        self.lbl_etq_venda.setAlignment(Qt.AlignCenter)
         self.lbl_venda = _rotulo("Balcão", "titulo")
         titulo_venda = QHBoxLayout()
+        titulo_venda.addWidget(self.lbl_etq_venda, 0, Qt.AlignVCenter)
         titulo_venda.addWidget(self.lbl_venda, 1)
         self.btn_anterior = QPushButton("◀")
         self.btn_proxima = QPushButton("▶")
@@ -412,12 +458,9 @@ class JanelaCaixa(QMainWindow):
             botao.clicked.connect(lambda _=False, p=passo: self.navegar_comanda(p))
             titulo_venda.addWidget(botao)
         c_cen.addLayout(titulo_venda)
-        self.lbl_dica_nav = _rotulo("← → mudam de comanda  ·  Enter com o código vazio paga  ·  Esc volta", "mudo")
-        c_cen.addWidget(self.lbl_dica_nav)
         if not self.com_mesas:
             self.btn_anterior.hide()
             self.btn_proxima.hide()
-            self.lbl_dica_nav.hide()
         self.lbl_aviso_venda = _rotulo("", "alerta")
         self.lbl_aviso_venda.hide()
         c_cen.addWidget(self.lbl_aviso_venda)
@@ -427,16 +470,32 @@ class JanelaCaixa(QMainWindow):
         self.lbl_qtd_titulo = QLabel("Quantidade:")
         entrada.addWidget(self.lbl_qtd_titulo, 0, 1)
         self.ent_codigo = QLineEdit()
-        self.ent_codigo.setPlaceholderText("Código, código de barras, nome ou 6*código")
+        self.ent_codigo.setObjectName("codigo")
+        self.ent_codigo.setPlaceholderText("Passe o leitor ou digite o código, o nome ou 6*código")
         self.ent_codigo.returnPressed.connect(self._enter_codigo)
         self.ent_codigo.installEventFilter(self)
         self.ent_codigo.textEdited.connect(self._esconder_produtos)
         self.ent_codigo.textEdited.connect(self._comissao_nome)
         entrada.addWidget(self.ent_codigo, 1, 0)
         self.ent_qtd = QLineEdit("1")
-        self.ent_qtd.setMaximumWidth(110)
+        self.ent_qtd.setObjectName("quantidade")
+        self.ent_qtd.setAlignment(Qt.AlignCenter)
+        self.ent_qtd.setMaximumWidth(80)
         self.ent_qtd.returnPressed.connect(self.lancar_item)
-        entrada.addWidget(self.ent_qtd, 1, 1)
+        self.ent_qtd.textEdited.connect(self._atualizar_achado)
+        linha_qtd = QHBoxLayout()
+        linha_qtd.setSpacing(4)
+        self.btn_qtd_menos = QPushButton("−")
+        self.btn_qtd_mais = QPushButton("+")
+        for botao, passo in ((self.btn_qtd_menos, -1), (self.btn_qtd_mais, 1)):
+            botao.setObjectName("passo")
+            botao.setFocusPolicy(Qt.NoFocus)
+            botao.setToolTip("Diminui a quantidade" if passo < 0 else "Aumenta a quantidade")
+            botao.clicked.connect(self._qtd_menos if passo < 0 else self._qtd_mais)
+        linha_qtd.addWidget(self.btn_qtd_menos)
+        linha_qtd.addWidget(self.ent_qtd)
+        linha_qtd.addWidget(self.btn_qtd_mais)
+        entrada.addLayout(linha_qtd, 1, 1)
         self.btn_lancar = QPushButton("Lançar")
         self.btn_lancar.setObjectName("primario")
         self.btn_lancar.clicked.connect(lambda _=False: self.lancar_item())
@@ -446,39 +505,80 @@ class JanelaCaixa(QMainWindow):
         entrada.addWidget(self.lbl_comissao_nome, 2, 0, 1, 3)
         entrada.setColumnStretch(0, 1)
         c_cen.addLayout(entrada)
+        self._achado: dict | None = None              # o produto escolhido, mostrado antes do Enter que lança
+        self.lbl_achado = _rotulo("", "achado")
+        self.lbl_achado.hide()
+        c_cen.addWidget(self.lbl_achado)
         self.lista_produtos = QListWidget()
         self.lista_produtos.setMaximumHeight(150)
         self.lista_produtos.itemActivated.connect(lambda _item: self.lancar_item())
         self.lista_produtos.hide()
         c_cen.addWidget(self.lista_produtos)
         self.tabela = QTableWidget(0, 6)
+        self.tabela.setObjectName("itens")
         self.tabela.setHorizontalHeaderLabels(["Código", "Produto", "Un.", "Preço (R$)", "Qtd.", "Total (R$)"])
+        self.tabela.setAlternatingRowColors(True)
+        self.tabela.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)      # o produto se ajusta: sem rolagem para o lado
+        self.tabela.verticalHeader().setDefaultSectionSize(34)
+        self._ultimo_item_id: int | None = None       # o item que acabou de ser lançado fica verde até o próximo
+        vazio = QVBoxLayout(self.tabela.viewport())   # lista vazia: um convite no lugar do branco
+        self.lbl_vazio = _rotulo("Passe o leitor ou digite o código do produto\n\n"
+                                 "Para lançar várias de uma vez: 6*101 lança 6 do produto 101", "vazio")
+        self.lbl_vazio.setAlignment(Qt.AlignCenter)
+        self.lbl_vazio.setWordWrap(False)
+        self.lbl_vazio.setAttribute(Qt.WA_TransparentForMouseEvents)
+        vazio.addWidget(self.lbl_vazio, 0, Qt.AlignCenter)
         self.tabela.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tabela.setSelectionMode(QAbstractItemView.SingleSelection)
         self.tabela.itemActivated.connect(self._ativar_linha)
         self.tabela.verticalHeader().setVisible(False)
-        self.tabela.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        cabecalho_itens = self.tabela.horizontalHeader()
+        for coluna in (0, 2, 4):                      # código, unidade e quantidade: do tamanho do que mostram
+            cabecalho_itens.setSectionResizeMode(coluna, QHeaderView.ResizeToContents)
+        for coluna, largura in ((3, 100), (5, 110)):
+            cabecalho_itens.setSectionResizeMode(coluna, QHeaderView.Fixed)
+            self.tabela.setColumnWidth(coluna, largura)
+        cabecalho_itens.setSectionResizeMode(1, QHeaderView.Stretch)
         c_cen.addWidget(self.tabela, 1)
+        self.lbl_dica_nav = QWidget()                 # os atalhos como teclas, em vez da frase cinza
+        dicas = QHBoxLayout(self.lbl_dica_nav)
+        dicas.setContentsMargins(0, 2, 0, 2)
+        dicas.setSpacing(4)
+        for tecla, oque in TECLAS_DICA:
+            if tecla == "← →" and not self.com_mesas:
+                continue
+            rotulo_tecla = QLabel(tecla)
+            rotulo_tecla.setObjectName("tecla")
+            dicas.addWidget(rotulo_tecla)
+            rotulo_dica = QLabel(oque)
+            rotulo_dica.setObjectName("dica")
+            dicas.addWidget(rotulo_dica)
+            dicas.addSpacing(8)
+        dicas.addStretch(1)
+        c_cen.addWidget(self.lbl_dica_nav)
         botoes = QHBoxLayout()
-        self.btn_cancelar_item = QPushButton("Cancelar item")
+        self.btn_cancelar_item = QPushButton("✕  Cancelar item")
+        self.btn_cancelar_item.setObjectName("cancelar")
         self.btn_cancelar_item.clicked.connect(self.cancelar_item)
         botoes.addWidget(self.btn_cancelar_item)
-        self.btn_cancelar_venda = QPushButton("Cancelar venda")
-        self.btn_cancelar_venda.setObjectName("perigo")
+        self.btn_cancelar_venda = QPushButton("✕  Cancelar venda")
+        self.btn_cancelar_venda.setObjectName("cancelar")
         self.btn_cancelar_venda.clicked.connect(self.cancelar_venda)
         botoes.addWidget(self.btn_cancelar_venda)
         botoes.addStretch(1)
-        self.btn_pagar_garota = QPushButton("Pagar a garota")
+        self.btn_pagar_garota = QPushButton("★  Pagar a garota")
+        self.btn_pagar_garota.setObjectName("rosa")
         self.btn_pagar_garota.clicked.connect(lambda: self.pagar_comissao())
         self.btn_pagar_garota.hide()
         botoes.addWidget(self.btn_pagar_garota)
-        self.btn_comissoes = QPushButton("Comissões")
+        self.btn_comissoes = QPushButton("★  Comissões")
+        self.btn_comissoes.setObjectName("rosa")
         self.btn_comissoes.clicked.connect(self.abrir_comissoes)
         self.btn_comissoes.setVisible(self.ctx.banco.cfg_bool("usar_garotas", True))     # só casa com garotas
         botoes.addWidget(self.btn_comissoes)
-        c_cen.addLayout(botoes)
-        self.btn_operacoes = QPushButton("Operações do caixa")
+        self.btn_operacoes = QPushButton("☰  Operações do caixa")
+        self.btn_operacoes.setObjectName("neutro")
         menu = QMenu(self.btn_operacoes)
         self.acoes = {}
         for chave, titulo, acao in (
@@ -511,7 +611,8 @@ class JanelaCaixa(QMainWindow):
                           "repique", "consultar_comanda", "rodizio", "recarga", "nomear"):
                 self.acoes[chave].setVisible(False)
             self.acoes["pre_conta"].setText("Emitir pedido de entrega (F8)")
-        c_cen.addWidget(self.btn_operacoes)
+        botoes.addWidget(self.btn_operacoes)          # na mesma linha dos outros botões
+        c_cen.addLayout(botoes)
         grade.addWidget(centro, 1)
 
         dir_, c_dir = _cartao()
@@ -719,11 +820,19 @@ class JanelaCaixa(QMainWindow):
                 nome += f" — {it['observacao']}"
             valores = [it["codigo"], nome, it["unidade"], fmt.fmt_num(it["preco_unit_cent"]), _fmt_qtd(it["quantidade"]),
                        fmt.fmt_num(it["total_cent"])]
+            nova = int(it["id"]) == self._ultimo_item_id
             for col, texto in enumerate(valores):
                 celula = QTableWidgetItem(str(texto))
                 if detalhe_preco:
                     celula.setToolTip(detalhe_preco)
                 celula.setData(Qt.UserRole, int(it["id"]))
+                if nova:                              # o que acabou de ser lançado fica verde até o próximo
+                    fundo, letra = LINHA_NOVA[self._modo_visual()]
+                    celula.setBackground(QColor(fundo))
+                    celula.setForeground(QColor(letra))
+                    fonte = celula.font()
+                    fonte.setBold(True)
+                    celula.setFont(fonte)
                 if col >= 3:
                     celula.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.tabela.setItem(linha, col, celula)
@@ -746,6 +855,8 @@ class JanelaCaixa(QMainWindow):
                 self.tabela.setItem(linha, col, celula)
         if itens or self.comissao_marcada:
             self.tabela.scrollToBottom()
+        self.lbl_vazio.setVisible(not itens and not self.comissao_marcada)
+        self._etiqueta_venda(v)
         total = v["total_cent"] if v else 0
         pags = caixa.pagamentos(v["id"]) if v else []
         recebido = sum(p["valor_cent"] for p in pags)
@@ -759,8 +870,7 @@ class JanelaCaixa(QMainWindow):
             situacao = "Conta enviada" if v["status"] == "conta_enviada" else "Aberta"
             if v["prepago"]:
                 situacao += "  ·  " + ("Pré-pago" if caixa.saldo_prepago(v["id"])["saldo"] > 0 else "Sem crédito")
-            self.lbl_venda.setText(f"{caixa.rotular_posicao(v['comanda'], v['posicao'])}  ·  "
-                                   f"{nome_posicao(v['comanda'], v['posicao'])}  ·  {situacao}")
+            self.lbl_venda.setText(f"{nome_posicao(v['comanda'], v['posicao'])}  ·  {situacao}")
         self.lbl_total.setText(fmt.fmt_num(total))
         self.lbl_total_rotulo.setText("Total (R$)")
         self.lbl_detalhe.setText(self._detalhe_total(v))
@@ -1574,6 +1684,62 @@ class JanelaCaixa(QMainWindow):
     def _esconder_produtos(self, _texto: str = "") -> None:
         self.lista_produtos.clear()
         self.lista_produtos.hide()
+        self._achado = None
+        self.lbl_achado.hide()
+
+    def _mostrar_achado(self, p: dict) -> None:
+        """O produto escolhido pelo código, antes do Enter que lança: nome, estoque (se controla) e quantidade x preço."""
+        self._achado = p
+        self._atualizar_achado()
+
+    def _atualizar_achado(self, _texto: str = "") -> None:
+        p = self._achado
+        if p is None:
+            self.lbl_achado.hide()
+            return
+        preco = self.ctx.produtos.preco_vigente(p)
+        try:
+            qtd = fmt.para_qtd(self.ent_qtd.text() or "1")
+        except ValueError:
+            qtd = None
+        estoque = f"   ·   estoque: {_fmt_qtd(p['qt_atual'])}" if p.get("controla_estoque") else ""
+        conta = (f"{_fmt_qtd(qtd)} × {fmt.fmt_brl(preco)} = {fmt.fmt_brl(round(qtd * preco))}" if qtd and qtd > 0
+                 else fmt.fmt_brl(preco))
+        self.lbl_achado.setText(f"<b>{p['nome']}</b>{estoque}   →   <b>{conta}</b>")
+        self.lbl_achado.show()
+
+    def _mudar_qtd(self, passo: int) -> None:
+        """Os botões − e + da quantidade (nunca abaixo de 1)."""
+        try:
+            atual = fmt.para_qtd(self.ent_qtd.text() or "1")
+        except ValueError:
+            atual = 1
+        self.ent_qtd.setText(_fmt_qtd(max(1, fmt.arred_qtd(atual + passo))))
+        self._atualizar_achado()
+
+    def _qtd_menos(self) -> None:
+        self._mudar_qtd(-1)
+
+    def _qtd_mais(self) -> None:
+        self._mudar_qtd(1)
+
+    def _etiqueta_venda(self, v: dict | None) -> None:
+        """A etiqueta no alto da coluna do meio: BALCÃO, COMANDA, MESA, CADERNETA, ENTREGA ou, em rosa, GAROTA (a comanda com
+        comissão marcada ou de uma garota cadastrada)."""
+        if v is None or v["modalidade"] == "balcao":
+            tipo, texto = "balcao", "BALCÃO"
+        elif v["modalidade"] == "mesa" and v["comanda"]:
+            garota = self.ctx.comissoes.ligada() and (bool(self.comissao_marcada)
+                                                      or self.ctx.comissoes.garota(v["posicao"]) is not None)
+            tipo, texto = ("garota", "GAROTA") if garota else ("comanda", "COMANDA")
+        elif v["modalidade"] == "mesa":
+            tipo, texto = "mesa", "MESA"
+        else:
+            tipo, texto = "outra", "CADERNETA" if v["modalidade"] == "caderneta" else "ENTREGA"
+        fundo, letra, borda = ETIQUETAS[self._modo_visual()][tipo]
+        self.lbl_etq_venda.setText(texto)
+        self.lbl_etq_venda.setStyleSheet(f"background: {fundo}; color: {letra}; border: 1px solid {borda}; border-radius: 10px;"
+                                         " padding: 2px 10px; font-size: 9pt; font-weight: bold;")
 
     def _mostrar_produtos(self, produtos: list[dict]) -> None:
         self.lista_produtos.clear()
@@ -1745,6 +1911,7 @@ class JanelaCaixa(QMainWindow):
                 self.balanca()                        # produto de balança: pesa direto e o peso vai para a quantidade
                 return
             self.ent_qtd.setText("1")
+            self._mostrar_achado(p)
             self.avisar(f"{p['nome']}  ·  {fmt.fmt_brl(self.ctx.produtos.preco_vigente(p))}.  "
                         "Digite a quantidade e tecle Enter.", AMBAR)
             self.ent_qtd.setFocus()
@@ -1799,7 +1966,9 @@ class JanelaCaixa(QMainWindow):
             if quantidade_cascos is None:
                 return
             opcoes["quantidade_cascos"] = quantidade_cascos
-        ok, _ = self._executar(self._lancar, p["id"], qtd, partes, **opcoes)
+        ok, item_id = self._executar(self._lancar, p["id"], qtd, partes, **opcoes)
+        if ok:
+            self._ultimo_item_id = item_id
         if not ok:
             self.recarregar()
             self.ent_qtd.setFocus()
