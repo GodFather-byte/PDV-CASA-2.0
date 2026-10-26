@@ -25,7 +25,8 @@ from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QColor, QFont, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
-                               QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QStackedWidget, QTableWidget,
+                               QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy, QSpinBox, QStackedWidget,
+                               QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from src.core import formatacao as fmt
@@ -158,7 +159,7 @@ ETIQUETAS = {
 }
 # Só os quatro do dia a dia e com textos curtos: a fileira não pode alargar o caixa num monitor de 1366 pontos (as setas
 # de comanda já estão nos botões ◀ ▶ e o F3 no menu de Operações).
-TECLAS_DICA = (("Enter", "paga"), ("F12", "fecha"), ("Esc", "volta"), ("Del", "cancela item"))
+TECLAS_DICA = (("Enter", "paga"), ("F12", "fecha"), ("Esc", "volta"), ("Del", "cancela"))
 
 
 def _fmt_qtd(q) -> str:
@@ -470,6 +471,8 @@ class JanelaCaixa(QMainWindow):
         entrada.addWidget(self.lbl_cod_titulo, 0, 0)
         self.lbl_qtd_titulo = QLabel("Quantidade:")
         entrada.addWidget(self.lbl_qtd_titulo, 0, 1)
+        for titulo in (self.lbl_cod_titulo, self.lbl_qtd_titulo):     # o título não decide a largura mínima do caixa
+            titulo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.ent_codigo = QLineEdit()
         self.ent_codigo.setObjectName("codigo")
         self.ent_codigo.setPlaceholderText("Passe o leitor ou digite o código, o nome ou 6*código")
@@ -569,12 +572,12 @@ class JanelaCaixa(QMainWindow):
         self.btn_pagar_garota.setObjectName("rosa")
         self.btn_pagar_garota.clicked.connect(lambda: self.pagar_comissao())
         self.btn_pagar_garota.hide()
-        botoes.addWidget(self.btn_pagar_garota)
         self.btn_comissoes = QPushButton("★ Comissões")
         self.btn_comissoes.setObjectName("rosa")
         self.btn_comissoes.clicked.connect(self.abrir_comissoes)
         self.btn_comissoes.setVisible(self.ctx.banco.cfg_bool("usar_garotas", True))     # só casa com garotas
-        self.btn_operacoes = QPushButton("☰ Operações do caixa")
+        self.btn_operacoes = QPushButton("☰ Operações")
+        self.btn_operacoes.setToolTip("Operações do caixa: desconto, transferências, sangria, reimpressão e mais")
         self.btn_operacoes.setObjectName("neutro")
         menu = QMenu(self.btn_operacoes)
         self.acoes = {}
@@ -612,6 +615,7 @@ class JanelaCaixa(QMainWindow):
         # Comissões e Operações numa segunda linha: todos numa linha só não cabem num monitor de 1366 pontos (com o estilo do
         # programa a janela passava da tela e cortava o painel do pagamento).
         linha_operacoes = QHBoxLayout()
+        linha_operacoes.addWidget(self.btn_pagar_garota)
         linha_operacoes.addWidget(self.btn_comissoes)
         linha_operacoes.addWidget(self.btn_operacoes, 1)
         c_cen.addLayout(linha_operacoes)
