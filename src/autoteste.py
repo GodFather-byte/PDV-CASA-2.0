@@ -54,6 +54,7 @@ MODULOS = [
     "src.ui_qt.alertas", "src.ui_qt.etiquetas", "src.ui_qt.promocoes", "src.ui_qt.retornaveis",
     "src.ui_qt.cozinha", "src.ui_qt.diagnostico",
     "src.ui_qt.devolucoes", "src.ui_qt.fechamento", "src.ui_qt.painel_mesas", "src.ui_qt.relogio", "src.core.edicao", "src.controllers.mesas_modelo", "src.ui_qt.fechamento_turno",
+    "src.porteiro.consulta", "src.porteiro.servidor", "src.porteiro.servico", "src.porteiro.nuvem_envio", "src.ui_qt.porteiro",
 ]
 
 

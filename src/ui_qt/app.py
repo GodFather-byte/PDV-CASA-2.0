@@ -21,6 +21,7 @@ from src.controllers.mesas_modelo import montar_tiles
 from src.core import edicao, formatacao as fmt, licenca, registro
 from src.core.erros import ErroNegocio
 from src.database.conexao import BancoDados, caminho_padrao
+from src.porteiro.servico import ServicoPorteiro, descrever as descrever_porteiro
 from src.sync.ponte import ServicoPonte
 from src.controllers.contexto import Contexto
 from src.ui_qt import tema
@@ -219,6 +220,7 @@ class JanelaPrincipal(QMainWindow):
         for chave, titulo, acao in (
             ("inicio", "Visão geral", self.atualizar),
             ("caixa", "Abrir caixa", self.abrir_caixa),
+            ("porteiro", "Porteiro no celular", self.abrir_porteiro),
             ("produtos", "Produtos", lambda: self.abrir_cadastro("produtos")),
             ("estoque", "Estoque", self.abrir_estoque),
             ("retornaveis", "Retornáveis por cliente", self.abrir_retornaveis),
@@ -292,6 +294,10 @@ class JanelaPrincipal(QMainWindow):
             self.kpis[chave] = (cartao, valor)
             noite.addWidget(cartao, 1)
         conteudo.addWidget(self.faixa_noite)
+        self.linha_porteiro = tema.texto("")
+        self.linha_porteiro.setObjectName("linha_porteiro")
+        self.linha_porteiro.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        conteudo.addWidget(self.linha_porteiro)
         for chave, titulo in (("turno", "CAIXA"), ("licenca", "LICENÇA"),
                               ("backup", "PROTEÇÃO DOS DADOS"), ("impressao", "RECUPERAÇÃO DA IMPRESSÃO"),
                               ("sync", "NUVEM E SERVIÇOS")):
@@ -441,6 +447,8 @@ class JanelaPrincipal(QMainWindow):
         self.botoes["auditoria"].setEnabled(
             operador.nivel == 4 and self.ctx.pode("rel_auditoria") and "rel_auditoria" not in desligados)
         self._atualizar_noite()
+        self._atualizar_porteiro()
+        self.filtrar_modulos(self.busca_modulos.text())
         turno = self.ctx.turnos.atual()
         self.indicadores["turno"].setText(
             f"Turno {turno['id']} aberto. Operações disponíveis em Abrir caixa."
@@ -475,11 +483,31 @@ class JanelaPrincipal(QMainWindow):
             nuvem += "\n" + " | ".join(self.app.estado_servicos)
         self.indicadores["sync"].setText(nuvem)
 
+    def _atualizar_porteiro(self) -> None:
+        erro = None
+        for servico in self.app.servicos:
+            achado = getattr(servico, "erro_porteiro", None)
+            if achado:
+                erro = achado
+        texto = descrever_porteiro(self.ctx.banco, erro)
+        self.linha_porteiro.setVisible(bool(texto))
+        self.linha_porteiro.setText(texto)
+
     def filtrar_modulos(self, texto):
         from src.database.conexao import normalizar
         busca = normalizar(texto.strip())
+        usa_mesas = self.ctx.banco.cfg_bool("usar_mesas", True)
         for chave, botao in self.botoes.items():
-            botao.setVisible(chave not in self.edicao.menu_oculto and (not busca or busca in normalizar(botao.text())))
+            visivel = chave not in self.edicao.menu_oculto and (not busca or busca in normalizar(botao.text()))
+            if chave == "porteiro" and not usa_mesas:
+                visivel = False
+            botao.setVisible(visivel)
+
+    def abrir_porteiro(self):
+        from src.ui_qt.porteiro import JanelaPorteiro
+        janela = JanelaPorteiro(self.ctx, self)
+        janela.exec()
+        self.atualizar()
 
     def focar_busca(self):
         self.busca_modulos.setFocus()
@@ -882,7 +910,7 @@ class App:
             if idade is None or idade >= 12:
                 self.ctx.utilitarios.backup_automatico("início")
             for classe, nome in ((ServicoFilaImpressao, "Impressão"), (ServicoTelegram, "Telegram"),
-                                 (ServicoPonte, "Ponte de licenças")):
+                                 (ServicoPonte, "Ponte de licenças"), (ServicoPorteiro, "Porteiro")):
                 servico = None
                 try:
                     servico = classe(self.banco.caminho)

@@ -48,6 +48,7 @@ class Sincronizador:
         except Exception:
             log.exception("Falha ao consultar atualizações ou licença.")
             return False
+        self._enviar_porteiro()
         return self._enviar_painel()
 
     def _ponte(self) -> None:
@@ -57,6 +58,14 @@ class Sincronizador:
             ponte.rodada(self.banco, self._http)
         except Exception:
             log.exception("Falha na comunicação com a central do fornecedor.")
+
+    def _enviar_porteiro(self) -> None:
+        """Retrato das comandas abertas para o porteiro no 4G. Falha aqui não atrasa a licença: a página local segue."""
+        try:
+            from src.porteiro import nuvem_envio
+            nuvem_envio.enviar_se_preciso(self.banco, self._http)
+        except Exception:
+            log.exception("Falha ao enviar as comandas abertas para a nuvem.")
 
     def _enviar_painel(self) -> bool:
         """Painel do dono (opcional): sobe as vendas que faltam e o retrato do caixa. Falha aqui só espera a próxima rodada."""

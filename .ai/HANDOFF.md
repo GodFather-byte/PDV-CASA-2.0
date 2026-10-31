@@ -1,5 +1,13 @@
 # HANDOFF
 
+## Porteiro no celular
+
+- Página no caixa, `http://<ip>:<porta>/porteiro` (padrão 8765), PIN, só leitura: LIBERADA ou DEVENDO.
+  No caixa PySide6: **☰ Operações → Porteiro no celular** (também no menu principal). Sem Wi-Fi na porta, o mesmo PIN na nuvem (`/porteiro/?loja=CHAVE`);
+  o caixa manda só as comandas abertas (`src/porteiro/nuvem_envio.py`, `backend/porteiro.py`).
+  A página tenta o caixa e, se ele não responde, a nuvem, e mostra a idade ("atualizado há 30s").
+  Render grátis dorme: a primeira abertura pelo 4G pode demorar. Guia: `docs/PORTEIRO.md`.
+
 ## Estado
 
 - PDV **1.9.0**, esquema **30**. **A interface do PDV é só Qt (PySide6).** O Tk do PDV foi removido

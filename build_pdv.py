@@ -56,6 +56,8 @@ def gerar_executavel(ed) -> None:
         comando += ["--icon", str(icone), "--add-data", f"{icone}{os.pathsep}."]
     if ed.logotipo and (PASTA_INSTALADOR / ed.logotipo).exists():
         comando += ["--add-data", f"{PASTA_INSTALADOR / ed.logotipo}{os.pathsep}."]      # logotipo no alto do menu
+    web_porteiro = RAIZ / "src" / "porteiro" / "web"
+    comando += ["--add-data", f"{web_porteiro}{os.pathsep}porteiro_web"]                 # página do porteiro no celular
     comando.append(str(RAIZ / "src" / "app.py"))
     subprocess.run(comando, check=True, cwd=RAIZ)
     destino = RAIZ / "dist" / nome
@@ -71,7 +73,7 @@ def copiar_licencas(destino: Path) -> None:
     for arquivo in (RAIZ / "instalador" / "licencas").glob("*.txt"):
         shutil.copyfile(arquivo, pasta / arquivo.name)
     manifesto = []
-    for nome in ("PySide6-Essentials", "shiboken6", "cryptography", "cffi", "Pillow"):
+    for nome in ("PySide6-Essentials", "shiboken6", "cryptography", "cffi", "Pillow", "segno"):
         pacote = distribution(nome)
         manifesto.append(f"{nome} {pacote.version}: {pacote.metadata.get('License-Expression') or pacote.metadata.get('License', '')}")
         for arquivo in pacote.files or ():
