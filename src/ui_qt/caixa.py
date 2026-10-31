@@ -600,6 +600,7 @@ class JanelaCaixa(QMainWindow):
                 ("fila", "Fila de impressão (ver, reenviar, cancelar)", self.abrir_fila),
                 ("devolucoes", "Devoluções e trocas por cupom", self.abrir_devolucoes),
                 ("consultar_comanda", "Consultar comanda", self.consultar_comanda),
+                ("porteiro", "Porteiro no celular", self.abrir_porteiro),
                 ("rodizio", "Rodízio da mesa (Ctrl+R)", self.rodizio),
                 ("recarga", "Recarga pré-pago (Ctrl+Shift+P)", self.recarga),
                 ("modo_cancelar", "Cancelar linhas (Enter; Esc retorna)", self.iniciar_cancelamento)):
@@ -608,7 +609,7 @@ class JanelaCaixa(QMainWindow):
         self.btn_operacoes.setMenu(menu)
         if not self.com_mesas:
             for chave in ("servico", "transferir_mesa", "transferir_varias", "transferir_item",
-                          "repique", "consultar_comanda", "rodizio", "recarga", "nomear"):
+                          "repique", "consultar_comanda", "porteiro", "rodizio", "recarga", "nomear"):
                 self.acoes[chave].setVisible(False)
             self.acoes["pre_conta"].setText("Emitir pedido de entrega (F8)")
         c_cen.addLayout(botoes)
@@ -1294,6 +1295,16 @@ class JanelaCaixa(QMainWindow):
         if a_pagar:
             texto += f"\n\nComissão da garota {pos[1]} a pagar: {fmt.fmt_brl(a_pagar)}."
         self._mostrar("Consulta de comanda", texto)
+
+    def abrir_porteiro(self) -> None:
+        """PIN, endereço e QR do celular. A página que o porteiro abre continua só de leitura."""
+        if not self._pode_operar():
+            return
+        from src.ui_qt.porteiro import JanelaPorteiro
+        pai = self.parent()
+        if getattr(pai, "app", None) is None:
+            pai = self
+        JanelaPorteiro(self.ctx, pai).exec()
 
     # ========================================================= caderneta e entrega
     def _exigir_venda_vazia(self) -> bool:

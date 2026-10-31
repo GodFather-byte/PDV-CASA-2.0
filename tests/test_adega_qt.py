@@ -48,7 +48,7 @@ class TestAdegaQt(BaseCaixaQt):
         for widget in (self.j.painel_mesas, self.j.ent_pos, self.j.btn_chamar, self.j.cartoes):
             self.assertFalse(widget.isVisible())
         for chave in ("servico", "transferir_mesa", "transferir_varias", "transferir_item",
-                      "repique", "consultar_comanda"):
+                      "repique", "consultar_comanda", "porteiro"):
             self.assertFalse(self.j.acoes[chave].isVisible())
         for chave in ("entrega", "caderneta", "pre_conta"):
             self.assertTrue(self.j.acoes[chave].isVisible())

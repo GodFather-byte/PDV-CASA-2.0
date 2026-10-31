@@ -1,13 +1,13 @@
 # Porteiro no celular
 
-O porteiro consulta, no Wi-Fi do clube, se a comanda ainda tem valor em aberto. A página sai do
-computador do caixa. Não usa internet e não usa a nuvem. Ele só olha: não fecha conta, não lança
-item e não mexe no pagamento.
+O porteiro consulta, no Wi-Fi do clube ou pelo 4G, se a comanda ainda tem valor em aberto. Quem liga
+isso é o caixa em PySide6. A página no celular só olha: não fecha conta, não lança item e não mexe
+no pagamento.
 
 ## Ligar
 
-1. No menu do WillPDV, abra **Porteiro no celular** (também dá para ligar em Configurações, mas o PIN
-   fica nesta tela).
+1. No caixa (a janela PySide6), abra **☰ Operações → Porteiro no celular**. O mesmo atalho está no
+   menu principal. O PIN fica nesta tela, não em Configurações.
 2. Marque **Ligado**, escolha a porta (o padrão é **8765**) e defina um PIN de 4 a 8 números.
 3. Salve. A tela mostra o endereço, por exemplo `http://192.168.0.15:8765/porteiro`, e um QR.
 4. O caixa precisa ficar com o WillPDV aberto. Fechar o programa desliga a página.

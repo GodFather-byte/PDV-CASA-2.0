@@ -23,8 +23,17 @@ class TestCaixaQtLacunas(BaseCaixaQt):
         return next(a for a in self.j.findChildren(QShortcut) if a.key().toString() == tecla)
 
     def test_acoes_do_menu(self):
-        for chave in ("nomear", "leitor", "leitura_x", "reducao_z", "fila"):
+        for chave in ("nomear", "leitor", "leitura_x", "reducao_z", "fila", "porteiro"):
             self.assertIn(chave, self.j.acoes)
+        self.assertIn("Porteiro", self.j.acoes["porteiro"].text())
+        with patch("src.ui_qt.porteiro.JanelaPorteiro") as janela:
+            janela.return_value.exec.return_value = 0
+            self.j.acoes["porteiro"].trigger()
+            janela.assert_called_once()
+        self.j._ocupado = True
+        with patch("src.ui_qt.porteiro.JanelaPorteiro") as janela:
+            self.j.acoes["porteiro"].trigger()
+            janela.assert_not_called()
         self.assertIn("F7", self.j.acoes["sangria"].text())
         self.assertIn("F3", self.j.acoes["leitor"].text())
 
