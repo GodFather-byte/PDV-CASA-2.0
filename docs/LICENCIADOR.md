@@ -10,7 +10,7 @@ ponte para lojas migradas. Não faz cobrança. Configuração e implantação:
 [Central Telegram](CENTRAL_TELEGRAM.md).
 
 Para cobrar mensalidades e renovar pela internet, veja o guia separado
-[Cobrança de licenças com Asaas](COBRANCA_LICENCAS_ASAAS.md). O licenciador continua
+[Cobrança de licenças com Mercado Pago](COBRANCA_LICENCAS_MERCADOPAGO.md). O licenciador continua
 disponível para operação manual e liberações excepcionais; não é entregue ao cliente.
 
 > **Não entregue este programa a clientes.** O cliente só recebe o *código* da licença. Quem tem este programa **e a chave de

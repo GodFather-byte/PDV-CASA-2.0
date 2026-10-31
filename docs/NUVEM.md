@@ -20,10 +20,11 @@ código publicado e não carrega chave privada nem emite licença. As lojas anti
 não migradas preservam o fluxo descrito neste guia. Credenciais da central e dos
 caixas são separadas; o painel web continua opcional e independente.
 
-**Cobrança automática da mensalidade:** veja o guia separado
-[Cobrança de licenças com Asaas](COBRANCA_LICENCAS_ASAAS.md). Ele explica vínculo
-por loja, webhook, conciliação, custos e homologação. Para cobranças reais,
-não use o Render gratuito descrito abaixo: escolha serviço sempre ligado e banco persistente.
+**Cobrança automática da mensalidade:** veja
+[Cobrança de licenças com Mercado Pago](COBRANCA_LICENCAS_MERCADOPAGO.md).
+O webhook e a varredura rodam no mesmo serviço da API, sem worker separado.
+No Render gratuito a primeira notificação, depois que o serviço dormiu, pode
+falhar por demora; o Mercado Pago reenvia e a varredura completa o que ficou pendente.
 
 ---
 
@@ -86,6 +87,10 @@ no caixa.
 5. Clique em **Deploy**. Quando terminar, o Render mostra o endereço, algo como `https://willpdv-nuvem.onrender.com`.
    Abra `https://willpdv-nuvem.onrender.com/v1/saude`: tem que aparecer `{"status":"ok"}`.
 6. A sua senha de administrador (para listar todas as lojas) está em **Environment > PDV_API_TOKEN**.
+7. Para cobrar a mensalidade, preencha **MP_ACCESS_TOKEN** e **MP_WEBHOOK_SECRET**
+   (o Render deixa os dois em branco de propósito). O passo a passo do painel do
+   Mercado Pago está em [COBRANCA_LICENCAS_MERCADOPAGO.md](COBRANCA_LICENCAS_MERCADOPAGO.md).
+   Se ainda existirem `ASAAS_AMBIENTE`, `ASAAS_API_KEY` ou `ASAAS_WEBHOOK_TOKEN`, apague-os.
 
 ### G3. Rodar os comandos de lojas e licenças no seu PC
 Como o banco está no Neon, os comandos funcionam do seu computador. No PowerShell, dentro da pasta do projeto:
@@ -154,6 +159,9 @@ cat > /opt/willpdv/nuvem.env <<'EOF'
 PDV_API_TOKEN=TROQUE-POR-UMA-SENHA-LONGA-SO-SUA
 PDV_NUVEM_DB_URL=sqlite:////opt/willpdv/nuvem.db
 PDV_LICENCA_CHAVE=/opt/willpdv/licenca_privada.key
+# Cobrança Mercado Pago (opcional). Não coloque estes valores no git.
+# MP_ACCESS_TOKEN=
+# MP_WEBHOOK_SECRET=
 EOF
 chmod 600 /opt/willpdv/nuvem.env
 ```
@@ -286,7 +294,11 @@ BOATE-LUA                INATIVA  paga até 01/09/2026 (VENCIDA)          Boate 
 
 Fique de olho nas marcadas com **vence em** (cobrar) e **VENCIDA**.
 
-**Como a renovação funciona no dia a dia:**
+Para a loja pagar sozinha (Pix e cartão/boleto) e a data avançar quando o Mercado Pago
+confirmar, use o guia [COBRANCA_LICENCAS_MERCADOPAGO.md](COBRANCA_LICENCAS_MERCADOPAGO.md).
+O comando `assinatura` abaixo continua valendo para loja sem esse plano.
+
+**Como a renovação manual funciona no dia a dia:**
 
 1. A boate paga o mês.
 2. Você roda `lojas assinatura BOATE-ESTRELA <nova data>`.

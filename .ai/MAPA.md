@@ -18,8 +18,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `python -m tools.gerar_licenca` | Licenças pela linha de comando (`novo-par`, `emitir`, `ver`) |
 | `python -m uvicorn backend.main:app` | API da nuvem |
 | `python -m backend.lojas` / `backend.atualizacoes` | Lojas, assinatura e versões na nuvem |
-| `python -m backend.lojas cobranca` | Vínculos Asaas e conciliação das mensalidades |
-| `python -m backend.worker_asaas` | Processamento durável de webhooks e conciliação periódica |
+| `python -m backend.lojas cobranca` | Plano, Pix/Checkout Pro e conciliação da mensalidade no Mercado Pago |
 | `python -m backend.lojas painel LOJA [senha]` | Senha do painel do dono no celular (app em `/painel/` da nuvem); o dono também a troca no PDV (Configurações > Nuvem) |
 | `python -m backend.lojas limpar-painel` | Apaga já o que passou da retenção do painel (vendas > 120 dias, sessões vencidas, caixas parados); a nuvem também faz sozinha |
 | `python -m tools.gerar_icones_painel` | Ícones PNG da PWA do painel (só biblioteca padrão) |
@@ -37,7 +36,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `src/sync/` | `sincronizador.py`, `licenca_nuvem.py`, `atualizacoes.py`, `telegram_api.py`, `ponte.py` (credencial individual, licença, contato técnico e pedido de renovação), `painel_envio.py` (vendas e retrato de cada caixa para o painel do dono; troca da senha do painel) |
 | `src/porteiro/` | Página do porteiro no celular: consulta só de leitura da comanda no caixa (`/porteiro`, Wi-Fi) e retrato das abertas para a nuvem (`nuvem_envio.py`, 4G). A mesma página em `backend/porteiro.py` |
 | `licenciador/` | `nucleo.py` (regras), `tela.py` (janela), `app.py`, `autoteste.py`; central própria em `central.py` (SQLite/emissão/ponte), `central_bot.py`, `central_cli.py`, `central_tela.py` |
-| `backend/` | FastAPI: `main.py` (rotas), `ponte.py` (central técnica, caixas aprovados e entrega de licenças assinadas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobrancas.py` (Asaas), `operacao_asaas.py` e `worker_asaas.py` (fila, agenda e indicadores), `painel.py` (painel do dono: envio, um retrato por caixa, senha, sessão, consultas e limpeza automática) e `painel_web/` (a PWA servida em `/painel/`) |
+| `backend/` | FastAPI: `main.py` (rotas), `ponte.py` (central técnica, caixas aprovados e entrega de licenças assinadas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobranca_mercadopago.py` (Pix, Checkout Pro, webhook e varredura no próprio processo), `painel.py` (painel do dono: envio, um retrato por caixa, senha, sessão, consultas e limpeza automática) e `painel_web/` (a PWA servida em `/painel/`) |
 | `tools/` | `gerar_licenca.py`, `gerar_logos.py` (não vão no instalador do PDV) |
 | `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`, `EASuperacoes.iss`) e imagens (`ea-superacoes-*`: marca da edição adega) |
 | `tests/` | Um `test_*.py` por assunto; `base.py` (banco em memória, relógio controlável); `ui_robo.py` (robô das janelas modais) |
@@ -93,7 +92,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 `ESPECIFICACAO.md` (o que o sistema deve fazer), `INSTALAR_E_TESTAR.md`, `LICENCIADOR.md`,
 `NUVEM.md`, `TELEGRAM.md`, `IMPRESSORA.md`, `ESTOQUE.md` (inclui as regras da adega), `ADEGA.md` (checklist de
 implantação da adega), `IMPORTAR_PRODUTOS.md`, `PILOTO.md`,
-`COBRANCA_LICENCAS_ASAAS.md` (cobrança e renovação mensal), `PAINEL_DONO.md` (painel do dono no celular), `PORTEIRO.md` (porteiro no celular, Wi-Fi e 4G),
+`COBRANCA_LICENCAS_MERCADOPAGO.md` (cobrança e renovação mensal), `PAINEL_DONO.md` (painel do dono no celular), `PORTEIRO.md` (porteiro no celular, Wi-Fi e 4G),
 `COORDENACAO.md` (histórico de pedidos entre agentes).
 `BACKUP_EXTERNO.md` (pasta sincronizada, senha e recuperação), `AUDITORIA.md`,
 `CENTRAL_TELEGRAM.md` (configuração dos dois painéis Telegram e central local com API como ponte; sem cobrança),
