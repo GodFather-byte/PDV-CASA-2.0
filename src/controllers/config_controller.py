@@ -83,6 +83,9 @@ CAMPOS_CONFIG = [
     ("imprimir_saida_ao_pagar", "Ao pagar a comanda ou mesa, imprimir junto o ticket de saída para a portaria", "sn", "Caixa"),
     ("codigo_saida", "Código que libera a saída da comanda sem consumo e imprime o comprovante (vazio = desligado)", "texto",
      "Caixa"),
+    ("porteiro_ativo", "Porteiro no celular: página no Wi-Fi do clube para ver se a comanda ainda deve "
+     "(o PIN é definido no menu Porteiro no celular)", "sn", "Caixa"),
+    ("porteiro_porta", "Porta da página do porteiro (1024 a 65535)", "int", "Caixa"),
     ("comissao_na_linha", "Marcar, pagar e cancelar a comissão das garotas na própria tela do caixa (desligado: abre janelas)", "sn", "Caixa"),
     ("imprimir_via_comissao", "Imprimir a via da garota a cada comissão lançada", "sn", "Caixa"),
     ("comissao_pede_shows", "Ao acertar a conta da garota, perguntar quantos shows ela fez (lançados pelo operador)", "sn", "Caixa"),
@@ -360,6 +363,8 @@ class ConfigController:
                     raise ErroValidacao("O número de mesas deve ficar entre 1 e 999.", {chave: "inválido"})
                 if chave == "num_comandas" and not 0 <= int(v) <= 10000:
                     raise ErroValidacao("O número de comandas deve ficar entre 0 e 10000.", {chave: "inválido"})
+                if chave == "porteiro_porta" and not 1024 <= int(v) <= 65535:
+                    raise ErroValidacao("A porta do porteiro deve ficar entre 1024 e 65535.", {chave: "inválido"})
                 if chave == "virada_dia_hora" and not 0 <= int(v) <= 23:
                     raise ErroValidacao("A hora da virada do dia vai de 0 a 23.", {chave: "inválido"})
                 if chave == "num_turnos" and not 1 <= int(v) <= 9:

@@ -94,6 +94,8 @@ CONFIG_PADRAO = {
     # Recursos da casa noturna: nascem ligados porque o sistema nasceu boate; o perfil do estabelecimento os desliga nos
     # outros tipos de negócio (perfil_controller.py).
     "usar_garotas": "S", "usar_portaria": "S", "perfil_operacao": "boate",
+    # Página do porteiro no Wi-Fi do clube (src/porteiro): desligada até o admin definir o PIN e ligar.
+    "porteiro_ativo": "N", "porteiro_porta": "8765",
     # Mesas e comandas no caixa: desligado, o caixa vende só no balcão (adega, comércio). Nasce ligado, como sempre foi.
     "usar_mesas": "S",
     "agrupar_itens_balcao": "N",

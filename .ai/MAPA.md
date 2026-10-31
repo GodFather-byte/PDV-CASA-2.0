@@ -8,7 +8,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 
 | Comando | O que abre |
 |---|---|
-| `python -m src.app` | PDV (`--sync`: segundo plano com a nuvem; `--autoteste`: autoteste) |
+| `python -m src.app` | PDV (`--sync`: segundo plano com a nuvem; `--autoteste`: autoteste). Com o porteiro ligado, a página do celular sobe na rede do caixa e o retrato das comandas abertas vai para a nuvem |
 | `python -m src.app --edicao ea_superacoes` | Edição E&A Superações (adega); `iniciar_ea_superacoes.bat` no Windows |
 | `python -m src.app --autoteste-qt [arquivo]` | Mesmo autoteste Qt (alias de `--autoteste`) |
 | `python -m src.app --homologacao [arquivo.json]` | Cinco cenários de recuperação em banco fictício descartável; sem rede ou hardware |
@@ -35,6 +35,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `src/ui_qt/` | Interface do PDV em PySide6/Qt: login, caixa, cadastros, estoque operacional, relatórios, configurações, máquinas, acessos, Telegram e utilitários; escopo em `docs/INTERFACE_QT.md` |
 | `src/hardware/` | Impressora térmica ESC/POS e gaveta, balança, logotipo no cupom, impressoras do Windows |
 | `src/sync/` | `sincronizador.py`, `licenca_nuvem.py`, `atualizacoes.py`, `telegram_api.py`, `ponte.py` (credencial individual, licença, contato técnico e pedido de renovação), `painel_envio.py` (vendas e retrato de cada caixa para o painel do dono; troca da senha do painel) |
+| `src/porteiro/` | Página do porteiro no celular: consulta só de leitura da comanda no caixa (`/porteiro`, Wi-Fi) e retrato das abertas para a nuvem (`nuvem_envio.py`, 4G). A mesma página em `backend/porteiro.py` |
 | `licenciador/` | `nucleo.py` (regras), `tela.py` (janela), `app.py`, `autoteste.py`; central própria em `central.py` (SQLite/emissão/ponte), `central_bot.py`, `central_cli.py`, `central_tela.py` |
 | `backend/` | FastAPI: `main.py` (rotas), `ponte.py` (central técnica, caixas aprovados e entrega de licenças assinadas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobrancas.py` (Asaas), `operacao_asaas.py` e `worker_asaas.py` (fila, agenda e indicadores), `painel.py` (painel do dono: envio, um retrato por caixa, senha, sessão, consultas e limpeza automática) e `painel_web/` (a PWA servida em `/painel/`) |
 | `tools/` | `gerar_licenca.py`, `gerar_logos.py` (não vão no instalador do PDV) |
@@ -92,7 +93,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 `ESPECIFICACAO.md` (o que o sistema deve fazer), `INSTALAR_E_TESTAR.md`, `LICENCIADOR.md`,
 `NUVEM.md`, `TELEGRAM.md`, `IMPRESSORA.md`, `ESTOQUE.md` (inclui as regras da adega), `ADEGA.md` (checklist de
 implantação da adega), `IMPORTAR_PRODUTOS.md`, `PILOTO.md`,
-`COBRANCA_LICENCAS_ASAAS.md` (cobrança e renovação mensal), `PAINEL_DONO.md` (painel do dono no celular),
+`COBRANCA_LICENCAS_ASAAS.md` (cobrança e renovação mensal), `PAINEL_DONO.md` (painel do dono no celular), `PORTEIRO.md` (porteiro no celular, Wi-Fi e 4G),
 `COORDENACAO.md` (histórico de pedidos entre agentes).
 `BACKUP_EXTERNO.md` (pasta sincronizada, senha e recuperação), `AUDITORIA.md`,
 `CENTRAL_TELEGRAM.md` (configuração dos dois painéis Telegram e central local com API como ponte; sem cobrança),

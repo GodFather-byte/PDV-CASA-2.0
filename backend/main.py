@@ -250,3 +250,8 @@ from backend import painel as _painel   # noqa: E402  (depois de Loja e autentic
 
 _painel.instalar(app, Loja, autenticar)
 _ponte.instalar(app, Loja, hash_token)
+
+# Porteiro no celular pelo 4G: retrato das comandas abertas e a mesma página em /porteiro/.
+from backend import porteiro as _porteiro_nuvem  # noqa: E402
+
+_porteiro_nuvem.instalar(app, Loja, autenticar)

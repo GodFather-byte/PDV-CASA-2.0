@@ -5,5 +5,6 @@ pyserial>=3.5                               # balança e impressora térmica ser
 Pillow>=12.3,<13                            # importação e normalização do logotipo (Qt)
 cryptography>=43,<47                        # backup externo com criptografia autenticada
 PySide6-Essentials>=6.7,<7                  # Qt Widgets em migração (python -m src.app --qt)
+segno>=1.6,<2                               # QR do endereço do porteiro na rede local (sem internet)
 # Para gerar o executável: pip install pyinstaller  (python build_pdv.py)
 # A API de nuvem tem as suas próprias dependências em backend/requirements.txt

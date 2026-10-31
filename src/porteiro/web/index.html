@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Porteiro</title>
+  <meta name="description" content="Confere se a comanda ainda tem valor em aberto antes da saída.">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Porteiro">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icones/icone-192.png">
+  <link rel="apple-touch-icon" href="icones/icone-192.png">
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+  <header class="topo">
+    <strong>Porteiro</strong>
+    <button type="button" id="botao-instalar" hidden>Instalar</button>
+  </header>
+  <p id="aviso" class="aviso" role="alert" hidden></p>
+
+  <main id="tela-pin" hidden>
+    <h1>Entrada</h1>
+    <p class="sub">PIN definido no caixa. Quem está no Wi-Fi sem o PIN não consulta comanda.</p>
+    <label id="rotulo-loja" for="campo-loja" hidden>Loja</label>
+    <input id="campo-loja" hidden inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false"
+           placeholder="CHAVE-DA-LOJA" aria-label="Chave da loja">
+    <p id="pin-mostra" class="mostra" aria-live="polite"> </p>
+    <div class="teclado" data-teclado="pin">
+      <button type="button" data-tecla="1">1</button>
+      <button type="button" data-tecla="2">2</button>
+      <button type="button" data-tecla="3">3</button>
+      <button type="button" data-tecla="4">4</button>
+      <button type="button" data-tecla="5">5</button>
+      <button type="button" data-tecla="6">6</button>
+      <button type="button" data-tecla="7">7</button>
+      <button type="button" data-tecla="8">8</button>
+      <button type="button" data-tecla="9">9</button>
+      <button type="button" data-tecla="limpar">Limpar</button>
+      <button type="button" data-tecla="0">0</button>
+      <button type="button" data-tecla="apagar" aria-label="Apagar">⌫</button>
+    </div>
+    <button type="button" id="botao-entrar" class="acao">Entrar</button>
+  </main>
+
+  <main id="tela-consulta" hidden>
+    <h1>Comanda</h1>
+    <p class="sub">Digite o número, ou use o leitor. A câmera só abre em endereço seguro.</p>
+    <p id="codigo-mostra" class="mostra" aria-live="polite">—</p>
+    <div class="teclado" data-teclado="consulta">
+      <button type="button" data-tecla="1">1</button>
+      <button type="button" data-tecla="2">2</button>
+      <button type="button" data-tecla="3">3</button>
+      <button type="button" data-tecla="4">4</button>
+      <button type="button" data-tecla="5">5</button>
+      <button type="button" data-tecla="6">6</button>
+      <button type="button" data-tecla="7">7</button>
+      <button type="button" data-tecla="8">8</button>
+      <button type="button" data-tecla="9">9</button>
+      <button type="button" id="botao-mesa" data-tecla="mesa" aria-pressed="false">Mesa</button>
+      <button type="button" data-tecla="0">0</button>
+      <button type="button" data-tecla="apagar" aria-label="Apagar">⌫</button>
+    </div>
+    <button type="button" id="botao-consultar" class="acao">Consultar</button>
+    <button type="button" id="botao-camera" class="secundario">Ler com a câmera</button>
+    <video id="camera" hidden playsinline autoplay muted></video>
+    <button type="button" id="botao-parar-camera" class="secundario" hidden>Fechar câmera</button>
+    <button type="button" id="botao-sair" class="link">Sair</button>
+  </main>
+
+  <main id="tela-resultado" hidden>
+    <p id="res-cabecalho" class="cabecalho-resultado"></p>
+    <h1 id="res-titulo" class="titulo-resultado"></h1>
+    <p id="res-valor" class="valor-resultado"></p>
+    <p id="res-detalhe" class="detalhe"></p>
+    <p id="res-origem" class="origem"></p>
+    <ul id="res-itens" class="itens"></ul>
+    <button type="button" id="botao-nova" class="acao">Nova consulta</button>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

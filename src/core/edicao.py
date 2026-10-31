@@ -26,7 +26,7 @@ CHAVES_CASA_NOTURNA = frozenset({
     "painel_mostra_garotas", "consumacao_minima", "limite_comanda", "consumacao_minima_de", "consumacao_minima_ate",
     "exigir_senha_comissao", "codigo_comissao", "comissao_em_pontos", "comissao_valor_ponto", "comissao_paga_do_caixa",
     "imprimir_saida_ao_pagar", "codigo_saida", "comissao_na_linha", "imprimir_via_comissao", "comissao_pede_shows",
-    "show_valores", "valor_rodizio_pessoa",
+    "show_valores", "valor_rodizio_pessoa", "porteiro_ativo", "porteiro_porta",
 })
 
 

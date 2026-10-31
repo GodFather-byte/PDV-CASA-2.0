@@ -1,0 +1,70 @@
+# Porteiro no celular
+
+O porteiro consulta, no Wi-Fi do clube, se a comanda ainda tem valor em aberto. A página sai do
+computador do caixa. Não usa internet e não usa a nuvem. Ele só olha: não fecha conta, não lança
+item e não mexe no pagamento.
+
+## Ligar
+
+1. No menu do WillPDV, abra **Porteiro no celular** (também dá para ligar em Configurações, mas o PIN
+   fica nesta tela).
+2. Marque **Ligado**, escolha a porta (o padrão é **8765**) e defina um PIN de 4 a 8 números.
+3. Salve. A tela mostra o endereço, por exemplo `http://192.168.0.15:8765/porteiro`, e um QR.
+4. O caixa precisa ficar com o WillPDV aberto. Fechar o programa desliga a página.
+
+Se o Windows pedir permissão de rede para o Python ou para o WillPDV, aceite na rede **privada**
+(o Wi-Fi do clube). Não é preciso liberar na internet.
+
+O celular no **Wi-Fi do clube** abre o endereço do QR (o caixa responde na hora). Se o Wi-Fi não
+chega na porta, use o endereço **Pelo 4G** que a mesma tela mostra: a página fica na nuvem
+(`https://willpdv-nuvem-6sp0.onrender.com/porteiro/?loja=CHAVE-DA-LOJA`, com a chave desta loja).
+O caixa precisa ter internet e a nuvem configurada (Configurações > Nuvem: endereço, token e chave
+da loja). A cada mudança nas comandas abertas, e no máximo uma vez por minuto se nada mudou, ele
+manda só o retrato do que ainda está aberto — não o histórico. O PIN é o mesmo; o token da loja
+não vai para o celular.
+
+## No celular
+
+1. Digite o PIN. Sem ele, a página não informa comandas.
+2. Digite o número da comanda e toque em **Consultar**. Um leitor que digita o número e dá Enter
+   também serve. O botão **Mesa** consulta mesa (`M5`) em vez de comanda. A página tenta o caixa
+   na rede local primeiro. Se ele não responder, usa a nuvem sozinha. Embaixo do resultado aparece
+   de onde veio e a hora, por exemplo **No caixa · agora, no caixa** ou **Na nuvem · atualizado há 30s**.
+3. A resposta ocupa a tela:
+   - **LIBERADA**, em verde: nada a cobrar (sem conta, conta paga, vazia ou já recebida).
+   - **DEVENDO**, em vermelho: o valor que ainda falta, o que já foi recebido e a lista dos itens.
+4. **Nova consulta** lê a próxima. O saldo é o do caixa naquela hora.
+
+A câmera do próprio navegador só abre em endereço seguro (`https`). No Wi-Fi, em `http`, use o
+teclado ou o leitor. O aviso na tela explica isso.
+
+### Deixar na tela inicial
+
+- **iPhone:** Compartilhar → Adicionar à Tela de Início. O atalho abre em tela cheia.
+- **Android:** no Chrome, o menu pode oferecer **Instalar app** ou **Adicionar à tela inicial**.
+  O Chrome só trata como aplicativo instalável em endereço seguro; em `http://` da rede local o
+  atalho abre do mesmo jeito no navegador. A página tem manifesto e service worker para quando o
+  navegador permitir a instalação.
+
+O service worker guarda só o visual da página. O saldo **não** fica gravado no celular: cada
+consulta vai ao caixa ou à nuvem. Sem os dois, a tela avisa que não há ligação.
+
+## 4G e a nuvem
+
+A nuvem (Render, plano grátis) **dorme** quando ninguém chama. A primeira abertura pelo 4G, depois
+de um tempo parada, pode levar cerca de um minuto para acordar. A consulta mostra o último retrato
+que o caixa conseguiu enviar, com a idade ("atualizado há 30s", ou mais, se o caixa ficou sem
+internet). Não é a conta ao vivo: quem está no Wi-Fi do caixa vê o valor na hora; quem está no 4G
+vê o que subiu por último.
+
+O plano grátis aguenta esse uso: o caixa manda um retrato pequeno (só comandas e mesas abertas) e
+não reenvia a mesma foto a todo instante. A consulta na nuvem é só leitura, de uma loja por vez, com
+o PIN e um limite de tentativas erradas.
+
+## O que o porteiro não faz
+
+Não existe botão de fechar, pagar ou cancelar. A porta HTTP também não aceita esses pedidos.
+Cinco PINs errados seguidos travam o aparelho por um minuto.
+
+O PIN fica só como hash no caixa. Não commite banco, `.env` nem senha. A página não sai para a
+internet: quem está fora do Wi-Fi do clube não alcança o endereço.
