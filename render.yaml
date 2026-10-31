@@ -1,10 +1,9 @@
 # Nuvem do WillPDV no Render (plano gratuito). Passo a passo em docs/NUVEM.md, "Opção grátis: Render + Neon".
 # O banco NÃO fica no Render: o disco do plano grátis é apagado a cada reinício. Os dados ficam num PostgreSQL
 # gratuito do Neon (neon.tech), informado em PDV_NUVEM_DB_URL.
-# Cobrança Asaas: docs/COBRANCA_LICENCAS_ASAAS.md. Em produção, escolha plano pago
-# sempre ligado e configure ASAAS_AMBIENTE, ASAAS_API_KEY e ASAAS_WEBHOOK_TOKEN no painel.
-# A API só enfileira eventos. Worker/agenda: python -m backend.worker_asaas
-# em processo supervisionado separado (não provisionado aqui; verificar custo no guia).
+# Cobrança Mercado Pago: docs/COBRANCA_LICENCAS_MERCADOPAGO.md.
+# O webhook e a varredura rodam neste serviço web (não há worker separado).
+# Cole MP_ACCESS_TOKEN e MP_WEBHOOK_SECRET no painel do Render. Não commite esses valores.
 services:
   - type: web
     name: willpdv-nuvem
@@ -24,3 +23,7 @@ services:
         sync: false
       - key: PDV_LICENCA_CHAVE        # arquivo secreto (Secret File) com a chave da licença
         value: /etc/secrets/licenca_privada.key
+      - key: MP_ACCESS_TOKEN         # Access Token do Mercado Pago (teste começa com TEST-). Não commitar.
+        sync: false
+      - key: MP_WEBHOOK_SECRET       # Assinatura secreta de Suas integrações > Webhooks. Não commitar.
+        sync: false

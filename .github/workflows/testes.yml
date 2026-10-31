@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   cobrancas-postgres:
-    name: Asaas / PostgreSQL 16
+    name: Mercado Pago / PostgreSQL 16
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -40,7 +40,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -r backend/requirements.txt httpx
       - name: Inbox, concorrência, retentativas e reinício (PostgreSQL e SQLite)
-        run: python -m unittest tests.test_cobrancas_asaas tests.test_backend_operacao_asaas
+        run: python -m unittest tests.test_cobrancas_mercadopago
 
   testes:
     name: ${{ matrix.os }} / Python ${{ matrix.python }}

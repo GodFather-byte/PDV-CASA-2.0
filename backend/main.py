@@ -1,7 +1,8 @@
 """API de nuvem do PDV (FastAPI): licença das lojas, aviso de versão nova e o painel do dono no celular.
 
-O PDV funciona sozinho em cada loja; a nuvem não é necessária para vender. Ela guarda a lista de lojas e cobranças de
-licença Asaas (cada loja com o SEU token e a data até quando pagou), entrega a licença e publica as versões novas do PDV.
+O PDV funciona sozinho em cada loja; a nuvem não é necessária para vender. Ela guarda a lista de lojas e a data até
+quando cada uma pagou (Mercado Pago ou lançamento manual; cada loja com o SEU token), entrega a licença e publica as
+versões novas do PDV.
 Com o painel do dono ligado na loja (opcional), recebe também as vendas fechadas e um retrato do caixa/estoque, que o dono
 consulta pelo celular em /painel/ (backend/painel.py). Cadastro das lojas (o token aparece uma única vez):
     python -m backend.lojas criar BOATE-CENTRO "Boate Centro"
@@ -19,18 +20,18 @@ import hashlib
 import hmac
 import logging
 import os
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from sqlalchemy import Boolean, Column, Integer, String
 from sqlalchemy.orm import Session
 
 from backend.database import Base, SessionLocal, engine
-from backend import cobrancas
-from backend import operacao_asaas
+from backend import cobranca_mercadopago as cobranca
 from backend import ponte as _ponte     # tabelas e rotas da ponte de licenças (central do fornecedor)
 from src.core import ed25519, licenca as licenca_pdv
 from src.versao import chave, mais_nova, valida      # a mesma regra de comparação de versões do PDV
@@ -94,8 +95,23 @@ def _acrescentar_colunas() -> None:
 
 
 _acrescentar_colunas()
+cobranca.garantir_esquema(engine)
 
-app = FastAPI(title="WillPDV - API de nuvem")
+
+@asynccontextmanager
+async def _ciclo_de_vida(_aplicacao):
+    # A varredura vive neste processo: no Render grátis não há worker separado.
+    try:
+        cobranca.iniciar_varredura()
+    except Exception:
+        log.error("Não foi possível iniciar a varredura do Mercado Pago.")
+    try:
+        yield
+    finally:
+        cobranca.parar_varredura()
+
+
+app = FastAPI(title="WillPDV - API de nuvem", lifespan=_ciclo_de_vida)
 
 
 def get_db():
@@ -132,40 +148,41 @@ def autenticar(authorization: Optional[str] = Header(None), db: Session = Depend
     raise HTTPException(status_code=401, detail="Token invalido")
 
 
-@app.post("/v1/webhooks/asaas")
-def webhook_asaas(dados: dict = Body(...), asaas_access_token: Optional[str] = Header(None),
-                  db: Session = Depends(get_db)):
-    segredo = os.environ.get("ASAAS_WEBHOOK_TOKEN", "").strip()
-    if not segredo:
-        raise HTTPException(status_code=503, detail="Webhook Asaas não configurado.")
-    if not asaas_access_token or not hmac.compare_digest(asaas_access_token.encode(), segredo.encode()):
-        raise HTTPException(status_code=401, detail="Token do webhook inválido.")
-    evento = dados.get("event")
-    pagamento = dados.get("payment")
-    if not isinstance(evento, str) or not evento.startswith("PAYMENT_") or not isinstance(pagamento, dict):
-        raise HTTPException(status_code=422, detail="Informe um evento de cobrança Asaas.")
-    if not pagamento.get("subscription"):
-        log.info("Evento Asaas sem assinatura ignorado.")
-        return {"situacao": "sem_assinatura"}
+@app.post("/v1/webhooks/mercadopago")
+def webhook_mercadopago(request: Request, db: Session = Depends(get_db)):
+    """Notificação do Mercado Pago. O corpo não é comprovante: a assinatura cobre data.id na URL."""
     try:
-        evento_id = cobrancas.identificador(dados.get("id"), "evt_")
-        return {"situacao": operacao_asaas.receber(
-            db, evento_id, pagamento["subscription"], pagamento.get("id"), evento)}
-    except cobrancas.ErroCobranca as erro:
+        data_id, evento_id = cobranca.validar_assinatura(
+            request.headers.get("x-signature"),
+            request.headers.get("x-request-id"),
+            request.query_params.get("data.id"))
+    except cobranca.WebhookNaoConfigurado:
+        raise HTTPException(status_code=503, detail="Webhook Mercado Pago não configurado.") from None
+    except cobranca.AssinaturaInvalida:
+        raise HTTPException(status_code=401, detail="Assinatura do webhook inválida.") from None
+    if request.query_params.get("type") != "payment":
+        return {"situacao": "ignorado"}
+    if not cobranca.ID_PAGAMENTO.fullmatch(data_id):
+        log.info("Notificação Mercado Pago ignorada: id de pagamento não numérico.")
+        return {"situacao": "ignorado"}
+    try:
+        return {"situacao": cobranca.processar_notificacao(db, data_id, evento_id)}
+    except cobranca.MercadoPagoIndisponivel:
         db.rollback()
-        log.warning("Webhook Asaas recusado: %s", erro)
-        raise HTTPException(status_code=422, detail=str(erro)) from None
+        log.error("Mercado Pago indisponível ao processar o pagamento %s.", data_id)
+        raise HTTPException(
+            status_code=503, detail="Mercado Pago indisponível; a notificação será reenviada.") from None
     except Exception:
         db.rollback()
-        log.error("ALERTA_ASAAS_INBOX Falha ao persistir evento; provedor deve reenviar.")
-        raise HTTPException(status_code=503, detail="Inbox indisponível; reenvie o evento.") from None
+        log.error("Falha ao processar notificação Mercado Pago (erro interno).")
+        raise HTTPException(status_code=503, detail="Não foi possível processar a notificação.") from None
 
 
 @app.get("/v1/admin/cobrancas/operacao")
-def admin_operacao_asaas(acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db)):
+def admin_operacao_cobrancas(acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db)):
     if not acesso.admin:
         raise HTTPException(status_code=403, detail="Só o administrador vê a operação de cobrança.")
-    return operacao_asaas.estado(db)
+    return cobranca.estado(db)
 
 
 @app.get("/v1/saude")

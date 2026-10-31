@@ -1,5 +1,25 @@
 # HANDOFF
 
+## Cobrança da licença (Mercado Pago)
+
+- O Asaas saiu: sem `backend/cobrancas.py`, `worker_asaas.py`, `operacao_asaas.py`,
+  `/v1/webhooks/asaas` nem variáveis `ASAAS_*`.
+- A mensalidade é gerada no Mercado Pago (`backend/cobranca_mercadopago.py`): Pix
+  (copia e cola e página do QR) e link do Checkout Pro para cartão/boleto.
+- O webhook `POST /v1/webhooks/mercadopago` valida `x-signature` (`MP_WEBHOOK_SECRET`),
+  relê o pagamento na API e, se estiver `approved` com o valor da cobrança, estende a
+  licença um mês de calendário a partir do vencimento (a mesma regra de antes).
+  Estorno tira só aquela contribuição. A data que já estava na loja fica em
+  `validade_anterior` e não é apagada.
+- Não há worker separado. A varredura roda no processo da API (a cada 6 h, e ~20 s
+  depois que o processo sobe). No Render grátis o serviço dorme; o Mercado Pago
+  reenvia o webhook e a varredura completa o resto quando ele acorda.
+- Segredos só no ambiente: `MP_ACCESS_TOKEN` e `MP_WEBHOOK_SECRET`. Guia:
+  `docs/COBRANCA_LICENCAS_MERCADOPAGO.md`.
+- Migração aditiva (`garantir_esquema`): cria `planos_mercadopago`, `cobrancas_mercadopago`,
+  `pagamentos_mercadopago` e `eventos_mercadopago`. Não mexe em `lojas.licenca_ate` e
+  não apaga tabela antiga do Asaas, se existir.
+
 ## Porteiro no celular
 
 - Página no caixa, `http://<ip>:<porta>/porteiro` (padrão 8765), PIN, só leitura: LIBERADA ou DEVENDO.
@@ -161,4 +181,5 @@
 - Bruto, CMV e comissões históricos não são estornados por devolução (relatórios deixam isso explícito).
 - Impressão física não tem garantia exactly-once; estado `incerto` exige conferência humana.
 - Bot Telegram precisa estar ativo, com token e dono pareado. Central/licenças pedem ensaio real; preservar a
-  ponte Render/Neon. Cobrança Asaas, iFood e NFC-e SP não estão ativas. Substituir credenciais expostas antes.
+  ponte Render/Neon. Cobrança Mercado Pago, iFood e NFC-e SP não estão ativas até o dono colar
+  `MP_ACCESS_TOKEN` e `MP_WEBHOOK_SECRET` e cadastrar o webhook. Substituir credenciais expostas antes.
