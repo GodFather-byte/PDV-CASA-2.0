@@ -162,6 +162,13 @@ PDV_LICENCA_CHAVE=/opt/willpdv/licenca_privada.key
 # Cobrança Mercado Pago (opcional). Não coloque estes valores no git.
 # MP_ACCESS_TOKEN=
 # MP_WEBHOOK_SECRET=
+# SMTP_HOST=smtp.gmail.com
+# SMTP_PORT=587
+# SMTP_USER=
+# SMTP_PASSWORD=
+# SMTP_FROM=
+# WHATSAPP_API_URL=
+# WHATSAPP_API_TOKEN=
 EOF
 chmod 600 /opt/willpdv/nuvem.env
 ```

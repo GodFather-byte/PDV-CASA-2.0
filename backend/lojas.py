@@ -8,6 +8,9 @@
     python -m backend.lojas assinatura BOATE-CENTRO 2026-11-30  # pagou até essa data: o PDV renova a licença sozinho
     python -m backend.lojas assinatura BOATE-CENTRO cancelar    # não emite mais (a licença do caixa vence no prazo)
     python -m backend.lojas cobranca plano BOATE-CENTRO 9900 financeiro@boate.com
+    python -m backend.lojas cobranca assinatura BOATE-CENTRO 9900 10 --email financeiro@boate.com --whatsapp "+55 11 99999-9999" --nome "Nome Completo" --documento 00000000000 --cep 00000000 --logradouro "Rua Exemplo" --numero 100 --bairro Centro --cidade "São Paulo" --uf SP
+    python -m backend.lojas cobranca emitir BOATE-CENTRO
+    python -m backend.lojas cobranca reenviar BOATE-CENTRO
     python -m backend.lojas cobranca gerar BOATE-CENTRO 2026-11-30
     python -m backend.lojas cobranca conciliar BOATE-CENTRO
     python -m backend.lojas cobranca listar
