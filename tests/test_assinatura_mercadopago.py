@@ -351,6 +351,58 @@ class TesteAssinaturaMensal(unittest.TestCase):
         self.assertEqual(self.db.query(nuvem.Loja).filter_by(chave_loja="LOJA-1").one().licenca_ate, "2027-04-01")
         self.assertEqual(self.db.query(cobranca.Plano).one().valor_cent, 100)
 
+    def test_email_de_teste_so_vai_para_o_destino_e_nao_cria_cobranca(self):
+        http = TestClient(nuvem.app)
+        url = "/v1/admin/cobrancas/teste-email"
+        admin = {"Authorization": "Bearer token-de-teste"}
+        pedido = {"chave_loja": "LOJA-1", "destino": "alguem@example.com"}
+        self.assertEqual(http.post(url, json=pedido).status_code, 401)
+        self.assertEqual(http.post(url, json=pedido, headers=cabecalho()).status_code, 403)
+        self.assertEqual(http.post(url, json=pedido, headers=admin).status_code, 422)
+        cobranca.definir_assinatura_de_pedido(self.db, _pedido())
+        self.assertEqual(self.db.query(cobranca.Cobranca).count(), 0)
+        enviados = []
+
+        def falso(destino, assunto, corpo):
+            enviados.append((destino, assunto, corpo))
+
+        with mock.patch.object(cobranca, "enviar_email", side_effect=falso):
+            resposta = http.post(url, json=pedido, headers=admin)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json(), {"ok": True, "destino": "alguem@example.com", "assunto": enviados[0][1]})
+        self.assertEqual(enviados[0][0], "alguem@example.com")
+        self.assertNotEqual(enviados[0][0], "financeiro@exemplo.com")
+        self.assertTrue(enviados[0][1].startswith("TESTE — "))
+        self.assertIn("TESTE — esta mensagem não é uma cobrança", enviados[0][2])
+        self.assertIn("(teste, sem link)", enviados[0][2])
+        self.assertIn("(teste, sem código)", enviados[0][2])
+        self.assertIn("249,99", enviados[0][2])
+        vencimento = cobranca.proximo_vencimento(date.today(), 10, 5).isoformat()
+        self.assertIn(vencimento, enviados[0][1])
+        self.assertEqual(self.db.query(cobranca.Cobranca).count(), 0)
+        self.assertEqual(self.chamadas, [])
+
+        plano = self.db.query(cobranca.Plano).filter_by(chave_loja="LOJA-1").one()
+        registro = cobranca.Cobranca(
+            id="f" * 32, plano=plano.id, chave_loja="LOJA-1", chave_vencimento="LOJA-1:2026-11-10",
+            valor_cent=24999, vencimento="2026-11-10", status="pendente",
+            boleto_url="https://www.mercadopago.com.br/boleto/real", boleto_linha="23793.38128",
+            pix_copia_cola="00020126PIXREAL", criada_em=cobranca.agora(), consultada_em=cobranca.agora())
+        self.db.add(registro)
+        self.db.commit()
+        enviados.clear()
+        with mock.patch.object(cobranca, "enviar_email", side_effect=falso):
+            resposta = http.post(url, json=pedido, headers=admin)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(enviados[0][1], cobranca.assunto_cobranca("LOJA-1", "2026-11-10"))
+        self.assertNotIn("TESTE", enviados[0][1])
+        self.assertEqual(enviados[0][2], cobranca.texto_cobranca("LOJA-1", registro))
+        self.assertIn("00020126PIXREAL", enviados[0][2])
+        self.assertEqual(self.db.query(cobranca.Cobranca).count(), 1)
+        ruim = http.post(url, json={"chave_loja": "LOJA-1", "destino": "sem-arroba"}, headers=admin)
+        self.assertEqual(ruim.status_code, 422)
+        self.assertIn("destino", ruim.json()["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()

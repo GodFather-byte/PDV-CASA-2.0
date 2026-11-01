@@ -217,6 +217,14 @@ A chamada é `POST https://api.brevo.com/v3/smtp/email` com o cabeçalho
 SMTP, se um dia usar fora do Render grátis: porta `465` é SSL; as outras (no
 Gmail, `587`) usam STARTTLS. A senha de app vai em `SMTP_PASSWORD`.
 
+Para conferir o texto sem avisar o cliente, o administrador (`PDV_API_TOKEN`)
+pode chamar `POST /v1/admin/cobrancas/teste-email` com
+`{"chave_loja":"LOJA","destino":"voce@example.com"}`. O e-mail vai só para
+`destino`, nunca para o contato da loja. Se ainda não houver cobrança, o texto
+é um TESTE com o valor e o próximo vencimento, sem link real e sem criar
+pagamento no Mercado Pago. Se já houver, o assunto e o corpo são os mesmos do
+aviso de verdade.
+
 ### WhatsApp
 
 Se `WHATSAPP_API_URL` (https) e `WHATSAPP_API_TOKEN` existirem, a nuvem faz:
