@@ -327,3 +327,8 @@ _ponte.instalar(app, Loja, hash_token)
 from backend import porteiro as _porteiro_nuvem  # noqa: E402
 
 _porteiro_nuvem.instalar(app, Loja, autenticar)
+
+# Cardápio digital, só consulta: o caixa publica o catálogo e o QR da mesa abre /cardapio/.
+from backend import cardapio as _cardapio  # noqa: E402
+
+_cardapio.instalar(app, Loja, autenticar)

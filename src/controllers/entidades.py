@@ -354,6 +354,7 @@ _ENTIDADES = [
         _sn("usa_observacao", "Permite observações"),
         Campo("comissao_pct", "Comissão %", "decimal", padrao=0, na_grade=False),
         Campo("texto_sugestao", "Texto para sugestão", tamanho=60, na_grade=False),
+        _sn("mostrar_no_cardapio", "Mostrar no cardápio digital", 1, na_grade=True),
         _sn("ativo", "Ativo", 1),
         Campo("controla_estoque", "Controla estoque", "sn", padrao=0, secao="Estoque"),
         Campo("estoque_minimo", "Estoque mínimo", "decimal", padrao=0, secao="Estoque", na_grade=False),

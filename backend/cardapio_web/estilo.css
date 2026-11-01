@@ -1,0 +1,68 @@
+:root {
+  --verde: #14532d;
+  --fundo: #f4f7f4;
+  --cartao: #fff;
+  --texto: #142018;
+  --suave: #5b6b62;
+  --borda: #e2e8e4;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #0f1712;
+    --cartao: #17211b;
+    --texto: #e7f0ea;
+    --suave: #a3b5ab;
+    --borda: #243028;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--fundo);
+  color: var(--texto);
+}
+.topo {
+  display: flex;
+  gap: .85rem;
+  align-items: center;
+  padding: 1rem 1rem .6rem;
+  background: var(--verde);
+  color: #f0fdf4;
+}
+.topo h1 { margin: 0; font-size: 1.35rem; }
+.topo .aviso { margin: .2rem 0 0; font-size: .85rem; opacity: .9; }
+.mesa { margin: 0 0 .15rem; font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; }
+#logo { width: 64px; height: 40px; object-fit: contain; background: #fff; border-radius: 6px; }
+.busca { position: sticky; top: 0; padding: .6rem 1rem; background: var(--fundo); z-index: 2; }
+.busca input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  padding: 0 1rem;
+  font-size: 1rem;
+  background: var(--cartao);
+  color: var(--texto);
+}
+.sumido { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+main { padding: 0 1rem 2rem; }
+.estado { text-align: center; color: var(--suave); padding: 2rem 0; }
+.grupo { margin: 1.1rem 0 .4rem; font-size: 1.05rem; }
+.sub { margin: .8rem 0 .2rem; font-size: .8rem; letter-spacing: .04em; text-transform: uppercase; color: var(--suave); }
+.item {
+  display: flex;
+  gap: .75rem;
+  align-items: flex-start;
+  padding: .75rem 0;
+  border-top: 1px solid var(--borda);
+}
+.item img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: var(--borda); }
+.item .nome { font-weight: 650; }
+.item .desc { margin: .15rem 0 0; color: var(--suave); font-size: .88rem; }
+.preco { margin-left: auto; text-align: right; white-space: nowrap; }
+.preco strong { display: block; font-size: 1.05rem; }
+.de { text-decoration: line-through; color: var(--suave); font-size: .8rem; }
+.selo { display: inline-block; margin-top: .15rem; font-size: .7rem; color: var(--verde); font-weight: 700; }
+@media (prefers-color-scheme: dark) { .selo { color: #86efac; } }

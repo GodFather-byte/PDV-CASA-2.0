@@ -151,6 +151,11 @@ class JanelaConfiguracoes(QDialog):
                     "Muda a senha que o dono usa no celular (painel da nuvem). Usa o endereço e o token já salvos.")
                 self.btn_senha_painel.clicked.connect(self.trocar_senha_painel)
                 formulario.addRow(self.btn_senha_painel)
+                self.btn_cardapio_qr = QPushButton("QR do cardápio das mesas…")
+                self.btn_cardapio_qr.setToolTip(
+                    "Gera a folha A4 com um QR por mesa, apontando para o cardápio na nuvem.")
+                self.btn_cardapio_qr.clicked.connect(self.abrir_cardapio_qr)
+                formulario.addRow(self.btn_cardapio_qr)
                 orientacao = texto(
                     "Para enviar vendas, caixa e estoque, habilite também o Painel do dono. "
                     "Para enviar comandas abertas ao porteiro, habilite o porteiro e defina o PIN. "
@@ -406,6 +411,16 @@ class JanelaConfiguracoes(QDialog):
             self.mensagem.setText(str(erro))
             return False
         QMessageBox.information(self, "Central do fornecedor", resumo)
+        return True
+
+    def abrir_cardapio_qr(self):
+        try:
+            self._autorizar("nuvem")
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return False
+        from src.ui_qt.cardapio_qr import JanelaCardapioQr
+        JanelaCardapioQr(self.ctx.banco, self).exec()
         return True
 
     # ------------------------------------------------ senha do painel do dono

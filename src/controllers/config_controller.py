@@ -142,6 +142,7 @@ CAMPOS_CONFIG = [
     ("sync_quase_tempo_real", "Sincronização automática quase em tempo real (a cada 5 segundos, com o PDV aberto)", "sn", "Nuvem"),
     ("sync_intervalo_seg", "Intervalo da sincronização no modo normal (segundos, de 5 a 3600)", "int", "Nuvem"),
     ("painel_dono", "Painel do dono no celular: enviar vendas fechadas, caixa e estoque para a nuvem", "sn", "Nuvem"),
+    ("cardapio_digital", "Cardápio digital: publicar o catálogo na nuvem para o QR da mesa (só consulta, sem pedido)", "sn", "Nuvem"),
     # Central do fornecedor (src/sync/ponte.py): usa o endereço da nuvem acima e um token só deste caixa.
     ("central_ponte_ativa", "Central do fornecedor: buscar a licença publicada e enviar o contato deste caixa", "sn", "Nuvem"),
     ("central_caixa_id", "ID deste caixa na central (passe ao fornecedor)", "texto", "Nuvem"),

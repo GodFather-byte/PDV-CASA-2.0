@@ -33,10 +33,11 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `src/controllers/` | Regras de negócio, um arquivo por assunto (lista abaixo) |
 | `src/ui_qt/` | Interface do PDV em PySide6/Qt: login, caixa, cadastros, estoque operacional, relatórios, configurações, máquinas, acessos, Telegram e utilitários; escopo em `docs/INTERFACE_QT.md` |
 | `src/hardware/` | Impressora térmica ESC/POS e gaveta, balança, logotipo no cupom, impressoras do Windows |
-| `src/sync/` | `sincronizador.py`, `licenca_nuvem.py`, `atualizacoes.py`, `telegram_api.py`, `ponte.py` (credencial individual, licença, contato técnico e pedido de renovação), `painel_envio.py` (vendas e retrato de cada caixa — estoque, comandas, comissões, fechamentos, sangrias e 12 meses — para o painel do dono; troca da senha do painel) |
+| `src/sync/` | `sincronizador.py`, `licenca_nuvem.py`, `atualizacoes.py`, `telegram_api.py`, `ponte.py` (credencial individual, licença, contato técnico e pedido de renovação), `painel_envio.py` (vendas e retrato de cada caixa para o painel do dono; troca da senha do painel), `cardapio_envio.py` (catálogo do cardápio digital) |
 | `src/porteiro/` | Página do porteiro no celular: lista das comandas abertas (sem a da garota) e consulta por número no caixa (`/porteiro`, Wi-Fi); o retrato vai para a nuvem (`nuvem_envio.py`, 4G). A mesma página em `backend/porteiro.py` |
+| `src/cardapio/` | Preço público do cardápio e a folha A4 dos QR (`preco.py`, `folha.py`). A tela Qt é `ui_qt/cardapio_qr.py` |
 | `licenciador/` | `nucleo.py` (regras), `tela.py` (janela), `app.py`, `autoteste.py`; central própria em `central.py` (SQLite/emissão/ponte), `central_bot.py`, `central_cli.py`, `central_tela.py` |
-| `backend/` | FastAPI: `main.py` (rotas), `ponte.py` (central técnica, caixas aprovados e entrega de licenças assinadas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobranca_mercadopago.py` (Pix, Checkout Pro, webhook e varredura no próprio processo), `painel.py` (painel do dono: envio, um retrato por caixa, senha, sessão, resumo, ranking, histórico e limpeza) e `painel_web/` (a PWA servida em `/painel/`) |
+| `backend/` | FastAPI: `main.py` (rotas), `ponte.py` (central técnica, caixas aprovados e entrega de licenças assinadas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobranca_mercadopago.py` (Pix, Checkout Pro, webhook e varredura no próprio processo), `painel.py` e `painel_web/` (painel do dono em `/painel/`), `cardapio.py` e `cardapio_web/` (cardápio só consulta em `/cardapio/`) |
 | `tools/` | `gerar_licenca.py`, `gerar_logos.py`, `esp32_campainha/main.py` (MicroPython da campainha dos quartos; nada disso vai no instalador do PDV) |
 | `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`, `EASuperacoes.iss`) e imagens (`ea-superacoes-*`: marca da edição adega) |
 | `tests/` | Um `test_*.py` por assunto; `base.py` (banco em memória, relógio controlável); `ui_robo.py` (robô das janelas modais) |
@@ -93,7 +94,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 `ESPECIFICACAO.md` (o que o sistema deve fazer), `INSTALAR_E_TESTAR.md`, `LICENCIADOR.md`,
 `NUVEM.md`, `TELEGRAM.md`, `IMPRESSORA.md`, `ESTOQUE.md` (inclui as regras da adega), `ADEGA.md` (checklist de
 implantação da adega), `IMPORTAR_PRODUTOS.md`, `PILOTO.md`,
-`COBRANCA_LICENCAS_MERCADOPAGO.md` (cobrança e renovação mensal), `PAINEL_DONO.md` (painel do dono no celular), `PORTEIRO.md` (porteiro no celular, Wi-Fi e 4G),
+`COBRANCA_LICENCAS_MERCADOPAGO.md` (cobrança e renovação mensal), `PAINEL_DONO.md` (painel do dono no celular), `CARDAPIO.md` (QR do cardápio, só consulta), `PORTEIRO.md` (porteiro no celular, Wi-Fi e 4G),
 `COORDENACAO.md` (histórico de pedidos entre agentes).
 `BACKUP_EXTERNO.md` (pasta sincronizada, senha e recuperação), `AUDITORIA.md`,
 `CENTRAL_TELEGRAM.md` (configuração dos dois painéis Telegram e central local com API como ponte; sem cobrança),
