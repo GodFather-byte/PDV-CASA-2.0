@@ -1,15 +1,19 @@
-"""Controle de quartos em Qt: painel completo (menu) e faixa compacta na tela do caixa.
+"""Controle de quartos em Qt: painel completo (menu) e linha de cartões no caixa.
 
 Somente o QuartosController decide estados e grava; aqui só se mostra, avisa e chama o controlador. O cliente paga
 antes no caixa; nada é lançado na comanda.
+
+No caixa, os quartos aparecem numa linha de cartões embaixo dos produtos e do pagamento (`PainelQuartosCaixa`).
 
 Os avisos (bipe, campainha do quarto e repetição a cada minuto) ficam em `AvisosQuartos`, um por banco: com o caixa e o
 painel abertos ao mesmo tempo, a campainha não toca em dobro.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QKeySequence, QShortcut
+import math
+
+from PySide6.QtCore import QObject, QPoint, QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFontMetrics, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QMenu,
     QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget,
@@ -20,6 +24,7 @@ from src.controllers.quartos_controller import MAX_BLOCOS, QuartosController, fm
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.hardware import campainha
+from src.ui_qt.painel_mesas import CORES as CORES_MESAS, ESTADOS as ESTADOS_MESAS, _fonte
 from src.ui_qt.tema import texto
 
 REPETIR_TOQUE_SEG = 60      # tempo esgotado: toca de novo a cada minuto até liberar
@@ -394,100 +399,171 @@ class JanelaQuartos(QDialog):
             f"{fmt.fmt_brl(resumo['valor_cent'])}  ·  {resumo['estouros']} passaram do tempo")
 
 
-# ------------------------------------------------------- faixa no caixa
-class ChipQuarto(QPushButton):
-    """Botão compacto de um quarto na faixa do caixa: número e tempo na cor do estado."""
+# ------------------------------------------------- quartos no caixa
+# Cartões no mesmo desenho dos das comandas (painel_mesas.py): mesmas cores por situação, cantos, pílula e fontes.
+_ESTADO_CARTAO = {"uso": "balcao", "alerta": "conta", "estourou": "parada"}
+_PILULA = {"livre": "Livre", "uso": "Em uso", "alerta": "Acabando", "estourou": "Esgotado"}
 
-    def __init__(self, numero: int, faixa: "FaixaQuartos"):
-        super().__init__()
-        self.numero = numero
-        self.faixa = faixa
-        self.item: dict = {"estado": "livre", "uso_id": None}
+
+class GradeQuartos(QWidget):
+    """Grade de cartões compactos dos quartos; o clique devolve o número do quarto."""
+    clicado = Signal(int)
+    ALTURA = 58
+    MIN_COLUNAS, MAX_COLUNAS = 4, 8          # até 8 quartos numa linha só; mais que isso quebra em outra linha
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.itens: list[dict] = []
+        self.colunas = self.MIN_COLUNAS
+        self.modo = "escuro"
         self.piscar = False
-        self.setObjectName("chip_quarto")
-        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)       # o foco fica no código do produto do caixa
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)       # o teclado continua no caixa
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumWidth(104)
-        self.setFixedHeight(34)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.clicked.connect(lambda: self.faixa.menu_do_quarto(self))
 
-    def mostrar(self, item: dict):
-        self.item = item
-        estado = item["estado"]
-        if estado == "livre":
-            rotulo, cor = "livre", "livre"
-            self.setToolTip(f"Quarto {self.numero}: livre. Clique para iniciar.")
-        elif estado == "estourou":
-            self.piscar = not self.piscar
-            rotulo, cor = "+" + fmt_relogio(item["restante_seg"]), "piscar" if self.piscar else "estourou"
-            self.setToolTip(f"Quarto {self.numero}: tempo esgotado (saída prevista {item['fim']:%H:%M}).")
-        else:
-            rotulo, cor = fmt_relogio(item["restante_seg"]), estado
-            self.setToolTip(f"Quarto {self.numero}: {fmt_duracao(item['minutos'])}, sai às {item['fim']:%H:%M}.")
-        self.setText(f"{self.numero}  ·  {rotulo}")
-        if estado == "livre":       # livre fica discreto (só o contorno): o olho vai para o que está correndo
-            fundo, letra, borda, peso = "transparent", "#8b95a7", "1px solid #3b4558", "600"
-        else:
-            fundo, letra = CORES[cor]
-            borda, peso = "none", "800"
-        self.setStyleSheet(
-            f"QPushButton#chip_quarto {{ background: {fundo}; color: {letra}; border: {borda}; border-radius: 8px;"
-            f" padding: 2px 8px; font-size: 15px; font-weight: {peso}; }}"
-            f"QPushButton#chip_quarto:hover {{ border: 2px solid #ffffff55; }}")
+    def definir(self, itens: list[dict], modo: str) -> None:
+        self.itens = itens
+        self.modo = modo
+        self.piscar = not self.piscar
+        self.colunas = max(self.MIN_COLUNAS, min(self.MAX_COLUNAS, len(itens)))
+        linhas = max(1, math.ceil(len(itens) / self.colunas))
+        self.setFixedHeight(linhas * self.ALTURA)
+        self.update()
+
+    def celula(self, i: int) -> tuple[float, float, float, float]:
+        largura = self.width() / self.colunas
+        return (i % self.colunas) * largura, (i // self.colunas) * self.ALTURA, largura, self.ALTURA
+
+    def indice_em(self, pos) -> int | None:
+        for i in range(len(self.itens)):
+            x, y, w, h = self.celula(i)
+            if x <= pos.x() < x + w and y <= pos.y() < y + h:
+                return i
+        return None
+
+    def mousePressEvent(self, ev) -> None:
+        i = self.indice_em(ev.position() if hasattr(ev, "position") else ev.pos())
+        if i is not None:
+            self.clicado.emit(self.itens[i]["quarto"])
+
+    def paintEvent(self, ev) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        cores = CORES_MESAS[self.modo]
+        for i, item in enumerate(self.itens):
+            x, y, w, h = self.celula(i)
+            x1, y1, x2, y2 = x + 3, y + 3, x + w - 3, y + h - 3
+            estado = item["estado"]
+            if estado == "livre":
+                fundo, borda, cor_pilula = cores["quadro"], cores["borda"], cores["mudo"]
+                largura = 1
+            else:
+                e = ESTADOS_MESAS[self.modo][_ESTADO_CARTAO[estado]]
+                fundo, borda, cor_pilula = e["fundo"], e["borda"], e["texto"]
+                largura = 1
+                if estado == "estourou" and self.piscar:      # pisca a borda: chama o olho sem poluir
+                    borda, largura = cores["vermelho"], 3
+            p.setPen(QPen(QColor(borda), largura))
+            p.setBrush(QColor(fundo))
+            p.drawRoundedRect(QRectF(x1, y1, x2 - x1, y2 - y1), 12, 12)
+            pad = 9
+            fm_rotulo = QFontMetrics(_fonte(7, True))
+            p.setFont(_fonte(7, True))
+            p.setPen(QColor(cores["suave"] if estado != "livre" else cores["mudo"]))
+            p.drawText(QPointF(x1 + pad, y1 + 4 + fm_rotulo.ascent()), "QUARTO")
+            p.setFont(_fonte(15, True))
+            p.setPen(QColor(cores["texto"] if estado != "livre" else cores["mudo"]))
+            fm_num = QFontMetrics(_fonte(15, True))
+            p.drawText(QPointF(x1 + pad, y2 - 8), str(item["quarto"]))
+            espaco = x2 - pad - (x1 + pad + fm_num.horizontalAdvance(str(item["quarto"])) + 6)
+            if estado == "livre":
+                rotulo, fonte = _PILULA["livre"], _fonte(8, True)
+            else:
+                rotulo = ("+" if estado == "estourou" else "") + fmt_relogio(item["restante_seg"])
+                for tamanho in (12, 11, 10, 9, 8):          # o tempo cabe inteiro: diminui a fonte, não corta
+                    fonte = _fonte(tamanho, True)
+                    if QFontMetrics(fonte).horizontalAdvance(rotulo) <= espaco:
+                        break
+            p.setFont(fonte)
+            p.setPen(QColor(cor_pilula if estado != "livre" else cores["mudo"]))
+            fm = QFontMetrics(fonte)
+            rotulo = fm.elidedText(rotulo, Qt.TextElideMode.ElideRight, int(max(10, espaco)))
+            p.drawText(QPointF(x2 - pad - fm.horizontalAdvance(rotulo), y2 - 9), rotulo)
+        p.end()
 
 
-class FaixaQuartos(QFrame):
-    """Faixa fina no alto da tela de venda do caixa. Some sozinha com o módulo desligado ou sem permissão."""
+class PainelQuartosCaixa(QFrame):
+    """Linha "Quartos" do caixa, embaixo dos produtos e do pagamento. Some sozinho com o módulo desligado ou sem permissão.
 
-    def __init__(self, ctx, janela: QWidget | None = None):
+    O operador inicia o tempo depois que o cliente paga: clique no cartão livre (ou Q + número no campo da comanda,
+    ex.: Q3) abre a escolha do tempo; no ocupado, + Tempo ou Liberar."""
+
+    def __init__(self, ctx, janela: QWidget | None = None, modo: str = "escuro"):
         super().__init__()
         self.ctx = ctx
         self.janela = janela
+        self.modo = modo
         self.avisos = avisos_de(ctx.banco)
-        self.chips: dict[int, ChipQuarto] = {}
-        self.setObjectName("faixa_quartos")
-        self.setStyleSheet("QFrame#faixa_quartos { background: transparent; }")
+        self.itens: dict[int, dict] = {}
+        self.setObjectName("painel_quartos_caixa")
+        # Título, resumo e botão do painel na lateral: a linha fica com a altura de um cartão só.
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(10, 2, 10, 2)
-        lay.setSpacing(6)
-        self.titulo = QLabel("QUARTOS")
-        self.titulo.setObjectName("mudo")
-        self.titulo.setStyleSheet("font-weight: 700; letter-spacing: 1px;")
-        lay.addWidget(self.titulo)
-        self.linha = QHBoxLayout()
-        self.linha.setSpacing(6)
-        lay.addLayout(self.linha, 1)
+        lay.setContentsMargins(10, 5, 8, 5)
+        lay.setSpacing(8)
+        lateral = QVBoxLayout()
+        lateral.setSpacing(0)
+        self.titulo = QLabel("Quartos")
+        self.titulo.setStyleSheet("font-size: 15px; font-weight: 700;")
+        lateral.addWidget(self.titulo)
         self.resumo = QLabel("")
-        self.resumo.setObjectName("mudo")
-        lay.addWidget(self.resumo)
+        self.resumo.setStyleSheet("font-size: 11px;")
+        lateral.addWidget(self.resumo)
+        lateral.addStretch(1)
         self.btn_painel = QPushButton("Painel")
         self.btn_painel.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_painel.setFixedHeight(34)
         self.btn_painel.setToolTip("Abrir o painel completo dos quartos")
+        self.btn_painel.setStyleSheet("padding: 1px 8px; font-size: 11px;")
         self.btn_painel.clicked.connect(self.abrir_painel)
-        lay.addWidget(self.btn_painel)
+        lateral.addWidget(self.btn_painel)
+        caixa_lateral = QWidget()
+        caixa_lateral.setObjectName("quartos_lateral")
+        caixa_lateral.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        caixa_lateral.setStyleSheet("QWidget#quartos_lateral { background: transparent; }")
+        caixa_lateral.setLayout(lateral)
+        caixa_lateral.setFixedWidth(82)
+        lay.addWidget(caixa_lateral)
+        self.grade = GradeQuartos()
+        self.grade.clicado.connect(self.acionar)
+        lay.addWidget(self.grade, 1)
+        self._estilizar()
         self.timer = QTimer(self)
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self.atualizar)
         self.timer_campainhas = QTimer(self)
         self.timer_campainhas.setInterval(VERIFICAR_CAMPAINHAS_SEG * 1000)
-        self.timer_campainhas.timeout.connect(lambda: self.avisos.verificar(self.ctx.quartos, list(self.chips)))
+        self.timer_campainhas.timeout.connect(lambda: self.avisos.verificar(self.ctx.quartos, list(self.itens)))
         self.atualizar()
         self.timer.start()
         self.timer_campainhas.start()
 
-    def _montar(self, numeros: list[int]):
-        if list(self.chips) == numeros:
-            return
-        for chip in self.chips.values():
-            chip.setParent(None)
-            chip.deleteLater()
-        self.chips = {}
-        for n in numeros:
-            chip = ChipQuarto(n, self)
-            self.chips[n] = chip
-            self.linha.addWidget(chip)
+    def definir_modo(self, modo: str) -> None:
+        self.modo = modo
+        self._estilizar()
+        self.atualizar()
+
+    def _estilizar(self) -> None:
+        c = CORES_MESAS[self.modo]
+        self.setStyleSheet(
+            f"QFrame#painel_quartos_caixa {{ background: {c['quadro']}; border: 1px solid {c['quadro_borda']};"
+            f" border-radius: 12px; }}"
+            f"QFrame#painel_quartos_caixa QLabel {{ background: transparent; color: {c['texto']}; }}")
+
+    def texto_do_quarto(self, numero: int) -> str:
+        """O que o cartão mostra, em texto (para conferência e testes): '3 · 2:54:00', '1 · livre', '4 · +02:00'."""
+        item = self.itens[numero]
+        if item["estado"] == "livre":
+            return f"{numero} · livre"
+        return f"{numero} · " + ("+" if item["estado"] == "estourou" else "") + fmt_relogio(item["restante_seg"])
 
     def atualizar(self):
         try:
@@ -500,29 +576,44 @@ class FaixaQuartos(QFrame):
             self.setVisible(False)
             return
         self.setVisible(True)
-        self._montar([i["quarto"] for i in situacao])
-        for item in situacao:
-            self.chips[item["quarto"]].mostrar(item)
+        self.itens = {i["quarto"]: i for i in situacao}
+        self.grade.definir(situacao, self.modo)
         livres = sum(i["estado"] == "livre" for i in situacao)
-        self.resumo.setText(f"{livres} livre{'s' if livres != 1 else ''}")
+        esgotados = sum(i["estado"] == "estourou" for i in situacao)
+        self.resumo.setText(f"{livres} livre{'s' if livres != 1 else ''}")   # o esgotado já pisca em vermelho no cartão
+        self.resumo.setToolTip(f"{esgotados} com tempo esgotado" if esgotados else "")
         if self.avisos.processar(ctrl, situacao, fmt.agora_dt()) and self.janela is not None:
             _trazer_para_frente(self.janela)
 
-    def menu_do_quarto(self, chip: ChipQuarto):
+    def acoes_do_quarto(self, numero: int) -> list[tuple[str, object]]:
+        item = self.itens.get(numero, {"estado": "livre", "quarto": numero})
+        if item["estado"] == "livre":
+            return [("Iniciar tempo…", lambda c: pedir_iniciar(self, c, numero))]
+        return [("+ Tempo…", lambda c: pedir_mais_tempo(self, c, item)),
+                ("Liberar quarto", lambda c: pedir_liberar(self, c, numero))]
+
+    def acionar(self, numero: int):
+        """Clique no cartão ou Q + número no caixa: livre já abre a escolha do tempo; ocupado mostra as opções."""
+        self.atualizar()
+        if numero not in self.itens:
+            self._avisar_erro(f"Quarto {numero} não existe.")
+            return
+        acoes = self.acoes_do_quarto(numero)
+        if self.itens[numero]["estado"] == "livre":
+            self.pedir(acoes[0][1], numero)
+            return
         menu = QMenu(self)
-        if chip.item["estado"] == "livre":
-            acoes = [("Iniciar tempo…", lambda c: pedir_iniciar(self, c, chip.numero))]
-        else:
-            acoes = [("+ Tempo…", lambda c: pedir_mais_tempo(self, c, chip.item)),
-                     ("Liberar quarto", lambda c: pedir_liberar(self, c, chip.numero))]
         for rotulo, montar in acoes:
-            menu.addAction(rotulo, lambda m=montar: self.pedir(m, chip))
+            menu.addAction(rotulo, lambda m=montar: self.pedir(m, numero))
         menu.addSeparator()
         menu.addAction("Abrir painel dos quartos", self.abrir_painel)
-        menu.popup(chip.mapToGlobal(chip.rect().bottomLeft()))
+        i = list(self.itens).index(numero)
+        x, y, w, h = self.grade.celula(i)
+        menu.popup(self.grade.mapToGlobal(QPoint(int(x + 6), int(y + h))))
         self._menu = menu                                    # testes acessam o último menu aberto
 
-    def pedir(self, montar, chip: ChipQuarto):
+    def pedir(self, montar, numero: int):
+        uso_id = self.itens.get(numero, {}).get("uso_id")
         try:
             if not modulo_disponivel(self.ctx):
                 raise ErroPermissao("O módulo Quartos está desligado ou o seu nível não permite.")
@@ -534,7 +625,7 @@ class FaixaQuartos(QFrame):
         except ErroNegocio as erro:
             self._avisar_erro(str(erro))
         else:
-            self.avisos.mudou(ctrl, chip.numero, chip.item.get("uso_id"))
+            self.avisos.mudou(ctrl, numero, uso_id)
         self.atualizar()
 
     def _avisar_erro(self, texto_erro: str):
@@ -553,3 +644,11 @@ class FaixaQuartos(QFrame):
         janela.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         janela.show()
         self._painel = janela
+
+
+def ler_atalho_quarto(texto: str) -> int | None:
+    """'Q3' ou 'q 3' digitado no campo da comanda -> 3; qualquer outra coisa -> None (segue como comanda/mesa)."""
+    s = (texto or "").strip().replace(" ", "").upper()
+    if len(s) >= 2 and s[0] == "Q" and s[1:].isdigit():
+        return int(s[1:])
+    return None

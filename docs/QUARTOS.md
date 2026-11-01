@@ -19,10 +19,16 @@ Acesso: módulo `util_quartos` (nível 1, o caixa já abre). Na edição E&A Sup
 
 ## Na tela do caixa
 
-Com o módulo ligado, a tela de venda ganha uma faixa fina logo abaixo do cabeçalho: um botão por quarto com o número
-e o tempo (livre fica só com contorno; verde em uso; amarelo acabando; vermelho piscando estourado). Clicar no quarto
-abre Iniciar / + Tempo / Liberar; **Painel** abre os cartões grandes. Os botões não tiram o foco do código do produto.
-Os avisos são os mesmos no caixa e no painel e não tocam em dobro com os dois abertos.
+Com o módulo ligado, aparece uma linha **Quartos** embaixo dos produtos e do pagamento (Total e Troco ficam lado a
+lado para sobrar altura; cabe em 1366×768): um cartão por quarto no mesmo desenho das comandas (livre apagado; verde em uso; amarelo acabando; vermelho com a borda piscando quando esgota,
+mostrando quanto passou, ex.: +02:00).
+
+O operador inicia o tempo depois que o cliente paga:
+- clique no quarto livre → escolhe o tempo (30 min, 1h, 2h, 3h…) → Enter; ou
+- digite **Q3** no campo *Número* (onde chama a comanda) e Enter → mesma escolha para o quarto 3.
+
+No quarto ocupado, o clique (ou Q3) mostra **+ Tempo** e **Liberar**. **Painel** abre os cartões grandes. Os cartões não
+tiram o foco do código do produto. Os avisos são os mesmos no caixa e no painel e não tocam em dobro.
 
 ## Operação
 

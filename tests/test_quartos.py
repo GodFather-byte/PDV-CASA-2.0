@@ -247,70 +247,95 @@ class TesteQuartosQt(BaseQuartos):
         j.executar(lambda: j.controlador().iniciar(1, 1), 1)
         self.assertIn("já está em uso", j.mensagem.text())
 
-    # ---- faixa no caixa ----
-    def faixa(self, operador_id=None):
-        from src.ui_qt.quartos import FaixaQuartos
+    # ---- cartões no caixa ----
+    def painel(self, operador_id=None):
+        from src.ui_qt.quartos import PainelQuartosCaixa
         ctx = Contexto(self.banco, AcessoController(self.banco).operador(operador_id or self.operador_adm()))
-        f = FaixaQuartos(ctx)
+        f = PainelQuartosCaixa(ctx)
         f.timer.stop()
         f.timer_campainhas.stop()
         self.addCleanup(f.deleteLater)
         return f
 
-    def test_faixa_mostra_cada_quarto_e_some_com_o_modulo_desligado(self):
+    def test_cartoes_mostram_cada_quarto_e_somem_com_o_modulo_desligado(self):
         self.q.iniciar(3, 6)
-        f = self.faixa(self.baixo)
+        f = self.painel(self.baixo)
         self.assertFalse(f.isHidden())
-        self.assertEqual(sorted(f.chips), list(range(1, 8)))
-        self.assertEqual(f.chips[3].text(), "3  ·  3:00:00")
-        self.assertEqual(f.chips[1].text(), "1  ·  livre")
-        self.assertEqual(f.resumo.text(), "6 livres")
+        self.assertEqual(sorted(f.itens), list(range(1, 8)))
+        self.assertEqual(f.texto_do_quarto(3), "3 · 3:00:00")
+        self.assertEqual(f.texto_do_quarto(1), "1 · livre")
+        self.assertEqual(f.resumo.text().strip(), "6 livres")
+        self.assertEqual((f.grade.colunas, f.grade.height()), (7, f.grade.ALTURA))   # os 7 numa linha só
+        self.avancar(hours=3, minutes=2)
+        f.atualizar()
+        self.assertEqual(f.texto_do_quarto(3), "3 · +02:00")
+        self.assertIn("1 com tempo esgotado", f.resumo.toolTip())
         self.banco.cfg_set("usar_quartos", "N")
         f.atualizar()
         self.assertTrue(f.isHidden())
 
-    def test_chips_nao_tiram_o_foco_do_caixa(self):
-        f = self.faixa()
-        self.assertTrue(all(c.focusPolicy() == Qt.FocusPolicy.NoFocus for c in f.chips.values()))
+    def test_cartoes_nao_tiram_o_foco_do_caixa(self):
+        f = self.painel()
+        self.assertEqual(f.grade.focusPolicy(), Qt.FocusPolicy.NoFocus)
+        self.assertEqual(f.btn_painel.focusPolicy(), Qt.FocusPolicy.NoFocus)
 
-    def test_menu_do_chip_inicia_e_libera(self):
+    def test_quarto_livre_ja_abre_o_tempo_e_o_ocupado_mostra_opcoes(self):
         from src.ui_qt import quartos as tela
-        f = self.faixa()
-        f.menu_do_quarto(f.chips[2])
-        self.assertEqual([a.text() for a in f._menu.actions() if a.text()],
-                         ["Iniciar tempo…", "Abrir painel dos quartos"])
-        with mock.patch.object(tela, "pedir_iniciar", lambda pai, ctrl, q: (lambda: ctrl.iniciar(q, 2))):
-            f._menu.actions()[0].trigger()
-        self.assertEqual(self.estado(2)["minutos"], 60)
-        f.menu_do_quarto(f.chips[2])
+        f = self.painel()
+        with mock.patch.object(tela, "pedir_iniciar", lambda pai, ctrl, q: (lambda: ctrl.iniciar(q, 1))):
+            f.grade.clicado.emit(2)                                     # clique no cartão livre
+        self.assertEqual(self.estado(2)["minutos"], 30)
+        self.assertEqual(f.texto_do_quarto(2), "2 · 30:00")
+        f.acionar(2)
         self.assertEqual([a.text() for a in f._menu.actions() if a.text()],
                          ["+ Tempo…", "Liberar quarto", "Abrir painel dos quartos"])
         with mock.patch.object(tela, "pedir_liberar", lambda pai, ctrl, q: (lambda: ctrl.liberar(q))):
             f._menu.actions()[1].trigger()
-        self.assertEqual(self.estado(2)["estado"], "livre")
-        self.assertEqual(f.chips[2].text(), "2  ·  livre")
+        self.assertEqual(f.texto_do_quarto(2), "2 · livre")
+
+    def test_desistir_da_escolha_nao_inicia(self):
+        from src.ui_qt import quartos as tela
+        f = self.painel()
+        with mock.patch.object(tela, "pedir_iniciar", lambda pai, ctrl, q: None):
+            f.acionar(4)
+        self.assertEqual(self.estado(4)["estado"], "livre")
+
+    def test_atalho_q_no_campo_da_comanda(self):
+        from src.ui_qt.quartos import ler_atalho_quarto
+        self.assertEqual(ler_atalho_quarto("Q3"), 3)
+        self.assertEqual(ler_atalho_quarto(" q 12 "), 12)
+        for outro in ("3", "M5", "Q", "QX", "", "Q3A"):
+            self.assertIsNone(ler_atalho_quarto(outro), outro)
 
     def test_caixa_e_painel_abertos_nao_tocam_em_dobro(self):
         self.banco.cfg_set("quartos_campainhas", "1=192.168.0.51")
         self.q.iniciar(1, 1)
-        f = self.faixa()
+        f = self.painel()
         j = self.janela()
         self.avancar(minutes=31)
         f.atualizar()
         j.atualizar()
         self.assertEqual(self.envios.count(("192.168.0.51", "tocar")), 1)
 
-    def test_tela_do_caixa_tem_a_faixa(self):
+    def test_tela_do_caixa_tem_os_quartos_e_o_atalho(self):
+        from src.ui_qt import quartos as tela
         from src.ui_qt.caixa import JanelaCaixa
         self.banco.cfg_set("imprimir_cupom", "0")
         ctx = Contexto(self.banco, AcessoController(self.banco).operador(self.operador_adm()))
+        ctx.turnos.abrir(ctx.operador_id, 1, 10000)
         j = JanelaCaixa(ctx)
         self.addCleanup(j.deleteLater)
-        j.faixa_quartos.timer.stop()
-        self.assertEqual(len(j.faixa_quartos.chips), 7)
+        j.painel_quartos.timer.stop()
+        self.assertEqual(len(j.painel_quartos.itens), 7)
+        self.assertIn("Q3 = quarto 3", j.lbl_dica_pos.text())
+        j.ent_pos.setText("Q3")
+        with mock.patch.object(tela, "pedir_iniciar", lambda pai, ctrl, q: (lambda: ctrl.iniciar(q, 2))):
+            j.chamar_posicao()
+        self.assertEqual(self.estado(3)["minutos"], 60)
+        self.assertEqual(j.ent_pos.text(), "")
         self.banco.cfg_set("usar_quartos", "N")
-        j.faixa_quartos.atualizar()
-        self.assertTrue(j.faixa_quartos.isHidden())
+        j.painel_quartos.atualizar()
+        self.assertTrue(j.painel_quartos.isHidden())
 
 
 if __name__ == "__main__":
