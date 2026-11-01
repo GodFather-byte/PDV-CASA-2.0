@@ -81,6 +81,27 @@ class BasePainel(BaseCaixa):
         self.pagar(vid, forma, total)
         return self.caixa.fechar(vid)
 
+    def preparar_noite(self):
+        """Fecha um turno com sangria e suprimento e abre outro com comandas e comissão pendente."""
+        from src.controllers.comissao_controller import ComissaoController
+        self.banco.cfg_set("usar_mesas", "S")
+        self.turnos.movimentar(self.turno, self.adm, "saida", 1500, "malote")
+        self.turnos.movimentar(self.turno, self.adm, "entrada", 400, "troco")
+        self.venda_fechada((self.skol, 1))
+        esperado = self.turnos.resumo(self.turno)["esperado"]
+        self.turnos.fechar(self.turno, self.adm, esperado)
+        self.turno = self.turnos.abrir(self.adm, 2, 5000)
+        self.banco.inserir("garotas", {"numero": 12, "nome": "ANA", "ativo": 1})
+        vid, _ = self.caixa.abrir_mesa(7, comanda=True)
+        self.caixa.adicionar_item(vid, self.skol, 1)
+        self.caixa.abrir_mesa(12, comanda=True)
+        self.caixa.abrir_mesa(13, comanda=True)
+        ComissaoController(self.banco).lancar(12, 5000, self.turno, self.adm)
+        self.banco.inserir("comissoes_garotas", {
+            "garota": 13, "valor_cent": 1000, "turno_id": self.turno, "operador_id": self.adm,
+            "criado_em": "2026-10-03 21:00:00", "status": "paga", "paga_em": "2026-10-03 21:00:00"})
+        return {"esperado": esperado}
+
 
 class TesteEnvioDoPdv(BasePainel):
     def test_desligado_nao_chama_a_nuvem(self):
@@ -169,6 +190,9 @@ class TesteEnvioDoPdv(BasePainel):
         self.assertEqual((r["entregas_pendentes"], r["vendas_pendentes_envio"], r["dia_operacional"]), (0, 1, "2026-10-03"))
         self.assertEqual(r["loja_nome"], "PDV")
         self.assertIsNotNone(zerado)
+        self.assertEqual(r["comandas"], [])
+        self.assertIn("faturamento_meses", r)
+        self.assertEqual(len(r["faturamento_meses"]), 12)
 
     def test_retrato_sem_turno_aberto(self):
         self.turnos.fechar(self.turno, self.adm, 10000)
@@ -186,6 +210,25 @@ class TesteEnvioDoPdv(BasePainel):
                 mock.patch.object(painel_envio.log, "exception"), \
                 mock.patch("src.sync.sincronizador.log.exception"):
             self.assertFalse(Sincronizador(self.banco, http=HttpFalso(status=500)).rodada())
+
+    def test_retrato_leva_comandas_comissoes_fechamento_e_meses(self):
+        noite = self.preparar_noite()
+        r = painel_envio.retrato(self.banco)
+        self.assertEqual([(c["numero"], c["garota"], c["devido_cent"]) for c in r["comandas"]],
+                         [(7, False, 800), (12, True, 0), (13, False, 0)])
+        self.assertTrue(r["comandas"][1]["rotulo"])
+        linhas = {(c["garota"], c["nome"], c["valor_cent"], c["status"], c["dia"]) for c in r["comissoes"]["linhas"]}
+        self.assertEqual(linhas, {(12, "ANA", 5000, "pendente", "2026-10-03"), (13, "", 1000, "paga", "2026-10-03")})
+        self.assertEqual(r["comissoes"]["pendente_total_cent"], 5000)
+        self.assertEqual(len(r["fechamentos"]), 1)
+        f = r["fechamentos"][0]
+        self.assertEqual((f["dia"], f["turno_numero"], f["resultado_cent"], f["sangrias_cent"], f["suprimentos_cent"],
+                          f["esperado_cent"]), ("2026-10-03", 1, 0, 1500, 400, noite["esperado"]))
+        self.assertEqual([(s["valor_cent"], s["descricao"], s["dia"]) for s in r["sangrias"]], [(1500, "malote", "2026-10-03")])
+        outubro = next(m for m in r["faturamento_meses"] if m["mes"] == "2026-10")
+        self.assertEqual((outubro["faturamento_cent"], outubro["quantidade"]), (800, 1))
+        self.assertEqual(len(r["faturamento_meses"]), 12)
+        self.assertEqual(r["caixa"]["turno_numero"], 2)
 
     def test_modulos_do_sistema_sabem_do_painel(self):
         from src.controllers.config_controller import CAMPOS_CONFIG
@@ -381,6 +424,87 @@ class TesteNuvemPainel(BaseNuvem):
         self.assertEqual(venda["pagamentos"][0]["tipo"], "Dinheiro")
         self.assertEqual(self.http.get("/v1/painel/vendas", params={"dia": "ontem"}, headers=sessao).status_code, 422)
         self.assertEqual(self.http.get("/v1/painel/resumo", params={"dia": "2026-13-01"}, headers=sessao).status_code, 422)
+
+    def test_resumo_entrega_comandas_comissoes_fechamento_e_meses(self):
+        self.preparar_noite()
+        self.subir()
+        r = self.http.get("/v1/painel/resumo", headers=self.entrar()).json()
+        self.assertEqual(r["dia_operacional"], "2026-10-03")
+        self.assertTrue(r["comandas_sincronizadas"])
+        self.assertFalse(r["comandas_parciais"])
+        self.assertEqual([(c["numero"], c["garota"], c["devido_cent"]) for c in r["comandas"]],
+                         [(7, False, 800), (12, True, 0), (13, False, 0)])
+        self.assertEqual(r["comissoes"]["pendente_total_cent"], 5000)
+        self.assertEqual(sorted((c["garota"], c["status"]) for c in r["comissoes"]["linhas"]),
+                         [(12, "pendente"), (13, "paga")])
+        self.assertTrue(r["movimento_sincronizado"])
+        self.assertEqual(r["fechamentos"][0]["resultado_cent"], 0)
+        self.assertEqual(r["sangrias"][0]["descricao"], "malote")
+        self.assertEqual(r["meses_origem"], "caixa")
+        self.assertFalse(r["meses_parcial"])
+        outubro = next(m for m in r["faturamento_meses"] if m["mes"] == "2026-10")
+        self.assertEqual(outubro["faturamento_cent"], 800)
+        outra = self.http.get("/v1/painel/resumo", headers=self.entrar("ADEGA-2", "senha-da-outra-loja")).json()
+        self.assertEqual((outra["comandas"], outra["comissoes"]["linhas"], outra["fechamentos"], outra["sangrias"]),
+                         ([], [], [], []))
+
+    def test_ranking_por_periodo_e_so_da_loja(self):
+        self.venda_fechada((self.skol, 2))
+        self.avancar(days=3)
+        self.venda_fechada((self.agua, 4))
+        self.subir()
+        sessao = self.entrar()
+        self.assertEqual(self.http.get("/v1/painel/produtos", headers=cabecalho()).status_code, 401)
+        self.assertEqual(self.http.get("/v1/painel/produtos", params={"periodo": "ano"}, headers=sessao).status_code, 422)
+        hoje = self.http.get("/v1/painel/produtos", params={"periodo": "hoje"}, headers=sessao).json()
+        self.assertEqual((hoje["de"], hoje["ate"], [(p["nome"], p["quantidade"], p["valor_cent"]) for p in hoje["produtos"]]),
+                         ("2026-10-06", "2026-10-06", [("AGUA", 4, 1400)]))
+        semana = self.http.get("/v1/painel/produtos", params={"periodo": "7d"}, headers=sessao).json()
+        self.assertEqual(semana["de"], "2026-09-30")
+        self.assertEqual([(p["nome"], p["quantidade"], p["valor_cent"]) for p in semana["produtos"]],
+                         [("SKOL", 2, 1600), ("AGUA", 4, 1400)])
+        outra = self.http.get("/v1/painel/produtos", headers=self.entrar("ADEGA-2", "senha-da-outra-loja")).json()
+        self.assertEqual(outra["produtos"], [])
+
+    def test_pdv_antigo_usa_as_vendas_guardadas_no_grafico_mensal(self):
+        self.http.post("/v1/painel/envio", json={
+            "vendas": [{"uuid": "venda-antiga-1", "status": "fechada", "dia": "2026-10-03", "total_cent": 500,
+                        "desconto_cent": 0, "modalidade": "balcao",
+                        "itens": [{"nome": "GELO", "quantidade": 2, "total_cent": 500, "cancelado": 0}],
+                        "pagamentos": []}],
+            "retrato": {"terminal_id": "velho", "terminal": 1, "loja_nome": "Adega",
+                        "dia_operacional": "2026-10-03", "momento": "2026-10-03 21:00:00", "caixa": None,
+                        "estoque": {"controlados": 0, "zerados": 0, "abaixo_minimo": []},
+                        "caderneta": {"a_receber_cent": 0, "clientes_devendo": 0},
+                        "entregas_pendentes": 0, "vendas_pendentes_envio": 0},
+        }, headers=cabecalho())
+        r = self.http.get("/v1/painel/resumo", headers=self.entrar()).json()
+        self.assertFalse(r["comandas_sincronizadas"])
+        self.assertFalse(r["movimento_sincronizado"])
+        self.assertEqual(r["meses_origem"], "nuvem")
+        self.assertTrue(r["meses_parcial"])
+        outubro = next(m for m in r["faturamento_meses"] if m["mes"] == "2026-10")
+        self.assertEqual((outubro["faturamento_cent"], outubro["quantidade"]), (500, 1))
+        self.assertEqual(len(r["faturamento_meses"]), 12)
+        rank = self.http.get("/v1/painel/produtos", params={"periodo": "hoje"}, headers=self.entrar()).json()
+        self.assertEqual(rank["produtos"][0]["nome"], "GELO")
+
+    def test_meses_de_dois_caixas_se_somam(self):
+        def corpo(terminal_id, cent, qtd):
+            return {"vendas": [], "retrato": {
+                "terminal_id": terminal_id, "terminal": 1 if terminal_id == "cx-a" else 2,
+                "dia_operacional": "2026-10-03", "momento": "2026-10-03 21:00:00",
+                "estoque": {"controlados": 0, "zerados": 0, "abaixo_minimo": []},
+                "comandas": [], "comissoes": {"linhas": [], "pendente_total_cent": 0},
+                "fechamentos": [], "sangrias": [],
+                "faturamento_meses": [{"mes": "2026-10", "faturamento_cent": cent, "quantidade": qtd}],
+            }}
+        self.assertEqual(self.http.post("/v1/painel/envio", json=corpo("cx-a", 100, 1), headers=cabecalho()).status_code, 200)
+        self.assertEqual(self.http.post("/v1/painel/envio", json=corpo("cx-b", 50, 2), headers=cabecalho()).status_code, 200)
+        r = self.http.get("/v1/painel/resumo", headers=self.entrar()).json()
+        outubro = next(m for m in r["faturamento_meses"] if m["mes"] == "2026-10")
+        self.assertEqual((outubro["faturamento_cent"], outubro["quantidade"], r["meses_parcial"], r["comandas_parciais"]),
+                         (150, 3, False, False))
 
     def test_historico_por_dia_com_dias_sem_venda_zerados(self):
         self.venda_fechada((self.skol, 1))

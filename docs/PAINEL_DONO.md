@@ -23,9 +23,10 @@ vende offline, guarda tudo                                     guarda a cópia p
 
 | Aba | Conteúdo |
 |---|---|
-| **Hoje** | Faturamento, nº de vendas, ticket médio, cancelamentos (quantos e quanto), itens, descontos, vendas por hora, formas de pagamento, modalidade (balcão, mesa, entrega, caderneta), últimos 14 dias; seletor de dia |
-| **Caixa** | Um cartão por caixa: turno aberto (nº, operador, abertura), valor inicial, recebido, esperado na gaveta, sangrias e suprimentos, vendas no turno, cancelamentos; abaixo, caderneta a receber e clientes devendo; entregas pendentes (somados dos caixas) |
-| **Produtos** | Mais vendidos do dia com natural × gelada, economia dada no atacado; estoque controlado, zerados e a lista abaixo do mínimo (um bloco por caixa quando mais de um controla estoque) |
+| **Hoje** | Faturamento, nº de vendas, ticket médio, cancelamentos, itens, descontos, alerta de estoque baixo, vendas por hora, formas de pagamento, modalidade, gráfico dos últimos 30 dias e dos últimos 12 meses; seletor de dia. O celular atualiza sozinho a cada 30 segundos |
+| **Caixa** | Um cartão por caixa (turno aberto, gaveta, sangrias e suprimentos do turno); caderneta; entregas; fechamento e sangrias de cada dia |
+| **Abertas** | Comandas abertas (número, quanto deve, hora, marca de comissão lançada) e o total de comissão por garota (hoje, 7 ou 30 dias) |
+| **Produtos** | Mais vendidos (quantidade e faturamento) em hoje, 7 ou 30 dias, com natural × gelada; economia do atacado do dia; estoque abaixo do mínimo |
 | **Vendas** | Cada venda do dia (mais recente primeiro) com itens (gelada marcada, cancelados riscados), pagamentos, canceladas em vermelho com o motivo; com mais de um caixa, de qual saiu |
 
 O "dia" é o **dia operacional** da loja (Configurações > Caixa > hora da virada): numa adega com virada às 6h, a venda
@@ -41,14 +42,25 @@ Sobe, a cada rodada da sincronização (`python -m src.app --sync`, normalmente 
 * as **vendas fechadas e canceladas** que ainda não subiram, com itens (nome, quantidade, preço, temperatura, observação)
   e pagamentos (forma e valor). A nuvem confirma o que recebeu e só então o caixa marca como enviada (`vendas.sincronizado`).
   Cancelar uma venda já enviada faz ela subir de novo com o status novo;
-* um **retrato** do momento: turno aberto e seus totais, estoque controlado (contagens e até 50 produtos abaixo do mínimo),
-  caderneta a receber, entregas pendentes e o relógio do caixa. Leva também a identificação do caixa (nº do terminal,
-  descrição e nome do computador, de Configurações > Máquinas, e um código gerado na primeira vez).
+* um **retrato** do momento, que substitui o anterior deste caixa: turno aberto e seus totais, estoque controlado
+  (contagens e até 50 produtos com quantidade no mínimo ou abaixo — o mínimo é o `estoque_minimo` do produto),
+  caderneta a receber, entregas pendentes, comandas abertas (número, quanto deve, hora e se há comissão pendente
+  naquele número, a mesma regra do cartão rosa e do porteiro), comissões pendentes e pagas dos últimos 30 dias,
+  fechamentos e sangrias dos últimos 31 dias, faturamento mês a mês dos últimos 12 meses e o relógio do caixa.
+  Leva também a identificação do caixa (nº do terminal, descrição e nome do computador, de Configurações > Máquinas,
+  e um código gerado na primeira vez).
+
+O faturamento mensal vai no retrato porque a nuvem apaga a venda depois da retenção (cerca de 120 dias). Sem o PDV
+atualizado, o gráfico de 12 meses usa só as vendas que a nuvem ainda guarda e avisa isso. Comandas, comissões,
+fechamento e sangrias por dia também só aparecem depois que o caixa da loja for atualizado e sincronizar: um PDV
+antigo continua mandando vendas, turno e estoque, e o painel diz o que falta.
 
 Não sobe: dados de clientes além do nome na venda de caderneta/entrega, senhas, operadores além do nome, configurações,
-produtos que não foram vendidos (fora os do estoque abaixo do mínimo), nada de garotas/comissões.
+produtos que não foram vendidos (fora os do estoque no mínimo ou abaixo), shows e o cadastro completo da garota
+(só o número, o nome se houver, e o valor da comissão).
 
-Vendas **abertas** (mesa, comanda, balcão em andamento) não aparecem no painel até fechar.
+Venda de balcão ainda aberta não entra no faturamento até fechar. A comanda aberta aparece na aba Abertas pelo
+retrato, sem virar venda. Mesa (não comanda) continua de fora dessa lista.
 
 Ao ligar o painel, **todo o histórico ainda não enviado** do caixa sobe (em lotes de 200, de uma vez). A nuvem confirma tudo,
 mas só guarda as vendas dentro da retenção (120 dias): as mais antigas não ocupam espaço nenhum.
@@ -190,7 +202,8 @@ permite usá-lo como hospedagem de serviço comercial.
 | `POST /v1/admin/lojas/{chave}/painel` | `PDV_API_TOKEN` | define (ou gera) a senha do painel da loja |
 | `POST /v1/painel/login` | loja + senha | abre a sessão (30 dias) |
 | `POST /v1/painel/sair` | sessão | encerra a sessão |
-| `GET /v1/painel/resumo?dia=` | sessão | totais do dia, dias disponíveis e `caixas` (um item por caixa: turno, estoque, caderneta, entregas, atraso); `caixa`, `estoque`, `caderneta` e `entregas_pendentes` seguem no topo, calculados de todos os caixas, para o app antigo |
+| `GET /v1/painel/resumo?dia=` | sessão | totais do dia, dias disponíveis, `caixas` e, no topo, comandas, comissões, fechamentos, sangrias e faturamento mensal (somados dos caixas). `caixa`, `estoque`, `caderneta` e `entregas_pendentes` continuam no topo para o app antigo |
+| `GET /v1/painel/produtos?periodo=` | sessão | mais vendidos. `periodo` é `hoje`, `7d` ou `30d`, a partir do dia operacional |
 | `GET /v1/painel/vendas?dia=&pagina=` | sessão | vendas do dia, 50 por página (cada uma com o `terminal_id` do caixa) |
-| `GET /v1/painel/historico?dias=14` | sessão | faturamento, vendas e canceladas por dia |
+| `GET /v1/painel/historico?dias=14` | sessão | faturamento, vendas e canceladas por dia (1 a 90; o app pede 30) |
 | `GET /painel/` | público | o app web (a API não expõe dados sem sessão) |

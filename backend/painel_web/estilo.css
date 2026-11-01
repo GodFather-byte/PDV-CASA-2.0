@@ -326,7 +326,45 @@ h3 { font-size: .95rem; color: var(--texto-suave); margin-top: .75rem; }
 }
 .barra.hoje .preenchimento { outline: 2px solid var(--verde); outline-offset: -2px; }
 
-.grafico-historico .eixo { font-size: .58rem; }
+.grafico-svg-caixa { width: 100%; min-height: 140px; }
+.grafico-svg { width: 100%; height: auto; display: block; }
+.grafico-svg text { font-size: 9px; fill: var(--texto-suave); font-family: inherit; }
+.grafico-svg .barra-svg { fill: var(--barra); cursor: pointer; }
+.grafico-svg .barra-svg.vazia { fill: var(--barra-fraca); }
+.grafico-svg .barra-svg.hoje { stroke: var(--verde); stroke-width: 1.5; }
+.detalhe-grafico {
+  min-height: 1.2em;
+  margin: .35rem 0 0;
+  font-size: .85rem;
+  color: var(--texto-suave);
+}
+
+.filtros { display: flex; gap: .4rem; margin: .35rem 0 .6rem; }
+.filtro {
+  flex: 1;
+  min-height: 40px;
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  background: var(--superficie);
+  color: var(--texto);
+  font-weight: 600;
+  cursor: pointer;
+}
+.filtro.ativa { background: var(--verde); color: #fff; border-color: var(--verde); }
+
+.rotulo-aba { display: inline-flex; align-items: center; gap: .25rem; }
+.selo {
+  display: inline-block;
+  min-width: 1.1rem;
+  padding: 0 .3rem;
+  border-radius: 999px;
+  background: #b45309;
+  color: #fff;
+  font-size: .65rem;
+  line-height: 1.35;
+  text-align: center;
+}
+.etiqueta-garota { background: #fce7f3; color: #9d174d; }
 
 /* ---------- Listas ---------- */
 
@@ -539,7 +577,7 @@ li.zerado .nome strong { color: var(--vermelho); }
   border: 0;
   background: none;
   color: var(--texto-suave);
-  font-size: .75rem;
+  font-size: .68rem;
   font-weight: 600;
   display: flex;
   flex-direction: column;
@@ -554,6 +592,8 @@ li.zerado .nome strong { color: var(--vermelho); }
 .aba-botao.ativa .icone { transform: translateY(-1px); }
 @media (prefers-color-scheme: dark) {
   .aba-botao.ativa { color: #86efac; }
+  .etiqueta-garota { background: #4a1d36; color: #f9a8d4; }
+  .filtro.ativa { background: #166534; color: #fff; }
 }
 
 :focus-visible { outline: 2px solid var(--verde-medio); outline-offset: 2px; }

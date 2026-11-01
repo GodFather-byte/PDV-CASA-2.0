@@ -2,7 +2,7 @@
  * Guarda só o "app shell" (arquivos estáticos) com cache-first e atualização em segundo plano.
  * Chamadas à API (/v1/) vão sempre à rede e NUNCA são guardadas: contêm dados sensíveis e o token. */
 
-const VERSAO = "painel-v2";
+const VERSAO = "painel-v3";
 const ARQUIVOS_SHELL = [
   "./",
   "./index.html",
