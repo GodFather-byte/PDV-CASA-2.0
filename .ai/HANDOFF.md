@@ -31,8 +31,11 @@
 ## Porteiro no celular
 
 - Página no caixa, `http://<ip>:<porta>/porteiro` (padrão 8765), PIN, só leitura: LIBERADA ou DEVENDO.
-  No caixa PySide6: **☰ Operações → Porteiro no celular** (também no menu principal). Sem Wi-Fi na porta, o mesmo PIN na nuvem (`/porteiro/?loja=CHAVE`);
-  o caixa manda só as comandas abertas (`src/porteiro/nuvem_envio.py`, `backend/porteiro.py`).
+  A tela principal lista as comandas abertas (número, quanto deve, hora) e atualiza sozinha;
+  **Consultar número** continua. Comanda de garota (comissão pendente em `comissoes_garotas`)
+  fica de fora da lista, no Wi-Fi e no 4G. No caixa PySide6: **☰ Operações → Porteiro no celular**.
+  Sem Wi-Fi na porta, o mesmo PIN na nuvem (`/porteiro/?loja=CHAVE`);
+  o caixa manda as abertas com a marca `garota` (`src/porteiro/nuvem_envio.py`, `backend/porteiro.py`).
   A página tenta o caixa e, se ele não responde, a nuvem, e mostra a idade ("atualizado há 30s").
   Render grátis dorme: a primeira abertura pelo 4G pode demorar. Guia: `docs/PORTEIRO.md`.
 

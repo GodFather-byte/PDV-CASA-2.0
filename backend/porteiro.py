@@ -41,7 +41,8 @@ JANELA_CAIXAS_SEG = 180
 ID_RE = re.compile(r"[A-Za-z0-9_-]{1,40}")
 CHAVE_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _CAMPOS = ("situacao", "titulo", "motivo", "detalhe", "cabecalho", "rotulo", "nome", "apelido",
-           "comanda", "numero", "devido_cent", "total_cent", "pago_cent", "valor_txt", "itens", "cupom")
+           "comanda", "numero", "devido_cent", "total_cent", "pago_cent", "valor_txt", "itens", "cupom",
+           "garota", "aberta_em", "aberta_txt")
 _CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
@@ -165,6 +166,11 @@ def _posicao_limpa(bruta: dict) -> dict | None:
     limpa = {k: bruta.get(k) for k in _CAMPOS}
     limpa["numero"] = numero
     limpa["comanda"] = comanda
+    limpa["garota"] = bruta.get("garota") is True
+    aberta = bruta.get("aberta_em")
+    limpa["aberta_em"] = aberta[:19] if isinstance(aberta, str) else ""
+    hora = bruta.get("aberta_txt")
+    limpa["aberta_txt"] = hora[:24] if isinstance(hora, str) else ""
     limpa["itens"] = itens
     return limpa
 
@@ -258,6 +264,52 @@ def consultar_chave(db: Session, chave: str, texto: str) -> dict:
         pos = dict(pos)
     pos.update(frescura(momento))
     return pos
+
+
+def listar_abertas_chave(db: Session, chave: str) -> dict:
+    """Comandas abertas do retrato, sem mesa e sem comanda marcada como garota."""
+    linhas = _vigentes(db.query(PorteiroRetrato).filter_by(chave_loja=chave).all())
+    if not linhas:
+        raise HTTPException(status_code=503, detail="O caixa ainda não enviou as comandas.")
+    linhas.sort(key=lambda linha: linha.momento or "", reverse=True)
+    escolhidas: dict[int, tuple[str, dict]] = {}
+    for linha in linhas:
+        try:
+            foto = json.loads(linha.dados or "{}")
+        except json.JSONDecodeError:
+            continue
+        for pos in foto.get("posicoes") or []:
+            if not isinstance(pos, dict) or not pos.get("comanda") or pos.get("garota") is True:
+                continue
+            try:
+                numero = int(pos.get("numero") or 0)
+            except (TypeError, ValueError):
+                continue
+            if numero <= 0:
+                continue
+            anterior = escolhidas.get(numero)
+            if anterior is None or (linha.momento or "") >= anterior[0]:
+                escolhidas[numero] = (linha.momento or "", pos)
+    comandas = []
+    for numero in escolhidas:
+        _momento, pos = escolhidas[numero]
+        comandas.append({
+            "numero": numero,
+            "rotulo": pos.get("rotulo") or str(numero),
+            "cabecalho": pos.get("cabecalho") or nome_posicao(True, numero),
+            "situacao": pos.get("situacao") or "",
+            "titulo": pos.get("titulo") or "",
+            "devido_cent": int(pos.get("devido_cent") or 0),
+            "total_cent": int(pos.get("total_cent") or 0),
+            "pago_cent": int(pos.get("pago_cent") or 0),
+            "valor_txt": pos.get("valor_txt") or "",
+            "aberta_em": pos.get("aberta_em") or "",
+            "aberta_txt": pos.get("aberta_txt") or "",
+        })
+    comandas.sort(key=lambda item: (0 if item["situacao"] == "devendo" else 1, item["numero"]))
+    dados = {"comandas": comandas}
+    dados.update(frescura(linhas[0].momento))
+    return dados
 
 
 def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
@@ -369,6 +421,16 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
     def consulta_pagina(request: Request, q: str = Query(""), authorization: str | None = Header(None),
                         db: Session = Depends(get_db)):
         return consulta_v1(request, q, authorization, db)
+
+    @router.get("/v1/porteiro/abertas")
+    def abertas_v1(request: Request, authorization: str | None = Header(None), db: Session = Depends(get_db)):
+        chave = _sessao(authorization, request, db)
+        return listar_abertas_chave(db, chave)
+
+    @router.get("/porteiro/api/abertas")
+    def abertas_pagina(request: Request, authorization: str | None = Header(None),
+                       db: Session = Depends(get_db)):
+        return abertas_v1(request, authorization, db)
 
     @app.middleware("http")
     async def cors_porteiro(request: Request, call_next):

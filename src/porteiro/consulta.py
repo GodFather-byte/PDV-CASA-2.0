@@ -132,17 +132,64 @@ def consultar(banco, texto) -> dict:
     return dados
 
 
+def numeros_com_comissao(banco) -> set[int]:
+    """Números de comanda da garota: a comissão foi lançada e ainda está registrada (pendente).
+
+    O número da garota é o da comanda dela. Paga ou cancelada não marca a comanda — é o mesmo
+    critério do cartão rosa do caixa (comissão a pagar)."""
+    return {int(linha["garota"]) for linha in banco.todos(
+        "SELECT DISTINCT garota FROM comissoes_garotas WHERE status = 'pendente'")}
+
+
 def retrato(banco) -> dict:
     """Comandas e mesas abertas, no formato da consulta, para a nuvem substituir o retrato anterior.
-    Só leitura: não grava total nem fecha conta."""
+    Só leitura: não grava total nem fecha conta. `garota` marca a comanda com comissão pendente."""
     caixa = CaixaController(banco)
+    garotas = numeros_com_comissao(banco)
     posicoes = []
     for linha in caixa.banco.todos(
             """SELECT * FROM vendas WHERE modalidade = 'mesa' AND status IN ('aberta', 'conta_enviada')
                ORDER BY comanda, posicao"""):
         v = dict(linha)
-        posicoes.append(_aberta(caixa, v, bool(v["comanda"]), int(v["posicao"])))
+        posicoes.append(_aberta(caixa, v, bool(v["comanda"]), int(v["posicao"]), garotas))
     return {"posicao_padrao": caixa.padrao_posicao(), "posicoes": posicoes}
+
+
+def listar_abertas(banco) -> dict:
+    """Comandas abertas para o painel do porteiro, sem as das garotas e sem mesas.
+    Só leitura. O celular atualiza esta lista; a consulta de um número continua à parte."""
+    caixa = CaixaController(banco)
+    garotas = numeros_com_comissao(banco)
+    comandas = []
+    for linha in caixa.banco.todos(
+            """SELECT * FROM vendas WHERE modalidade = 'mesa' AND comanda = 1
+               AND status IN ('aberta', 'conta_enviada') ORDER BY posicao"""):
+        v = dict(linha)
+        numero = int(v["posicao"])
+        if numero in garotas:
+            continue
+        comandas.append(_resumo_lista(_aberta(caixa, v, True, numero, garotas)))
+    comandas.sort(key=lambda item: (0 if item["situacao"] == "devendo" else 1, item["numero"]))
+    dados = {"comandas": comandas}
+    dados.update(frescura(no_caixa=True))
+    return dados
+
+
+def _resumo_lista(dados: dict) -> dict:
+    return {
+        "numero": dados["numero"],
+        "rotulo": dados["rotulo"],
+        "cabecalho": dados["cabecalho"],
+        "situacao": dados["situacao"],
+        "titulo": dados["titulo"],
+        "devido_cent": dados["devido_cent"],
+        "total_cent": dados["total_cent"],
+        "pago_cent": dados["pago_cent"],
+        "valor_txt": dados["valor_txt"] or fmt.fmt_brl(0),
+        "total_txt": fmt.fmt_brl(dados["total_cent"]),
+        "aberta_em": dados.get("aberta_em") or "",
+        "aberta_txt": dados.get("aberta_txt") or "",
+    }
 
 
 def _consultar(banco, texto) -> dict:
@@ -186,9 +233,15 @@ def _consultar(banco, texto) -> dict:
     return _liberada(dados, "cancelada", f"{nome}: a última conta foi cancelada. Nada em aberto.")
 
 
-def _aberta(caixa: CaixaController, venda: dict, comanda: bool, numero: int) -> dict:
+def _aberta(caixa: CaixaController, venda: dict, comanda: bool, numero: int,
+           garotas: set[int] | None = None) -> dict:
     apelido = (venda.get("apelido") or "").strip()
     dados = _base(caixa, comanda, numero, apelido)
+    if garotas is None and comanda:
+        garotas = numeros_com_comissao(caixa.banco)
+    dados["garota"] = bool(comanda and garotas and numero in garotas)
+    dados["aberta_em"] = (venda.get("aberta_em") or "")[:19]
+    dados["aberta_txt"] = _quando(venda.get("aberta_em"))
     # calcular só lê. Não chamar recalcular: ele grava o total na venda.
     calculo = caixa.calcular(venda)
     pago = sum(p["valor_cent"] for p in caixa.pagamentos(venda["id"]))

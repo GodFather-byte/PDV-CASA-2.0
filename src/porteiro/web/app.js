@@ -15,6 +15,8 @@ let baseNuvem = "";
 let chaveNuvem = "";
 let urlCaixa = "";
 let pinMemoria = "";
+let listaTimer = null;
+const INTERVALO_LISTA_MS = 20000;
 
 function cabecalhos(extra) {
   const saida = Object.assign({ "Content-Type": "application/json" }, extra || {});
@@ -46,12 +48,14 @@ function mostrarAviso(texto) {
 }
 
 function mostrar(id) {
-  for (const tela of ["tela-pin", "tela-consulta", "tela-resultado"]) {
+  for (const tela of ["tela-pin", "tela-lista", "tela-consulta", "tela-resultado"]) {
     document.getElementById(tela).hidden = tela !== id;
   }
   document.body.dataset.tela = id;
   if (id !== "tela-resultado") delete document.body.dataset.situacao;
   if (id !== "tela-consulta") pararCamera();
+  if (id === "tela-lista") iniciarLista();
+  else pararLista();
 }
 
 function desenharPin() {
@@ -138,7 +142,7 @@ async function entrar() {
   mesa = false;
   desenharCodigo();
   mostrarAviso("");
-  mostrar("tela-consulta");
+  mostrar("tela-lista");
 }
 
 async function guardarNuvem() {
@@ -281,6 +285,125 @@ async function consultarNuvem(q) {
   }
 }
 
+function pararLista() {
+  if (listaTimer) clearInterval(listaTimer);
+  listaTimer = null;
+}
+
+function iniciarLista() {
+  carregarLista(false);
+  pararLista();
+  listaTimer = setInterval(() => {
+    if (document.body.dataset.tela === "tela-lista") carregarLista(true);
+  }, INTERVALO_LISTA_MS);
+}
+
+async function carregarLista(silencioso) {
+  if (urlCaixa && podeTentarCaixa(urlCaixa) && pinMemoria) {
+    const noCaixa = await listaNoCaixa();
+    if (noCaixa) {
+      pintarLista(noCaixa);
+      return;
+    }
+  }
+  const aqui = await consultarUrl("api/abertas", token, modo === "nuvem" ? 20000 : 4000);
+  if (aqui && aqui.ok) {
+    pintarLista(aqui.dados);
+    return;
+  }
+  if (aqui && aqui.status === 401 && modo === "nuvem") {
+    mostrarAviso("Entre de novo com o PIN.");
+    mostrar("tela-pin");
+    return;
+  }
+  if (modo === "caixa" && baseNuvem && chaveNuvem && pinMemoria) {
+    const naNuvem = await listaNuvem();
+    if (naNuvem) {
+      pintarLista(naNuvem);
+      return;
+    }
+  }
+  if (!silencioso) {
+    mostrarAviso((aqui && aqui.mensagem) || "Sem ligação com o caixa nem com a nuvem. Confira o Wi-Fi ou o 4G.");
+  }
+}
+
+async function listaNoCaixa() {
+  const base = urlCaixa.replace(/\/$/, "");
+  try {
+    const entrada = await buscar(base + "/api/entrar", {
+      method: "POST",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: pinMemoria }),
+    }, 1500);
+    const sessao = await entrada.json().catch(() => ({}));
+    if (!entrada.ok || !sessao.token) return null;
+    const resposta = await consultarUrl(base + "/api/abertas", sessao.token, 1500);
+    return resposta && resposta.ok ? resposta.dados : null;
+  } catch (_erro) {
+    return null;
+  }
+}
+
+async function listaNuvem() {
+  try {
+    if (!tokenNuvem) {
+      const entrada = await buscar(baseNuvem + "/api/entrar", {
+        method: "POST",
+        credentials: "omit",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pinMemoria, chave: chaveNuvem }),
+      }, 20000);
+      const dados = await entrada.json().catch(() => ({}));
+      if (!entrada.ok) return null;
+      tokenNuvem = dados.token || "";
+      if (dados.caixa_url) urlCaixa = dados.caixa_url;
+    }
+    const resposta = await consultarUrl(baseNuvem + "/api/abertas", tokenNuvem, 20000);
+    return resposta && resposta.ok ? resposta.dados : null;
+  } catch (_erro) {
+    return null;
+  }
+}
+
+function pintarLista(dados) {
+  mostrarAviso("");
+  document.getElementById("lista-origem").textContent = dados.origem_txt || "";
+  const lista = document.getElementById("lista-comandas");
+  const vazio = document.getElementById("lista-vazio");
+  lista.replaceChildren();
+  const comandas = dados.comandas || [];
+  vazio.hidden = comandas.length > 0;
+  for (const comanda of comandas) {
+    const botao = document.createElement("button");
+    botao.type = "button";
+    botao.className = "cartao-comanda " + (comanda.situacao === "devendo" ? "devendo" : "liberada");
+    const numero = document.createElement("span");
+    numero.className = "numero";
+    numero.textContent = comanda.cabecalho || ("Comanda " + comanda.numero);
+    const valor = document.createElement("span");
+    valor.className = "valor";
+    valor.textContent = comanda.valor_txt || "R$ 0,00";
+    const hora = document.createElement("span");
+    hora.className = "hora";
+    hora.textContent = comanda.aberta_txt ? "Aberta " + comanda.aberta_txt : "";
+    const situacao = document.createElement("span");
+    situacao.className = "situacao-txt";
+    const total = comanda.total_txt && comanda.total_cent !== comanda.devido_cent
+      ? " · conta " + comanda.total_txt : "";
+    situacao.textContent = (comanda.titulo || "") + total;
+    botao.append(numero, valor, hora, situacao);
+    botao.addEventListener("click", () => {
+      mesa = false;
+      codigo = String(comanda.numero);
+      desenharCodigo();
+      consultar();
+    });
+    lista.append(botao);
+  }
+}
+
 function pintar(dados) {
   document.body.dataset.situacao = dados.situacao === "devendo" ? "devendo" : "liberada";
   document.getElementById("res-cabecalho").textContent = dados.cabecalho || "";
@@ -413,14 +536,25 @@ document.addEventListener("keydown", (evento) => {
     else if (evento.key === "m" || evento.key === "M") { mesa = true; desenharCodigo(); }
     else if (evento.key === "c" || evento.key === "C") { mesa = false; desenharCodigo(); }
     else if (evento.key === "Enter") consultar();
+  } else if (tela === "tela-lista" && evento.key === "Escape") {
+    sair();
   } else if (tela === "tela-resultado" && (evento.key === "Enter" || evento.key === "Escape")) {
     codigo = "";
     desenharCodigo();
-    mostrar("tela-consulta");
+    mostrar("tela-lista");
   }
 });
 
 document.getElementById("botao-entrar").addEventListener("click", entrar);
+document.getElementById("botao-atualizar").addEventListener("click", () => carregarLista(false));
+document.getElementById("botao-buscar").addEventListener("click", () => {
+  codigo = "";
+  mesa = false;
+  desenharCodigo();
+  mostrarAviso("");
+  mostrar("tela-consulta");
+});
+document.getElementById("botao-sair-lista").addEventListener("click", sair);
 document.getElementById("botao-consultar").addEventListener("click", consultar);
 document.getElementById("botao-camera").addEventListener("click", abrirCamera);
 document.getElementById("botao-parar-camera").addEventListener("click", pararCamera);
@@ -429,7 +563,7 @@ document.getElementById("botao-nova").addEventListener("click", () => {
   codigo = "";
   desenharCodigo();
   mostrarAviso("");
-  mostrar("tela-consulta");
+  mostrar("tela-lista");
 });
 
 window.addEventListener("beforeinstallprompt", (evento) => {
@@ -466,5 +600,5 @@ async function preparar() {
   const nuvem = modo === "nuvem";
   document.getElementById("rotulo-loja").hidden = !nuvem;
   campo.hidden = !nuvem;
-  mostrar(await sessaoAtiva() ? "tela-consulta" : "tela-pin");
+  mostrar(await sessaoAtiva() ? "tela-lista" : "tela-pin");
 }

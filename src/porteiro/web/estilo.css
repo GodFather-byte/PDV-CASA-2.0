@@ -201,6 +201,48 @@ body[data-situacao] .aviso { color: #fff; }
 
 .itens .valor { font-weight: 700; white-space: nowrap; }
 
+.lista-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lista-topo h1 { margin: 8px 0; }
+
+.compacto {
+  width: auto;
+  margin-top: 0;
+  min-height: 44px;
+  padding: 8px 14px;
+  flex: 0 0 auto;
+}
+
+.lista { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+
+.cartao-comanda {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 2px 12px;
+  width: 100%;
+  margin: 0;
+  padding: 14px 16px;
+  text-align: left;
+  background: var(--cartao);
+  color: var(--texto);
+  border: 1px solid var(--linha);
+  border-left-width: 6px;
+}
+
+.cartao-comanda.devendo { border-left-color: #f87171; }
+.cartao-comanda.liberada { border-left-color: #34d399; }
+
+.cartao-comanda .numero { font-size: 1.55rem; font-weight: 800; }
+.cartao-comanda .valor { font-size: 1.35rem; font-weight: 800; text-align: right; }
+.cartao-comanda .hora, .cartao-comanda .situacao-txt { color: var(--suave); font-size: 0.95rem; }
+.cartao-comanda .situacao-txt { text-align: right; }
+
 body[data-situacao] .acao {
   background: #fff;
   color: #111827;

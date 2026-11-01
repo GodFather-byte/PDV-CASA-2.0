@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Porteiro</title>
-  <meta name="description" content="Confere se a comanda ainda tem valor em aberto antes da saída.">
+  <meta name="description" content="Lista as comandas abertas e confere se ainda há valor antes da saída.">
   <meta name="theme-color" content="#0b1220">
   <meta name="color-scheme" content="dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -47,8 +47,21 @@
     <button type="button" id="botao-entrar" class="acao">Entrar</button>
   </main>
 
+  <main id="tela-lista" hidden>
+    <div class="lista-topo">
+      <h1>Comandas abertas</h1>
+      <button type="button" id="botao-atualizar" class="secundario compacto">Atualizar</button>
+    </div>
+    <p class="sub">Sem as comandas das garotas. A lista se atualiza sozinha.</p>
+    <p id="lista-origem" class="origem"></p>
+    <p id="lista-vazio" class="sub" hidden>Nenhuma comanda aberta.</p>
+    <div id="lista-comandas" class="lista"></div>
+    <button type="button" id="botao-buscar" class="acao">Consultar número</button>
+    <button type="button" id="botao-sair-lista" class="link">Sair</button>
+  </main>
+
   <main id="tela-consulta" hidden>
-    <h1>Comanda</h1>
+    <h1>Consultar número</h1>
     <p class="sub">Digite o número, ou use o leitor. A câmera só abre em endereço seguro.</p>
     <p id="codigo-mostra" class="mostra" aria-live="polite">—</p>
     <div class="teclado" data-teclado="consulta">
@@ -79,7 +92,7 @@
     <p id="res-detalhe" class="detalhe"></p>
     <p id="res-origem" class="origem"></p>
     <ul id="res-itens" class="itens"></ul>
-    <button type="button" id="botao-nova" class="acao">Nova consulta</button>
+    <button type="button" id="botao-nova" class="acao">Voltar às comandas</button>
   </main>
 
   <script src="app.js"></script>
