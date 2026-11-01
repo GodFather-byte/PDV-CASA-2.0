@@ -32,6 +32,10 @@
     periodoProdutos: "hoje",
     periodoComissoes: "hoje",
     diaMovimento: null,
+    atalhoPeriodo: "mes",
+    periodoDe: "",
+    periodoAte: "",
+    periodo: null,
     vendas: null,
     paginaVendas: 1,
     carregando: false,
@@ -132,6 +136,39 @@
 
   const SVG_NS = "http://www.w3.org/2000/svg";
   const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+  function datasDoAtalho(ateIso, atalho) {
+    if (!ateIso) return ["", ""];
+    if (atalho === "hoje") return [ateIso, ateIso];
+    if (atalho === "ontem") {
+      const ontem = somarDiasIso(ateIso, -1);
+      return [ontem, ontem];
+    }
+    if (atalho === "7d") return [somarDiasIso(ateIso, -6), ateIso];
+    if (atalho === "mes-passado") {
+      const fim = somarDiasIso(ateIso.slice(0, 8) + "01", -1);
+      return [fim.slice(0, 8) + "01", fim];
+    }
+    return [ateIso.slice(0, 8) + "01", ateIso];
+  }
+
+  function marcarAtalho(atalho) {
+    document.querySelectorAll("[data-atalho]").forEach((b) => {
+      const ativa = b.dataset.atalho === atalho;
+      b.classList.toggle("ativa", ativa);
+      b.setAttribute("aria-pressed", ativa ? "true" : "false");
+    });
+  }
+
+  function sincronizarDatasDoAtalho() {
+    if (!estado.atalhoPeriodo || !estado.resumo) return;
+    const ate = estado.resumo.dia_operacional || estado.resumo.dia;
+    const [de, fim] = datasDoAtalho(ate, estado.atalhoPeriodo);
+    estado.periodoDe = de;
+    estado.periodoAte = fim;
+    if ($("periodo-de")) $("periodo-de").value = de;
+    if ($("periodo-ate")) $("periodo-ate").value = fim;
+  }
 
   function somarDiasIso(iso, delta) {
     const partes = String(iso || "").split("-").map(Number);
@@ -481,6 +518,87 @@
     renderizarRanking(r.dados);
   }
 
+  function renderizarMesAtual(r) {
+    const mes = r.mes || {};
+    $("mes-faturamento").textContent = formatarCentavos(mes.faturamento_cent);
+    $("mes-periodo").textContent = mes.de && mes.ate
+      ? formatarData(mes.de) + " a " + formatarData(mes.ate) : "";
+    const ant = mes.anterior || {};
+    if (!ant.de) {
+      $("mes-comparacao").textContent = "";
+      return;
+    }
+    let texto = "Mesmo período do mês anterior (" + formatarData(ant.de) + " a " + formatarData(ant.ate) +
+      "): " + formatarCentavos(ant.faturamento_cent) + " · diferença " + formatarCentavos(mes.variacao_cent);
+    if (mes.parcial) texto += ". A nuvem guarda cerca de 120 dias; o mês anterior pode estar incompleto.";
+    $("mes-comparacao").textContent = texto;
+  }
+
+  async function carregarPeriodo() {
+    sincronizarDatasDoAtalho();
+    if (!estado.periodoDe || !estado.periodoAte) return;
+    const r = await carregarComCache(
+      "periodo:" + estado.periodoDe + ":" + estado.periodoAte,
+      "/periodo?de=" + encodeURIComponent(estado.periodoDe) + "&ate=" + encodeURIComponent(estado.periodoAte)
+    );
+    if (!r) return;
+    estado.periodo = r.dados;
+    renderizarPeriodo(r.dados);
+  }
+
+  function renderizarPeriodo(d) {
+    $("per-faturamento").textContent = formatarCentavos(d.faturamento_cent);
+    $("per-quantidade").textContent = formatarInteiro(d.quantidade);
+    $("per-ticket").textContent = formatarCentavos(d.ticket_medio_cent);
+    $("per-servico").textContent = d.servico_sincronizado ? formatarCentavos(d.servico_cent) : "—";
+    const nota = $("nota-periodo");
+    const avisos = [];
+    if (!d.servico_sincronizado && d.quantidade) avisos.push("A taxa de serviço separada pede o PDV atualizado.");
+    if (d.parcial) avisos.push("A nuvem guarda cerca de 120 dias. O começo deste intervalo pode estar incompleto.");
+    nota.hidden = avisos.length === 0;
+    nota.textContent = avisos.join(" ");
+    const dias = Array.isArray(d.dias) ? d.dias : [];
+    const pontos = dias.map((dia, i) => {
+      const valor = Number(dia.faturamento_cent) || 0;
+      const mostrar = dias.length <= 16 || i === 0 || i === dias.length - 1 || (dia.dia && Number(dia.dia.slice(8, 10)) % 5 === 0);
+      return {
+        valor,
+        rotulo: mostrar && dia.dia ? dia.dia.slice(8, 10) : "",
+        titulo: formatarDiaCurto(dia.dia) + ": " + formatarCentavos(valor) + " em " + formatarInteiro(dia.quantidade) + " venda(s)",
+      };
+    });
+    const tem = desenharGrafico($("grafico-periodo"), pontos, "Faturamento por dia no período", "detalhe-periodo");
+    $("grafico-periodo").hidden = !tem;
+    $("vazio-periodo").hidden = !!tem;
+    if (!tem) $("detalhe-periodo").textContent = "";
+    const formas = $("lista-formas-periodo");
+    limpar(formas);
+    const lista = Array.isArray(d.formas) ? d.formas.filter((f) => f && (Number(f.valor_cent) || 0) !== 0) : [];
+    $("vazio-formas-periodo").hidden = lista.length > 0;
+    const total = lista.reduce((s, f) => s + (Number(f.valor_cent) || 0), 0) || 1;
+    for (const f of lista) {
+      const pct = Math.round(((Number(f.valor_cent) || 0) / total) * 100);
+      formas.append(el("li", null,
+        el("span", { class: "nome", text: f.tipo || "—" }),
+        el("span", { class: "valor" }, formatarCentavos(f.valor_cent), el("span", { class: "sec", text: " " + pct + "%" }))
+      ));
+    }
+    const corpo = $("corpo-meses-periodo");
+    limpar(corpo);
+    const meses = Array.isArray(d.meses) ? d.meses : [];
+    $("vazio-meses-periodo").hidden = meses.length > 0;
+    for (const m of meses) {
+      const linha = document.createElement("tr");
+      for (const texto of [rotuloMes(m.mes) + "/" + String(m.mes || "").slice(0, 4), formatarInteiro(m.quantidade),
+        formatarCentavos(m.servico_cent), formatarCentavos(m.faturamento_cent)]) {
+        const celula = document.createElement("td");
+        celula.textContent = texto;
+        linha.append(celula);
+      }
+      corpo.append(linha);
+    }
+  }
+
   async function carregarVendas() {
     const pagina = estado.paginaVendas || 1;
     const r = await carregarComCache(
@@ -503,8 +621,11 @@
     $("faixa-offline").hidden = true;
     $("faixa-erro").hidden = true;
     try {
-      const tarefas = [carregarResumo(), carregarHistorico(), carregarRanking()];
+      await carregarResumo();
+      sincronizarDatasDoAtalho();
+      const tarefas = [carregarHistorico(), carregarRanking()];
       if (estado.aba === "vendas") tarefas.push(carregarVendas());
+      if (estado.aba === "periodo") tarefas.push(carregarPeriodo());
       await Promise.all(tarefas);
       estado.ultimaAtualizacao = Date.now();
     } finally {
@@ -541,6 +662,7 @@
       status.append("PDV ainda não enviou dados");
     }
     mostrarAtraso(r.atraso_min);
+    renderizarMesAtual(r);
 
     $("v-faturamento").textContent = formatarCentavos(v.faturamento_cent);
     $("v-devolucoes").textContent = typeof v.devolucoes_cent === "number" ? formatarCentavos(v.devolucoes_cent) : "—";
@@ -569,6 +691,7 @@
     renderizarComandas(r);
     renderizarComissoes(r);
     renderizarAlertaEstoque(r);
+    renderizarBar(r);
     renderizarProdutos(r);
     renderizarMeses(r);
     if (estado.historico) renderizarHistorico(estado.historico);
@@ -866,6 +989,92 @@
     $("sangrias-total").textContent = formatarCentavos(total);
   }
 
+  function renderizarBar(r) {
+    const bar = r.bar || {};
+    const perfil = r.perfil || {};
+    const servicoOk = bar.servico_sincronizado;
+    $("nota-servico").hidden = servicoOk !== false || !(r.vendas && r.vendas.quantidade);
+    $("nota-servico").textContent = "O caixa ainda não separa a taxa de serviço. Atualize o PDV da loja.";
+    $("servico-dia").textContent = formatarCentavos(bar.servico_cent);
+    $("servico-mes").textContent = bar.servico_mes_sincronizado ? formatarCentavos(bar.servico_mes_cent) : "—";
+    $("consumo-dia").textContent = formatarCentavos(bar.consumo_cent);
+    const mesas = bar.mesas || {};
+    $("bloco-mesa-resumo").hidden = perfil.mostrar_salao === false;
+    $("ticket-mesa").textContent = formatarCentavos(mesas.ticket_medio_cent);
+    $("ticket-pessoa").textContent = mesas.pessoas ? formatarCentavos(mesas.ticket_pessoa_cent) : "—";
+    $("tempo-mesa").textContent = mesas.permanencia_min ? mesas.permanencia_min + " min" : "—";
+    $("nota-mesa-resumo").hidden = !(perfil.conhecido === false && mesas.quantidade);
+    $("nota-mesa-resumo").textContent = "Tempo, pessoas e garçom completos pedem o PDV atualizado.";
+    const antes = bar.semana_anterior;
+    const notaPico = $("nota-pico");
+    if (antes) {
+      notaPico.hidden = false;
+      notaPico.textContent = "Mesmo dia da semana passada (" + formatarDiaCurto(antes.dia) + "): " +
+        formatarCentavos(antes.faturamento_cent) + " em " + formatarInteiro(antes.quantidade) + " venda(s).";
+    } else {
+      notaPico.hidden = true;
+    }
+    preencherLista($("lista-cancelamentos"), $("vazio-cancelamentos"), bar.cancelamentos || [], (c) =>
+      el("li", null,
+        el("div", { class: "nome" },
+          el("span", { text: (c.cupom ? "Cupom " + c.cupom : "Venda") + (c.hora ? " · " + formatarHora(c.hora) : "") }),
+          el("span", { class: "sec", text: (c.operador || "—") + (c.motivo ? " · " + c.motivo : "") })
+        ),
+        el("span", { class: "valor", text: formatarCentavos(c.total_cent) })
+      ));
+    preencherLista($("lista-descontos"), $("vazio-descontos"), bar.descontos || [], (d) =>
+      el("li", null,
+        el("div", { class: "nome" },
+          el("span", { text: (d.cupom ? "Cupom " + d.cupom : "Venda") + (d.rotulo ? " · " + d.rotulo : "") }),
+          el("span", { class: "sec", text: d.operador || "—" })
+        ),
+        el("span", { class: "valor", text: formatarCentavos(d.desconto_cent) })
+      ));
+    const mostrarGarotas = perfil.mostrar_garotas === true;
+    $("cartao-garotas").hidden = !mostrarGarotas;
+    $("bloco-comissoes").hidden = !mostrarGarotas;
+    const salao = perfil.mostrar_salao !== false;
+    $("tab-abertas").hidden = !salao;
+    if (!salao && estado.aba === "abertas") trocarAba("hoje");
+    $("nota-garcons").hidden = bar.garcons_sincronizados !== false;
+    $("nota-garcons").textContent = "O garçom de cada mesa passa a aparecer depois de atualizar o PDV.";
+    preencherLista($("lista-garcons"), $("vazio-garcons"), bar.garcons || [], (g) =>
+      el("li", null,
+        el("div", { class: "nome" },
+          el("span", { text: g.nome || "Sem garçom" }),
+          el("span", { class: "sec", text: formatarInteiro(g.vendas) + " mesa(s) · serviço " + formatarCentavos(g.servico_cent) +
+            " · comissão " + formatarCentavos(g.comissao_cent) })
+        ),
+        el("span", { class: "valor", text: formatarCentavos(g.consumo_cent) })
+      ));
+    const avisoGrupo = "Grupo, setor e custo do item pedem o PDV atualizado. O ranking acima continua com as vendas que já subiram.";
+    $("nota-grupos").hidden = bar.grupos_sincronizados !== false;
+    $("nota-grupos").textContent = avisoGrupo;
+    preencherLista($("lista-grupos"), $("vazio-grupos"), bar.grupos || [], (g) =>
+      el("li", null,
+        el("span", { class: "nome", text: g.nome }),
+        el("span", { class: "valor", text: formatarCentavos(g.valor_cent) })
+      ));
+    $("bloco-setores").hidden = perfil.modulos && perfil.modulos.usar_cozinha_bar === false && !bar.setores_sincronizados;
+    $("nota-setores").hidden = bar.setores_sincronizados !== false;
+    $("nota-setores").textContent = avisoGrupo;
+    preencherLista($("lista-setores"), $("vazio-setores"), bar.setores || [], (s) =>
+      el("li", null,
+        el("span", { class: "nome", text: s.nome }),
+        el("span", { class: "valor", text: formatarCentavos(s.valor_cent) })
+      ));
+    $("nota-margem").hidden = bar.cmv_sincronizado !== false;
+    $("nota-margem").textContent = "O custo do produto ainda não sobe. Atualize o PDV para ver CMV e margem.";
+    $("cmv-dia").textContent = bar.cmv_sincronizado ? formatarCentavos(bar.cmv_cent) : "—";
+    $("margem-dia").textContent = bar.cmv_sincronizado ? formatarCentavos(bar.margem_cent) : "—";
+  }
+
+  function preencherLista(alvo, vazio, itens, montar) {
+    limpar(alvo);
+    vazio.hidden = itens.length > 0;
+    for (const item of itens) alvo.append(montar(item));
+  }
+
   function renderizarComandas(r) {
     const nota = $("nota-comandas");
     const lista = $("lista-comandas");
@@ -874,7 +1083,7 @@
     if (!r.comandas_sincronizadas) {
       nota.hidden = false;
       nota.textContent = r.atualizado_em
-        ? "Atualize o PDV da loja para ver as comandas abertas e as comissões."
+        ? "Atualize o PDV da loja para ver as mesas e comandas abertas."
         : "O PDV ainda não enviou dados.";
       $("comandas-qtd").textContent = "0";
       $("comandas-devido").textContent = formatarCentavos(0);
@@ -890,16 +1099,22 @@
     $("comandas-devido").textContent = formatarCentavos(devido);
     $("comandas-garotas").textContent = formatarInteiro(garotas);
     $("vazio-comandas").hidden = comandas.length > 0;
+    const mostrarGarotas = r.perfil && r.perfil.mostrar_garotas === true;
     for (const c of comandas) {
       const devendo = c.situacao === "devendo";
+      const itens = Array.isArray(c.itens) ? c.itens : [];
+      const resumoItens = itens.map((i) => formatarQuantidade(i.quantidade) + " " + (i.nome || "")).join(", ");
       lista.append(el("li", null,
         el("div", { class: "nome" },
           el("span", null,
-            el("strong", { text: c.rotulo || ("Comanda " + c.numero) }),
-            c.garota ? el("span", { class: "etiqueta etiqueta-garota", text: "Comissão lançada" }) : null
+            el("strong", { text: c.rotulo || ((c.comanda === false ? "Mesa " : "Comanda ") + c.numero) }),
+            mostrarGarotas && c.garota ? el("span", { class: "etiqueta etiqueta-garota", text: "Comissão lançada" }) : null
           ),
           el("span", { class: "sec", text: (c.aberta_txt ? "Aberta " + c.aberta_txt : "Aberta") +
-            (c.caixa ? " · " + c.caixa : "") + (devendo ? "" : " · nada a cobrar") })
+            (c.garcom ? " · " + c.garcom : "") +
+            (c.pessoas ? " · " + c.pessoas + " pessoa(s)" : "") +
+            (c.caixa ? " · " + c.caixa : "") + (devendo ? "" : " · nada a cobrar") }),
+          resumoItens ? el("span", { class: "sec", text: resumoItens }) : null
         ),
         el("span", { class: "valor", text: formatarCentavos(c.devido_cent) })
       ));
@@ -1206,6 +1421,7 @@
     });
     window.scrollTo({ top: 0 });
     if (nome === "vendas" && estado.token) carregarVendas();
+    if (nome === "periodo" && estado.token) carregarPeriodo();
   }
 
   function mudarDia(novoDia) {
@@ -1274,6 +1490,20 @@
     }));
     marcarFiltro("produtos", estado.periodoProdutos);
     marcarFiltro("comissoes", estado.periodoComissoes);
+    marcarAtalho(estado.atalhoPeriodo);
+    document.querySelectorAll("[data-atalho]").forEach((b) => b.addEventListener("click", () => {
+      estado.atalhoPeriodo = b.dataset.atalho;
+      marcarAtalho(estado.atalhoPeriodo);
+      sincronizarDatasDoAtalho();
+      if (estado.token) carregarPeriodo();
+    }));
+    $("botao-periodo").addEventListener("click", () => {
+      estado.atalhoPeriodo = null;
+      marcarAtalho(null);
+      estado.periodoDe = $("periodo-de").value;
+      estado.periodoAte = $("periodo-ate").value;
+      carregarPeriodo();
+    });
     $("data-dia").addEventListener("change", (e) => { if (e.target.value) mudarDia(e.target.value); });
     $("pag-anterior").addEventListener("click", () => {
       if (estado.paginaVendas > 1) { estado.paginaVendas--; carregarVendas(); }

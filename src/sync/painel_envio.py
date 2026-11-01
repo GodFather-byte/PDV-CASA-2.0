@@ -118,9 +118,11 @@ def _coletar_vendas(banco, limite: int | None, uuids: list[str] | None) -> list[
     virada = _virada(banco)
     caixa_id = id_do_caixa(banco)
     vendas = banco.todos(
-        """SELECT v.*, o.nome AS operador, c.nome AS cliente, t.numero AS turno_numero
-           FROM vendas v LEFT JOIN operadores o ON o.id = v.operador_id LEFT JOIN clientes c ON c.id = v.cliente_id
-           LEFT JOIN turnos t ON t.id = v.turno_id
+        """SELECT v.*, o.nome AS operador, g.nome AS garcom, x.nome AS cancelada_por_nome, c.nome AS cliente,
+                  t.numero AS turno_numero
+           FROM vendas v LEFT JOIN operadores o ON o.id = v.operador_id
+           LEFT JOIN operadores g ON g.id = v.garcom_id LEFT JOIN operadores x ON x.id = v.cancelada_por
+           LEFT JOIN clientes c ON c.id = v.cliente_id LEFT JOIN turnos t ON t.id = v.turno_id
            WHERE v.status IN ('fechada','cancelada') AND v.sincronizado = 0""" + filtro + " ORDER BY v.id LIMIT ?",
         (*(() if uuids is None else uuids), limite))
     saida = []
@@ -128,8 +130,11 @@ def _coletar_vendas(banco, limite: int | None, uuids: list[str] | None) -> list[
         v = dict(v)
         itens = [dict(i) for i in banco.todos(
             """SELECT p.nome, p.codigo, u.abreviatura AS unidade, i.quantidade, i.preco_unit_cent, i.preco_base_cent,
-                      i.total_cent, i.temperatura, i.cancelado, i.observacao
-               FROM itens_venda i JOIN produtos_historico p ON p.id = i.produto_id JOIN unidades u ON u.id = p.unidade_id
+                      i.total_cent, i.temperatura, i.cancelado, i.observacao, i.comissao_cent,
+                      gr.nome AS grupo, COALESCE(st.nome, '') AS setor, p.custo_cent AS custo_unit_cent
+               FROM itens_venda i JOIN produtos_historico p ON p.id = i.produto_id
+               JOIN unidades u ON u.id = p.unidade_id JOIN subgrupos s ON s.id = p.subgrupo_id
+               JOIN grupos gr ON gr.id = s.grupo_id LEFT JOIN setores_impressao st ON st.id = s.setor_impressao_id
                WHERE i.venda_id = ? ORDER BY i.id""", (v["id"],))]
         pagamentos = [dict(p) for p in banco.todos(
             """SELECT t.tipo, p.valor_cent, p.troco_cent FROM pagamentos_venda p
@@ -138,6 +143,7 @@ def _coletar_vendas(banco, limite: int | None, uuids: list[str] | None) -> list[
         saida.append({
             "uuid": v["uuid"], "cupom": v["cupom"], "status": v["status"], "modalidade": v["modalidade"],
             "posicao_rotulo": _rotulo_posicao(v, v["cliente"]), "operador": v["operador"] or "",
+            "garcom": v["garcom"] or "", "cancelada_por": v["cancelada_por_nome"] or "",
             "turno_numero": v["turno_numero"], "terminal": v["terminal"], "terminal_id": caixa_id,
             "aberta_em": v["aberta_em"], "fechada_em": momento, "dia": fmt.dia_operacional(momento, virada),
             "subtotal_cent": v["subtotal_cent"], "desconto_cent": v["desconto_cent"], "servico_cent": v["servico_cent"],
@@ -188,17 +194,47 @@ def _meses_fechados(banco, virada: int, hoje: str) -> list[dict]:
     return saida
 
 
+def _modulos(banco) -> dict:
+    """O que a casa usa. O painel esconde garota e portaria quando o flag vem desligado."""
+    def pct(chave: str) -> float:
+        try:
+            return float(str(banco.cfg(chave, "0")).replace(",", "."))
+        except ValueError:
+            return 0.0
+    return {
+        "usar_mesas": banco.cfg_bool("usar_mesas", True),
+        "usar_garotas": banco.cfg_bool("usar_garotas", True),
+        "usar_portaria": banco.cfg_bool("usar_portaria", True),
+        "usar_cozinha_bar": banco.cfg_bool("usar_cozinha_bar", False),
+        "servico_pct": pct("servico_pct"),
+        "comissao_garcom_pct": pct("comissao_garcom_pct"),
+    }
+
+
 def _comandas_abertas(banco) -> list[dict]:
-    """Comandas abertas, inclusive as da garota. O valor em aberto é o mesmo da portaria (consulta.retrato);
-    a marca `garota` também: comissão pendente em comissoes_garotas, no número da comanda. Mesas ficam de fora."""
+    """Mesas e comandas abertas. O valor é o da portaria. `garota` só na comanda com comissão pendente.
+    Cada uma leva garçom, pessoas e os itens (nome e valor, sem custo)."""
     from src.porteiro.consulta import retrato as retrato_portaria
+    extras = {}
+    for r in banco.todos(
+            """SELECT v.comanda, v.posicao, v.pessoas, COALESCE(g.nome, '') AS garcom
+               FROM vendas v LEFT JOIN operadores g ON g.id = v.garcom_id
+               WHERE v.modalidade = 'mesa' AND v.status IN ('aberta', 'conta_enviada')"""):
+        extras[(int(r["comanda"] or 0), int(r["posicao"]))] = dict(r)
     saida = []
     for p in retrato_portaria(banco).get("posicoes") or []:
-        if not p.get("comanda"):
-            continue
+        comanda = bool(p.get("comanda"))
+        numero = int(p["numero"])
+        extra = extras.get((1 if comanda else 0, numero), {})
+        itens = []
+        for i in (p.get("itens") or [])[:8]:
+            if not isinstance(i, dict):
+                continue
+            itens.append({"nome": str(i.get("nome") or "")[:60], "quantidade": i.get("quantidade"),
+                          "total_cent": int(i.get("total_cent") or 0)})
         saida.append({
-            "numero": int(p["numero"]),
-            "rotulo": p.get("rotulo") or str(p["numero"]),
+            "numero": numero, "comanda": comanda,
+            "rotulo": p.get("rotulo") or str(numero),
             "devido_cent": int(p.get("devido_cent") or 0),
             "total_cent": int(p.get("total_cent") or 0),
             "pago_cent": int(p.get("pago_cent") or 0),
@@ -206,8 +242,11 @@ def _comandas_abertas(banco) -> list[dict]:
             "aberta_txt": p.get("aberta_txt") or "",
             "garota": bool(p.get("garota")),
             "situacao": p.get("situacao") or "",
+            "garcom": extra.get("garcom") or "",
+            "pessoas": int(extra.get("pessoas") or 0),
+            "itens": itens,
         })
-    saida.sort(key=lambda c: (0 if c["situacao"] == "devendo" else 1, c["numero"]))
+    saida.sort(key=lambda c: (0 if c["situacao"] == "devendo" else 1, 0 if not c["comanda"] else 1, c["numero"]))
     return saida[:LIMITE_COMANDAS]
 
 
@@ -323,6 +362,7 @@ def retrato(banco) -> dict:
         "entregas_pendentes": banco.valor(
             "SELECT COUNT(*) FROM vendas WHERE modalidade = 'entrega' AND status IN ('aberta','conta_enviada')", (), 0),
         "vendas_pendentes_envio": pendentes(banco),
+        "modulos": _modulos(banco),
         "comandas": _comandas_abertas(banco),
         "comissoes": _comissoes(banco, virada, hoje),
         "fechamentos": fechamentos, "sangrias": sangrias,

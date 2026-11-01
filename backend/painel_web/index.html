@@ -68,6 +68,13 @@
 
       <!-- Aba Hoje -->
       <section id="aba-hoje" class="aba" role="tabpanel" aria-labelledby="tab-hoje">
+        <article class="cartao destaque cartao-mes" id="cartao-mes">
+          <span class="rotulo">Faturamento do mês até agora</span>
+          <strong id="mes-faturamento" class="valor-grande">R$ 0,00</strong>
+          <p id="mes-periodo" class="legenda"></p>
+          <p id="mes-comparacao" class="detalhe"></p>
+        </article>
+
         <div class="linha-dia">
           <label for="seletor-dia">Dia</label>
           <select id="seletor-dia" aria-label="Escolher dia"></select>
@@ -109,6 +116,44 @@
           <span>Descontos: <strong id="v-desconto">R$ 0,00</strong></span>
         </p>
 
+        <section class="bloco" id="bloco-servico">
+          <h2>Taxa de serviço</h2>
+          <p id="nota-servico" class="legenda" hidden></p>
+          <div class="grade-cartoes">
+            <article class="cartao">
+              <span class="rotulo">Serviço do dia</span>
+              <strong id="servico-dia" class="valor-grande">R$ 0,00</strong>
+            </article>
+            <article class="cartao">
+              <span class="rotulo">Serviço no mês</span>
+              <strong id="servico-mes" class="valor-grande">R$ 0,00</strong>
+            </article>
+            <article class="cartao">
+              <span class="rotulo">Consumo sem serviço</span>
+              <strong id="consumo-dia" class="valor-grande">R$ 0,00</strong>
+            </article>
+          </div>
+        </section>
+
+        <section class="bloco" id="bloco-mesa-resumo">
+          <h2>Mesas fechadas no dia</h2>
+          <p id="nota-mesa-resumo" class="legenda" hidden></p>
+          <div class="grade-cartoes">
+            <article class="cartao">
+              <span class="rotulo">Ticket médio da mesa</span>
+              <strong id="ticket-mesa" class="valor-grande">R$ 0,00</strong>
+            </article>
+            <article class="cartao">
+              <span class="rotulo">Ticket por pessoa</span>
+              <strong id="ticket-pessoa" class="valor-grande">R$ 0,00</strong>
+            </article>
+            <article class="cartao">
+              <span class="rotulo">Tempo médio</span>
+              <strong id="tempo-mesa" class="valor-grande">0 min</strong>
+            </article>
+          </div>
+        </section>
+
         <section class="bloco" id="bloco-alerta-estoque">
           <h2>Estoque baixo</h2>
           <p id="alerta-estoque-resumo" class="legenda"></p>
@@ -119,6 +164,7 @@
         <section class="bloco">
           <h2>Vendas por hora</h2>
           <div id="grafico-horas" class="grafico-barras" role="img" aria-label="Vendas por hora"></div>
+          <p id="nota-pico" class="legenda" hidden></p>
           <p id="vazio-horas" class="vazio" hidden>Nenhuma venda neste dia.</p>
         </section>
 
@@ -126,6 +172,18 @@
           <h2>Formas de pagamento</h2>
           <ul id="lista-formas" class="lista"></ul>
           <p id="vazio-formas" class="vazio" hidden>Nenhum pagamento neste dia.</p>
+        </section>
+
+        <section class="bloco" id="bloco-cancelamentos">
+          <h2>Cancelamentos</h2>
+          <ul id="lista-cancelamentos" class="lista"></ul>
+          <p id="vazio-cancelamentos" class="vazio" hidden>Nenhum cancelamento neste dia.</p>
+        </section>
+
+        <section class="bloco" id="bloco-descontos">
+          <h2>Descontos concedidos</h2>
+          <ul id="lista-descontos" class="lista"></ul>
+          <p id="vazio-descontos" class="vazio" hidden>Nenhum desconto neste dia.</p>
         </section>
 
         <section class="bloco">
@@ -147,6 +205,64 @@
           <div id="grafico-meses" class="grafico-svg-caixa" role="img" aria-label="Faturamento dos últimos 12 meses"></div>
           <p id="detalhe-meses" class="detalhe-grafico"></p>
           <p id="vazio-meses" class="vazio" hidden>Sem faturamento mensal ainda.</p>
+        </section>
+      </section>
+
+      <!-- Aba Período -->
+      <section id="aba-periodo" class="aba" role="tabpanel" aria-labelledby="tab-periodo" hidden>
+        <div class="filtros filtros-quebra" role="group" aria-label="Atalhos de período">
+          <button type="button" class="filtro" data-atalho="hoje" id="atalho-hoje">Hoje</button>
+          <button type="button" class="filtro" data-atalho="ontem" id="atalho-ontem">Ontem</button>
+          <button type="button" class="filtro" data-atalho="7d" id="atalho-7d">7 dias</button>
+          <button type="button" class="filtro ativa" data-atalho="mes" id="atalho-mes">Este mês</button>
+          <button type="button" class="filtro" data-atalho="mes-passado" id="atalho-mes-passado">Mês passado</button>
+        </div>
+        <div class="linha-dia">
+          <label for="periodo-de">De</label>
+          <input id="periodo-de" type="date" aria-label="Data inicial">
+          <label for="periodo-ate">até</label>
+          <input id="periodo-ate" type="date" aria-label="Data final">
+          <button type="button" id="botao-periodo" class="botao-secundario">Ver</button>
+        </div>
+        <p id="nota-periodo" class="legenda" hidden></p>
+        <div class="grade-cartoes">
+          <article class="cartao destaque">
+            <span class="rotulo">Faturamento</span>
+            <strong id="per-faturamento" class="valor-grande">R$ 0,00</strong>
+          </article>
+          <article class="cartao">
+            <span class="rotulo">Vendas</span>
+            <strong id="per-quantidade" class="valor-grande">0</strong>
+          </article>
+          <article class="cartao">
+            <span class="rotulo">Ticket médio</span>
+            <strong id="per-ticket" class="valor-grande">R$ 0,00</strong>
+          </article>
+          <article class="cartao">
+            <span class="rotulo">Taxa de serviço</span>
+            <strong id="per-servico" class="valor-grande">R$ 0,00</strong>
+          </article>
+        </div>
+        <section class="bloco">
+          <h2>Por dia</h2>
+          <div id="grafico-periodo" class="grafico-svg-caixa" role="img" aria-label="Faturamento por dia no período"></div>
+          <p id="detalhe-periodo" class="detalhe-grafico"></p>
+          <p id="vazio-periodo" class="vazio" hidden>Nenhuma venda neste período.</p>
+        </section>
+        <section class="bloco">
+          <h2>Formas de pagamento</h2>
+          <ul id="lista-formas-periodo" class="lista"></ul>
+          <p id="vazio-formas-periodo" class="vazio" hidden>Nenhum pagamento neste período.</p>
+        </section>
+        <section class="bloco">
+          <h2>Totais por mês</h2>
+          <table class="tabela-meses">
+            <thead>
+              <tr><th>Mês</th><th>Vendas</th><th>Serviço</th><th>Faturamento</th></tr>
+            </thead>
+            <tbody id="corpo-meses-periodo"></tbody>
+          </table>
+          <p id="vazio-meses-periodo" class="vazio" hidden>Sem meses neste período.</p>
         </section>
       </section>
 
@@ -202,7 +318,7 @@
       <!-- Aba Comandas abertas e comissões -->
       <section id="aba-abertas" class="aba" role="tabpanel" aria-labelledby="tab-abertas" hidden>
         <section class="bloco">
-          <h2>Comandas abertas</h2>
+          <h2>Mesas e comandas</h2>
           <p id="nota-comandas" class="legenda" hidden></p>
           <div class="grade-cartoes">
             <article class="cartao destaque">
@@ -213,7 +329,7 @@
               <span class="rotulo">A receber</span>
               <strong id="comandas-devido" class="valor-grande">R$ 0,00</strong>
             </article>
-            <article class="cartao">
+            <article class="cartao" id="cartao-garotas">
               <span class="rotulo">Comissão lançada</span>
               <strong id="comandas-garotas" class="valor-grande">0</strong>
             </article>
@@ -222,7 +338,14 @@
           <p id="vazio-comandas" class="vazio" hidden>Nenhuma comanda aberta.</p>
         </section>
 
-        <section class="bloco">
+        <section class="bloco" id="bloco-garcons">
+          <h2>Garçons</h2>
+          <p id="nota-garcons" class="legenda" hidden></p>
+          <ol id="lista-garcons" class="lista lista-produtos"></ol>
+          <p id="vazio-garcons" class="vazio" hidden>Nenhuma mesa fechada com garçom neste dia.</p>
+        </section>
+
+        <section class="bloco" id="bloco-comissoes">
           <h2>Comissões das garotas</h2>
           <div class="filtros" role="group" aria-label="Período das comissões">
             <button type="button" class="filtro ativa" data-grupo="comissoes" data-periodo="hoje">Hoje</button>
@@ -254,6 +377,35 @@
           <p class="legenda"><span class="ponto natural"></span> Natural <span class="ponto gelada"></span> Gelada</p>
           <ol id="lista-produtos" class="lista lista-produtos"></ol>
           <p id="vazio-produtos" class="vazio" hidden>Nenhum produto vendido neste dia.</p>
+        </section>
+
+        <section class="bloco" id="bloco-grupos">
+          <h2>Por grupo</h2>
+          <p id="nota-grupos" class="legenda" hidden></p>
+          <ul id="lista-grupos" class="lista"></ul>
+          <p id="vazio-grupos" class="vazio" hidden>Sem grupos neste período.</p>
+        </section>
+
+        <section class="bloco" id="bloco-setores">
+          <h2>Por setor</h2>
+          <p id="nota-setores" class="legenda" hidden></p>
+          <ul id="lista-setores" class="lista"></ul>
+          <p id="vazio-setores" class="vazio" hidden>Sem setor neste período.</p>
+        </section>
+
+        <section class="bloco" id="bloco-margem">
+          <h2>Custo e margem</h2>
+          <p id="nota-margem" class="legenda" hidden></p>
+          <div class="grade-cartoes">
+            <article class="cartao">
+              <span class="rotulo">CMV</span>
+              <strong id="cmv-dia" class="valor-grande">R$ 0,00</strong>
+            </article>
+            <article class="cartao">
+              <span class="rotulo">Margem dos itens</span>
+              <strong id="margem-dia" class="valor-grande">R$ 0,00</strong>
+            </article>
+          </div>
         </section>
 
         <section class="bloco">
@@ -299,11 +451,14 @@
       <button type="button" role="tab" id="tab-hoje" class="aba-botao ativa" data-aba="hoje" aria-selected="true" aria-controls="aba-hoje">
         <span class="icone" aria-hidden="true">&#x1F4CA;</span>Hoje
       </button>
+      <button type="button" role="tab" id="tab-periodo" class="aba-botao" data-aba="periodo" aria-selected="false" aria-controls="aba-periodo">
+        <span class="icone" aria-hidden="true">&#x1F4C5;</span>Período
+      </button>
       <button type="button" role="tab" id="tab-caixa" class="aba-botao" data-aba="caixa" aria-selected="false" aria-controls="aba-caixa">
         <span class="icone" aria-hidden="true">&#x1F4B5;</span>Caixa
       </button>
       <button type="button" role="tab" id="tab-abertas" class="aba-botao" data-aba="abertas" aria-selected="false" aria-controls="aba-abertas">
-        <span class="icone" aria-hidden="true">&#x1F4CB;</span>Abertas
+        <span class="icone" aria-hidden="true">&#x1F4CB;</span>Salão
       </button>
       <button type="button" role="tab" id="tab-produtos" class="aba-botao" data-aba="produtos" aria-selected="false" aria-controls="aba-produtos">
         <span class="icone" aria-hidden="true">&#x1F37A;</span>

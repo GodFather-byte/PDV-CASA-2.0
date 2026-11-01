@@ -534,12 +534,20 @@ def _comandas_publicas(dados: dict) -> list[dict] | None:
     for item in bruto[:80]:
         if not isinstance(item, dict):
             continue
+        itens = []
+        for i in (item.get("itens") or [])[:8]:
+            if isinstance(i, dict):
+                itens.append({"nome": _txt(i.get("nome"), 60), "quantidade": i.get("quantidade"),
+                              "total_cent": _int(i.get("total_cent"))})
         saida.append({
             "numero": _int(item.get("numero")), "rotulo": _txt(item.get("rotulo"), 40),
             "devido_cent": _int(item.get("devido_cent")), "total_cent": _int(item.get("total_cent")),
             "pago_cent": _int(item.get("pago_cent")), "aberta_em": _txt(item.get("aberta_em"), 19),
             "aberta_txt": _txt(item.get("aberta_txt"), 20), "garota": bool(item.get("garota")),
             "situacao": _txt(item.get("situacao"), 20),
+            # Sem a chave, o retrato antigo só tinha comanda (a mesa não subia).
+            "comanda": True if "comanda" not in item else bool(item.get("comanda")),
+            "garcom": _txt(item.get("garcom"), 40), "pessoas": _int(item.get("pessoas")), "itens": itens,
         })
     return saida
 
@@ -620,6 +628,243 @@ def _meses_publicos(dados: dict) -> list[dict] | None:
     return saida
 
 
+def _modulos_publicos(dados: dict) -> dict | None:
+    bruto = dados.get("modulos")
+    if not isinstance(bruto, dict) or "usar_mesas" not in bruto:
+        return None
+    try:
+        servico = float(bruto.get("servico_pct") or 0)
+        comissao = float(bruto.get("comissao_garcom_pct") or 0)
+    except (TypeError, ValueError):
+        servico = comissao = 0.0
+    return {
+        "usar_mesas": bool(bruto.get("usar_mesas")),
+        "usar_garotas": bool(bruto.get("usar_garotas")),
+        "usar_portaria": bool(bruto.get("usar_portaria")),
+        "usar_cozinha_bar": bool(bruto.get("usar_cozinha_bar")),
+        "servico_pct": servico, "comissao_garcom_pct": comissao,
+    }
+
+
+def perfil_do_painel(modulos: dict | None, comandas: list[dict], comissoes: dict | None) -> dict:
+    """O que a tela mostra. Sem o flag, garota só aparece se o retrato tiver comissão de verdade
+    (um bar antigo não ganha uma seção vazia de boate). Portaria não tem bloco no painel."""
+    linhas = (comissoes or {}).get("linhas") or []
+    tem_garota = any(c.get("garota") for c in comandas) or bool(linhas)
+    if isinstance(modulos, dict):
+        return {"conhecido": True, "mostrar_garotas": bool(modulos.get("usar_garotas")),
+                "mostrar_portaria": bool(modulos.get("usar_portaria")),
+                "mostrar_salao": bool(modulos.get("usar_mesas")), "modulos": modulos}
+    return {"conhecido": False, "mostrar_garotas": tem_garota, "mostrar_portaria": False,
+            "mostrar_salao": True, "modulos": {}}
+
+
+def _minutos_entre(inicio, fim) -> int | None:
+    try:
+        a = datetime.strptime(str(inicio)[:19], "%Y-%m-%d %H:%M:%S")
+        b = datetime.strptime(str(fim)[:19], "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return None
+    return max(int((b - a).total_seconds() // 60), 0)
+
+
+def _consumo_da_venda(v: dict) -> int:
+    if "subtotal_cent" in v:
+        return max(_int(v.get("subtotal_cent")) - _int(v.get("desconto_cent")), 0)
+    return max(_int(v.get("total_cent")) - _int(v.get("servico_cent")), 0)
+
+
+def indicadores_bar(vendas: list[dict], pct_comissao: float = 0) -> dict:
+    """Serviço, mesa, garçom, setor, grupo, CMV, cancelamento e desconto. Campos ausentes não inventam zero de custo."""
+    from src.core import formatacao as fmt
+    fechadas = [v for v in vendas if v.get("status") == "fechada"]
+    canceladas = [v for v in vendas if v.get("status") == "cancelada"]
+    servico = sum(_int(v.get("servico_cent")) for v in fechadas)
+    tem_servico = any("servico_cent" in v for v in fechadas)
+    mesas = [v for v in fechadas if v.get("modalidade") == "mesa"]
+    pessoas = sum(_int(v.get("pessoas")) for v in mesas if _int(v.get("pessoas")) > 0)
+    tempos = [m for m in (_minutos_entre(v.get("aberta_em"), v.get("fechada_em")) for v in mesas) if m is not None]
+    garcons: dict[str, dict] = {}
+    tem_garcom = any("garcom" in v for v in mesas)
+    setores: dict[str, dict] = {}
+    grupos: dict[str, dict] = {}
+    cmv = 0
+    tem_custo = False
+    tem_setor = False
+    tem_grupo = False
+    for v in fechadas:
+        for i in v.get("itens") or []:
+            if not isinstance(i, dict) or _int(i.get("cancelado")):
+                continue
+            qtd = float(i.get("quantidade") or 0)
+            valor = _int(i.get("total_cent"))
+            if "grupo" in i:
+                tem_grupo = True
+                g = grupos.setdefault(str(i.get("grupo") or "Sem grupo"), {"nome": str(i.get("grupo") or "Sem grupo"),
+                                                                            "valor_cent": 0, "quantidade": 0.0})
+                g["valor_cent"] += valor
+                g["quantidade"] += qtd
+            if "setor" in i:
+                tem_setor = True
+                nome = str(i.get("setor") or "").strip() or "Sem setor"
+                s = setores.setdefault(nome, {"nome": nome, "valor_cent": 0, "quantidade": 0.0})
+                s["valor_cent"] += valor
+                s["quantidade"] += qtd
+            if "custo_unit_cent" in i:
+                tem_custo = True
+                cmv += int(round(qtd * _int(i.get("custo_unit_cent"))))
+    for v in mesas:
+        nome = str(v.get("garcom") or "").strip() or "Sem garçom"
+        g = garcons.setdefault(nome, {"nome": nome, "vendas": 0, "consumo_cent": 0, "servico_cent": 0, "comissao_cent": 0})
+        g["vendas"] += 1
+        consumo = _consumo_da_venda(v)
+        g["consumo_cent"] += consumo
+        g["servico_cent"] += _int(v.get("servico_cent"))
+        dos_itens = sum(_int(i.get("comissao_cent")) for i in (v.get("itens") or [])
+                        if isinstance(i, dict) and not _int(i.get("cancelado")) and "comissao_cent" in i)
+        g["comissao_cent"] += fmt.pct_de(consumo, pct_comissao) if pct_comissao else dos_itens
+    faturamento_mesas = sum(_int(v.get("total_cent")) for v in mesas)
+    return {
+        "servico_cent": servico, "servico_sincronizado": tem_servico,
+        "consumo_cent": sum(_consumo_da_venda(v) for v in fechadas),
+        "mesas": {"quantidade": len(mesas),
+                  "ticket_medio_cent": round(faturamento_mesas / len(mesas)) if mesas else 0,
+                  "pessoas": pessoas,
+                  "ticket_pessoa_cent": round(faturamento_mesas / pessoas) if pessoas else 0,
+                  "permanencia_min": round(sum(tempos) / len(tempos)) if tempos else 0},
+        "garcons": sorted(garcons.values(), key=lambda g: (-g["consumo_cent"], g["nome"])),
+        "garcons_sincronizados": tem_garcom,
+        "setores": sorted(setores.values(), key=lambda s: -s["valor_cent"]),
+        "setores_sincronizados": tem_setor,
+        "grupos": sorted(grupos.values(), key=lambda g: -g["valor_cent"]),
+        "grupos_sincronizados": tem_grupo,
+        "cmv_cent": cmv, "cmv_sincronizado": tem_custo,
+        "margem_cent": sum(_int(i.get("total_cent")) for v in fechadas for i in (v.get("itens") or [])
+                           if isinstance(i, dict) and not _int(i.get("cancelado"))) - cmv if tem_custo else 0,
+        "cancelamentos": [{"cupom": v.get("cupom"), "total_cent": _int(v.get("total_cent")),
+                           "motivo": _txt(v.get("motivo_cancelamento"), 120),
+                           "operador": _txt(v.get("cancelada_por") or v.get("operador"), 40),
+                           "hora": _txt(v.get("fechada_em"), 19)} for v in canceladas[:20]],
+        "descontos": [{"cupom": v.get("cupom"), "desconto_cent": _int(v.get("desconto_cent")),
+                       "total_cent": _int(v.get("total_cent")), "operador": _txt(v.get("operador"), 40),
+                       "rotulo": _txt(v.get("posicao_rotulo"), 40)}
+                      for v in fechadas if _int(v.get("desconto_cent")) > 0][:20],
+    }
+
+
+def faixa_mes_ate(ate: date) -> tuple[date, date, date, date]:
+    """Do dia 1 até `ate`, e o mesmo tanto de dias no mês anterior (31/03 compara com 28/02)."""
+    inicio = ate.replace(day=1)
+    if ate.month == 1:
+        ano, mes = ate.year - 1, 12
+    else:
+        ano, mes = ate.year, ate.month - 1
+    primeiro_depois = date(ano + (mes == 12), 1 if mes == 12 else mes + 1, 1)
+    ultimo = primeiro_depois - timedelta(days=1)
+    return inicio, ate, date(ano, mes, 1), date(ano, mes, min(ate.day, ultimo.day))
+
+
+def agregar_periodo(linhas) -> dict:
+    """Totais, formas, dias e meses a partir das linhas (dia, status, total_cent, dados)."""
+    formas: dict[str, int] = defaultdict(int)
+    por_dia: dict[str, dict] = {}
+    por_mes: dict[str, dict] = {}
+    faturamento = quantidade = servico = 0
+    tem_servico = False
+    for dia, status, total, dados in linhas:
+        if status != "fechada":
+            continue
+        try:
+            v = json.loads(dados) if isinstance(dados, str) else {}
+        except (TypeError, ValueError):
+            v = {}
+        if not isinstance(v, dict):
+            v = {}
+        valor = _int(total)
+        faturamento += valor
+        quantidade += 1
+        if "servico_cent" in v:
+            tem_servico = True
+            servico += _int(v.get("servico_cent"))
+        for p in v.get("pagamentos") or []:
+            if isinstance(p, dict):
+                formas[str(p.get("tipo") or "?")] += _int(p.get("valor_cent")) - _int(p.get("troco_cent"))
+        dia_txt = str(dia)
+        bloco = por_dia.setdefault(dia_txt, {"dia": dia_txt, "faturamento_cent": 0, "quantidade": 0})
+        bloco["faturamento_cent"] += valor
+        bloco["quantidade"] += 1
+        mes = dia_txt[:7]
+        acumulado = por_mes.setdefault(mes, {"mes": mes, "faturamento_cent": 0, "quantidade": 0, "servico_cent": 0})
+        acumulado["faturamento_cent"] += valor
+        acumulado["quantidade"] += 1
+        if "servico_cent" in v:
+            acumulado["servico_cent"] += _int(v.get("servico_cent"))
+    return {
+        "faturamento_cent": faturamento, "quantidade": quantidade,
+        "ticket_medio_cent": round(faturamento / quantidade) if quantidade else 0,
+        "servico_cent": servico, "servico_sincronizado": tem_servico,
+        "formas": [{"tipo": t, "valor_cent": val} for t, val in sorted(formas.items(), key=lambda kv: -kv[1])],
+        "por_dia": por_dia, "meses": [por_mes[k] for k in sorted(por_mes)],
+    }
+
+
+def _linhas_do_periodo(db: Session, chave_loja: str, de: str, ate: str):
+    return (db.query(PainelVenda.dia, PainelVenda.status, PainelVenda.total_cent, PainelVenda.dados)
+            .filter(PainelVenda.chave_loja == chave_loja, PainelVenda.dia >= de, PainelVenda.dia <= ate).all())
+
+
+def relatorio_periodo(db: Session, chave_loja: str, de: date, ate: date) -> dict:
+    """Um intervalo fechado, com os dias vazios no gráfico e um total por mês."""
+    agregado = agregar_periodo(_linhas_do_periodo(db, chave_loja, de.isoformat(), ate.isoformat()))
+    dias = []
+    cursor = de
+    while cursor <= ate:
+        iso = cursor.isoformat()
+        dias.append(agregado["por_dia"].get(iso, {"dia": iso, "faturamento_cent": 0, "quantidade": 0}))
+        cursor += timedelta(days=1)
+    return {
+        "de": de.isoformat(), "ate": ate.isoformat(),
+        "faturamento_cent": agregado["faturamento_cent"], "quantidade": agregado["quantidade"],
+        "ticket_medio_cent": agregado["ticket_medio_cent"],
+        "servico_cent": agregado["servico_cent"], "servico_sincronizado": agregado["servico_sincronizado"],
+        "formas": agregado["formas"], "dias": dias, "meses": agregado["meses"],
+        "parcial": de.isoformat() < _corte_das_vendas(),
+    }
+
+
+def faturamento_do_mes(db: Session, chave_loja: str, ate: date) -> dict:
+    """Do dia 1 até `ate`, comparado com o mesmo período do mês anterior."""
+    inicio, fim, inicio_ant, fim_ant = faixa_mes_ate(ate)
+    atual = agregar_periodo(_linhas_do_periodo(db, chave_loja, inicio.isoformat(), fim.isoformat()))
+    anterior = agregar_periodo(_linhas_do_periodo(db, chave_loja, inicio_ant.isoformat(), fim_ant.isoformat()))
+    return {
+        "de": inicio.isoformat(), "ate": fim.isoformat(),
+        "faturamento_cent": atual["faturamento_cent"], "quantidade": atual["quantidade"],
+        "anterior": {"de": inicio_ant.isoformat(), "ate": fim_ant.isoformat(),
+                     "faturamento_cent": anterior["faturamento_cent"], "quantidade": anterior["quantidade"]},
+        "variacao_cent": atual["faturamento_cent"] - anterior["faturamento_cent"],
+        "parcial": inicio_ant.isoformat() < _corte_das_vendas(),
+    }
+
+
+def _servico_entre(db: Session, chave_loja: str, inicio: str, fim: str) -> tuple[int, bool]:
+    """Soma a taxa de serviço das vendas fechadas no intervalo. O segundo valor diz se o caixa mandou o campo."""
+    linhas = (db.query(PainelVenda.dados).filter(
+        PainelVenda.chave_loja == chave_loja, PainelVenda.status == "fechada",
+        PainelVenda.dia >= inicio, PainelVenda.dia <= fim).all())
+    total = 0
+    tem = False
+    for (dados,) in linhas:
+        try:
+            v = json.loads(dados)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(v, dict) and "servico_cent" in v:
+            tem = True
+            total += _int(v.get("servico_cent"))
+    return total, tem
+
+
 def _com_origem(itens: list[dict], origem: str) -> list[dict]:
     if not origem:
         return itens
@@ -635,6 +880,8 @@ def _gestao_dos_retratos(pares: list[tuple], ultimo: date) -> dict:
     pendente = 0
     com_comandas = com_movimento = com_meses = 0
     somas: dict[str, dict] = defaultdict(lambda: {"faturamento_cent": 0, "quantidade": 0})
+    modulos_fonte = [(linha, dados) for linha, dados in pares if _modulos_publicos(dados)]
+    modulos = _modulos_publicos(max(modulos_fonte, key=lambda p: p[0].recebido_em)[1]) if modulos_fonte else None
     for linha, dados in pares:
         origem = _rotulo_do_caixa(linha, dados) if varios else ""
         lista = _comandas_publicas(dados)
@@ -670,6 +917,8 @@ def _gestao_dos_retratos(pares: list[tuple], ultimo: date) -> dict:
         "faturamento_meses": _grade_meses(ultimo, somas) if com_meses else None,
         "meses_origem": "caixa" if com_meses else "nuvem",
         "meses_parcial": not (com_meses and com_meses == n and n > 0),
+        "modulos": modulos,
+        "perfil": perfil_do_painel(modulos, comandas, {"linhas": linhas}),
     }
 
 
@@ -887,6 +1136,23 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         gestao = _gestao_dos_retratos(pares, dia_op)
         if gestao["faturamento_meses"] is None:
             gestao["faturamento_meses"] = _meses_das_vendas(db, loja.chave_loja, dia_op)
+        pct = (gestao.get("modulos") or {}).get("comissao_garcom_pct") or 0
+        bar = indicadores_bar(_vendas_do_dia(db, loja.chave_loja, dia), pct)
+        try:
+            anterior = (date.fromisoformat(str(dia)[:10]) - timedelta(days=7)).isoformat()
+        except ValueError:
+            anterior = None
+        if anterior:
+            antes = resumo_do_dia(_vendas_do_dia(db, loja.chave_loja, anterior))
+            bar["semana_anterior"] = {"dia": anterior, "faturamento_cent": antes["vendas"]["faturamento_cent"],
+                                      "quantidade": antes["vendas"]["quantidade"], "por_hora": antes["por_hora"]}
+        else:
+            bar["semana_anterior"] = None
+        inicio_mes = str(dia)[:7] + "-01" if DIA_RE.fullmatch(str(dia)[:10]) else dia
+        bar["servico_mes_cent"], bar["servico_mes_sincronizado"] = _servico_entre(
+            db, loja.chave_loja, inicio_mes, str(dia)[:10])
+        r["bar"] = bar
+        r["mes"] = faturamento_do_mes(db, loja.chave_loja, dia_op)
         r.update({
             "loja": {"chave": loja.chave_loja, "nome": retrato.get("loja_nome") or loja.nome},
             "dia": dia, "dia_operacional": dia_op.isoformat(),
@@ -897,6 +1163,19 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             **gestao,
         })
         return r
+
+    @router.get("/v1/painel/periodo")
+    def periodo(de: str = Query(..., max_length=10), ate: str = Query(..., max_length=10),
+                sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
+        """Relatório de um intervalo. Serve boate, bar e adega: só vendas fechadas já na nuvem."""
+        inicio, fim = _data_segura(de, None), _data_segura(ate, None)
+        if inicio is None or fim is None or str(de)[:10] != inicio.isoformat() or str(ate)[:10] != fim.isoformat():
+            raise HTTPException(status_code=422, detail="Informe as datas como AAAA-MM-DD.")
+        if fim < inicio:
+            raise HTTPException(status_code=422, detail="A data final é anterior à inicial.")
+        if (fim - inicio).days > 400:
+            raise HTTPException(status_code=422, detail="O intervalo pode ter no máximo 400 dias.")
+        return relatorio_periodo(db, sessao.chave_loja, inicio, fim)
 
     @router.get("/v1/painel/produtos")
     def produtos(periodo: str = Query("hoje"), sessao: PainelSessao = Depends(sessao_ativa),
