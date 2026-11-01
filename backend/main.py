@@ -26,7 +26,7 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
 from sqlalchemy import Boolean, Column, Integer, String
 from sqlalchemy.orm import Session
 
@@ -183,6 +183,41 @@ def admin_operacao_cobrancas(acesso: Acesso = Depends(autenticar), db: Session =
     if not acesso.admin:
         raise HTTPException(status_code=403, detail="Só o administrador vê a operação de cobrança.")
     return cobranca.estado(db)
+
+
+def _erro_cobranca(erro: cobranca.ErroCobranca) -> HTTPException:
+    codigo = 404 if str(erro).startswith("Loja não encontrada") else 422
+    return HTTPException(status_code=codigo, detail=str(erro))
+
+
+@app.post("/v1/admin/cobrancas/assinatura")
+def admin_assinatura(dados: dict = Body(...), acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db)):
+    """Cadastra a mensalidade recorrente. Exige o token do administrador (PDV_API_TOKEN)."""
+    if not acesso.admin:
+        raise HTTPException(status_code=403, detail="Só o administrador cadastra assinatura.")
+    try:
+        situacao = cobranca.definir_assinatura_de_pedido(db, dados)
+        chave = str(dados.get("chave_loja") or "").strip()
+        emitidas = cobranca.gerar_recorrencias(db, chave=chave)
+        plano = db.query(cobranca.Plano).filter_by(chave_loja=chave).one()
+    except cobranca.ErroCobranca as erro:
+        db.rollback()
+        raise _erro_cobranca(erro) from None
+    return {"situacao": situacao, "emitidas": emitidas, **cobranca.resumo_assinatura(plano)}
+
+
+@app.post("/v1/admin/cobrancas/reenviar")
+def admin_reenviar(dados: dict = Body(...), acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db)):
+    if not acesso.admin:
+        raise HTTPException(status_code=403, detail="Só o administrador reenvia cobrança.")
+    chave = dados.get("chave_loja") if isinstance(dados, dict) else None
+    if not isinstance(chave, str) or not chave.strip():
+        raise HTTPException(status_code=422, detail="Informe chave_loja.")
+    try:
+        return cobranca.reenviar(db, chave.strip())
+    except cobranca.ErroCobranca as erro:
+        db.rollback()
+        raise _erro_cobranca(erro) from None
 
 
 @app.get("/v1/saude")

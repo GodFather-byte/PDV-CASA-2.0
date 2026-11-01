@@ -18,7 +18,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `python -m tools.gerar_licenca` | Licenças pela linha de comando (`novo-par`, `emitir`, `ver`) |
 | `python -m uvicorn backend.main:app` | API da nuvem |
 | `python -m backend.lojas` / `backend.atualizacoes` | Lojas, assinatura e versões na nuvem |
-| `python -m backend.lojas cobranca` | Plano, Pix/Checkout Pro e conciliação da mensalidade no Mercado Pago |
+| `python -m backend.lojas cobranca` | Assinatura mensal, boleto/Pix, reenvio e conciliação no Mercado Pago |
 | `python -m backend.lojas painel LOJA [senha]` | Senha do painel do dono no celular (app em `/painel/` da nuvem); o dono também a troca no PDV (Configurações > Nuvem) |
 | `python -m backend.lojas limpar-painel` | Apaga já o que passou da retenção do painel (vendas > 120 dias, sessões vencidas, caixas parados); a nuvem também faz sozinha |
 | `python -m tools.gerar_icones_painel` | Ícones PNG da PWA do painel (só biblioteca padrão) |

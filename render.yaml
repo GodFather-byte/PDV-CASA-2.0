@@ -27,3 +27,19 @@ services:
         sync: false
       - key: MP_WEBHOOK_SECRET       # Assinatura secreta de Suas integrações > Webhooks. Não commitar.
         sync: false
+      - key: MP_BOLETO_METODO        # opcional; padrão bolbradesco. Outro código de boleto da conta, se o painel exigir.
+        value: bolbradesco
+      - key: SMTP_HOST               # ex.: smtp.gmail.com. Vazio = não envia e-mail.
+        sync: false
+      - key: SMTP_PORT               # 587 (STARTTLS) ou 465 (SSL).
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD           # no Gmail, senha de app. Não commitar.
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: WHATSAPP_API_URL        # https do bot. Vazio = o painel mostra um link wa.me.
+        sync: false
+      - key: WHATSAPP_API_TOKEN
+        sync: false

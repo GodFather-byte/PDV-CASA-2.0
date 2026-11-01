@@ -18,7 +18,11 @@ abaixo são marcadores.
    `https://SEU-SERVICO.onrender.com/v1/webhooks/mercadopago`.
 5. O mesmo `MP_ACCESS_TOKEN` no terminal em que você roda `python -m backend.lojas cobranca`,
    junto com `PDV_NUVEM_DB_URL` do Neon. É esse comando que gera o Pix.
-6. Apague `ASAAS_AMBIENTE`, `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN` se ainda existirem
+6. Para o e-mail da cobrança: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` e
+   `SMTP_FROM`. No Gmail, host `smtp.gmail.com`, porta `587` e uma senha de app.
+7. Se o bot de WhatsApp já está no ar: `WHATSAPP_API_URL` (https) e `WHATSAPP_API_TOKEN`.
+   Sem os dois, a nuvem não envia mensagem; ela mostra um link `wa.me`.
+8. Apague `ASAAS_AMBIENTE`, `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN` se ainda existirem
    no painel. Não há mais worker (`backend.worker_asaas` foi removido).
 
 O caixa continua só com a URL da nuvem, a chave da loja e o token da loja.
@@ -86,6 +90,9 @@ preço da licença. A nuvem em si continua no desenho do [NUVEM.md](NUVEM.md)
 | --- | --- | --- |
 | `MP_ACCESS_TOKEN` | Servidor e o terminal em que você gera a cobrança | Chamar a API |
 | `MP_WEBHOOK_SECRET` | Servidor, igual à assinatura secreta do painel | Validar `x-signature` |
+| `MP_BOLETO_METODO` | Servidor, opcional | Código do boleto; padrão `bolbradesco` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Servidor | E-mail da cobrança. No Gmail, `smtp.gmail.com`, porta `587` e senha de app |
+| `WHATSAPP_API_URL`, `WHATSAPP_API_TOKEN` | Servidor, opcional | Bot que já recebe um POST. Sem os dois, fica o link `wa.me` |
 | `PDV_NUVEM_DB_URL` | Servidor e o mesmo terminal | PostgreSQL (Neon) |
 | `PDV_API_TOKEN` | Só você | Lista de lojas e `/v1/admin/cobrancas/operacao` |
 | `PDV_LICENCA_CHAVE` | Servidor | Emitir a licença assinada (a chave que já existe) |
@@ -127,6 +134,85 @@ $env:MP_ACCESS_TOKEN = "COLE_FORA_DO_HISTORICO"
 ```
 
 O `MP_WEBHOOK_SECRET` só precisa estar no servidor que recebe o webhook.
+
+## Assinatura mensal (boleto + Pix)
+
+Cada loja pode ter uma recorrência: valor em centavos, dia do mês (1 a 31; em
+mês curto vale o último dia) e os contatos do responsável (e-mail e WhatsApp
+`+55`). A varredura que já roda dentro da API gera a cobrança **5 dias antes**
+do vencimento (dá para mudar com `--antecedencia`). Se o Render grátis estava
+dormindo, ela ainda gera até 20 dias depois do vencimento, na primeira vez que
+o processo acordar. O webhook que já existe renova a licença quando o boleto ou
+o Pix fica `approved`.
+
+O boleto do Mercado Pago exige, além do e-mail:
+
+| Campo | Exemplo de formato |
+| --- | --- |
+| Nome completo | Nome e sobrenome |
+| CPF ou CNPJ | com ou sem pontuação; o dígito é conferido |
+| CEP | 8 dígitos |
+| Logradouro, número, bairro, cidade | texto |
+| UF | duas letras |
+
+O padrão do meio é `bolbradesco`. Se a sua conta usar outro código de boleto,
+defina `MP_BOLETO_METODO` (por exemplo `pec`). O Pix da mesma cobrança continua
+sendo criado. O link de cartão (Checkout Pro) deixa de oferecer boleto e Pix,
+para não haver duas vias do mesmo mês.
+
+A loja precisa existir antes (`python -m backend.lojas criar CHAVE "Nome"`).
+Não grave e-mail, telefone nem CPF no código: passe no comando ou no `curl`.
+
+```powershell
+python -m backend.lojas cobranca assinatura LOJA-CENTRO 24999 10 --email financeiro@exemplo.com --whatsapp "+55 11 98888-7777" --nome "Maria Silva" --documento 52998224725 --cep 01310100 --logradouro "Avenida Paulista" --numero 1000 --bairro "Bela Vista" --cidade "São Paulo" --uf SP
+python -m backend.lojas cobranca emitir LOJA-CENTRO
+python -m backend.lojas cobranca reenviar LOJA-CENTRO
+python -m backend.lojas cobranca assinatura-parar LOJA-CENTRO
+```
+
+`24999` são R$ 249,99. `emitir` gera na hora se a data de hoje já está na janela;
+senão não chama o Mercado Pago. `reenviar` manda de novo a cobrança atual.
+
+Pelo navegador, com o `PDV_API_TOKEN`, sem precisar do PC ligado no banco:
+
+```bash
+curl -X POST https://SEU-SERVICO.onrender.com/v1/admin/cobrancas/assinatura \
+  -H "Authorization: Bearer SEU_PDV_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"chave_loja\":\"LOJA-CENTRO\",\"valor_cent\":24999,\"dia_vencimento\":10,\"email\":\"financeiro@exemplo.com\",\"whatsapp\":\"+55 11 98888-7777\",\"nome\":\"Maria Silva\",\"documento\":\"52998224725\",\"cep\":\"01310100\",\"logradouro\":\"Avenida Paulista\",\"numero\":\"1000\",\"bairro\":\"Bela Vista\",\"cidade\":\"São Paulo\",\"uf\":\"SP\"}"
+```
+
+Para reenviar: `POST /v1/admin/cobrancas/reenviar` com `{"chave_loja":"LOJA-CENTRO"}`.
+O mesmo token. Token de loja recebe 403.
+
+### E-mail
+
+Com as cinco variáveis `SMTP_*` preenchidas, cada cobrança nova sai em texto
+simples: link do boleto (o PDF que o Mercado Pago devolve), linha digitável e
+Pix copia e cola. Porta `465` usa SSL; qualquer outra (no Gmail, `587`) usa
+STARTTLS. Senha de app do Gmail vai em `SMTP_PASSWORD`, nunca no git.
+Se o SMTP não estiver configurado, a cobrança fica gravada e o aviso marca
+`nao_configurado`. Depois de preencher o SMTP, rode `reenviar`.
+
+### WhatsApp
+
+Se `WHATSAPP_API_URL` (https) e `WHATSAPP_API_TOKEN` existirem, a nuvem faz:
+
+```http
+POST WHATSAPP_API_URL
+Authorization: Bearer WHATSAPP_API_TOKEN
+Content-Type: application/json
+
+{"to": "+5511988887777", "text": "Licença WillPDV — ...\nBoleto (PDF): ...\nLinha digitável: ...\nPix copia e cola:\n..."}
+```
+
+O bot que você já hospeda no Render precisa aceitar esse JSON. Se ele espera
+outro formato, coloque um adaptador na frente; a nuvem não fala o protocolo
+interno de um fornecedor específico.
+
+Sem essas variáveis, nada é postado. O comando, o `reenviar` e
+`GET /v1/admin/cobrancas/operacao` incluem um link `https://wa.me/55...?...`
+para você abrir e enviar na mão.
 
 ## Cadastrar a loja, o plano e a cobrança
 
@@ -310,7 +396,7 @@ quando trocar o token de teste pelo de produção.
 | Arquivo | Função |
 | --- | --- |
 | `backend/cobranca_mercadopago.py` | Plano, Pix, Checkout Pro, assinatura do webhook, renovação e varredura |
-| `backend/main.py` | `POST /v1/webhooks/mercadopago` e o resumo em `/v1/admin/cobrancas/operacao` |
+| `backend/main.py` | Webhook, `POST /v1/admin/cobrancas/assinatura`, `POST /v1/admin/cobrancas/reenviar` e o resumo em `/v1/admin/cobrancas/operacao` |
 | `backend/lojas.py` | `cobranca plano`, `gerar`, `listar`, `conciliar` |
 | `render.yaml` | `MP_ACCESS_TOKEN` e `MP_WEBHOOK_SECRET` sem valor no git |
 | `tests/test_cobrancas_mercadopago.py` | Testes sem conta real |
