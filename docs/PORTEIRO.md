@@ -26,10 +26,16 @@ não vai para o celular.
 ## No celular
 
 1. Digite o PIN. Sem ele, a página não informa comandas.
-2. Digite o número da comanda e toque em **Consultar**. Um leitor que digita o número e dá Enter
-   também serve. O botão **Mesa** consulta mesa (`M5`) em vez de comanda. A página tenta o caixa
-   na rede local primeiro. Se ele não responder, usa a nuvem sozinha. Embaixo do resultado aparece
-   de onde veio e a hora, por exemplo **No caixa · agora, no caixa** ou **Na nuvem · atualizado há 30s**.
+2. A primeira tela é a lista das **comandas abertas**: número, quanto ainda deve, total da conta
+   se for diferente, e a hora em que abriu. **Atualizar** busca de novo; a lista também se
+   atualiza sozinha a cada 20 segundos. Tocar numa comanda abre o detalhe.
+   Comanda de garota não entra nessa lista: é a que tem comissão lançada e ainda pendente
+   (o mesmo cartão rosa do caixa). Mesa também não entra aqui.
+3. **Consultar número** continua disponível para uma comanda ou mesa específica, inclusive a da
+   garota. Um leitor que digita o número e dá Enter também serve. O botão **Mesa** consulta mesa
+   (`M5`) em vez de comanda. A página tenta o caixa na rede local primeiro. Se ele não responder,
+   usa a nuvem sozinha. Embaixo do resultado aparece de onde veio e a hora, por exemplo
+   **No caixa · agora, no caixa** ou **Na nuvem · atualizado há 30s**.
 3. A resposta ocupa a tela:
    - **LIBERADA**, em verde: nada a cobrar (sem conta, conta paga, vazia ou já recebida).
    - **DEVENDO**, em vermelho: o valor que ainda falta, o que já foi recebido e a lista dos itens.

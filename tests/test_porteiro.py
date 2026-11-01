@@ -126,6 +126,34 @@ class TesteConsulta(BaseCaixa):
         self.assertEqual(self.caixa.obter(vid)["status"], "aberta")
         self.assertEqual(self._retrato(), antes)
 
+    def test_lista_omite_comanda_da_garota_e_a_consulta_do_numero_continua(self):
+        from src.controllers.comissao_controller import ComissaoController
+        from src.core import formatacao as fmt
+        from src.porteiro.consulta import listar_abertas, retrato
+        self.comanda(7)
+        self.comanda(12)
+        self.comanda(13)
+        self.caixa.abrir_mesa(5)
+        ComissaoController(self.banco).lancar(12, 5000, self.turno, self.adm)
+        self.banco.inserir("comissoes_garotas", {
+            "garota": 13, "valor_cent": 1000, "turno_id": self.turno, "operador_id": self.adm,
+            "criado_em": fmt.agora(), "status": "paga", "paga_em": fmt.agora()})
+        antes = self._retrato()
+        lista = listar_abertas(self.banco)
+        self.assertEqual([c["numero"] for c in lista["comandas"]], [7, 13])
+        self.assertTrue(lista["comandas"][0]["aberta_em"])
+        self.assertTrue(lista["comandas"][0]["aberta_txt"])
+        self.assertEqual(lista["fonte"], "caixa")
+        self.assertNotIn("itens", lista["comandas"][0])
+        marcas = {p["numero"]: p["garota"] for p in retrato(self.banco)["posicoes"]}
+        self.assertTrue(marcas[12])
+        self.assertFalse(marcas[7])
+        self.assertFalse(marcas[5])
+        vista = consultar(self.banco, "12")
+        self.assertEqual(vista["situacao"], "devendo")
+        self.assertTrue(vista["garota"])
+        self.assertEqual(self._retrato(), antes)
+
     def test_numero_invalido(self):
         with self.assertRaises(ErroNegocio):
             consultar(self.banco, "abc")
@@ -301,6 +329,8 @@ class TesteHttp(unittest.TestCase):
     def test_pin_sessao_consulta_e_somente_leitura(self):
         status, dados, _ = self.pedir("GET", "/porteiro/api/consulta?q=7")
         self.assertEqual(status, 401)
+        status, _, _ = self.pedir("GET", "/porteiro/api/abertas")
+        self.assertEqual(status, 401)
         for _ in range(4):
             status, dados, bruto = self.pedir("POST", "/porteiro/api/entrar", {"pin": "0000"})
             self.assertEqual(status, 401)
@@ -319,6 +349,9 @@ class TesteHttp(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(dados["situacao"], "devendo")
         self.assertEqual(dados["devido_cent"], 880)
+        status, lista, _ = self.pedir("GET", "/porteiro/api/abertas")
+        self.assertEqual(status, 200)
+        self.assertEqual([c["numero"] for c in lista["comandas"]], [7])
         self.assertNotIn("uuid", dados)
         self.assertNotIn("venda_id", dados)
         sem_cookie = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())

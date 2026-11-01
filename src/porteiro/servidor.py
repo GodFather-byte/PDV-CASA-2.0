@@ -199,6 +199,8 @@ class ServidorPorteiro:
             return self._config(cabecalhos)
         if caminho == "/porteiro/api/consulta" and metodo == "GET":
             return self._consulta(cabecalhos, partes.query)
+        if caminho == "/porteiro/api/abertas" and metodo == "GET":
+            return self._abertas(cabecalhos)
         if metodo in ("GET", "HEAD") and caminho.startswith("/porteiro/"):
             return _arquivo(caminho)
         if metodo not in ("GET", "POST", "HEAD"):
@@ -257,6 +259,16 @@ class ServidorPorteiro:
                 return _json(200, consultar(banco, texto))
             except ErroNegocio as exc:
                 return _json(400, {"erro": str(exc)})
+        finally:
+            banco.fechar()
+
+    def _abertas(self, cabecalhos):
+        if not self.sessoes.valida(_credencial(cabecalhos)):
+            return _json(401, {"erro": "Informe o PIN."})
+        from src.porteiro.consulta import listar_abertas
+        banco = self._abrir_banco()
+        try:
+            return _json(200, listar_abertas(banco))
         finally:
             banco.fechar()
 

@@ -101,5 +101,32 @@ class TestePorteiroNuvem(unittest.TestCase):
         pagina = self.http.get("/porteiro/")
         self.assertEqual(pagina.status_code, 200)
         self.assertIn("pt-BR", pagina.text)
+        self.assertIn("Comandas abertas", pagina.text)
+        self.assertIn("api/abertas", self.http.get("/porteiro/app.js").text)
         self.assertEqual(self.http.get("/porteiro/api/saude").json()["modo"], "nuvem")
         self.assertEqual(self.http.get("/porteiro").status_code, 200)
+
+    def test_lista_omite_garota_e_a_consulta_do_numero_continua(self):
+        garota = _posicao(12, 1500)
+        garota["garota"] = True
+        garota["aberta_txt"] = "31/10 21:40"
+        cliente = _posicao(7)
+        cliente["aberta_em"] = "2026-10-31 21:00:00"
+        cliente["aberta_txt"] = "31/10 21:00"
+        mesa = _posicao(5)
+        mesa["comanda"] = False
+        mesa["nome"] = "Mesa 5"
+        mesa["cabecalho"] = "Mesa 5"
+        self.assertEqual(self.http.get("/porteiro/api/abertas").status_code, 401)
+        self.assertEqual(self.http.post("/v1/porteiro/retrato",
+                                        json=_corpo([cliente, garota, mesa]), headers=cabecalho()).status_code, 200)
+        ok = self.http.post("/v1/porteiro/entrar", json={"chave": "LOJA-1", "pin": PIN})
+        dono = {"Authorization": "Bearer " + ok.json()["token"]}
+        lista = self.http.get("/porteiro/api/abertas", headers=dono)
+        self.assertEqual(lista.status_code, 200)
+        self.assertEqual([c["numero"] for c in lista.json()["comandas"]], [7])
+        self.assertEqual(lista.json()["comandas"][0]["aberta_txt"], "31/10 21:00")
+        self.assertEqual(lista.json()["fonte"], "nuvem")
+        consulta = self.http.get("/v1/porteiro/consulta", params={"q": "12"}, headers=dono)
+        self.assertEqual(consulta.json()["situacao"], "devendo")
+        self.assertTrue(consulta.json()["garota"])
