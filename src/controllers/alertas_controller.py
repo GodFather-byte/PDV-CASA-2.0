@@ -1,4 +1,4 @@
-"""Alertas operacionais da loja, para o painel do caixa e para o Telegram do dono.
+"""Alertas operacionais da loja, para o painel do caixa.
 
 Só LEITURA do banco local: nenhuma consulta daqui grava, envia, reprocessa fila ou faz rede. As regras são as que o PDV já
 usa em outras telas, sem limites novos inventados aqui:
@@ -6,12 +6,12 @@ usa em outras telas, sem limites novos inventados aqui:
     do Estoque;
   * mesas/comandas: as "paradas" do painel de mesas (`tempo_inatividade_min`, 0 desliga), só com o módulo de mesas ligado;
   * entregas em aberto (só com o delivery ligado), informativo, sem prazo arbitrário;
-  * filas: impressão (erro/falhando/aguardando), avisos do Telegram não entregues e vendas aguardando o painel na nuvem;
+  * filas: impressão (erro/falhando/aguardando) e vendas aguardando o painel na nuvem;
   * integrações iFood/NFC-e em preparação (informativo: continuam bloqueadas).
 Nenhum alerta traz valor em dinheiro, e nada daqui segue para a central do fornecedor.
 
 Permissões (revalidadas no banco a cada consulta da tela): a seção de estoque exige `rel_estoque`; a operacional
-(mesas, entregas, filas e integrações) exige `rel_informativos`. O Telegram do dono, já pareado, vê as duas.
+(mesas, entregas, filas e integrações) exige `rel_informativos`.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from src.core.erros import ErroNegocio, ErroPermissao
 NIVEIS = ("critico", "aviso", "info")
 ROTULO_NIVEL = {"critico": "Crítico", "aviso": "Atenção", "info": "Informativo"}
 CATEGORIAS = {"estoque": "Estoque", "mesas": "Mesas/comandas", "entregas": "Entregas", "impressao": "Impressão",
-              "telegram": "Telegram", "nuvem": "Painel na nuvem", "integracoes": "Integrações"}
+              "nuvem": "Painel na nuvem", "integracoes": "Integrações"}
 # seção do painel -> módulo de acesso exigido
 SECOES = {"estoque": "rel_estoque", "operacao": "rel_informativos"}
 TODAS = frozenset(SECOES)
@@ -37,7 +37,7 @@ class Alerta(TypedDict):
 
 
 def _qtd(q) -> str:
-    """2,000 -> '2'; 1,500 -> '1,5' (o mesmo formato do Telegram)."""
+    """2,000 -> '2'; 1,500 -> '1,5'."""
     return fmt.fmt_qtd(q).rstrip("0").rstrip(",")
 
 
@@ -102,15 +102,10 @@ class AlertasController:
         """Contagens das filas locais (sem o texto dos erros, que pode ter detalhe técnico)."""
         from src.controllers.fila_impressao_controller import FilaImpressao
         imp = FilaImpressao(self.banco).contagem()
-        tg = self.banco.um(
-            "SELECT COALESCE(SUM(status = 'pendente'), 0) AS pendentes, COALESCE(SUM(status = 'erro'), 0) AS erros "
-            "FROM telegram_fila")
         from src.sync import painel_envio
         nuvem_ligada = painel_envio.ligado(self.banco)
         return {
             "impressao": {"pendentes": imp["pendentes"], "falhando": imp["falhando"], "erros": imp["erros"]},
-            "telegram": {"ligado": self.banco.cfg_bool("telegram_ativo", False), "pendentes": tg["pendentes"],
-                         "erros": tg["erros"], "com_erro": bool(self.banco.cfg("telegram_erro").strip())},
             "nuvem": {"ligada": nuvem_ligada, "pendentes": painel_envio.pendentes(self.banco) if nuvem_ligada else 0,
                       "com_erro": nuvem_ligada and bool(self.banco.cfg(painel_envio.CHAVE_ULTIMO_ERRO).strip())},
         }
@@ -188,14 +183,6 @@ class AlertasController:
         elif imp["pendentes"]:
             lista.append(Alerta(categoria="impressao", nivel="info", titulo=f"{imp['pendentes']} documento(s) aguardando impressão",
                                 detalhe="Saem sozinhos assim que a impressora responder"))
-        tg = f["telegram"]
-        if tg["erros"]:
-            lista.append(Alerta(categoria="telegram", nivel="aviso", titulo=f"{tg['erros']} aviso(s) do Telegram não entregue(s)",
-                                detalhe="Ficaram velhos demais ou o celular recusou; confira Configurações > Telegram"))
-        if tg["ligado"] and tg["pendentes"]:
-            lista.append(Alerta(categoria="telegram", nivel="aviso" if tg["com_erro"] else "info",
-                                titulo=f"{tg['pendentes']} aviso(s) do Telegram na fila",
-                                detalhe="Sem conexão com o Telegram agora" if tg["com_erro"] else "Saem na próxima rodada de envio"))
         n = f["nuvem"]
         if n["ligada"] and n["com_erro"]:
             lista.append(Alerta(categoria="nuvem", nivel="aviso", titulo="Último envio ao painel na nuvem falhou",

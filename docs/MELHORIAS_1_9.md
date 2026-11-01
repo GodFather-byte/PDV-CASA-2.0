@@ -100,7 +100,7 @@ O horário é editável nas duas interfaces. Bot ligado, token e pareamento do d
 continuam obrigatórios; não se habilita um bot sem configuração.
 Se o PC estiver desligado, o envio pendente é recuperado quando o programa voltar;
 não existe serviço local funcionando com o PC desligado.
-Consulte a política de recuperação e os estados em [Telegram](TELEGRAM.md).
+Consulte a política de recuperação nos guias de backup. O Telegram foi desligado.
 
 ## Antes de instalar na loja
 

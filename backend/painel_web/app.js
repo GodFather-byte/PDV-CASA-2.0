@@ -522,6 +522,58 @@
     renderizarRanking(r.dados);
   }
 
+  function renderizarAlertas(alertas) {
+    const lista = $("lista-alertas");
+    const badge = $("badge-alertas");
+    if (!lista || !badge) return;
+    badge.textContent = String(alertas.length);
+    limpar(lista);
+    if (!alertas.length) {
+      lista.append(el("li", { text: "Nenhum alerta neste recorte." }));
+      return;
+    }
+    alertas.forEach((alerta) => {
+      const item = el("li", {});
+      item.append(el("strong", { text: alerta.titulo || "Alerta" }));
+      item.append(document.createTextNode(" "));
+      const botao = el("button", { type: "button", text: "mandar no WhatsApp" });
+      botao.addEventListener("click", () => compartilharWhatsapp(alerta.texto || alerta.titulo));
+      item.append(botao);
+      lista.append(item);
+    });
+    const perdas = (estado.resumo && estado.resumo.perdas) || [];
+    if (perdas.length) {
+      lista.append(el("li", { text: "Perdas na contagem" }));
+      perdas.slice(0, 8).forEach((p) => {
+        lista.append(el("li", { text: (p.nome || "Produto") + ": " + (p.unidades || 0) + " un · " + formatarCentavos(p.valor_cent || 0) }));
+      });
+    }
+  }
+
+  async function textoDoResumo() {
+    const de = estado.aba === "periodo" && estado.periodoDe ? estado.periodoDe : (estado.dia || "");
+    const ate = estado.aba === "periodo" && estado.periodoAte ? estado.periodoAte : de;
+    if (!de) return null;
+    const r = await chamarApi("/whatsapp?de=" + encodeURIComponent(de) + "&ate=" + encodeURIComponent(ate || de));
+    return r;
+  }
+
+  async function compartilharWhatsapp(texto) {
+    let corpo = texto;
+    let links = [];
+    if (!corpo) {
+      const dados = await textoDoResumo();
+      if (!dados) return;
+      corpo = dados.texto;
+      links = dados.links || [];
+    }
+    if (links.length) links.forEach((item) => window.open(item.url, "_blank", "noopener"));
+    else if (corpo) {
+      await navigator.clipboard.writeText(corpo).catch(() => {});
+      window.open("https://wa.me/?text=" + encodeURIComponent(corpo), "_blank", "noopener");
+    }
+  }
+
   function renderizarMesAtual(r) {
     const mes = r.mes || {};
     $("mes-faturamento").textContent = formatarCentavos(mes.faturamento_cent);
@@ -716,6 +768,7 @@
       status.append("última atualização —");
     }
     mostrarAtraso(r.atraso_min);
+    renderizarAlertas(r.alertas || []);
     renderizarMesAtual(r);
 
     $("v-faturamento").textContent = formatarCentavos(v.faturamento_cent);
@@ -1524,6 +1577,20 @@
     $("form-login").addEventListener("submit", entrar);
     $("botao-sair").addEventListener("click", () => encerrarSessao(true));
     $("botao-atualizar").addEventListener("click", () => atualizarAgora());
+    const botaoResumo = $("botao-resumo-whatsapp");
+    if (botaoResumo) botaoResumo.addEventListener("click", () => compartilharWhatsapp(""));
+    const botaoCopiar = $("botao-copiar-resumo");
+    if (botaoCopiar) botaoCopiar.addEventListener("click", async () => {
+      const dados = await textoDoResumo();
+      if (dados && dados.texto) await navigator.clipboard.writeText(dados.texto);
+    });
+    const botaoPdf = $("botao-pdf");
+    if (botaoPdf) botaoPdf.addEventListener("click", async () => {
+      const dados = await textoDoResumo();
+      if (!dados || !dados.texto || typeof baixarPdf !== "function") return;
+      const linhas = dados.texto.replace(/\*/g, "").split("\n");
+      baixarPdf("resumo-willpdv.pdf", linhas, []);
+    });
     $("seletor-dia").addEventListener("change", (e) => mudarDia(e.target.value));
     $("seletor-movimento").addEventListener("change", (e) => {
       estado.diaMovimento = e.target.value || null;

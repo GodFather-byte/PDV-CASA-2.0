@@ -1,5 +1,18 @@
 # HANDOFF
 
+## WhatsApp do dono, sem Telegram
+
+- O bot do Telegram saiu do caixa e da central. Tabelas `telegram_chats` e `telegram_fila` ficam no
+  banco da loja, sem uso. Fora do repo: apagar o bot no BotFather e `WILLCENTRAL_TELEGRAM_TOKEN`
+  no PC do fornecedor. Não há worker de Telegram no Render.
+- Fechamento do turno abre `https://wa.me/<número>?text=...` com o resumo do dia (Configurações >
+  Nuvem > WhatsApp do dono, vários números). O painel tem **Enviar resumo no WhatsApp**, **Copiar texto**
+  e **Baixar PDF** do dia ou do período. A consulta do texto é sob demanda, não um timer.
+- Alertas (cancelamento, desconto, sangria, mesa parada, caixa fora do horário, diferença de caixa,
+  estoque baixo) vêm dentro do resumo que o celular já pede. Cada um tem **mandar no WhatsApp**.
+- Contagem de estoque no PDV compara contado e teórico e mostra a perda. O retrato leva as perdas e a
+  conferência por forma para o painel.
+
 ## Neon pode dormir
 
 - O caixa só chama o banco da nuvem com pendência (venda, comanda, estoque, cardápio), no fechamento

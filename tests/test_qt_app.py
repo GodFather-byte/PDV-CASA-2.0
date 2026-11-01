@@ -346,7 +346,6 @@ class TestAppQt(BaseQt):
     def test_banco_memoria_e_qapplication_existente_sem_servicos(self):
         app = self.app()
         with patch("src.ui_qt.app.ServicoFilaImpressao") as impressao, \
-                patch("src.ui_qt.app.ServicoTelegram") as telegram, \
                 patch("src.ui_qt.app.ServicoPonte") as ponte, \
                 patch("src.controllers.utilitario_controller.UtilitarioController.backup_automatico") as backup:
             app.iniciar()
@@ -354,7 +353,7 @@ class TestAppQt(BaseQt):
             self.assertTrue(app.login.isVisible())
             app.finalizar()
         impressao.assert_not_called()
-        telegram.assert_not_called()
+        ponte.assert_not_called()
         backup.assert_not_called()
         self.assertEqual(self.banco.valor("SELECT 1"), 1)
 
@@ -415,13 +414,12 @@ class TestAppQt(BaseQt):
     def test_menu_novas_configuracoes_utilitarios_e_janelas_unicas(self):
         from src.ui_qt.acessos import JanelaAcessos
         from src.ui_qt.maquinas import JanelaMaquinas
-        from src.ui_qt.telegram import JanelaTelegram
         from src.ui_qt.utilitarios import JanelaUtilitarios
         app = self.app()
         app.ctx.operador = app.ctx.acesso.autenticar("ADM", "ADM")
         app.principal = JanelaPrincipal(app)
         for chave, classe in (("maquinas", JanelaMaquinas), ("acessos", JanelaAcessos),
-                              ("telegram", JanelaTelegram), ("utilitarios", JanelaUtilitarios)):
+                              ("utilitarios", JanelaUtilitarios)):
             with self.subTest(tela=chave):
                 self.assertTrue(app.principal.botoes[chave].isEnabled())
                 abrir = getattr(app.principal, f"abrir_{chave}")
@@ -436,7 +434,7 @@ class TestAppQt(BaseQt):
         app = self.app()
         app.ctx.operador = app.ctx.acesso.autenticar("ADM", "ADM")
         app.principal = JanelaPrincipal(app)
-        for chave in ("maquinas", "acessos", "telegram", "utilitarios"):
+        for chave in ("maquinas", "acessos", "utilitarios"):
             abrir = getattr(app.principal, f"abrir_{chave}")
             with self.subTest(tela=chave):
                 self.banco.executar("UPDATE operadores SET ativo = 1 WHERE id = ?", (app.ctx.operador_id,))
@@ -518,7 +516,6 @@ class TestAppQt(BaseQt):
         self.banco.caminho = "somente-teste-qt.db"
         try:
             with patch("src.ui_qt.app.ServicoFilaImpressao") as impressao, \
-                    patch("src.ui_qt.app.ServicoTelegram") as telegram, \
                     patch("src.ui_qt.app.ServicoPonte") as ponte, \
                     patch("src.ui_qt.app.ServicoPorteiro") as porteiro, \
                     patch("src.ui_qt.app.ServicoSincronizacao") as sincronizacao, \
@@ -527,13 +524,11 @@ class TestAppQt(BaseQt):
                     patch("src.controllers.utilitario_controller.UtilitarioController.backup_automatico") as backup:
                 app.iniciar()
                 impressao.return_value.iniciar.assert_called_once()
-                telegram.return_value.iniciar.assert_called_once()
                 ponte.return_value.iniciar.assert_called_once()
                 porteiro.return_value.iniciar.assert_called_once()
                 sincronizacao.return_value.iniciar.assert_called_once()
                 app.finalizar()
                 impressao.return_value.parar.assert_called_once()
-                telegram.return_value.parar.assert_called_once()
                 ponte.return_value.parar.assert_called_once()
                 porteiro.return_value.parar.assert_called_once()
                 sincronizacao.return_value.parar.assert_called_once()

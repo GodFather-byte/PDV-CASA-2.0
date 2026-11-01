@@ -10,7 +10,6 @@ from pathlib import Path
 from licenciador.central import Central, ErroCentral
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
-from src.sync.telegram_api import ClienteTelegram, ErroTelegram
 
 log = logging.getLogger("pdv.central")
 AJUDA = (
@@ -196,6 +195,10 @@ class TravaCentral:
 
 def servir(central: Central, token_bot: str, parar: threading.Event | None = None,
            http=None, notificar=None) -> None:
+    """O bot do Telegram foi desligado. A central continua pela linha de comando."""
+    raise ErroCentral(
+        "O Telegram da central foi desligado. Use os comandos de licenciador.central_cli. "
+        "Apague o bot no BotFather e a variável WILLCENTRAL_TELEGRAM_TOKEN.")
     if not token_bot.strip():
         raise ErroCentral("Configure o token do bot administrativo.")
     trava = TravaCentral(central.arquivo)

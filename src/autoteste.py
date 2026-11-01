@@ -29,6 +29,9 @@ MODULOS = [
     'src.sync.cardapio_envio',
     'src.sync.devolucoes_envio',
     'src.sync.ociosidade',
+    'src.whatsapp.alertas',
+    'src.whatsapp.caixa',
+    'src.whatsapp.resumo',
     'src.sync.painel_ritmo',
     'src.sync.painel_status',
     'src.ui_qt.cardapio_qr',
@@ -42,7 +45,7 @@ MODULOS = [
     "src.controllers.importacao_produtos", "src.controllers.impressao_assistente", "src.controllers.impressao_controller", "src.controllers.notificacoes", "src.controllers.perfil_controller", "src.controllers.preparo_controller", "src.controllers.quartos_controller",
     "src.controllers.produto_controller",
     "src.controllers.relatorio_comissoes", "src.controllers.relatorio_controller", "src.controllers.relatorio_gestao",
-    "src.controllers.relatorio_vendas", "src.controllers.telegram_controller", "src.controllers.telegram_textos",
+    "src.controllers.relatorio_vendas",
     "src.controllers.turno_controller", "src.controllers.utilitario_controller",
     "src.core.ed25519", "src.core.erros", "src.core.formatacao", "src.core.instancia", "src.core.licenca",
     "src.core.posicao", "src.core.registro", "src.core.relatorio", "src.core.seguranca", "src.core.backup_seguro",
@@ -50,7 +53,7 @@ MODULOS = [
     "src.database.conexao", "src.database.esquema", "src.database.protecao", "src.database.sementes",
     "src.hardware.campainha", "src.hardware.dispositivos", "src.hardware.imagem_escpos", "src.hardware.impressora_termica",
     "src.hardware.impressoras_so",
-    "src.sync.atualizacoes", "src.sync.licenca_nuvem", "src.sync.painel_envio", "src.sync.sincronizador", "src.sync.telegram_api",
+    "src.sync.atualizacoes", "src.sync.licenca_nuvem", "src.sync.painel_envio", "src.sync.sincronizador",
     "src.sync.ponte",
     "src.controllers.integracoes_controller",
     "src.controllers.alertas_controller", "src.controllers.etiqueta_controller",
@@ -61,7 +64,7 @@ MODULOS = [
     "src.ui_qt.configuracoes", "src.ui_qt.estoque", "src.ui_qt.fila_impressao",
     "src.ui_qt.importar_produtos", "src.ui_qt.relatorio_vendas", "src.ui_qt.relatorios",
     "src.ui_qt.restaurar_backup", "src.ui_qt.contas",
-    "src.ui_qt.maquinas", "src.ui_qt.acessos", "src.ui_qt.telegram", "src.ui_qt.utilitarios",
+    "src.ui_qt.contagem", "src.ui_qt.maquinas", "src.ui_qt.acessos", "src.ui_qt.utilitarios",
     "src.ui_qt.atualizacoes", "src.ui_qt.visualizador", "src.ui_qt.estoque_lancamentos",
     "src.ui_qt.alertas", "src.ui_qt.etiquetas", "src.ui_qt.promocoes", "src.ui_qt.retornaveis",
     "src.ui_qt.cozinha", "src.ui_qt.quartos", "src.ui_qt.diagnostico",
@@ -114,14 +117,7 @@ def _banco_e_telas(pasta: Path) -> list[str]:
 
 
 def _rede() -> list[str]:
-    from src.sync.telegram_api import ClienteTelegram, ErroTelegram
-    try:
-        ClienteTelegram("123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA").quem_sou()
-    except ErroTelegram as e:
-        if e.codigo is None:
-            raise RuntimeError(f"sem conexão HTTPS com o Telegram: {e}") from None
-        return [f"HTTPS com o Telegram funciona (respondeu {e.codigo}, como esperado para um token falso)"]
-    raise RuntimeError("o Telegram aceitou um token falso?!")
+    return ["rede: o Telegram foi removido; o caixa não consulta api.telegram.org"]
 
 
 def executar(saida: str | None = None, rede: bool = False) -> int:

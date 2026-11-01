@@ -7,7 +7,7 @@ import re
 
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroValidacao
-from src.database.sementes import CONFIG_PADRAO, aplicar_padrao_telegram_23h
+from src.database.sementes import CONFIG_PADRAO
 
 # (chave, rótulo, tipo[texto|int|decimal|sn|escolha], seção, opções)
 CAMPOS_LOJA = [
@@ -144,25 +144,17 @@ CAMPOS_CONFIG = [
     ("sync_lote_seg", "Intervalo do lote enviado à nuvem (segundos, de 60 a 3600; 900 = 15 minutos). Abaixo de 300 o banco não dorme", "int", "Nuvem"),
     ("sync_expediente_de", "Batimento só a partir desta hora (vazio = o dia inteiro; ex.: 18:00)", "texto", "Nuvem"),
     ("sync_expediente_ate", "Batimento só até esta hora (vazio = o dia inteiro; ex.: 06:00)", "texto", "Nuvem"),
+    ("whatsapp_dono", "WhatsApp do dono: números com DDD, separados por vírgula (ex.: 11999998888, 21988887777)", "texto", "Nuvem"),
+    ("whatsapp_alerta_cancelamento_cent", "Alertar cancelamentos a partir deste valor (centavos; 0 desliga)", "int", "Nuvem"),
+    ("whatsapp_alerta_desconto_cent", "Alertar descontos a partir deste valor (centavos; 0 desliga)", "int", "Nuvem"),
+    ("whatsapp_alerta_sangria_cent", "Alertar sangria a partir deste valor (centavos; 0 desliga)", "int", "Nuvem"),
+    ("whatsapp_mesa_horas", "Alertar mesa ou comanda aberta há mais de quantas horas (0 desliga)", "int", "Nuvem"),
     ("painel_dono", "Painel do dono no celular: enviar vendas fechadas, caixa e estoque para a nuvem", "sn", "Nuvem"),
     ("cardapio_digital", "Cardápio digital: publicar o catálogo na nuvem para o QR da mesa (só consulta, sem pedido)", "sn", "Nuvem"),
     # Central do fornecedor (src/sync/ponte.py): usa o endereço da nuvem acima e um token só deste caixa.
     ("central_ponte_ativa", "Central do fornecedor: buscar a licença publicada e enviar o contato deste caixa", "sn", "Nuvem"),
     ("central_caixa_id", "ID deste caixa na central (passe ao fornecedor)", "texto", "Nuvem"),
     ("central_caixa_token", "Token do caixa emitido pelo fornecedor (não é o token da API)", "segredo", "Nuvem"),
-    # O token do bot e o pareamento ficam na janela Configurações > Telegram (não aqui, para o token não aparecer em tela cheia).
-    ("telegram_ativo", "Telegram ligado: avisar o celular do dono e responder aos botões (precisa parear em Configurações > Telegram)",
-     "sn", "Telegram"),
-    ("telegram_avisa_turno", "Avisar quando o caixa abrir e fechar (com a diferença do caixa)", "sn", "Telegram"),
-    ("telegram_avisa_cancelamento", "Avisar cada venda/cupom cancelado (com o motivo e quem cancelou)", "sn", "Telegram"),
-    ("telegram_avisa_item", "Avisar cada item cancelado (com o motivo e quem cancelou)", "sn", "Telegram"),
-    ("telegram_avisa_sangria", "Avisar sangria e suprimento do caixa", "sn", "Telegram"),
-    ("telegram_avisa_backup", "Avisar se o backup automático falhar", "sn", "Telegram"),
-    ("telegram_avisa_estoque", "Avisar na hora quando um produto acabar ou chegar no ponto de pedido", "sn", "Telegram"),
-    ("telegram_avisa_venda", "Avisar CADA venda fechada, em tempo real (em noite cheia são muitas mensagens)", "sn", "Telegram"),
-    ("telegram_resumo_ativo", "Enviar resumo diário consolidado ao dono (pendente sai quando o PC voltar)", "sn", "Telegram"),
-    ("telegram_resumo_hora", "Resumo diário neste horário LOCAL (padrão 23:00; vazio = não enviar)",
-     "texto", "Telegram"),
 ]
 _TIPO_CONFIG = {c[0]: c[2] for c in CAMPOS_CONFIG}
 _OPCOES_CONFIG = {c[0]: [o[0] for o in c[4]] for c in CAMPOS_CONFIG if len(c) > 4}
@@ -212,7 +204,6 @@ def modulos_desligados(banco) -> set[str]:
 class ConfigController:
     def __init__(self, banco):
         self.banco = banco
-        aplicar_padrao_telegram_23h(banco)
 
     # --------------------------------------------------------------- loja
     def loja(self) -> dict:
@@ -369,11 +360,6 @@ class ConfigController:
                     if not v:
                         raise ErroValidacao("O ID do caixa na central precisa ser um UUID válido "
                                             "(ex.: 3f2b8c1e-0d4a-4e8f-9b6c-1a2b3c4d5e6f).", {chave: "inválido"})
-                if chave == "telegram_resumo_hora":
-                    try:
-                        v = fmt.para_hora(v) or ""
-                    except ValueError:
-                        raise ErroValidacao("Horário do resumo inválido (use hh:mm, por exemplo 23:00).", {chave: "inválido"}) from None
                 if chave == "num_mesas" and not 1 <= int(v) <= 999:
                     raise ErroValidacao("O número de mesas deve ficar entre 1 e 999.", {chave: "inválido"})
                 if chave == "num_comandas" and not 0 <= int(v) <= 10000:

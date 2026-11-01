@@ -358,4 +358,10 @@ class TurnoController:
         notificacoes.avisar(self.banco, "turno", "turno_fechado", turno_id)
         from src.sync.ociosidade import pedir_flush
         pedir_flush(self.banco)
+        try:
+            from src.whatsapp.caixa import enviar_no_fechamento
+            enviar_no_fechamento(self.banco)
+        except Exception:
+            log = __import__("logging").getLogger("pdv.whatsapp")
+            log.exception("Não abri o WhatsApp no fechamento; o turno já foi gravado.")
         return res

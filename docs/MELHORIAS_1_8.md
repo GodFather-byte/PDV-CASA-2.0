@@ -23,7 +23,7 @@ As permissões de estoque, produtos, relatórios e cozinha continuam independent
 
 Detalhes: [caixa](CAIXA_MELHORIAS.md), [estoque e etiquetas](ESTOQUE.md),
 [retornáveis](RETORNAVEIS.md), [promoções](PROMOCOES.md),
-[Telegram](TELEGRAM.md) e [interface Qt](INTERFACE_QT.md).
+[interface Qt](INTERFACE_QT.md). O Telegram foi desligado.
 
 ## Limites que continuam valendo
 

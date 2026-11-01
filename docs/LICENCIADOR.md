@@ -7,7 +7,7 @@ Na **1.2.0**, o botão **Central Telegram** abre a central exclusiva do forneced
 cadastro de lojas, administradores locais, credenciais de caixa, backup e execução
 do bot administrativo. A assinatura permanece no seu PC e a API atual é somente
 ponte para lojas migradas. Não faz cobrança. Configuração e implantação:
-[Central Telegram](CENTRAL_TELEGRAM.md).
+[Central](CENTRAL_TELEGRAM.md) (o bot do Telegram foi desligado).
 
 Para cobrar mensalidades e renovar pela internet, veja o guia separado
 [Cobrança de licenças com Mercado Pago](COBRANCA_LICENCAS_MERCADOPAGO.md). O licenciador continua
