@@ -32,7 +32,7 @@ MODULOS = [
     'src.sync.painel_status',
     'src.ui_qt.cardapio_qr',
     'src.ui_qt.estado_nuvem',
-    "src.autoteste", "src.autoteste_qt", "src.versao",
+    "src.autoteste", "src.autoteste_qt", "src.atualizacao.cliente", "src.atualizacao.manifesto", "src.versao",
     "src.controllers.auditoria_controller",
     "src.controllers.acesso_controller", "src.controllers.cadastro_controller", "src.controllers.caderneta_controller",
     "src.controllers.caixa_controller", "src.controllers.comissao_controller", "src.controllers.conferencia_turno",
