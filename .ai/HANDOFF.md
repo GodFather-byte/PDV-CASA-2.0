@@ -7,6 +7,8 @@
 - Só conta tempo: o cliente paga antes no caixa (venda normal). Blocos de `quartos_minutos_bloco` (30) a
   `quartos_valor_bloco` (R$ 90, informativo e gravado no início). Estados livre/uso/alerta/estourou pelo relógio;
   `quartos_uso` guarda início, blocos, liberação e quanto passou do tempo.
+- No caixa: faixa compacta `FaixaQuartos` no alto da tela de venda (`ui_qt/caixa.py`, `_pagina_venda`); clique no
+  quarto abre Iniciar/+ Tempo/Liberar. Avisos centralizados em `AvisosQuartos` (um por banco), sem tocar em dobro.
 - Aviso: bipe, janela na frente e campainha ESP32 do quarto (`quartos_campainhas`, rede local, thread com timeout de
   2 s). Programa do aparelho em `tools/esp32_campainha/main.py`. Guia: `docs/QUARTOS.md`. Testes: `tests/test_quartos.py`.
 - Pendente: homologar no balcão com um ESP32 real (só testado com o aparelho simulado).

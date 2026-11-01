@@ -409,7 +409,15 @@ class JanelaCaixa(QMainWindow):
 
     def _pagina_venda(self) -> QWidget:
         pagina = QWidget()
-        grade = QHBoxLayout(pagina)
+        externo = QVBoxLayout(pagina)
+        externo.setContentsMargins(0, 0, 0, 0)
+        externo.setSpacing(4)
+        # Quartos (módulo usar_quartos): faixa fina com o tempo de cada quarto; some com o módulo desligado.
+        from src.ui_qt.quartos import FaixaQuartos
+        self.faixa_quartos = FaixaQuartos(self.ctx, self)
+        externo.addWidget(self.faixa_quartos)
+        grade = QHBoxLayout()
+        externo.addLayout(grade, 1)
 
         esq, c_esq = _cartao()
         esq.setObjectName("painel_cartoes")

@@ -6,6 +6,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import unittest
 from unittest import mock
 
+try:
+    from PySide6.QtCore import Qt
+except ImportError:  # pragma: no cover - sem PySide6 os testes de tela são pulados
+    Qt = None
+
 from src.controllers.acesso_controller import AcessoController
 from src.controllers.cadastro_controller import CadastroController
 from src.controllers.config_controller import ConfigController, modulos_desligados
@@ -241,6 +246,71 @@ class TesteQuartosQt(BaseQuartos):
         j = self.janela()
         j.executar(lambda: j.controlador().iniciar(1, 1), 1)
         self.assertIn("já está em uso", j.mensagem.text())
+
+    # ---- faixa no caixa ----
+    def faixa(self, operador_id=None):
+        from src.ui_qt.quartos import FaixaQuartos
+        ctx = Contexto(self.banco, AcessoController(self.banco).operador(operador_id or self.operador_adm()))
+        f = FaixaQuartos(ctx)
+        f.timer.stop()
+        f.timer_campainhas.stop()
+        self.addCleanup(f.deleteLater)
+        return f
+
+    def test_faixa_mostra_cada_quarto_e_some_com_o_modulo_desligado(self):
+        self.q.iniciar(3, 6)
+        f = self.faixa(self.baixo)
+        self.assertFalse(f.isHidden())
+        self.assertEqual(sorted(f.chips), list(range(1, 8)))
+        self.assertEqual(f.chips[3].text(), "3  ·  3:00:00")
+        self.assertEqual(f.chips[1].text(), "1  ·  livre")
+        self.assertEqual(f.resumo.text(), "6 livres")
+        self.banco.cfg_set("usar_quartos", "N")
+        f.atualizar()
+        self.assertTrue(f.isHidden())
+
+    def test_chips_nao_tiram_o_foco_do_caixa(self):
+        f = self.faixa()
+        self.assertTrue(all(c.focusPolicy() == Qt.FocusPolicy.NoFocus for c in f.chips.values()))
+
+    def test_menu_do_chip_inicia_e_libera(self):
+        from src.ui_qt import quartos as tela
+        f = self.faixa()
+        f.menu_do_quarto(f.chips[2])
+        self.assertEqual([a.text() for a in f._menu.actions() if a.text()],
+                         ["Iniciar tempo…", "Abrir painel dos quartos"])
+        with mock.patch.object(tela, "pedir_iniciar", lambda pai, ctrl, q: (lambda: ctrl.iniciar(q, 2))):
+            f._menu.actions()[0].trigger()
+        self.assertEqual(self.estado(2)["minutos"], 60)
+        f.menu_do_quarto(f.chips[2])
+        self.assertEqual([a.text() for a in f._menu.actions() if a.text()],
+                         ["+ Tempo…", "Liberar quarto", "Abrir painel dos quartos"])
+        with mock.patch.object(tela, "pedir_liberar", lambda pai, ctrl, q: (lambda: ctrl.liberar(q))):
+            f._menu.actions()[1].trigger()
+        self.assertEqual(self.estado(2)["estado"], "livre")
+        self.assertEqual(f.chips[2].text(), "2  ·  livre")
+
+    def test_caixa_e_painel_abertos_nao_tocam_em_dobro(self):
+        self.banco.cfg_set("quartos_campainhas", "1=192.168.0.51")
+        self.q.iniciar(1, 1)
+        f = self.faixa()
+        j = self.janela()
+        self.avancar(minutes=31)
+        f.atualizar()
+        j.atualizar()
+        self.assertEqual(self.envios.count(("192.168.0.51", "tocar")), 1)
+
+    def test_tela_do_caixa_tem_a_faixa(self):
+        from src.ui_qt.caixa import JanelaCaixa
+        self.banco.cfg_set("imprimir_cupom", "0")
+        ctx = Contexto(self.banco, AcessoController(self.banco).operador(self.operador_adm()))
+        j = JanelaCaixa(ctx)
+        self.addCleanup(j.deleteLater)
+        j.faixa_quartos.timer.stop()
+        self.assertEqual(len(j.faixa_quartos.chips), 7)
+        self.banco.cfg_set("usar_quartos", "N")
+        j.faixa_quartos.atualizar()
+        self.assertTrue(j.faixa_quartos.isHidden())
 
 
 if __name__ == "__main__":

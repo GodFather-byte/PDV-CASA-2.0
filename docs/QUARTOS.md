@@ -17,6 +17,13 @@ Configurações > Módulos:
 
 Acesso: módulo `util_quartos` (nível 1, o caixa já abre). Na edição E&A Superações (adega) o módulo não existe.
 
+## Na tela do caixa
+
+Com o módulo ligado, a tela de venda ganha uma faixa fina logo abaixo do cabeçalho: um botão por quarto com o número
+e o tempo (livre fica só com contorno; verde em uso; amarelo acabando; vermelho piscando estourado). Clicar no quarto
+abre Iniciar / + Tempo / Liberar; **Painel** abre os cartões grandes. Os botões não tiram o foco do código do produto.
+Os avisos são os mesmos no caixa e no painel e não tocam em dobro com os dois abertos.
+
 ## Operação
 
 1. Cliente pagou no caixa → **Iniciar** no cartão do quarto → escolhe os blocos (1 = 30 min, 6 = 3h = R$ 540).
