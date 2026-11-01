@@ -13,6 +13,7 @@ on:
       - "tests/test_painel_*.py"
       - "tests/test_nuvem.py"
       - "tests/test_cardapio.py"
+      - "tests/test_atualizacao_automatica.py"
       - "render.yaml"
       - "requirements*.txt"
       - "tools/verificar_nuvem.py"
@@ -38,7 +39,7 @@ jobs:
           python-version: "3.12"
       - run: pip install --require-hashes -r backend/requirements.txt -r requirements-test.txt
       - name: API, painel do dono e laço de sincronização
-        run: python -m unittest tests.test_painel_dono tests.test_painel_caixas tests.test_painel_limpeza tests.test_painel_senha_pdv tests.test_painel_melhorias tests.test_painel_bar tests.test_verificar_nuvem tests.test_nuvem tests.test_cardapio
+        run: python -m unittest tests.test_painel_dono tests.test_painel_caixas tests.test_painel_limpeza tests.test_painel_senha_pdv tests.test_painel_melhorias tests.test_painel_bar tests.test_verificar_nuvem tests.test_nuvem tests.test_cardapio tests.test_atualizacao_automatica
       - name: App web (manifesto válido e arquivos no lugar)
         run: |
           python -m json.tool backend/painel_web/manifest.webmanifest > /dev/null

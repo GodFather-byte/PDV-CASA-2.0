@@ -341,3 +341,8 @@ _porteiro_nuvem.instalar(app, Loja, autenticar)
 from backend import cardapio as _cardapio  # noqa: E402
 
 _cardapio.instalar(app, Loja, autenticar)
+
+# Atualização do programa Windows: manifesto assinado por edição. O binário fica num HTTPS público.
+from backend import atualizacao_remota as _atualizacao_remota  # noqa: E402
+
+_atualizacao_remota.instalar_no_app(app, autenticar)

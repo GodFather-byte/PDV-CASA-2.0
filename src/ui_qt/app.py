@@ -749,6 +749,18 @@ class JanelaPrincipal(QMainWindow):
         return self._atualizacoes
 
     def _mostrar_aviso_atualizacao(self, aviso):
+        from src.atualizacao.cliente import aviso as aviso_pacote
+        pacote = None
+        try:
+            pacote = aviso_pacote(self.ctx.banco)
+        except Exception:
+            pacote = None
+        if pacote:
+            espera = f" Ainda não instala: {pacote['motivo']}." if pacote.get("motivo") else " O caixa está livre para instalar."
+            if pacote["obrigatoria"]:
+                espera = " Atualização obrigatória." + espera
+            self.aviso_atualizacao.setText(f"Atualização {pacote['ultima']} baixada.{espera}")
+            return
         self.aviso_atualizacao.setText(
             f"Atualização {aviso['ultima']} disponível. Consulte Atualizações do programa."
             if aviso else "")

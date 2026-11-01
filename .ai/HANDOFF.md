@@ -1,5 +1,17 @@
 # HANDOFF
 
+## Atualização automática do caixa
+
+- O aviso antigo (`GET /v1/atualizacoes`) continua. O novo fluxo é `GET /v1/atualizacao/ultima?edicao=&canal=estavel`:
+  versão, SHA-256, tamanho, URL, notas e assinatura Ed25519 (chave própria, não a da licença).
+- O caixa baixa no `--sync` e ao abrir, confere hash e assinatura, e instala com Inno `/VERYSILENT` só sem venda,
+  mesa ou comanda aberta. Adiar um dia; obrigatória ou abaixo da mínima não adia. Dados ficam no `%LOCALAPPDATA%`.
+  Se a versão nova não confirmar, o script restaura a pasta anterior e abre de novo, junto com `--sync`.
+- O arquivo NÃO fica no GitHub privado nem no disco do Render. URL pública (Cloudflare R2) ou
+  `PDV_ATUALIZACAO_DIR` num servidor com disco. Guia com o passo a passo: `docs/ATUALIZACAO.md`.
+- **Última instalação manual:** os caixas sem este código não se atualizam sozinhos. A chave pública já está
+  em `src/atualizacao/manifesto.py`. A semente privada não está no git: guarde em `PDV_ATUALIZACAO_CHAVE`.
+
 ## Painel do dono (bar, boate e adega)
 
 - Aba Hoje abre com **Faturamento do mês até agora**, comparado ao mesmo período do mês anterior.

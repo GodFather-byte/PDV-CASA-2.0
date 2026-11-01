@@ -75,6 +75,7 @@ class Sincronizador:
         except Exception:
             log.exception("Falha ao consultar atualizações ou licença.")
             sucesso = False
+        self._atualizar_programa()
         self._enviar_porteiro()
         self._enviar_cardapio()
         return self._enviar_painel() and sucesso
@@ -86,6 +87,14 @@ class Sincronizador:
             ponte.rodada(self.banco, self._http)
         except Exception:
             log.exception("Falha na comunicação com a central do fornecedor.")
+
+    def _atualizar_programa(self) -> None:
+        """Baixa a versão assinada e instala só com o caixa livre. Falha aqui não segura a licença."""
+        try:
+            from src.atualizacao.cliente import disparar_instalacao, rodada
+            rodada(self.banco, self._http, instalar=disparar_instalacao)
+        except Exception:
+            log.exception("Falha ao atualizar o programa.")
 
     def _enviar_porteiro(self) -> None:
         """Retrato das comandas abertas para o porteiro no 4G. Falha aqui não atrasa a licença: a página local segue."""
