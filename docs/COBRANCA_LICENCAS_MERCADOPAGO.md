@@ -18,8 +18,10 @@ abaixo são marcadores.
    `https://SEU-SERVICO.onrender.com/v1/webhooks/mercadopago`.
 5. O mesmo `MP_ACCESS_TOKEN` no terminal em que você roda `python -m backend.lojas cobranca`,
    junto com `PDV_NUVEM_DB_URL` do Neon. É esse comando que gera o Pix.
-6. Para o e-mail da cobrança: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` e
-   `SMTP_FROM`. No Gmail, host `smtp.gmail.com`, porta `587` e uma senha de app.
+6. Para o e-mail no Render gratuito: `BREVO_API_KEY` e `EMAIL_FROM` (remetente
+   verificado na Brevo). `EMAIL_FROM_NAME` é opcional. O plano grátis bloqueia
+   SMTP; a Brevo sai por HTTPS. SMTP (`SMTP_HOST` e as outras) só vale se a chave
+   da Brevo não estiver definida, por exemplo num VPS.
 7. Se o bot de WhatsApp já está no ar: `WHATSAPP_API_URL` (https) e `WHATSAPP_API_TOKEN`.
    Sem os dois, a nuvem não envia mensagem; ela mostra um link `wa.me`.
 8. Apague `ASAAS_AMBIENTE`, `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN` se ainda existirem
@@ -91,7 +93,8 @@ preço da licença. A nuvem em si continua no desenho do [NUVEM.md](NUVEM.md)
 | `MP_ACCESS_TOKEN` | Servidor e o terminal em que você gera a cobrança | Chamar a API |
 | `MP_WEBHOOK_SECRET` | Servidor, igual à assinatura secreta do painel | Validar `x-signature` |
 | `MP_BOLETO_METODO` | Servidor, opcional | Código do boleto; padrão `bolbradesco` |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Servidor | E-mail da cobrança. No Gmail, `smtp.gmail.com`, porta `587` e senha de app |
+| `BREVO_API_KEY`, `EMAIL_FROM` | Servidor | E-mail por HTTPS (use no Render grátis). `EMAIL_FROM_NAME` é opcional |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Servidor | Reserva, só quando `BREVO_API_KEY` não está definida |
 | `WHATSAPP_API_URL`, `WHATSAPP_API_TOKEN` | Servidor, opcional | Bot que já recebe um POST. Sem os dois, fica o link `wa.me` |
 | `PDV_NUVEM_DB_URL` | Servidor e o mesmo terminal | PostgreSQL (Neon) |
 | `PDV_API_TOKEN` | Só você | Lista de lojas e `/v1/admin/cobrancas/operacao` |
@@ -187,12 +190,32 @@ O mesmo token. Token de loja recebe 403.
 
 ### E-mail
 
-Com as cinco variáveis `SMTP_*` preenchidas, cada cobrança nova sai em texto
-simples: link do boleto (o PDF que o Mercado Pago devolve), linha digitável e
-Pix copia e cola. Porta `465` usa SSL; qualquer outra (no Gmail, `587`) usa
-STARTTLS. Senha de app do Gmail vai em `SMTP_PASSWORD`, nunca no git.
-Se o SMTP não estiver configurado, a cobrança fica gravada e o aviso marca
-`nao_configurado`. Depois de preencher o SMTP, rode `reenviar`.
+O Render gratuito bloqueia saída nas portas de SMTP (25, 465 e 587). No serviço
+da nuvem o e-mail vai pela **API da Brevo**, em HTTPS. O texto é o mesmo: link
+do boleto, linha digitável e Pix copia e cola. Se `BREVO_API_KEY` estiver
+definida, o SMTP nem é tentado. Sem a chave, e só então, usa as variáveis
+`SMTP_*` (útil num VPS). Sem nenhum dos dois, a cobrança fica gravada e o aviso
+marca `nao_configurado`. Depois de configurar, rode `reenviar`.
+
+#### Conta Brevo, remetente e chave
+
+1. Crie a conta em [brevo.com](https://www.brevo.com). O plano gratuito cobre o
+   volume de mensalidades.
+2. Confirme o e-mail da própria conta, se a Brevo pedir.
+3. Cadastre o remetente: **Remetentes, domínios e IPs** (ou Configurações >
+   Remetentes) > adicione o endereço que vai em `EMAIL_FROM`. Pode ser um Gmail.
+   A Brevo manda um e-mail de confirmação para essa caixa; abra e confirme.
+   Enquanto o remetente não estiver verificado, a API recusa o envio.
+4. Gere a chave: **SMTP e API** > **Chaves de API** > crie uma chave (v3). Ela
+   aparece uma vez. Cole em `BREVO_API_KEY` no Render. Não coloque no git.
+5. `EMAIL_FROM` é o mesmo endereço verificado no passo 3. `EMAIL_FROM_NAME` é o
+   nome que o cliente vê (por exemplo `WillPDV`); pode ficar vazio.
+
+A chamada é `POST https://api.brevo.com/v3/smtp/email` com o cabeçalho
+`api-key`. O corpo leva `sender`, `to`, `subject` e `textContent`.
+
+SMTP, se um dia usar fora do Render grátis: porta `465` é SSL; as outras (no
+Gmail, `587`) usam STARTTLS. A senha de app vai em `SMTP_PASSWORD`.
 
 ### WhatsApp
 

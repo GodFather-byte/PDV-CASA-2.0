@@ -29,7 +29,13 @@ services:
         sync: false
       - key: MP_BOLETO_METODO        # opcional; padrão bolbradesco. Outro código de boleto da conta, se o painel exigir.
         value: bolbradesco
-      - key: SMTP_HOST               # ex.: smtp.gmail.com. Vazio = não envia e-mail.
+      - key: BREVO_API_KEY           # E-mail por HTTPS. O Render grátis bloqueia SMTP. Não commitar.
+        sync: false
+      - key: EMAIL_FROM              # Remetente verificado na Brevo (pode ser um Gmail).
+        sync: false
+      - key: EMAIL_FROM_NAME         # Opcional. Nome que aparece no e-mail.
+        sync: false
+      - key: SMTP_HOST               # Reserva, só sem BREVO_API_KEY. O plano grátis não abre esta porta.
         sync: false
       - key: SMTP_PORT               # 587 (STARTTLS) ou 465 (SSL).
         sync: false

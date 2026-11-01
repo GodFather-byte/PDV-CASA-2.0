@@ -8,9 +8,11 @@
   guarda valor, dia do mês, e-mail, WhatsApp e os dados do boleto. A varredura no
   processo gera boleto (`bolbradesco`, ou `MP_BOLETO_METODO`) e Pix 5 dias antes
   do vencimento (e até 20 dias depois, se o Render estava dormindo).
-- Cada cobrança sai por e-mail (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD,
-  SMTP_FROM) e por WhatsApp (`WHATSAPP_API_URL` + `WHATSAPP_API_TOKEN`, POST
-  `{"to","text"}`). Sem o bot, o comando e o painel mostram um link `wa.me`.
+- Cada cobrança sai por e-mail. Com `BREVO_API_KEY` e `EMAIL_FROM` (nome opcional
+  em `EMAIL_FROM_NAME`) a API da Brevo manda por HTTPS — é o caminho do Render
+  grátis, que bloqueia SMTP. Sem a chave, cai no SMTP (`SMTP_*`). WhatsApp:
+  `WHATSAPP_API_URL` + `WHATSAPP_API_TOKEN`, POST `{"to","text"}`. Sem o bot, o
+  comando e o painel mostram um link `wa.me`.
 - Pix (copia e cola e página do QR) e link do Checkout Pro para cartão continuam.
 - O webhook `POST /v1/webhooks/mercadopago` valida `x-signature` (`MP_WEBHOOK_SECRET`),
   relê o pagamento na API e, se estiver `approved` com o valor da cobrança, estende a
@@ -20,8 +22,9 @@
 - Não há worker separado. A varredura roda no processo da API (a cada 6 h, e ~20 s
   depois que o processo sobe). No Render grátis o serviço dorme; o Mercado Pago
   reenvia o webhook e a varredura completa o resto quando ele acorda.
-- Segredos só no ambiente: `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `SMTP_*` e, se houver
-  bot, `WHATSAPP_API_URL` e `WHATSAPP_API_TOKEN`. Guia: `docs/COBRANCA_LICENCAS_MERCADOPAGO.md`.
+- Segredos só no ambiente: `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `BREVO_API_KEY`,
+  `EMAIL_FROM` e, se houver bot, `WHATSAPP_API_*`. SMTP é reserva. Guia:
+  `docs/COBRANCA_LICENCAS_MERCADOPAGO.md`.
 - Migração aditiva (`garantir_esquema`): cria as tabelas do Mercado Pago e, se a tabela
   já existia, acrescenta as colunas da assinatura e do boleto. Não mexe em `lojas.licenca_ate`.
 

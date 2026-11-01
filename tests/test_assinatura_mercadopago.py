@@ -9,6 +9,7 @@ import unittest
 from datetime import date
 from decimal import Decimal
 from unittest import mock
+from urllib.error import HTTPError
 
 from tests.test_nuvem import TestClient, cabecalho, nuvem, preparar_lojas
 
@@ -49,6 +50,9 @@ class TesteAssinaturaMensal(unittest.TestCase):
             "SMTP_USER": "",
             "SMTP_PASSWORD": "",
             "SMTP_FROM": "",
+            "BREVO_API_KEY": "",
+            "EMAIL_FROM": "",
+            "EMAIL_FROM_NAME": "",
             "WHATSAPP_API_URL": "",
             "WHATSAPP_API_TOKEN": "",
         })
@@ -239,6 +243,67 @@ class TesteAssinaturaMensal(unittest.TestCase):
         with mock.patch.dict(os.environ, {"WHATSAPP_API_URL": "http://inseguro", "WHATSAPP_API_TOKEN": "x"}):
             with self.assertRaises(cobranca.ErroCobranca):
                 cobranca.enviar_whatsapp_api("+5511988887777", "Olá")
+
+    def test_brevo_substitui_o_smtp_e_nao_vaza_a_chave(self):
+        capturado = {}
+
+        class Resposta:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, n=-1):
+                return b'{"messageId":"<id@brevo>"}'
+
+        def abrir(pedido):
+            capturado["url"] = pedido.full_url
+            capturado["chave"] = pedido.get_header("Api-key")
+            capturado["corpo"] = pedido.data
+            return Resposta()
+
+        ambiente = {
+            "BREVO_API_KEY": "xkeysib-segredo",
+            "EMAIL_FROM": "conta@gmail.com",
+            "EMAIL_FROM_NAME": "WillPDV",
+            "SMTP_HOST": "smtp.gmail.com", "SMTP_PORT": "587", "SMTP_USER": "conta@gmail.com",
+            "SMTP_PASSWORD": "senha-de-app", "SMTP_FROM": "conta@gmail.com",
+        }
+        with mock.patch.dict(os.environ, ambiente), \
+                mock.patch.object(cobranca, "_abrir", side_effect=abrir), \
+                mock.patch.object(cobranca.smtplib, "SMTP", side_effect=AssertionError("smtp nao deve ser usado")):
+            cobranca.enviar_email("destino@exemplo.com", "Licença", "Boleto e Pix")
+        self.assertEqual(capturado["url"], "https://api.brevo.com/v3/smtp/email")
+        self.assertEqual(capturado["chave"], "xkeysib-segredo")
+        import json
+        corpo = json.loads(capturado["corpo"])
+        self.assertEqual(corpo["sender"], {"email": "conta@gmail.com", "name": "WillPDV"})
+        self.assertEqual(corpo["to"], [{"email": "destino@exemplo.com"}])
+        self.assertEqual(corpo["subject"], "Licença")
+        self.assertEqual(corpo["textContent"], "Boleto e Pix")
+        self.assertNotIn(b"xkeysib-segredo", capturado["corpo"])
+
+        capturado.clear()
+        ambiente["EMAIL_FROM_NAME"] = ""
+        with mock.patch.dict(os.environ, ambiente), mock.patch.object(cobranca, "_abrir", side_effect=abrir):
+            cobranca.enviar_email("destino@exemplo.com", "Licença", "Texto")
+        self.assertEqual(json.loads(capturado["corpo"])["sender"], {"email": "conta@gmail.com"})
+
+        with mock.patch.dict(os.environ, {"BREVO_API_KEY": "xkeysib-segredo", "EMAIL_FROM": ""}), \
+                mock.patch.object(cobranca.smtplib, "SMTP", side_effect=AssertionError("smtp")):
+            with self.assertRaises(cobranca.ErroCobranca) as faltou:
+                cobranca.enviar_email("destino@exemplo.com", "Licença", "Texto")
+        self.assertIn("EMAIL_FROM", str(faltou.exception))
+        self.assertNotIn("xkeysib-segredo", str(faltou.exception))
+
+        with mock.patch.dict(os.environ, {"BREVO_API_KEY": "xkeysib-segredo", "EMAIL_FROM": "conta@gmail.com"}), \
+                mock.patch.object(cobranca, "_abrir", side_effect=HTTPError(
+                    "https://api.brevo.com/v3/smtp/email", 401, "xkeysib-segredo", {}, None)):
+            with self.assertRaises(cobranca.ErroCobranca) as recusa:
+                cobranca.enviar_email("destino@exemplo.com", "Licença", "Texto")
+        self.assertIn("401", str(recusa.exception))
+        self.assertNotIn("xkeysib-segredo", str(recusa.exception))
 
     def test_admin_cadastra_por_curl_e_recusa_loja_e_token(self):
         http = TestClient(nuvem.app)
