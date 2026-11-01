@@ -8,6 +8,9 @@
   guarda valor, dia do mês, e-mail, WhatsApp e os dados do boleto. A varredura no
   processo gera boleto (`bolbradesco`, ou `MP_BOLETO_METODO`) e Pix 5 dias antes
   do vencimento (e até 20 dias depois, se o Render estava dormindo).
+- `POST /v1/admin/cobrancas/teste-email` (só `PDV_API_TOKEN`) manda o mesmo aviso
+  da cobrança para o `destino` informado, nunca para o e-mail da loja. Sem
+  cobrança ainda, o texto é marcado TESTE e não cria pagamento.
 - Cada cobrança sai por e-mail. Com `BREVO_API_KEY` e `EMAIL_FROM` (nome opcional
   em `EMAIL_FROM_NAME`) a API da Brevo manda por HTTPS — é o caminho do Render
   grátis, que bloqueia SMTP. Sem a chave, cai no SMTP (`SMTP_*`). WhatsApp:

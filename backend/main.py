@@ -206,6 +206,26 @@ def admin_assinatura(dados: dict = Body(...), acesso: Acesso = Depends(autentica
     return {"situacao": situacao, "emitidas": emitidas, **cobranca.resumo_assinatura(plano)}
 
 
+@app.post("/v1/admin/cobrancas/teste-email")
+def admin_teste_email(dados: dict = Body(...), acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db)):
+    """Envia o mesmo aviso da cobrança só para `destino`. Não cria pagamento nem escreve para o e-mail da loja."""
+    if not acesso.admin:
+        raise HTTPException(status_code=403, detail="Só o administrador envia e-mail de teste.")
+    if not isinstance(dados, dict):
+        raise HTTPException(status_code=422, detail="Corpo inválido.")
+    chave = dados.get("chave_loja")
+    destino = dados.get("destino")
+    if not isinstance(chave, str) or not chave.strip():
+        raise HTTPException(status_code=422, detail="Informe chave_loja.")
+    if not isinstance(destino, str) or not destino.strip():
+        raise HTTPException(status_code=422, detail="Informe destino.")
+    try:
+        return cobranca.enviar_email_teste(db, chave.strip(), destino.strip())
+    except cobranca.ErroCobranca as erro:
+        db.rollback()
+        raise _erro_cobranca(erro) from None
+
+
 @app.post("/v1/admin/cobrancas/reenviar")
 def admin_reenviar(dados: dict = Body(...), acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db)):
     if not acesso.admin:

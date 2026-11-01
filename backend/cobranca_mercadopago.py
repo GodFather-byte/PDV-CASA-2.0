@@ -998,6 +998,10 @@ def whatsapp_configurado() -> bool:
     return bool(os.environ.get("WHATSAPP_API_URL", "").strip() and os.environ.get("WHATSAPP_API_TOKEN", "").strip())
 
 
+def assunto_cobranca(chave: str, vencimento: str) -> str:
+    return f"Licença WillPDV {chave} — {vencimento}"
+
+
 def texto_cobranca(nome_loja: str, cobranca: Cobranca) -> str:
     valor = f"R$ {reais(cobranca.valor_cent):.2f}".replace(".", ",")
     linhas = [
@@ -1137,7 +1141,7 @@ def entregar(db: Session, plano: Plano, cobranca: Cobranca) -> dict:
     }
     if plano.email_gerente and (brevo_configurado() or smtp_configurado()):
         try:
-            enviar_email(plano.email_gerente, f"Licença WillPDV {plano.chave_loja} — {cobranca.vencimento}", texto)
+            enviar_email(plano.email_gerente, assunto_cobranca(plano.chave_loja, cobranca.vencimento), texto)
             resultado["email"] = "enviado"
         except ErroCobranca:
             resultado["email"] = "erro"
@@ -1154,15 +1158,57 @@ def entregar(db: Session, plano: Plano, cobranca: Cobranca) -> dict:
     return resultado
 
 
+def cobranca_atual(db: Session, plano: Plano) -> Cobranca | None:
+    """A cobrança que o aviso usaria: a em aberto mais nova, ou a última se todas já foram pagas."""
+    aberta = (db.query(Cobranca).filter_by(plano=plano.id)
+              .filter(Cobranca.status != "aprovada")
+              .order_by(Cobranca.vencimento.desc()).first())
+    if aberta is not None:
+        return aberta
+    return db.query(Cobranca).filter_by(plano=plano.id).order_by(Cobranca.vencimento.desc()).first()
+
+
+def email_da_cobranca(db: Session, chave: str, hoje: date | None = None) -> tuple[str, str]:
+    """Assunto e corpo do aviso da assinatura. Sem cobrança, um texto de teste, sem chamar o Mercado Pago."""
+    from types import SimpleNamespace
+    from backend.main import Loja
+    plano = db.query(Plano).filter_by(chave_loja=chave).first()
+    if plano is None:
+        raise ErroCobranca("Loja sem plano Mercado Pago.")
+    loja = db.query(Loja).filter_by(chave_loja=chave).first()
+    nome = loja.nome if loja is not None else chave
+    cobranca = cobranca_atual(db, plano)
+    if cobranca is not None:
+        return assunto_cobranca(chave, cobranca.vencimento), texto_cobranca(nome, cobranca)
+    if not plano.dia_vencimento:
+        raise ErroCobranca("Loja sem cobrança e sem dia de vencimento para montar o teste.")
+    hoje = hoje or date.today()
+    vencimento = proximo_vencimento(hoje, plano.dia_vencimento, plano.antecedencia_dias or ANTECEDENCIA_PADRAO)
+    previa = SimpleNamespace(
+        valor_cent=plano.valor_cent, vencimento=vencimento.isoformat(),
+        boleto_url="(teste, sem link)", boleto_linha="(teste, sem linha)",
+        pix_copia_cola="(teste, sem código)", boleto_erro=None)
+    assunto = "TESTE — " + assunto_cobranca(chave, previa.vencimento)
+    corpo = "TESTE — esta mensagem não é uma cobrança e não gera pagamento.\n" + texto_cobranca(nome, previa)
+    return assunto, corpo
+
+
+def enviar_email_teste(db: Session, chave: str, destino: str, hoje: date | None = None) -> dict:
+    """Manda o aviso só para `destino`. Não usa o e-mail da loja e não cria cobrança."""
+    try:
+        destino = _email(destino)
+    except ErroCobranca:
+        raise ErroCobranca("Informe um e-mail válido em destino.") from None
+    assunto, corpo = email_da_cobranca(db, chave, hoje)
+    enviar_email(destino, assunto, corpo)
+    return {"ok": True, "destino": destino, "assunto": assunto}
+
+
 def reenviar(db: Session, chave: str) -> dict:
     plano = db.query(Plano).filter_by(chave_loja=chave).first()
     if plano is None:
         raise ErroCobranca("Loja sem plano Mercado Pago.")
-    cobranca = (db.query(Cobranca).filter_by(plano=plano.id)
-                .filter(Cobranca.status != "aprovada")
-                .order_by(Cobranca.vencimento.desc()).first())
-    if cobranca is None:
-        cobranca = db.query(Cobranca).filter_by(plano=plano.id).order_by(Cobranca.vencimento.desc()).first()
+    cobranca = cobranca_atual(db, plano)
     if cobranca is None:
         raise ErroCobranca("Loja sem cobrança para reenviar.")
     resultado = entregar(db, plano, cobranca)
