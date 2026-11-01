@@ -1,5 +1,6 @@
 """Devoluções no painel, entrega incremental e estado local da sincronização."""
 import json
+from contextlib import closing
 import os
 from unittest import mock
 from uuid import uuid4
@@ -89,7 +90,7 @@ class TesteMelhoriasPainel(BaseNuvem):
         with tempfile.TemporaryDirectory() as pasta:
             arquivo = Path(pasta) / "legado.db"
             self.banco.copiar_para(str(arquivo))
-            with sqlite3.connect(arquivo) as con:
+            with closing(sqlite3.connect(arquivo)) as con, con:
                 gatilhos = [r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='trigger' "
                                                      "AND name LIKE 'painel_revisao_%'")]
                 for nome in gatilhos:
