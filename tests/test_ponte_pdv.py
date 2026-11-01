@@ -260,16 +260,16 @@ class TesteRodada(BasePonte):
         http = HttpPonte()
         http.get = mock.Mock(side_effect=lambda url, **k: Resposta(404, {}) if "/ponte/" in url
                              else Resposta(200, {"versoes": []}))
-        with mock.patch("src.sync.painel_envio.enviar") as painel:
+        with mock.patch("src.sync.painel_ritmo.enviar_se_preciso") as painel:
             self.assertTrue(Sincronizador(self.banco, http).rodada())
         self.assertTrue(any("/ponte/licenca" in c.args[0] for c in http.get.call_args_list))
         self.assertTrue(self.banco.cfg(ponte.CHAVE_SUCESSO))
-        painel.assert_called_once()           # o envio do painel segue com a regra própria (opt-in em painel_envio)
+        painel.assert_called_once()           # o envio do painel segue com a regra própria (opt-in em painel_ritmo)
         self.assertNotIn("vendas", str(http.chamadas))
 
     def test_erro_inesperado_da_ponte_nao_derruba_a_sincronizacao(self):
         with mock.patch.object(ponte, "rodada", side_effect=RuntimeError("bug")), \
-                mock.patch("src.sync.painel_envio.enviar"), \
+                mock.patch("src.sync.painel_ritmo.enviar_se_preciso"), \
                 self.assertLogs("pdv.sync", "ERROR"):
             Sincronizador(self.banco, HttpPonte()).rodada()
 
@@ -282,7 +282,7 @@ class TesteResilienciaEDiagnostico(BasePonte):
         http = HttpPonte(erro=OSError("conexão recusada"))
         sync = Sincronizador(self.banco, http)
         with mock.patch.object(licenca_nuvem, "consultar_resultado") as legado, \
-                mock.patch("src.sync.painel_envio.enviar"), self.assertLogs("pdv.ponte", "WARNING"):
+                mock.patch("src.sync.painel_ritmo.enviar_se_preciso"), self.assertLogs("pdv.ponte", "WARNING"):
             for _ in range(4):
                 self.banco.cfg_set(ponte.CHAVE_TENTATIVA, "")          # simula o tempo de espera vencido
                 sync.rodada()

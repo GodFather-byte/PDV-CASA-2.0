@@ -21,6 +21,17 @@ from pathlib import Path
 # se algo ficou para trás. Um teste confere que esta lista acompanha os arquivos de `src/` (módulo novo precisa entrar aqui).
 # `src.app` fica de fora de propósito: no executável ele é o próprio script de entrada (`__main__`), não um módulo importável.
 MODULOS = [
+    'src.cardapio.folha',
+    'src.cardapio.preco',
+    'src.controllers.caixa_divisao',
+    'src.controllers.caixa_totais',
+    'src.controllers.custos_venda',
+    'src.sync.cardapio_envio',
+    'src.sync.devolucoes_envio',
+    'src.sync.painel_ritmo',
+    'src.sync.painel_status',
+    'src.ui_qt.cardapio_qr',
+    'src.ui_qt.estado_nuvem',
     "src.autoteste", "src.autoteste_qt", "src.versao",
     "src.controllers.auditoria_controller",
     "src.controllers.acesso_controller", "src.controllers.cadastro_controller", "src.controllers.caderneta_controller",
