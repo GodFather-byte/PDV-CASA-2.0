@@ -5,7 +5,7 @@
 #
 # Comandos que o PDV manda:
 #   /ping    -> responde "ok" (PDV sabe que está online)
-#   /alerta  -> LED piscando devagar (faltam 5 min)
+#   /alerta  -> 1 toque curto + LED piscando devagar (faltam 5 min)
 #   /tocar   -> campainha + LED piscando rápido (tempo acabou)
 #   /parar   -> desliga tudo
 # ==========================================================
@@ -27,7 +27,8 @@ PINO_CAMPAINHA = 26          # buzzer ou módulo relé
 PINO_LED = 2                 # 2 = LED azul da própria placa
 RELE_ATIVO_EM_BAIXO = False  # mude para True se o relé ligar com sinal baixo
 
-TOQUES = 3                   # quantos "trim" por chamada
+TOQUES = 3                   # quantos "trim" quando o tempo acaba
+TOQUES_AVISO = 1             # quantos "trim" no aviso de 5 minutos (0 = só o LED)
 DURACAO_TOQUE = 0.7          # segundos
 PAUSA_TOQUE = 0.4
 # ----------------------------------------------
@@ -54,8 +55,8 @@ def piscar(ativo, periodo=500):
         led.value(0)
 
 
-def tocar():
-    for _ in range(TOQUES):
+def tocar(vezes=TOQUES):
+    for _ in range(vezes):
         campainha_on(True)
         time.sleep(DURACAO_TOQUE)
         campainha_on(False)
@@ -110,7 +111,8 @@ def main():
                 responder(cl, "ok")
             elif caminho == "/alerta":
                 piscar(True, 700)
-                responder(cl, "alerta")
+                responder(cl, "alerta")    # responde antes para o PDV não esperar
+                tocar(TOQUES_AVISO)
             elif caminho == "/tocar":
                 piscar(True, 200)
                 responder(cl, "tocando")   # responde antes para o PDV não esperar

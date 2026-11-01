@@ -10,7 +10,9 @@
 - No caixa: linha `PainelQuartosCaixa` embaixo dos produtos e do pagamento (`ui_qt/caixa.py`, `_pagina_venda`; Total e
   Troco lado a lado para caber em 768 px de altura), cartões
   no desenho das comandas; clique ou **Q3** no campo da comanda (`chamar_posicao`) inicia/+ Tempo/Libera. Avisos centralizados em `AvisosQuartos` (um por banco), sem tocar em dobro.
-- Aviso: bipe, janela na frente e campainha ESP32 do quarto (`quartos_campainhas`, rede local, thread com timeout de
+- Cores: verde livre, azul ocupado, amarelo acabando, vermelho piscando esgotado. Aos 5 min: `AvisoNaTela` (faixa
+  sobreposta no alto do caixa, não modal, OK fecha) + `tocar_som` (bipes do Windows; tons diferentes p/ esgotado).
+- Aviso: janela na frente e campainha ESP32 (`/alerta` agora dá 1 toque curto) do quarto (`quartos_campainhas`, rede local, thread com timeout de
   2 s). Programa do aparelho em `tools/esp32_campainha/main.py`. Guia: `docs/QUARTOS.md`. Testes: `tests/test_quartos.py`.
 - Pendente: homologar no balcão com um ESP32 real (só testado com o aparelho simulado).
 

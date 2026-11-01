@@ -20,7 +20,7 @@ Acesso: módulo `util_quartos` (nível 1, o caixa já abre). Na edição E&A Sup
 ## Na tela do caixa
 
 Com o módulo ligado, aparece uma linha **Quartos** embaixo dos produtos e do pagamento (Total e Troco ficam lado a
-lado para sobrar altura; cabe em 1366×768): um cartão por quarto no mesmo desenho das comandas (livre apagado; verde em uso; amarelo acabando; vermelho com a borda piscando quando esgota,
+lado para sobrar altura; cabe em 1366×768): um cartão por quarto no mesmo desenho das comandas (verde livre; azul ocupado; amarelo acabando; vermelho com a borda piscando quando esgota,
 mostrando quanto passou, ex.: +02:00).
 
 O operador inicia o tempo depois que o cliente paga:
@@ -33,9 +33,10 @@ tiram o foco do código do produto. Os avisos são os mesmos no caixa e no paine
 ## Operação
 
 1. Cliente pagou no caixa → **Iniciar** no cartão do quarto → escolhe os blocos (1 = 30 min, 6 = 3h = R$ 540).
-2. Verde: em uso. Amarelo: faltam 5 min (bipe no caixa e LED piscando no quarto).
-3. Vermelho piscando: tempo esgotado. Bipe, a janela vem para a frente e a campainha toca, repetindo a cada minuto
-   até **Liberar**.
+2. Azul: em uso. Amarelo: faltam 5 min — aparece um aviso grande no alto do caixa ("QUARTO 3 — faltam 5 minutos"),
+   com som no caixa e, se houver campainha, um toque curto e o LED piscando no quarto. O aviso não trava o caixa: OK fecha.
+3. Vermelho piscando: tempo esgotado. Aviso vermelho na tela, som diferente, a janela vem para a frente e a campainha
+   toca, repetindo a cada minuto até **Liberar**.
 4. Cliente pagou mais tempo → **+ Tempo** (soma ao fim previsto). **Liberar** devolve o quarto a livre e desliga a
    campainha.
 
@@ -53,7 +54,7 @@ reservado no roteador. Funciona sem internet. O cartão mostra 🔔 ok / 🔕 of
 3. Salve no ESP32 com o nome `main.py`. Ele liga sozinho na tomada.
 4. Em Configurações > Módulos, preencha `quartos_campainhas` com o número de cada quarto e o IP do aparelho.
 
-Comandos aceitos pelo aparelho: `/ping`, `/alerta`, `/tocar`, `/parar`. Campainha de 220 V com relé: chame um
+Comandos aceitos pelo aparelho: `/ping`, `/alerta` (1 toque curto + LED; `TOQUES_AVISO`), `/tocar`, `/parar`. Campainha de 220 V com relé: chame um
 eletricista para a parte da tomada.
 
 Código: regra em `src/controllers/quartos_controller.py`, envio em `src/hardware/campainha.py`, tela em

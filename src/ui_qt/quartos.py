@@ -11,6 +11,7 @@ painel abertos ao mesmo tempo, a campainha não toca em dobro.
 from __future__ import annotations
 
 import math
+import threading
 
 from PySide6.QtCore import QObject, QPoint, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFontMetrics, QKeySequence, QPainter, QPen, QShortcut
@@ -33,8 +34,8 @@ COLUNAS = 4
 
 # estado -> (fundo, texto)
 CORES = {
-    "livre": ("#3a3a3a", "#cfcfcf"),
-    "uso": ("#1e7d32", "#ffffff"),
+    "livre": ("#1e7d32", "#ffffff"),        # verde: disponível
+    "uso": ("#1e4fa3", "#ffffff"),          # azul: ocupado (como a comanda aberta)
     "alerta": ("#f9a825", "#000000"),
     "estourou": ("#c62828", "#ffffff"),
     "piscar": ("#ff8a80", "#000000"),
@@ -42,9 +43,30 @@ CORES = {
 
 
 # ------------------------------------------------------------------ avisos
+# Som no caixa (no Windows, bipes pelo alto-falante do PC; fora dele, o bipe do sistema). Tons diferentes para
+# "faltam 5 minutos" e "tempo esgotado", para o operador reconhecer sem olhar.
+SONS = {"alerta": ((880, 250), (880, 250)), "estourou": ((1200, 300), (900, 300), (1200, 300))}
+
+
+def tocar_som(tipo: str) -> None:
+    try:
+        import winsound
+    except ImportError:
+        QApplication.beep()
+        return
+
+    def tocar():
+        for frequencia, duracao in SONS[tipo]:
+            winsound.Beep(frequencia, duracao)
+
+    threading.Thread(target=tocar, name="som-quarto", daemon=True).start()
+
+
 class AvisosQuartos(QObject):
-    """Decide quando bipar e acionar a campainha de cada uso; compartilhado por todas as telas do mesmo banco."""
+    """Decide quando avisar (tela, som no caixa e campainha) em cada uso; um por banco, compartilhado pelas telas."""
     resultado = Signal(int, bool)          # quarto, campainha respondeu?
+    aviso = Signal(int, str, str)          # quarto, tipo ('alerta' | 'estourou'), texto para a tela
+    resolvido = Signal(int)                # quarto iniciado, com mais tempo ou liberado: o aviso some
 
     def __init__(self):
         super().__init__()
@@ -78,13 +100,20 @@ class AvisosQuartos(QObject):
             uso = item["uso_id"]
             if item["estado"] == "alerta" and uso not in self._alertou:
                 self._alertou.add(uso)
-                QApplication.beep()
+                minutos = max(1, math.ceil(item["restante_seg"] / 60))
+                tocar_som("alerta")
+                self.aviso.emit(item["quarto"], "alerta",
+                                f"QUARTO {item['quarto']}  —  falta{'m' if minutos > 1 else ''} {minutos} "
+                                f"minuto{'s' if minutos > 1 else ''} (sai às {item['fim']:%H:%M})")
                 self.enviar(ctrl, item["quarto"], "alerta")
             elif item["estado"] == "estourou":
                 ultimo = self._ultimo_toque.get(uso)
                 if ultimo is None or (agora - ultimo).total_seconds() >= REPETIR_TOQUE_SEG:
                     self._ultimo_toque[uso] = agora
-                    QApplication.beep()
+                    tocar_som("estourou")
+                    self.aviso.emit(item["quarto"], "estourou",
+                                    f"QUARTO {item['quarto']}  —  TEMPO ESGOTADO "
+                                    f"(passou {fmt_relogio(item['restante_seg'])})")
                     self.enviar(ctrl, item["quarto"], "tocar")
                     tocaram.append(item["quarto"])
         return tocaram
@@ -93,6 +122,7 @@ class AvisosQuartos(QObject):
         """Iniciou, ganhou tempo ou foi liberado: os avisos recomeçam e a campainha desliga."""
         self._alertou.discard(uso_id)
         self._ultimo_toque.pop(uso_id, None)
+        self.resolvido.emit(quarto)
         self.enviar(ctrl, quarto, "parar")
 
 
@@ -102,6 +132,70 @@ def avisos_de(banco) -> AvisosQuartos:
         avisos = AvisosQuartos()
         banco._avisos_quartos = avisos
     return avisos
+
+
+class AvisoNaTela(QFrame):
+    """Aviso grande sobreposto no alto da janela (não é modal: o caixa continua funcionando). Uma linha por quarto;
+    some quando o operador clica em OK ou quando o quarto ganha tempo ou é liberado."""
+    LARGURA = 600
+    ESTILO = {"alerta": ("#f9a825", "#1a1200"), "estourou": ("#c62828", "#ffffff")}
+
+    def __init__(self, janela: QWidget, avisos: AvisosQuartos):
+        super().__init__(janela)
+        self.janela = janela
+        self.linhas: dict[int, tuple[str, str]] = {}
+        self.setObjectName("aviso_quartos")
+        self.setFixedWidth(self.LARGURA)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(16, 10, 10, 10)
+        self.texto = QLabel("")
+        self.texto.setWordWrap(True)
+        lay.addWidget(self.texto, 1)
+        self.ok = QPushButton("OK")
+        self.ok.setFocusPolicy(Qt.FocusPolicy.NoFocus)     # não rouba o Enter do caixa
+        self.ok.setFixedWidth(70)
+        self.ok.clicked.connect(self.dispensar)
+        lay.addWidget(self.ok)
+        self.hide()
+        avisos.aviso.connect(self.mostrar)
+        avisos.resolvido.connect(self.remover)
+        janela.installEventFilter(self)
+
+    def eventFilter(self, obj, ev):
+        if obj is self.janela and ev.type() == ev.Type.Resize and self.isVisible():
+            self._posicionar()
+        return False
+
+    def _posicionar(self):
+        self.adjustSize()
+        self.move(max(0, (self.janela.width() - self.width()) // 2), 64)
+        self.raise_()
+
+    def mostrar(self, quarto: int, tipo: str, texto: str):
+        self.linhas[quarto] = (tipo, texto)
+        self._desenhar()
+
+    def remover(self, quarto: int):
+        if self.linhas.pop(quarto, None) is not None:
+            self._desenhar()
+
+    def dispensar(self):
+        self.linhas.clear()
+        self._desenhar()
+
+    def _desenhar(self):
+        if not self.linhas:
+            self.hide()
+            return
+        grave = any(tipo == "estourou" for tipo, _ in self.linhas.values())
+        fundo, letra = self.ESTILO["estourou" if grave else "alerta"]
+        self.setStyleSheet(
+            f"QFrame#aviso_quartos {{ background: {fundo}; border: 2px solid #ffffff66; border-radius: 12px; }}"
+            f"QFrame#aviso_quartos QLabel {{ color: {letra}; background: transparent; font-size: 20px; font-weight: 800; }}"
+            f"QFrame#aviso_quartos QPushButton {{ font-size: 16px; font-weight: 700; padding: 6px; }}")
+        self.texto.setText("\n".join(texto for _, texto in sorted(self.linhas.values(), key=lambda l: l[0] != "estourou")))
+        self.show()
+        self._posicionar()
 
 
 def modulo_disponivel(ctx) -> bool:
@@ -276,6 +370,7 @@ class JanelaQuartos(QDialog):
         self.exigir_acesso()
         self.avisos = avisos_de(ctx.banco)
         self.avisos.resultado.connect(self._resultado_campainha)
+        self.aviso_tela = AvisoNaTela(self, self.avisos)
         self.setWindowTitle("Controle de Quartos • Qt")
         self.resize(1050, 620)
         self.cartoes: dict[int, CartaoQuarto] = {}
@@ -401,7 +496,7 @@ class JanelaQuartos(QDialog):
 
 # ------------------------------------------------- quartos no caixa
 # Cartões no mesmo desenho dos das comandas (painel_mesas.py): mesmas cores por situação, cantos, pílula e fontes.
-_ESTADO_CARTAO = {"uso": "balcao", "alerta": "conta", "estourou": "parada"}
+_ESTADO_CARTAO = {"livre": "balcao", "uso": "consumindo", "alerta": "conta", "estourou": "parada"}   # livre verde, ocupado azul
 _PILULA = {"livre": "Livre", "uso": "Em uso", "alerta": "Acabando", "estourou": "Esgotado"}
 
 
@@ -454,30 +549,26 @@ class GradeQuartos(QWidget):
             x, y, w, h = self.celula(i)
             x1, y1, x2, y2 = x + 3, y + 3, x + w - 3, y + h - 3
             estado = item["estado"]
-            if estado == "livre":
-                fundo, borda, cor_pilula = cores["quadro"], cores["borda"], cores["mudo"]
-                largura = 1
-            else:
-                e = ESTADOS_MESAS[self.modo][_ESTADO_CARTAO[estado]]
-                fundo, borda, cor_pilula = e["fundo"], e["borda"], e["texto"]
-                largura = 1
-                if estado == "estourou" and self.piscar:      # pisca a borda: chama o olho sem poluir
-                    borda, largura = cores["vermelho"], 3
+            e = ESTADOS_MESAS[self.modo][_ESTADO_CARTAO[estado]]
+            fundo, borda, cor_pilula = e["fundo"], e["borda"], e["texto"]
+            largura = 1
+            if estado == "estourou" and self.piscar:          # pisca a borda: chama o olho sem poluir
+                borda, largura = cores["vermelho"], 3
             p.setPen(QPen(QColor(borda), largura))
             p.setBrush(QColor(fundo))
             p.drawRoundedRect(QRectF(x1, y1, x2 - x1, y2 - y1), 12, 12)
             pad = 9
             fm_rotulo = QFontMetrics(_fonte(7, True))
             p.setFont(_fonte(7, True))
-            p.setPen(QColor(cores["suave"] if estado != "livre" else cores["mudo"]))
+            p.setPen(QColor(cores["suave"]))
             p.drawText(QPointF(x1 + pad, y1 + 4 + fm_rotulo.ascent()), "QUARTO")
             p.setFont(_fonte(15, True))
-            p.setPen(QColor(cores["texto"] if estado != "livre" else cores["mudo"]))
+            p.setPen(QColor(cores["texto"]))
             fm_num = QFontMetrics(_fonte(15, True))
             p.drawText(QPointF(x1 + pad, y2 - 8), str(item["quarto"]))
             espaco = x2 - pad - (x1 + pad + fm_num.horizontalAdvance(str(item["quarto"])) + 6)
             if estado == "livre":
-                rotulo, fonte = _PILULA["livre"], _fonte(8, True)
+                rotulo, fonte = _PILULA["livre"], _fonte(10, True)
             else:
                 rotulo = ("+" if estado == "estourou" else "") + fmt_relogio(item["restante_seg"])
                 for tamanho in (12, 11, 10, 9, 8):          # o tempo cabe inteiro: diminui a fonte, não corta
@@ -485,7 +576,7 @@ class GradeQuartos(QWidget):
                     if QFontMetrics(fonte).horizontalAdvance(rotulo) <= espaco:
                         break
             p.setFont(fonte)
-            p.setPen(QColor(cor_pilula if estado != "livre" else cores["mudo"]))
+            p.setPen(QColor(cor_pilula))
             fm = QFontMetrics(fonte)
             rotulo = fm.elidedText(rotulo, Qt.TextElideMode.ElideRight, int(max(10, espaco)))
             p.drawText(QPointF(x2 - pad - fm.horizontalAdvance(rotulo), y2 - 9), rotulo)
@@ -504,6 +595,7 @@ class PainelQuartosCaixa(QFrame):
         self.janela = janela
         self.modo = modo
         self.avisos = avisos_de(ctx.banco)
+        self.aviso_tela = AvisoNaTela(janela, self.avisos) if janela is not None else None
         self.itens: dict[int, dict] = {}
         self.setObjectName("painel_quartos_caixa")
         # Título, resumo e botão do painel na lateral: a linha fica com a altura de um cartão só.

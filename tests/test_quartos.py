@@ -317,6 +317,61 @@ class TesteQuartosQt(BaseQuartos):
         j.atualizar()
         self.assertEqual(self.envios.count(("192.168.0.51", "tocar")), 1)
 
+    def test_aviso_na_tela_aos_5_minutos_e_some_ao_liberar(self):
+        from PySide6.QtWidgets import QWidget
+        from src.ui_qt.quartos import PainelQuartosCaixa
+        janela = QWidget()
+        janela.resize(1200, 700)
+        self.addCleanup(janela.deleteLater)
+        ctx = Contexto(self.banco, AcessoController(self.banco).operador(self.operador_adm()))
+        self.q.iniciar(3, 1)
+        f = PainelQuartosCaixa(ctx, janela)
+        f.timer.stop()
+        f.timer_campainhas.stop()
+        janela.show()
+        self.assertTrue(f.aviso_tela.isHidden())
+        self.avancar(minutes=25, seconds=1)
+        f.atualizar()
+        self.assertFalse(f.aviso_tela.isHidden())
+        self.assertIn("QUARTO 3", f.aviso_tela.texto.text())
+        self.assertIn("faltam 5 minutos", f.aviso_tela.texto.text())
+        self.assertEqual(f.aviso_tela.ok.focusPolicy(), Qt.FocusPolicy.NoFocus)   # não rouba o Enter do caixa
+        f.atualizar()                                                              # não repete o aviso
+        self.assertEqual(f.aviso_tela.texto.text().count("QUARTO 3"), 1)
+        self.avancar(minutes=5)
+        f.atualizar()
+        self.assertIn("TEMPO ESGOTADO", f.aviso_tela.texto.text())
+        f.pedir(lambda ctrl: (lambda: ctrl.liberar(3)), 3)
+        self.assertTrue(f.aviso_tela.isHidden())
+
+    def test_ok_fecha_o_aviso(self):
+        from PySide6.QtWidgets import QWidget
+        from src.ui_qt.quartos import PainelQuartosCaixa
+        janela = QWidget()
+        self.addCleanup(janela.deleteLater)
+        ctx = Contexto(self.banco, AcessoController(self.banco).operador(self.operador_adm()))
+        self.q.iniciar(1, 1)
+        f = PainelQuartosCaixa(ctx, janela)
+        f.timer.stop()
+        janela.show()
+        self.avancar(minutes=26)
+        f.atualizar()
+        self.assertIn("falta", f.aviso_tela.texto.text())
+        f.aviso_tela.ok.click()
+        self.assertTrue(f.aviso_tela.isHidden())
+
+    def test_som_diferente_para_aviso_e_esgotado(self):
+        from src.ui_qt import quartos as tela
+        self.assertNotEqual(tela.SONS["alerta"], tela.SONS["estourou"])
+        self.q.iniciar(1, 1)
+        f = self.painel()
+        with mock.patch.object(tela, "tocar_som") as som:
+            self.avancar(minutes=26)
+            f.atualizar()
+            self.avancar(minutes=5)
+            f.atualizar()
+        self.assertEqual([c.args[0] for c in som.call_args_list], ["alerta", "estourou"])
+
     def test_tela_do_caixa_tem_os_quartos_e_o_atalho(self):
         from src.ui_qt import quartos as tela
         from src.ui_qt.caixa import JanelaCaixa
