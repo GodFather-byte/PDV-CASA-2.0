@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 30
+VERSAO_ESQUEMA = 31
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -684,6 +684,22 @@ TABELAS = [
     "CREATE INDEX IF NOT EXISTS ix_itens_estoque_prod ON itens_estoque(produto_id)",
     "CREATE INDEX IF NOT EXISTS ix_lanc_estoque_data ON lancamentos_estoque(data)",
     "CREATE INDEX IF NOT EXISTS ix_contas_quit ON contas(dt_quitacao)",
+    # Controle de quartos (v31, módulo usar_quartos): só o tempo; o pagamento é venda normal no caixa. O início fica
+    # gravado e o restante é calculado pelo relógio. Um uso aberto (liberado_em NULL) por quarto.
+    """CREATE TABLE IF NOT EXISTS quartos_uso (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        quarto INTEGER NOT NULL CHECK (quarto > 0),
+        inicio TEXT NOT NULL,
+        blocos INTEGER NOT NULL CHECK (blocos > 0),
+        minutos_bloco INTEGER NOT NULL CHECK (minutos_bloco > 0),
+        valor_bloco_cent INTEGER NOT NULL DEFAULT 0,
+        operador_id INTEGER REFERENCES operadores(id),
+        liberado_em TEXT,
+        liberado_por INTEGER REFERENCES operadores(id),
+        excedeu_seg INTEGER NOT NULL DEFAULT 0
+    )""",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_quarto_em_uso ON quartos_uso(quarto) WHERE liberado_em IS NULL",
+    "CREATE INDEX IF NOT EXISTS ix_quartos_uso_inicio ON quartos_uso(inicio)",
 ]
 
 # As relações históricas não dependem da permanência do cadastro comercial.
@@ -924,6 +940,9 @@ AUDITORIA = [
 # (ver BancoDados._migrar). Bancos novos já nascem na VERSAO_ESQUEMA e não as executam. Cada passo é um
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 MIGRACOES = {
+    # v31: controle de quartos (usar_quartos). A tabela quartos_uso nasce em TABELAS (IF NOT EXISTS); as chaves
+    # quartos_* nascem em CONFIG_PADRAO e o módulo util_quartos em ACESSOS, na abertura seguinte. Nada a migrar.
+    31: [],
     # O nome da garota digitado no acerto (o número da comanda pode ser de outra garota em outra noite: o cadastro não muda).
     30: [
         ("coluna", "acertos_garotas", "nome", "TEXT"),

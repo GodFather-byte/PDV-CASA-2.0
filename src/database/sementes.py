@@ -55,6 +55,7 @@ ACESSOS = [
     ("util_backup", "Backup de dados", "Utilitários", 2),
     ("util_fila_impressao", "Fila de impressão", "Utilitários", 2),
     ("util_cozinha", "Painel da Cozinha/Bar", "Utilitários", 2),
+    ("util_quartos", "Controle de quartos (tempo)", "Utilitários", 1),
     ("cfg_acessos", "Configurar níveis de acesso", "Configurações", 4),
     ("cfg_loja", "Dados da Loja", "Configurações", 3),
     ("cfg_configuracoes", "Configurações operacionais", "Configurações", 4),
@@ -91,6 +92,9 @@ CONFIG_PADRAO = {
     "usar_rodizio": "N", "valor_rodizio_pessoa": "0",
     # Módulo de operação Pré-pago: crédito carregado na comanda, consumo até o saldo e a sobra devolvida na saída.
     "usar_prepago": "N",
+    # Controle de quartos: tempo em blocos (valor só informativo; o pagamento é venda normal) e campainha por quarto.
+    "usar_quartos": "N", "quartos_qtd": "7", "quartos_minutos_bloco": "30", "quartos_valor_bloco": "90",
+    "quartos_alerta_min": "5", "quartos_campainhas": "",
     # Recursos da casa noturna: nascem ligados porque o sistema nasceu boate; o perfil do estabelecimento os desliga nos
     # outros tipos de negócio (perfil_controller.py).
     "usar_garotas": "S", "usar_portaria": "S", "perfil_operacao": "boate",

@@ -124,6 +124,14 @@ CAMPOS_CONFIG = [
     ("valor_rodizio_pessoa", "Valor do rodízio por pessoa (R$)", "texto", "Módulos"),
     ("usar_prepago", "Pré-pago: o cliente carrega crédito na comanda (botão Recarga no caixa), só consome até o saldo e "
      "recebe a sobra de volta na saída", "sn", "Módulos"),
+    ("usar_quartos", "Quartos: contagem do tempo de cada quarto (o cliente paga antes no caixa), aviso no caixa e "
+     "campainha no quarto", "sn", "Módulos"),
+    ("quartos_qtd", "Quartos: quantidade de quartos", "int", "Módulos"),
+    ("quartos_minutos_bloco", "Quartos: minutos de cada bloco de tempo", "int", "Módulos"),
+    ("quartos_valor_bloco", "Quartos: valor de cada bloco (R$, só informativo na tela)", "texto", "Módulos"),
+    ("quartos_alerta_min", "Quartos: avisar quantos minutos antes de acabar", "int", "Módulos"),
+    ("quartos_campainhas", "Quartos: campainhas (quarto=endereço do aparelho; ex.: 1=192.168.0.51; 2=192.168.0.52)",
+     "texto", "Módulos"),
     ("programa_comunicacao", "Programa de comunicação (caminho do executável)", "texto", "Utilitários"),
     ("pasta_backup", "Pasta do backup (vazio = pasta Backup do sistema)", "texto", "Utilitários"),
     ("pasta_backup_extra", "Cópia extra do backup: pendrive, outro disco ou pasta de rede (vazio = sem cópia extra)", "texto", "Utilitários"),
@@ -167,6 +175,7 @@ MODULOS_OPCIONAIS = {
     "usar_delivery": {"cad_bairros"},
     "usar_cozinha_bar": {"cad_setores_impressao", "util_cozinha"},
     "usar_garotas": {"cad_garotas", "caixa_comissao", "caixa_pagar_comissao", "rel_comissao_garotas"},
+    "usar_quartos": {"util_quartos"},
 }
 
 # Códigos especiais do caixa: (módulo que o usa, valor de fábrica, para que serve). Com o módulo desligado o código deixa de
@@ -371,6 +380,21 @@ class ConfigController:
                     raise ErroValidacao("O número de turnos deve ficar entre 1 e 9.", {chave: "inválido"})
                 if chave == "vias_fechamento" and not 1 <= int(v) <= 3:
                     raise ErroValidacao("As vias do fechamento vão de 1 a 3.", {chave: "inválido"})
+                if chave == "quartos_qtd" and not 1 <= int(v) <= 50:
+                    raise ErroValidacao("A quantidade de quartos deve ficar entre 1 e 50.", {chave: "inválido"})
+                if chave == "quartos_minutos_bloco" and not 5 <= int(v) <= 240:
+                    raise ErroValidacao("O bloco de tempo dos quartos vai de 5 a 240 minutos.", {chave: "inválido"})
+                if chave == "quartos_alerta_min" and not 0 <= int(v) <= 60:
+                    raise ErroValidacao("O aviso dos quartos vai de 0 a 60 minutos antes.", {chave: "inválido"})
+                if chave == "quartos_valor_bloco":
+                    try:
+                        if fmt.para_centavos(v) < 0:
+                            raise ValueError
+                    except ValueError:
+                        raise ErroValidacao("Valor do bloco dos quartos inválido (ex.: 90,00).", {chave: "inválido"}) from None
+                if chave == "quartos_campainhas":
+                    from src.controllers.quartos_controller import ler_campainhas
+                    ler_campainhas(v)
                 if chave == "limite_gaveta" and int(v) > 1_000_000:
                     raise ErroValidacao("O limite da gaveta deve ficar abaixo de R$ 1.000.000.", {chave: "inválido"})
                 self.banco.cfg_set(chave, v)
