@@ -8,3 +8,5 @@ PySide6-Essentials>=6.7,<7                  # Qt Widgets em migração (python -
 segno>=1.6,<2                               # QR do endereço do porteiro na rede local (sem internet)
 # Para gerar o executável: pip install pyinstaller  (python build_pdv.py)
 # A API de nuvem tem as suas próprias dependências em backend/requirements.txt
+
+tzdata>=2026.1                              # fusos IANA do cardápio, inclusive no Windows

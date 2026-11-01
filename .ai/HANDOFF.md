@@ -29,7 +29,7 @@
 - Custos recuperados e comissão dos itens são referências analíticas; não alteram salários, pagamentos nem CMV histórico.
 - Sincronização usa revisão persistente, filas e batimento de 45 s; indicador Qt mostra confirmação e pendências.
 - Esquema 33 adiciona revisão, ACK de devoluções e custos dos itens; migração preserva dados e gera backup.
-- Dependências fixadas com hashes; workflows validam instalação. Deploy verifica SHA público em /v1/versao.
+- Dependências fixadas com hashes; workflows validam instalação. Build inclui módulos do autoteste e tzdata (fuso no Windows). Deploy verifica SHA público em /v1/versao.
 - Guias: docs/ENTREGA_1_10.md e docs/HOMOLOGACAO_BALCAO.md. Equipamentos físicos ainda pendentes.
 - CaixaController mantém entrada pública; cálculo e divisão delegados a módulos menores.
 
