@@ -11,6 +11,8 @@
   `PDV_ATUALIZACAO_DIR` num servidor com disco. Guia com o passo a passo: `docs/ATUALIZACAO.md`.
 - **Última instalação manual:** os caixas sem este código não se atualizam sozinhos. A chave pública já está
   em `src/atualizacao/manifesto.py`. A semente privada não está no git: guarde em `PDV_ATUALIZACAO_CHAVE`.
+- O autoteste do executável lista `src.atualizacao.cliente`, `src.atualizacao.manifesto` e os módulos do
+  cardápio (`src.cardapio.*`, `src.sync.cardapio_envio`, `src.ui_qt.cardapio_qr`). Módulo novo em `src/` entra em `MODULOS`.
 
 ## Painel do dono (bar, boate e adega)
 
