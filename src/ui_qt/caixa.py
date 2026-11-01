@@ -443,6 +443,11 @@ class JanelaCaixa(QMainWindow):
             self.btn_chamar.hide()
             self.cartoes.hide()
 
+        # Produtos e pagamento lado a lado; embaixo dos dois, a linha dos quartos (quando o módulo está ligado).
+        lado = QVBoxLayout()
+        lado.setSpacing(8)
+        colunas = QHBoxLayout()
+        lado.addLayout(colunas, 1)
         centro, c_cen = _cartao()
         self.lbl_etq_venda = QLabel("BALCÃO")         # o tipo da venda em destaque (rosa na comanda da garota)
         self.lbl_etq_venda.setAlignment(Qt.AlignCenter)
@@ -620,21 +625,28 @@ class JanelaCaixa(QMainWindow):
         linha_operacoes.addWidget(self.btn_comissoes)
         linha_operacoes.addWidget(self.btn_operacoes, 1)
         c_cen.addLayout(linha_operacoes)
-        grade.addWidget(centro, 1)
+        colunas.addWidget(centro, 1)
 
         dir_, c_dir = _cartao()
         dir_.setFixedWidth(360)
+        # Total e troco lado a lado: sobra altura para a linha dos quartos embaixo.
+        valores = QGridLayout()
+        valores.setHorizontalSpacing(10)
+        valores.setVerticalSpacing(0)
         self.lbl_total_rotulo = _rotulo("Total (R$)", "mudo")
-        c_dir.addWidget(self.lbl_total_rotulo)
+        valores.addWidget(self.lbl_total_rotulo, 0, 0)
         self.lbl_total = _rotulo("0,00", "total")
-        c_dir.addWidget(self.lbl_total)
+        valores.addWidget(self.lbl_total, 1, 0)
         self.lbl_detalhe = _rotulo("", "mudo")
-        c_dir.addWidget(self.lbl_detalhe)
+        valores.addWidget(self.lbl_detalhe, 2, 0, 1, 2)
         self.lbl_falta_rotulo = _rotulo("Troco (R$)", "mudo")
-        c_dir.addWidget(self.lbl_falta_rotulo)
+        valores.addWidget(self.lbl_falta_rotulo, 0, 1)
         self.lbl_troco = _rotulo("0,00", "troco")
-        c_dir.addWidget(self.lbl_troco)
-        c_dir.addWidget(_rotulo("Forma de pagamento (setas, número 1-9 ou inicial)", "mudo"))
+        valores.addWidget(self.lbl_troco, 1, 1)
+        valores.setColumnStretch(0, 3)
+        valores.setColumnStretch(1, 2)
+        c_dir.addLayout(valores)
+        c_dir.addWidget(_rotulo("Forma de pagamento (setas, 1-9 ou inicial)", "mudo"))
         self.cmb_forma = QComboBox()
         self.cmb_forma.setObjectName("forma")
         self.cmb_forma.currentIndexChanged.connect(lambda _i: self._sugerir_valor())
@@ -676,7 +688,13 @@ class JanelaCaixa(QMainWindow):
         self.btn_trocar_turno = QPushButton("Trocar turno")
         self.btn_trocar_turno.clicked.connect(self.ir_para_fechamento)
         c_dir.addWidget(self.btn_trocar_turno)
-        grade.addWidget(dir_)
+        colunas.addWidget(dir_)
+        # Quartos (módulo usar_quartos): cartões no desenho das comandas, numa linha embaixo dos produtos e do pagamento;
+        # somem com o módulo desligado e a tela volta ao tamanho de sempre.
+        from src.ui_qt.quartos import PainelQuartosCaixa
+        self.painel_quartos = PainelQuartosCaixa(self.ctx, self, self._modo_visual())
+        lado.addWidget(self.painel_quartos)
+        grade.addLayout(lado, 1)
         return pagina
     # ========================================================= utilidades
     def avisar(self, texto: str, cor: str = VERDE) -> None:
@@ -781,7 +799,8 @@ class JanelaCaixa(QMainWindow):
         self.paginas.setCurrentIndex(PAGINA_VENDA)
         padrao = self.ctx.caixa.padrao_posicao()
         comum, outra = exemplos(padrao)
-        self.lbl_dica_pos.setText(f"{rotulo_do_campo(padrao)}. Ex.: {comum} ou {outra}; 0 volta ao balcão.")
+        dica_quartos = "; Q3 = quarto 3" if self.ctx.quartos.ligado() and self.ctx.pode("util_quartos") else ""
+        self.lbl_dica_pos.setText(f"{rotulo_do_campo(padrao)}. Ex.: {comum} ou {outra}; 0 volta ao balcão{dica_quartos}.")
         self._carregar_formas()
         self.recarregar()
 
@@ -1002,6 +1021,8 @@ class JanelaCaixa(QMainWindow):
         modo = self._modo_visual()
         c = CORES_MESAS[modo]
         self.cartoes.definir_modo(modo)
+        if hasattr(self, "painel_quartos"):
+            self.painel_quartos.definir_modo(modo)
         self.painel_mesas.setStyleSheet(
             f"QFrame#painel_cartoes {{ background: {c['quadro']}; border: 1px solid {c['quadro_borda']}; border-radius: 12px; }}"
             f"QFrame#painel_cartoes QLabel {{ background: transparent; color: {c['texto']}; }}"
@@ -2250,6 +2271,13 @@ class JanelaCaixa(QMainWindow):
         if self.modo_comissao:                        # trocou de posição no meio da comissão: ela é descartada
             self._limpar_entrada()
         texto = self.ent_pos.text().strip() or "0"
+        from src.ui_qt.quartos import ler_atalho_quarto
+        quarto = ler_atalho_quarto(texto)
+        if quarto is not None and not self.painel_quartos.isHidden():   # Q3: tempo do quarto 3, sem mexer na venda
+            self.ent_pos.clear()
+            self.painel_quartos.acionar(quarto)
+            self.ent_codigo.setFocus()
+            return
         try:
             comanda, n = self.ctx.caixa.ler_posicao(texto)
         except ValueError as e:

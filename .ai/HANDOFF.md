@@ -1,5 +1,21 @@
 # HANDOFF
 
+## Controle de quartos (novo, esquema 31)
+
+- Módulo `usar_quartos` (nasce desligado; Configurações > Módulos). Botão **Quartos (tempo)** no menu, acesso
+  `util_quartos` nível 1. Não existe na edição E&A Superações.
+- Só conta tempo: o cliente paga antes no caixa (venda normal). Blocos de `quartos_minutos_bloco` (30) a
+  `quartos_valor_bloco` (R$ 90, informativo e gravado no início). Estados livre/uso/alerta/estourou pelo relógio;
+  `quartos_uso` guarda início, blocos, liberação e quanto passou do tempo.
+- No caixa: linha `PainelQuartosCaixa` embaixo dos produtos e do pagamento (`ui_qt/caixa.py`, `_pagina_venda`; Total e
+  Troco lado a lado para caber em 768 px de altura), cartões
+  no desenho das comandas; clique ou **Q3** no campo da comanda (`chamar_posicao`) inicia/+ Tempo/Libera. Avisos centralizados em `AvisosQuartos` (um por banco), sem tocar em dobro.
+- Cores: verde livre, azul ocupado, amarelo acabando, vermelho piscando esgotado. Aos 5 min: `AvisoNaTela` (faixa
+  sobreposta no alto do caixa, não modal, OK fecha) + `tocar_som` (bipes do Windows; tons diferentes p/ esgotado).
+- Aviso: janela na frente e campainha ESP32 (`/alerta` agora dá 1 toque curto) do quarto (`quartos_campainhas`, rede local, thread com timeout de
+  2 s). Programa do aparelho em `tools/esp32_campainha/main.py`. Guia: `docs/QUARTOS.md`. Testes: `tests/test_quartos.py`.
+- Pendente: homologar no balcão com um ESP32 real (só testado com o aparelho simulado).
+
 ## Painel do dono (celular)
 
 - A PWA continua em `/painel/` (`backend/painel_web/`), com a mesma senha e sessão. O celular atualiza sozinho a cada 30 s.
@@ -33,7 +49,7 @@
 
 ## Estado
 
-- PDV **1.9.0**, esquema **30**. Interface do PDV só Qt (PySide6). O gerador de licenças continua em Tkinter.
+- PDV **1.9.0**, esquema **31**. Interface do PDV só Qt (PySide6). O gerador de licenças continua em Tkinter.
 - Dinheiro em centavos. Duas edições: WillPDV e E&A Superações (`src/core/edicao.py`). Cupom não fiscal.
 - O histórico fino de tela (caixa, fechamento, comanda da garota) está no git; não repetir aqui.
 

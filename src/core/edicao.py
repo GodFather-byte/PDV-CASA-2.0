@@ -27,6 +27,7 @@ CHAVES_CASA_NOTURNA = frozenset({
     "exigir_senha_comissao", "codigo_comissao", "comissao_em_pontos", "comissao_valor_ponto", "comissao_paga_do_caixa",
     "imprimir_saida_ao_pagar", "codigo_saida", "comissao_na_linha", "imprimir_via_comissao", "comissao_pede_shows",
     "show_valores", "valor_rodizio_pessoa", "porteiro_ativo", "porteiro_porta",
+    "quartos_qtd", "quartos_minutos_bloco", "quartos_valor_bloco", "quartos_alerta_min", "quartos_campainhas",
 })
 
 
@@ -57,8 +58,9 @@ EDICOES = {
     "ea_superacoes": Edicao(
         "ea_superacoes", "E&A Superações", "E&A SUPERAÇÕES", "ea-superacoes.ico", "ea-superacoes-logo.png",
         "EA-SUPERACOES", perfil="adega",
-        fixas={"usar_mesas": "N", "usar_garotas": "N", "usar_portaria": "N", "usar_rodizio": "N", "usar_prepago": "N"},
-        ocultas=CHAVES_CASA_NOTURNA, menu_oculto=frozenset({"cozinha"}),
+        fixas={"usar_mesas": "N", "usar_garotas": "N", "usar_portaria": "N", "usar_rodizio": "N", "usar_prepago": "N",
+               "usar_quartos": "N"},
+        ocultas=CHAVES_CASA_NOTURNA, menu_oculto=frozenset({"cozinha", "quartos"}),
         executavel="EASuperacoes", script_instalador="EASuperacoes.iss"),
 }
 

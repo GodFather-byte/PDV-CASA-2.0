@@ -44,6 +44,7 @@ class TesteModulosNoBanco(BaseCaixa):
         self.assertIn("cad_bairros", fora)               # bairros são só do delivery
         self.banco.cfg_set("usar_delivery", "S")
         self.banco.cfg_set("usar_cozinha_bar", "S")
+        self.banco.cfg_set("usar_quartos", "S")
         self.assertEqual(modulos_desligados(self.banco), set())
 
     def test_fita_do_fechamento_sem_linhas_de_caderneta(self):

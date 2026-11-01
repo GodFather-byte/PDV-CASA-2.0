@@ -227,6 +227,7 @@ class JanelaPrincipal(QMainWindow):
             ("promocoes", "Promoções e faixas", self.abrir_promocoes),
             ("alertas", "Alertas da operação", self.abrir_alertas),
             ("cozinha", "Cozinha / Bar", self.abrir_cozinha),
+            ("quartos", "Quartos (tempo)", self.abrir_quartos),
             ("relatorio_vendas", "Vendas • relatório", self.abrir_relatorio_vendas),
             ("relatorios", "Mais relatórios", self.abrir_relatorios),
             ("contas", "Contas a pagar / receber", self.abrir_contas),
@@ -421,6 +422,8 @@ class JanelaPrincipal(QMainWindow):
             self.ctx.pode("rel_estoque") or self.ctx.pode("rel_informativos"))
         self.botoes["cozinha"].setEnabled(
             "util_cozinha" not in desligados and self.ctx.pode("util_cozinha"))
+        self.botoes["quartos"].setEnabled(
+            "util_quartos" not in desligados and self.ctx.pode("util_quartos"))
         self.botoes["relatorio_vendas"].setEnabled(self.ctx.pode("rel_vendas"))
         self.botoes["contas"].setEnabled(self.ctx.pode("lanc_contas"))
         self.botoes["relatorios"].setEnabled(any(
@@ -588,6 +591,11 @@ class JanelaPrincipal(QMainWindow):
         from src.ui_qt.cozinha import JanelaCozinha
         return self._abrir_painel_operacional(
             "cozinha", lambda: JanelaCozinha(self.ctx, self))
+
+    def abrir_quartos(self):
+        from src.ui_qt.quartos import JanelaQuartos
+        return self._abrir_painel_operacional(
+            "quartos", lambda: JanelaQuartos(self.ctx, self))
 
     def abrir_diagnostico(self):
         from src.ui_qt.diagnostico import JanelaDiagnostico

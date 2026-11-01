@@ -15,6 +15,7 @@ from src.controllers.impressao_controller import ImpressaoController
 from src.controllers.perfil_controller import PerfilController
 from src.controllers.preparo_controller import PreparoController
 from src.controllers.produto_controller import ProdutoController
+from src.controllers.quartos_controller import QuartosController
 from src.controllers.relatorio_controller import RelatorioController
 from src.controllers.telegram_controller import TelegramController
 from src.controllers.turno_controller import TurnoController
@@ -80,6 +81,10 @@ class Contexto:
     @property
     def preparo(self) -> PreparoController:
         return PreparoController(self.banco, self.operador_id)
+
+    @property
+    def quartos(self) -> QuartosController:
+        return QuartosController(self.banco, self.operador_id)
 
     @property
     def perfil(self) -> PerfilController:

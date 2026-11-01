@@ -37,7 +37,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `src/porteiro/` | Página do porteiro no celular: lista das comandas abertas (sem a da garota) e consulta por número no caixa (`/porteiro`, Wi-Fi); o retrato vai para a nuvem (`nuvem_envio.py`, 4G). A mesma página em `backend/porteiro.py` |
 | `licenciador/` | `nucleo.py` (regras), `tela.py` (janela), `app.py`, `autoteste.py`; central própria em `central.py` (SQLite/emissão/ponte), `central_bot.py`, `central_cli.py`, `central_tela.py` |
 | `backend/` | FastAPI: `main.py` (rotas), `ponte.py` (central técnica, caixas aprovados e entrega de licenças assinadas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobranca_mercadopago.py` (Pix, Checkout Pro, webhook e varredura no próprio processo), `painel.py` (painel do dono: envio, um retrato por caixa, senha, sessão, resumo, ranking, histórico e limpeza) e `painel_web/` (a PWA servida em `/painel/`) |
-| `tools/` | `gerar_licenca.py`, `gerar_logos.py` (não vão no instalador do PDV) |
+| `tools/` | `gerar_licenca.py`, `gerar_logos.py`, `esp32_campainha/main.py` (MicroPython da campainha dos quartos; nada disso vai no instalador do PDV) |
 | `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`, `EASuperacoes.iss`) e imagens (`ea-superacoes-*`: marca da edição adega) |
 | `tests/` | Um `test_*.py` por assunto; `base.py` (banco em memória, relógio controlável); `ui_robo.py` (robô das janelas modais) |
 | `docs/` | Guias por assunto (lista abaixo) |
@@ -75,6 +75,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Adega: balcão Qt, cadastro pelo leitor, "6*", fardo/caixa, natural/gelada, atacado por temperatura, cascos e agrupamento | `caixa_controller.py` (`adicionar_item`, `_reprecificar_balcao`), `entidades.py` (seção Adega e `_validar_adega`), `produto_controller.py` (`cadastrar_rapido`, `criar_embalagem`, `embalagem`), `estoque_controller.py` (fardo vira unidades); UI `ui_qt/caixa.py`, `ui_qt/cadastros.py`; guia em `docs/ESTOQUE.md` |
 | Pré-pago (recarga, crédito, devolução da sobra) | `caixa_controller.py` (`recarregar`, `saldo_prepago`, `_conferir_credito`, `liquidar`/`fechar`) · UI `ui_qt/caixa.py` |
 | Cozinha/Bar (setores de impressão, status de preparo por item) | `preparo_controller.py`, `impressao_controller.py` (`setor_do_subgrupo`) · UI |
+| Controle de quartos (tempo em blocos, aviso no caixa, campainha ESP32 por quarto) | `quartos_controller.py`; envio em `src/hardware/campainha.py`; tela `ui_qt/quartos.py` (painel e linha de cartões embaixo dos produtos e do pagamento, ligados em `ui_qt/caixa.py` `_pagina_venda` e no atalho Q3 de `chamar_posicao`); programa do ESP32 em `tools/esp32_campainha/main.py`; guia `docs/QUARTOS.md` |
 | Cozinha/Bar em PySide6 | `ui_qt/cozinha.py`; setores em Mais cadastros; navegação por busca em `ui_qt/app.py` |
 | Impressão e fila | `impressao_controller.py`, `fila_impressao_controller.py`, `impressao_assistente.py` |
 | Recuperação após interrupção e roteiro isolado | `fila_impressao_controller.py` (`enviando`/`incerto`, conferência humana), `src/homologacao.py`; guia `docs/MELHORIAS_1_9.md` |
@@ -96,7 +97,7 @@ implantação da adega), `IMPORTAR_PRODUTOS.md`, `PILOTO.md`,
 `COORDENACAO.md` (histórico de pedidos entre agentes).
 `BACKUP_EXTERNO.md` (pasta sincronizada, senha e recuperação), `AUDITORIA.md`,
 `CENTRAL_TELEGRAM.md` (configuração dos dois painéis Telegram e central local com API como ponte; sem cobrança),
-`INTERFACE_QT.md` (prévia e homologação), `TERCEIROS_QT.md` (licenças das dependências).
+`INTERFACE_QT.md` (prévia e homologação), `QUARTOS.md` (controle de quartos e campainha), `TERCEIROS_QT.md` (licenças das dependências).
 
 ## Dados
 
