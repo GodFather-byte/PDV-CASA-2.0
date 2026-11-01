@@ -5,6 +5,12 @@ from src.core import formatacao as fmt
 from src.sync import painel_envio, devolucoes_envio
 
 
+def _limite_atraso(banco) -> int:
+    """O lote de 15 minutos não é atraso. Só passa disso (com folga) é que o envio emperrou."""
+    from src.sync.ociosidade import lote_seg
+    return max(lote_seg(banco) + 180, 90)
+
+
 def situacao(banco) -> dict:
     vendas = painel_envio.pendentes(banco)
     devolucoes = devolucoes_envio.pendentes(banco)
@@ -22,7 +28,7 @@ def situacao(banco) -> dict:
         estado, texto = "falha", "Falha na comunicação com a nuvem; dados preservados no caixa"
     elif not ultimo:
         estado, texto = "aguardando", "Aguardando a primeira confirmação da nuvem"
-    elif atraso is None or atraso > max(90, 3 * (5 if banco.cfg_bool("sync_quase_tempo_real") else banco.cfg_int("sync_intervalo_seg", 60))):
+    elif atraso is None or atraso > _limite_atraso(banco):
         estado, texto = "atrasado", "Envio atrasado; confira a conexão e o serviço de sincronização"
     elif vendas or devolucoes:
         estado, texto = "pendente", "Aguardando envio dos registros pendentes"

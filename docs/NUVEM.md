@@ -266,18 +266,22 @@ No caixa, entre em **Configurações > Configurações > aba Nuvem**:
 | Endereço da nuvem | `https://nuvem.seusite.com.br` |
 | Token da API | o token que o `criar` mostrou |
 | Painel do dono no celular | **Sim** só se o dono quiser acompanhar pelo celular (as vendas passam a subir para a nuvem; veja [PAINEL_DONO.md](PAINEL_DONO.md)) |
-| Sincronização automática quase em tempo real | **Sim** para enviar automaticamente a cada 5 segundos enquanto o PDV estiver aberto; nasce desligada |
+| Sincronização automática quase em tempo real | **Sim** para o PDV aberto conferir a fila sozinho; nasce desligada |
+| Intervalo do lote enviado à nuvem | Padrão **900 segundos (15 minutos)**. É o máximo entre um envio e outro enquanto há venda ou comanda nova |
 
-Com o modo quase em tempo real ligado, não é preciso iniciar outro programa: o próprio PDV
-mantém o envio em segundo plano e o painel do celular consulta as novidades a cada 5 segundos,
-enquanto estiver visível. Endereço e token precisam estar configurados. **Painel do dono = Sim**
-autoriza o envio de vendas, caixa e estoque; o porteiro precisa estar habilitado com PIN para
-enviar comandas abertas. Salvar a configuração vale sem reiniciar o PDV.
+Com o modo automático ligado, não é preciso iniciar outro programa: o próprio PDV olha a fila
+local a cada poucos segundos. Se não há venda, comanda, estoque ou cardápio novo, **não chama a
+nuvem**. O que acumulou sobe em lote, no máximo a cada 15 minutos (ajustável). O fechamento do
+turno envia na hora, e o botão **Atualizar agora** do painel ou do porteiro também. Endereço e
+token precisam estar configurados. **Painel do dono = Sim** autoriza o envio de vendas, caixa e
+estoque; o porteiro precisa estar habilitado com PIN para enviar comandas abertas. Salvar a
+configuração vale sem reiniciar o PDV.
 
-Cinco segundos é o intervalo entre tentativas com conexão saudável, não uma garantia de entrega.
-Sem internet ou com a nuvem indisponível, a espera aumenta e as vendas pendentes permanecem no caixa.
-O Render gratuito pode demorar a acordar. O recebimento na nuvem e a próxima consulta do celular
-podem somar seus atrasos; o painel mostra a hora do último envio confirmado.
+Quinze minutos é o espaço para o banco Neon dormir (ele suspende depois de 5 minutos parado).
+Não é uma garantia de que a venda aparece no celular antes disso. Sem internet, a espera aumenta
+e as vendas pendentes permanecem no caixa. O painel e o porteiro mostram **última atualização HH:MM**.
+Aba oculta no celular para de consultar; aberta, consulta cerca de uma vez por minuto (a resposta
+repetida fica 45 s na memória do servidor e não acorda o banco de novo).
 
 O modo normal continua usando o intervalo configurado (5 a 3600 segundos; padrão 60).
 

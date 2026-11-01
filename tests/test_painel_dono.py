@@ -311,14 +311,14 @@ class TesteNuvemPainel(BaseNuvem):
         with nuvem.SessionLocal() as db:
             self.assertEqual(db.query(painel.PainelVenda).filter_by(uuid=lote[0]["uuid"]).count(), 1)
 
-    def test_modo_rapido_orienta_atualizacao_do_celular_em_cinco_segundos(self):
+    def test_modo_rapido_nao_pede_consulta_de_cinco_segundos(self):
         sessao = self.entrar()
-        for ligado, segundos in (("S", 5), ("N", 30)):
+        for ligado in ("S", "N"):
             self.banco.cfg_set("sync_quase_tempo_real", ligado)
             self.subir()
             r = self.http.get("/v1/painel/resumo", headers=sessao)
             self.assertEqual(r.status_code, 200, r.text)
-            self.assertEqual(r.json()["atualizacao_seg"], segundos)
+            self.assertEqual(r.json()["atualizacao_seg"], 60)
 
     def test_cancelamento_durante_http_continua_pendente_e_sobe_na_proxima_rodada(self):
         v = self.venda_fechada((self.skol, 1))
@@ -449,6 +449,8 @@ class TesteNuvemPainel(BaseNuvem):
         db.query(painel.PainelSessao).update({"expira_em": "2000-01-01 00:00:00"})
         db.commit()
         db.close()
+        from backend.cache_leitura import limpar
+        limpar()  # a leitura fica até 45 s em memória; aqui o teste muda a sessão direto no banco
         self.assertEqual(self.http.get("/v1/painel/resumo", headers=sessao).status_code, 401)
         self.assertEqual(self.http.get("/v1/painel/resumo", headers=cabecalho()).status_code, 401)
 

@@ -19,16 +19,18 @@ O celular no **Wi-Fi do clube** abre o endereço do QR (o caixa responde na hora
 chega na porta, use o endereço **Pelo 4G** que a mesma tela mostra: a página fica na nuvem
 (`https://willpdv-nuvem-6sp0.onrender.com/porteiro/?loja=CHAVE-DA-LOJA`, com a chave desta loja).
 O caixa precisa ter internet e a nuvem configurada (Configurações > Nuvem: endereço, token e chave
-da loja). A cada mudança nas comandas abertas, e no máximo uma vez por minuto se nada mudou, ele
-manda só o retrato do que ainda está aberto — não o histórico. O PIN é o mesmo; o token da loja
-não vai para o celular.
+da loja). Quando a lista de comandas muda, o retrato entra no mesmo lote da nuvem (padrão 15
+minutos), não a cada segundo: assim o banco dorme. **Atualizar agora** pede o envio na hora.
+O Wi-Fi do caixa continua ao vivo. O PIN é o mesmo; o token da loja não vai para o celular.
 
 ## No celular
 
 1. Digite o PIN. Sem ele, a página não informa comandas.
 2. A primeira tela é a lista das **comandas abertas**: número, quanto ainda deve, total da conta
-   se for diferente, e a hora em que abriu. **Atualizar** busca de novo; a lista também se
-   atualiza sozinha a cada 20 segundos. Tocar numa comanda abre o detalhe.
+   se for diferente, e a hora em que abriu. A tela mostra **última atualização HH:MM**.
+   **Atualizar agora**, na nuvem, pede ao caixa um envio e espera cerca de 30 s; no Wi-Fi, relê o caixa.
+   A lista sozinha atualiza a cada 20 s no Wi-Fi e cerca de 1 min na nuvem, e para com a aba oculta.
+   Tocar numa comanda abre o detalhe.
    Comanda de garota não entra nessa lista: é a que tem comissão lançada e ainda pendente
    (o mesmo cartão rosa do caixa). Mesa também não entra aqui.
 3. **Consultar número** continua disponível para uma comanda ou mesa específica, inclusive a da

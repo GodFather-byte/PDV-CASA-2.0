@@ -51,9 +51,10 @@ de vasilhames por cliente, conforme a regra escolhida).
 Só com **Configurações > Nuvem > "Painel do dono no celular" = Sim**. Desligado (padrão), nada sai da loja.
 
 Sobe a cada rodada da sincronização: normalmente a cada 60 s com `python -m src.app --sync`,
-ou automaticamente a cada 5 s com **Configurações > Nuvem > Sincronização automática quase em tempo real = Sim**
-e o PDV aberto. Neste modo o painel visível no celular também consulta novidades a cada 5 s;
-sem ele, a atualização do celular continua em 30 s. Falhas de rede aumentam a espera e o Render
+ou em lote (padrão 15 minutos) com **Configurações > Nuvem > Sincronização automática = Sim**
+e o PDV aberto. O fechamento do turno sobe na hora. No celular, **Atualizar agora** pede esse envio
+e mostra "atualizando..." até o caixa responder (cerca de 30 s) ou, se não der, a última hora.
+Aba visível consulta cerca de uma vez por minuto; aba oculta para. Falhas de rede aumentam a espera e o Render
 gratuito pode demorar a acordar. O intervalo não é uma garantia de entrega instantânea.
 
 São enviados:

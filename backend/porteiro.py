@@ -367,6 +367,8 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
                                     headers={"Retry-After": str(BLOQUEIO_SEGUNDOS)})
             raise HTTPException(status_code=401, detail="PIN incorreto.")
         token = sessoes.abrir(loja.chave_loja, _selo(hashes), freio)
+        from backend.memoria_nuvem import memoria
+        memoria.lembrar_sessao(token, loja.chave_loja)
         recente = max(linhas, key=lambda linha: linha.momento or "")
         return {"ok": True, "token": token, "caixa_url": recente.url_lan or ""}, token
 

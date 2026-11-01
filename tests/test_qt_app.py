@@ -384,7 +384,7 @@ class TestAppQt(BaseQt):
         self.assertIn("Envio automático desligado", principal.indicadores["sync"].text())
         self.banco.cfg_set("sync_quase_tempo_real", "S")
         principal.atualizar()
-        self.assertIn("a cada 5 segundos", principal.indicadores["sync"].text())
+        self.assertIn("15 minutos", principal.indicadores["sync"].text())
         principal.mostrar_limites()
         self.assertIn("duas instâncias", principal.mensagem.text())
         self.assertIn("indisponíveis", principal.mensagem.text())

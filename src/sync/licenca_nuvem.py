@@ -71,6 +71,30 @@ def _falhas(banco) -> int:
         return 0
 
 
+def _intervalo_vencido(banco) -> bool:
+    tentativa = banco.cfg(CHAVE_TENTATIVA)
+    sucesso = banco.cfg(CHAVE_SUCESSO) or banco.cfg(CHAVE_CONSULTA)
+    falhou = tentativa and (not sucesso or tentativa > sucesso or _falhas(banco))
+    ultima = tentativa if falhou else sucesso
+    if not ultima:
+        return True
+    intervalo = RETENTATIVAS_MINUTOS[min(max(_falhas(banco) - 1, 0), len(RETENTATIVAS_MINUTOS) - 1)] \
+        if falhou else INTERVALO_HORAS * 60
+    try:
+        minutos = fmt.minutos_entre(ultima)
+    except ValueError:
+        return True
+    return minutos < 0 or minutos >= intervalo
+
+
+def precisa(banco) -> bool:
+    """True se a próxima rodada deve consultar a licença. Não grava a tentativa."""
+    from src.sync import ponte
+    if ponte.ativa(banco) or not licenca.exigida(banco):
+        return False
+    return _intervalo_vencido(banco)
+
+
 def iniciar_consulta(banco, forcar: bool = False) -> bool:
     """Registra a tentativa na thread dona do banco; só sucessos aguardam seis horas.
 
@@ -78,13 +102,7 @@ def iniciar_consulta(banco, forcar: bool = False) -> bool:
     from src.sync import ponte
     if ponte.ativa(banco) or not licenca.exigida(banco):
         return False
-    tentativa = banco.cfg(CHAVE_TENTATIVA)
-    sucesso = banco.cfg(CHAVE_SUCESSO) or banco.cfg(CHAVE_CONSULTA)
-    falhou = tentativa and (not sucesso or tentativa > sucesso or _falhas(banco))
-    ultima = tentativa if falhou else sucesso
-    intervalo = RETENTATIVAS_MINUTOS[min(max(_falhas(banco) - 1, 0), len(RETENTATIVAS_MINUTOS) - 1)] \
-        if falhou else INTERVALO_HORAS * 60
-    if not forcar and ultima and 0 <= fmt.minutos_entre(ultima) < intervalo:
+    if not forcar and not _intervalo_vencido(banco):
         return False
     banco.cfg_set(CHAVE_TENTATIVA, fmt.agora())
     return True

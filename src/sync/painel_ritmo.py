@@ -1,4 +1,8 @@
-"""Envia mudanças em poucos segundos e mantém a conexão confirmada com batimentos leves."""
+"""Envia o retrato quando os dados mudam. Sem mudança, não há batimento curto: o Neon dorme.
+
+Um batimento (pedido vazio que só renova o horário) sai no máximo a cada 15 minutos, e só com a
+loja em movimento e dentro do expediente. Ociosa ou fora do horário, não sai.
+"""
 import hashlib
 import json
 import time
@@ -7,11 +11,32 @@ from weakref import WeakKeyDictionary
 from src.core import formatacao as fmt
 from src.sync import painel_envio, devolucoes_envio
 
-BATIMENTO_SEG = 45
 _estados = WeakKeyDictionary()
 
 
-def enviar_se_preciso(banco, http=None, relogio=None):
+def desatualizado(banco) -> bool:
+    """O retrato local mudou desde o último envio bem-sucedido. Não chama a rede."""
+    if not painel_envio.ligado(banco):
+        return False
+    estado = _estados.get(banco)
+    if estado is None:
+        return True
+    revisao = banco.valor("SELECT revisao FROM painel_revisao WHERE id = 1", (), 0)
+    dia = fmt.dia_operacional(None, painel_envio._virada(banco))
+    destino = tuple(banco.cfg(c) for c in ("api_url", "api_token", "chave_loja", "sync_quase_tempo_real"))
+    return estado["destino"] != destino or estado["revisao"] != revisao or estado["dia"] != dia
+
+
+def pode_batimento(banco, decorrido: float) -> bool:
+    from src.sync.ociosidade import BATIMENTO_SEG, dentro_do_expediente, ocioso
+    if decorrido < BATIMENTO_SEG:
+        return False
+    if not dentro_do_expediente(banco):
+        return False
+    return not ocioso(banco)
+
+
+def enviar_se_preciso(banco, http=None, relogio=None, forcar_batimento: bool = False):
     if not painel_envio.ligado(banco):
         _estados.pop(banco, None)
         return None
@@ -38,7 +63,7 @@ def enviar_se_preciso(banco, http=None, relogio=None):
         if foto is not None or vendas or devolucoes:
             resultado = painel_envio.enviar(banco, http, foto=foto)
             confirmado = agora
-        elif estado is None or agora - anterior >= BATIMENTO_SEG:
+        elif forcar_batimento or pode_batimento(banco, agora - anterior):
             corpo = {"heartbeat": {"terminal_id": painel_envio.id_do_caixa(banco),
                       "vendas_pendentes_envio": vendas, "devolucoes_pendentes_envio": devolucoes}, "enviado_em": fmt.agora()}
             resposta = painel_envio._postar(banco, corpo, http)

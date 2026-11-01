@@ -483,7 +483,9 @@ class JanelaPrincipal(QMainWindow):
             nuvem += ("\nFalha na ponte; consulte Configurações ou Suporte no Telegram."
                       if estado_ponte["ativa"] else f"\nÚltima falha de licença: {erro}")
         if banco.cfg_bool("sync_quase_tempo_real"):
-            nuvem += "\nEnvio automático: a cada 5 segundos enquanto o PDV estiver aberto."
+            from src.sync.ociosidade import lote_minutos
+            nuvem += (f"\nEnvio automático: confere a fila a cada 5 segundos e manda o lote "
+                      f"a cada {lote_minutos(banco)} minutos (na hora no fechamento do turno).")
         else:
             nuvem += "\nEnvio automático desligado; disponível em Configurações > Nuvem."
         nuvem += f"\nÚltimo envio do painel: {banco.cfg('painel_ultimo_envio') or 'ainda não confirmado'}."

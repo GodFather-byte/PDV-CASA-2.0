@@ -114,6 +114,12 @@ async def _ciclo_de_vida(_aplicacao):
 app = FastAPI(title="WillPDV - API de nuvem", lifespan=_ciclo_de_vida)
 
 
+@app.middleware("http")
+async def _cache_de_leitura(request, call_next):
+    from backend.cache_leitura import tratar
+    return await tratar(request, call_next)
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -140,6 +146,8 @@ def autenticar(authorization: Optional[str] = Header(None), db: Session = Depend
             return Acesso(None)
         loja = db.query(Loja).filter(Loja.token_hash == hash_token(token)).first()
         if loja is not None:
+            from backend.memoria_nuvem import memoria
+            memoria.lembrar_token(token, loja.chave_loja)
             if not loja.ativa:
                 raise HTTPException(status_code=403, detail="Loja desativada na nuvem.")
             return Acesso(loja.chave_loja)
@@ -240,9 +248,59 @@ def admin_reenviar(dados: dict = Body(...), acesso: Acesso = Depends(autenticar)
         raise _erro_cobranca(erro) from None
 
 
+@app.get("/health")
 @app.get("/v1/saude")
 def saude():
+    """Pronto para o balanceador. Não abre banco: um health check não pode acordar o Neon."""
     return {"status": "ok"}
+
+
+def _sync_sem_banco(authorization: Optional[str]):
+    from backend.memoria_nuvem import memoria, token_do_cabecalho
+    return memoria, token_do_cabecalho(authorization)
+
+
+@app.get("/v1/sync/pedido")
+def sync_pedido(authorization: Optional[str] = Header(None)):
+    """O caixa pergunta se o celular pediu envio. Só memória do processo."""
+    memoria, token = _sync_sem_banco(authorization)
+    return memoria.consultar_loja(token)
+
+
+@app.post("/v1/sync/pedido")
+def sync_pedir(authorization: Optional[str] = Header(None)):
+    """O painel ou o porteiro pede um envio agora. A sessão precisa já estar na memória."""
+    memoria, token = _sync_sem_banco(authorization)
+    chave = memoria.chave_da_sessao(token)
+    if not chave:
+        try:
+            from backend.porteiro import sessoes
+            achado = sessoes.ler(token)
+            chave = achado[0] if achado else None
+        except Exception:
+            chave = None
+    if not chave:
+        return {"conhecido": False, "pedido": False}
+    return memoria.pedir(chave)
+
+
+@app.post("/v1/sync/concluido")
+def sync_concluido(dados: Optional[dict] = Body(None), authorization: Optional[str] = Header(None)):
+    """O caixa avisa que o lote subiu. O celular lê isso sem tocar no banco."""
+    memoria, token = _sync_sem_banco(authorization)
+    ident = dados.get("id") if isinstance(dados, dict) else None
+    try:
+        ident = int(ident) if ident is not None else None
+    except (TypeError, ValueError):
+        ident = None
+    momento = dados.get("momento") if isinstance(dados, dict) else ""
+    return memoria.concluir(token, str(momento or ""), ident)
+
+
+@app.get("/v1/sync/estado")
+def sync_estado(authorization: Optional[str] = Header(None)):
+    memoria, token = _sync_sem_banco(authorization)
+    return memoria.estado(token)
 
 
 @app.get("/v1/versao")

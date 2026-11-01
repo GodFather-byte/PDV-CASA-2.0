@@ -18,11 +18,22 @@ def normalizar_url(url: str) -> str:
 # postgresql://usuario:senha@servidor/pdv (o endereço que o Neon/Render mostram, colado do jeito que vem)
 SQLALCHEMY_DATABASE_URL = normalizar_url(os.environ.get("PDV_NUVEM_DB_URL") or "sqlite:///./pdv_casa.db")
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {},
-    pool_pre_ping=True,          # banco na nuvem derruba conexões paradas: testa antes de usar em vez de dar erro
-)
+
+def argumentos_engine(url: str) -> dict:
+    """SQLite local não precisa de pool. No Postgres (Neon) a conexão ociosa se fecha sozinha:
+    não há laço de keepalive. pool_pre_ping só testa na hora de usar, quando já vai ter consulta."""
+    if url.startswith("sqlite"):
+        return {"connect_args": {"check_same_thread": False}, "pool_pre_ping": True}
+    return {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+        "pool_size": 2,
+        "max_overflow": 2,
+        "pool_use_lifo": True,
+    }
+
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL, **argumentos_engine(SQLALCHEMY_DATABASE_URL))
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

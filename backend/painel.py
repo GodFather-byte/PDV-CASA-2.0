@@ -166,6 +166,8 @@ def definir_senha(db: Session, chave_loja: str, senha: str) -> None:
     acesso.atualizado_em = _agora()
     db.query(PainelSessao).filter_by(chave_loja=chave_loja).delete()
     db.commit()
+    from backend.cache_leitura import limpar
+    limpar()
 
 
 def gerar_senha() -> str:
@@ -250,6 +252,8 @@ def sessao_do_dono(authorization: Optional[str] = Header(None), db: Session = De
         raise HTTPException(status_code=401, detail="Sessão inválida ou vencida. Entre de novo.")
     sessao.ultimo_uso = _agora()
     db.commit()
+    from backend.memoria_nuvem import memoria
+    memoria.lembrar_sessao(token, sessao.chave_loja)
     return sessao
 
 
@@ -1106,12 +1110,16 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             raise HTTPException(status_code=401, detail="Loja ou senha inválida.")
         tentativas.acertou(chave)
         token, expira = abrir_sessao(db, chave)
+        from backend.memoria_nuvem import memoria
+        memoria.lembrar_sessao(token, chave)
         return {"token": token, "loja": {"chave": loja.chave_loja, "nome": loja.nome}, "expira_em": expira}
 
     @router.post("/v1/painel/sair")
     def sair(sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
         db.delete(sessao)
         db.commit()
+        from backend.cache_leitura import limpar
+        limpar()
         return {"ok": True}
 
     # ---- consultas do dono
@@ -1157,7 +1165,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             "loja": {"chave": loja.chave_loja, "nome": retrato.get("loja_nome") or loja.nome},
             "dia": dia, "dia_operacional": dia_op.isoformat(),
             "atualizado_em": momento, "atraso_min": _atraso_min(momento, recebido_em),
-            "atualizacao_seg": 5 if any(dados_.get("atualizacao_seg") == 5 for _, dados_ in pares) else 30,
+            "atualizacao_seg": 60,
             **_totais_dos_caixas(caixas), "caixas": caixas,
             "dias": dias if dia in dias else [dia] + dias,
             **gestao,

@@ -94,7 +94,7 @@
       (mesa ? "&mesa=" + encodeURIComponent(mesa) : "");
     let dados;
     try {
-      const r = await fetch(consulta, { cache: "no-store" });
+      const r = await fetch(consulta, { cache: "no-store", headers: { "X-PDV-Leitura": "1" } });
       const corpo = await r.json().catch(() => ({}));
       if (!r.ok) {
         estado.textContent = corpo.detail || "Não foi possível abrir o cardápio.";

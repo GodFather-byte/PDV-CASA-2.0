@@ -180,6 +180,8 @@ class TesteMelhoriasPainel(BaseNuvem):
             self.assertEqual(calcular.call_count, 1)
             self.assertEqual(len(chamadas), 1)
             painel_ritmo.enviar_se_preciso(self.banco, espiao, relogio=lambda: 45)
+            self.assertEqual(len(chamadas), 1)
+            painel_ritmo.enviar_se_preciso(self.banco, espiao, relogio=lambda: 45, forcar_batimento=True)
         self.assertEqual(len(chamadas), 2)
         self.assertIn("heartbeat", chamadas[1])
         self.assertNotIn("retrato", chamadas[1])
@@ -197,7 +199,7 @@ class TesteMelhoriasPainel(BaseNuvem):
         with nuvem.SessionLocal() as db:
             db.query(painel.PainelCaixa).delete()
             db.commit()
-        painel_ritmo.enviar_se_preciso(self.banco, http, relogio=lambda: 45)
+        painel_ritmo.enviar_se_preciso(self.banco, http, relogio=lambda: 45, forcar_batimento=True)
         with nuvem.SessionLocal() as db:
             self.assertEqual(db.query(painel.PainelCaixa).count(), 1)
 
@@ -237,7 +239,8 @@ class TesteMelhoriasPainel(BaseNuvem):
         ultimo = self.banco.cfg(painel_envio.CHAVE_ULTIMO_ENVIO)
         self.avancar(minutes=1)
         with self.assertRaises(RuntimeError):
-            painel_ritmo.enviar_se_preciso(self.banco, HttpFalso(status=503), relogio=lambda: 45)
+            painel_ritmo.enviar_se_preciso(self.banco, HttpFalso(status=503), relogio=lambda: 45,
+                                           forcar_batimento=True)
         self.assertEqual(self.banco.cfg(painel_envio.CHAVE_ULTIMO_ENVIO), ultimo)
         http = HttpFalso()
         painel_ritmo.enviar_se_preciso(self.banco, http, relogio=lambda: 50)
@@ -256,6 +259,8 @@ class TesteMelhoriasPainel(BaseNuvem):
         self.subir()
         self.assertEqual(painel_status.situacao(self.banco)["estado"], "em_dia")
         self.avancar(minutes=4)
+        self.assertEqual(painel_status.situacao(self.banco)["estado"], "em_dia")
+        self.avancar(minutes=16)
         self.assertEqual(painel_status.situacao(self.banco)["estado"], "atrasado")
 
     def test_versao_publica_so_expoe_sha_valido(self):

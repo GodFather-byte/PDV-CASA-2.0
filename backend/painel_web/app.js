@@ -10,7 +10,8 @@
   const CHAVE_LOJA = PREFIXO + "loja";
   const CHAVE_EXPIRA = PREFIXO + "expira_em";
   const PREFIXO_CACHE = PREFIXO + "cache.";
-  const INTERVALO_AUTO_MS = 30000;
+  const INTERVALO_AUTO_MS = 60000;
+  const ESPERA_FLUSH_MS = 35000;
   const LIMITE_ATRASO_MIN = 10;
 
   const NOMES_MODALIDADE = {
@@ -23,6 +24,8 @@
 
   const estado = {
     token: null,
+    aguardandoFlush: false,
+    _timer: null,
     loja: null,
     aba: "hoje",
     dia: null,            // null = dia operacional atual da loja
@@ -302,6 +305,7 @@
 
   async function chamarApi(caminho, opcoes = {}) {
     const cabecalhos = { Accept: "application/json" };
+    if ((opcoes.metodo || "GET") === "GET") cabecalhos["X-PDV-Leitura"] = "1";
     if (opcoes.corpo !== undefined) cabecalhos["Content-Type"] = "application/json";
     if (estado.token && !opcoes.semToken) cabecalhos.Authorization = "Bearer " + estado.token;
 
@@ -610,6 +614,56 @@
     renderizarVendas(r.dados);
   }
 
+  function textoUltimaAtualizacao() {
+    const r = estado.resumo;
+    if (r && r.atualizado_em) return "última atualização " + formatarHora(r.atualizado_em);
+    return "última atualização —";
+  }
+
+  async function atualizarAgora() {
+    if (!estado.token || estado.aguardandoFlush) return;
+    estado.aguardandoFlush = true;
+    const status = $("status-atualizacao");
+    limpar(status);
+    status.append("atualizando...");
+    let pedido = {};
+    try {
+      const r = await fetch("/v1/sync/pedido", {
+        method: "POST",
+        headers: { Accept: "application/json", Authorization: "Bearer " + estado.token },
+        cache: "no-store"
+      });
+      pedido = await r.json().catch(() => ({}));
+    } catch (_erro) {
+      pedido = {};
+    }
+    if (!pedido.conhecido) {
+      estado.aguardandoFlush = false;
+      limpar(status);
+      status.append(textoUltimaAtualizacao());
+      return;
+    }
+    const inicio = Date.now();
+    while (Date.now() - inicio < ESPERA_FLUSH_MS) {
+      await new Promise((resolver) => setTimeout(resolver, 2000));
+      try {
+        const e = await fetch("/v1/sync/estado", {
+          headers: { Accept: "application/json", Authorization: "Bearer " + estado.token },
+          cache: "no-store"
+        });
+        const j = await e.json().catch(() => ({}));
+        if (j && j.id && j.id === pedido.id && j.momento) {
+          estado.aguardandoFlush = false;
+          await atualizarTudo();
+          return;
+        }
+      } catch (_erro) { /* a próxima tentativa ainda é só memória */ }
+    }
+    estado.aguardandoFlush = false;
+    limpar(status);
+    status.append(textoUltimaAtualizacao());
+  }
+
   async function atualizarTudo() {
     if (!sessaoValida()) {
       encerrarSessao(false);
@@ -654,12 +708,12 @@
     limpar(status);
     if (r.atualizado_em) {
       const nCaixas = Array.isArray(r.caixas) ? r.caixas.length : 0;
-      status.append("Atualizado às " + formatarHora(r.atualizado_em) +
+      status.append("última atualização " + formatarHora(r.atualizado_em) +
         (r.atraso_min !== null && r.atraso_min !== undefined ? " (há " + formatarAtraso(r.atraso_min) + ")" : ""));
       // "· 3 caixas" não parte no meio: se faltar espaço, vai inteiro para a linha de baixo.
       if (nCaixas > 1) status.append(el("span", { class: "sem-quebra", text: " · " + nCaixas + " caixas" }));
     } else {
-      status.append("PDV ainda não enviou dados");
+      status.append("última atualização —");
     }
     mostrarAtraso(r.atraso_min);
     renderizarMesAtual(r);
@@ -1469,7 +1523,7 @@
 
     $("form-login").addEventListener("submit", entrar);
     $("botao-sair").addEventListener("click", () => encerrarSessao(true));
-    $("botao-atualizar").addEventListener("click", () => atualizarTudo());
+    $("botao-atualizar").addEventListener("click", () => atualizarAgora());
     $("seletor-dia").addEventListener("change", (e) => mudarDia(e.target.value));
     $("seletor-movimento").addEventListener("change", (e) => {
       estado.diaMovimento = e.target.value || null;
@@ -1511,22 +1565,38 @@
     $("pag-proxima").addEventListener("click", () => { estado.paginaVendas++; carregarVendas(); });
     document.querySelectorAll(".aba-botao").forEach((b) => b.addEventListener("click", () => trocarAba(b.dataset.aba)));
 
-    document.addEventListener("visibilitychange", atualizarSeAntigo);
-    window.addEventListener("focus", atualizarSeAntigo);
-    window.addEventListener("online", () => { if (estado.token) atualizarTudo(); });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        if (estado.token && !estado.aguardandoFlush) atualizarTudo();
+        agendarAtualizacao();
+      } else if (estado._timer) {
+        clearTimeout(estado._timer);
+        estado._timer = null;
+      }
+    });
+    window.addEventListener("online", () => {
+      if (estado.token && document.visibilityState === "visible") atualizarTudo();
+    });
     window.addEventListener("offline", () => {
       const cache = lerCache("resumo:" + (estado.dia || "atual"));
       if (cache && estado.token) mostrarOffline(cache.salvo_em);
     });
+    function agendarAtualizacao() {
+      if (estado._timer) clearTimeout(estado._timer);
+      if (document.visibilityState !== "visible") {
+        estado._timer = null;
+        return;
+      }
+      estado._timer = setTimeout(atualizarAutomaticamente, INTERVALO_AUTO_MS);
+    }
     async function atualizarAutomaticamente() {
       try {
-        if (document.visibilityState === "visible" && estado.token) await atualizarTudo();
+        if (document.visibilityState === "visible" && estado.token && !estado.aguardandoFlush) await atualizarTudo();
       } finally {
-        const intervalo = estado.resumo && estado.resumo.atualizacao_seg === 5 ? 5000 : INTERVALO_AUTO_MS;
-        setTimeout(atualizarAutomaticamente, intervalo);
+        agendarAtualizacao();
       }
     }
-    setTimeout(atualizarAutomaticamente, 5000);
+    agendarAtualizacao();
 
     configurarInstalacao();
     registrarServiceWorker();

@@ -115,7 +115,7 @@ def frescura(momento: str | None = None, agora: str | None = None, no_caixa: boo
     elif seg < 60:
         atualizado, atrasado = f"atualizado há {seg}s", False
     elif seg < 3600:
-        atualizado, atrasado = f"atualizado há {seg // 60} min", seg >= 180
+        atualizado, atrasado = f"atualizado há {seg // 60} min", seg >= 20 * 60
     else:
         atualizado, atrasado = f"atualizado há {seg // 3600} h", True
     texto = f"Na nuvem · {atualizado}"
