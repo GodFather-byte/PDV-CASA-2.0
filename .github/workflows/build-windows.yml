@@ -45,7 +45,7 @@ jobs:
       - name: Dependências (o que o programa usa de opcional entra no pacote) e PyInstaller
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt "pyinstaller>=6,<7"
+          pip install --require-hashes -r requirements.txt -r requirements-build.txt
 
       - name: Versão e commit
         id: info
@@ -207,7 +207,7 @@ jobs:
       - name: PyInstaller e criptografia (backup da chave com senha usa "cryptography", como o PDV)
         run: |
           python -m pip install --upgrade pip
-          pip install "pyinstaller>=6,<7" "cryptography>=43,<47"
+          pip install --require-hashes -r requirements-build.txt
 
       - name: Versão e commit
         id: info
@@ -312,7 +312,7 @@ jobs:
       - name: Dependências e PyInstaller
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt "pyinstaller>=6,<7"
+          pip install --require-hashes -r requirements.txt -r requirements-build.txt
 
       - name: Versão e commit
         id: info

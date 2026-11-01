@@ -44,6 +44,7 @@ from sqlalchemy.dialects.postgresql import insert as inserir_postgres
 from sqlalchemy.dialects.sqlite import insert as inserir_sqlite
 
 from backend.database import Base, SessionLocal, engine, get_db
+from backend import painel_devolucoes as devolucoes
 
 log = logging.getLogger("pdv.nuvem.painel")
 
@@ -423,7 +424,9 @@ def _atraso_min(momento: str | None, recebido_em: str | None) -> int | None:
 def _dias_recentes(db: Session, chave_loja: str, limite: int = 30) -> list[str]:
     linhas = (db.query(PainelVenda.dia).filter_by(chave_loja=chave_loja).distinct()
               .order_by(PainelVenda.dia.desc()).limit(limite).all())
-    return [l[0] for l in linhas]
+    dias_devolucao = db.query(devolucoes.PainelDevolucao.dia).filter_by(chave_loja=chave_loja).distinct().order_by(
+        devolucoes.PainelDevolucao.dia.desc()).limit(limite).all()
+    return sorted({l[0] for l in linhas} | {l[0] for l in dias_devolucao}, reverse=True)[:limite]
 
 
 def _vendas_do_dia(db: Session, chave_loja: str, dia: str) -> list[dict]:
@@ -697,6 +700,8 @@ def limpar_antigos(db: Session) -> dict[str, int]:
     que não mandam retrato há DIAS_CAIXA_PARADO dias. Seguro repetir: só apaga o que já passou do prazo."""
     agora = datetime.now()
     removidas = {
+        "devolucoes": db.query(devolucoes.PainelDevolucao).filter(
+            devolucoes.PainelDevolucao.dia < _corte_das_vendas()).delete(synchronize_session=False),
         "vendas": db.query(PainelVenda).filter(PainelVenda.dia < _corte_das_vendas()).delete(synchronize_session=False),
         "sessoes": db.query(PainelSessao).filter(PainelSessao.expira_em <= _agora()).delete(synchronize_session=False),
         "caixas": db.query(PainelCaixa).filter(
@@ -775,6 +780,9 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         vendas = dados.get("vendas") or []
         if not isinstance(vendas, list) or len(vendas) > LOTE_MAXIMO:
             raise HTTPException(status_code=422, detail=f"Envie uma lista de até {LOTE_MAXIMO} vendas.")
+        retornos = dados.get("devolucoes") or []
+        if not isinstance(retornos, list) or len(retornos) > LOTE_MAXIMO:
+            raise HTTPException(status_code=422, detail=f"Envie até {LOTE_MAXIMO} devoluções por lote.")
         agora = _agora()
         recebidos = []
         for v in vendas:
@@ -785,9 +793,28 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         retrato = dados.get("retrato")
         if isinstance(retrato, dict):
             _guardar_retrato(db, acesso.loja, retrato, dados.get("enviado_em"), agora)
+        recebidas_devolucoes = [devolucoes.guardar(db, acesso.loja, d, agora, _corte_das_vendas()) for d in retornos]
+        batimento = dados.get("heartbeat")
+        heartbeat_confirmado = False
+        if isinstance(batimento, dict):
+            linha = db.query(PainelCaixa).filter_by(chave_loja=acesso.loja, terminal_id=_id_do_caixa(batimento)).first()
+            if linha is not None:
+                linha.recebido_em = agora
+                linha.momento = str(dados.get("enviado_em") or agora)[:19]
+                foto = json.loads(linha.dados)
+                foto["momento"] = linha.momento
+                for campo in ("vendas_pendentes_envio", "devolucoes_pendentes_envio"):
+                    foto[campo] = max(_int(batimento.get(campo)), 0)
+                linha.dados = json.dumps(foto, ensure_ascii=False)
+                heartbeat_confirmado = True
         db.commit()
         tarefas.add_task(limpeza_periodica)         # depois da resposta: o PDV não espera pela limpeza
-        return {"recebidas": len(recebidos), "uuids": recebidos}
+        resposta = {"recebidas": len(recebidos), "uuids": recebidos}
+        if "devolucoes" in dados:
+            resposta["devolucoes_uuids"] = list(dict.fromkeys(recebidas_devolucoes))
+        if "heartbeat" in dados:
+            resposta["heartbeat_confirmado"] = heartbeat_confirmado
+        return resposta
 
     # ---- senha do painel (administrador ou o próprio PDV da loja)
     @router.post("/v1/admin/lojas/{chave}/painel")
@@ -849,6 +876,13 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         dias = _dias_recentes(db, loja.chave_loja)
         dia = _dia_valido(dia) or retrato.get("dia_operacional") or (dias[0] if dias else date.today().isoformat())
         r = resumo_do_dia(_vendas_do_dia(db, loja.chave_loja, dia))
+        reembolsos = devolucoes.resumo(db, loja.chave_loja, dia, dia)
+        r["devolucoes"] = reembolsos
+        r["vendas"].update({"bruto_cent": r["vendas"]["faturamento_cent"],
+                            "devolucoes_cent": reembolsos["valor_cent"],
+                            "liquido_cent": r["vendas"]["faturamento_cent"] - reembolsos["valor_cent"]})
+        r["devolucoes_completas"] = bool(pares) and all(
+            d.get("devolucoes_suportadas") and not d.get("devolucoes_pendentes_envio") for _, d in pares)
         dia_op = _data_segura(retrato.get("dia_operacional"), _hoje())
         gestao = _gestao_dos_retratos(pares, dia_op)
         if gestao["faturamento_meses"] is None:
@@ -927,6 +961,10 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
                 por_dia[dia_]["quantidade"] += 1
             else:
                 por_dia[dia_]["canceladas"] += 1
+        reembolsos = devolucoes.por_dia(db, sessao.chave_loja, primeiro, ultimo.isoformat())
+        for d, registro in por_dia.items():
+            registro["devolucoes_cent"] = reembolsos.get(d, 0)
+            registro["liquido_cent"] = registro["faturamento_cent"] - registro["devolucoes_cent"]
         return {"dias": list(por_dia.values())}
 
     app.include_router(router)

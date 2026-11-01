@@ -36,7 +36,7 @@ class HttpFalso:
 
 class TestePrecoEFolha(BaseCaixa):
     def test_coluna_nasce_ligada(self):
-        self.assertEqual(VERSAO_ESQUEMA, 32)
+        self.assertGreaterEqual(VERSAO_ESQUEMA, 32)
         self.assertEqual(self.banco.valor("SELECT mostrar_no_cardapio FROM produtos WHERE id = ?", (self.skol,)), 1)
 
     def test_happy_hour_e_promocao_usam_o_preco_do_caixa(self):

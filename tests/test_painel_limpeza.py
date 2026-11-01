@@ -102,8 +102,8 @@ class TesteRetencao(BaseNuvem):
         db = self.com_banco()
         semear_venda(db, "v", "2026-01-01")
         db.commit()
-        self.assertEqual(painel.limpar_antigos(db), {"vendas": 1, "sessoes": 0, "caixas": 0})
-        self.assertEqual(painel.limpar_antigos(db), {"vendas": 0, "sessoes": 0, "caixas": 0})
+        self.assertEqual(painel.limpar_antigos(db), {"vendas": 1, "sessoes": 0, "caixas": 0, "devolucoes": 0})
+        self.assertEqual(painel.limpar_antigos(db), {"vendas": 0, "sessoes": 0, "caixas": 0, "devolucoes": 0})
 
     def test_configuracao_de_senha_e_lojas_nunca_sao_tocadas(self):
         self.entrar()

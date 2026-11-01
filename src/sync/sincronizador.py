@@ -106,8 +106,8 @@ class Sincronizador:
     def _enviar_painel(self) -> bool:
         """Painel do dono (opcional): sobe as vendas que faltam e o retrato do caixa. Falha aqui só espera a próxima rodada."""
         try:
-            from src.sync import painel_envio
-            painel_envio.enviar(self.banco, self._http)
+            from src.sync import painel_ritmo
+            painel_ritmo.enviar_se_preciso(self.banco, self._http)
             return True
         except Exception:
             log.exception("Falha ao enviar os dados do painel do dono.")

@@ -50,6 +50,10 @@ def gerar_executavel(ed) -> None:
     comando = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir",
                "--windowed",                                # sem a janela preta do CMD atrás do caixa
                "--name", nome, "--paths", str(RAIZ)]        # a raiz no caminho: os imports são "from src..."
+    from src.autoteste import MODULOS
+    for modulo in MODULOS:
+        comando += ["--hidden-import", modulo]
+    comando += ["--collect-data", "tzdata"]  # fuso de Brasília também no Windows
     icone = PASTA_INSTALADOR / ed.icone
     if icone.exists():
         # --icon: ícone do .exe; --add-data: o mesmo arquivo dentro do pacote, para as janelas do programa

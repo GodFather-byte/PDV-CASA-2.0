@@ -76,8 +76,16 @@
 
         <div class="grade-cartoes">
           <article class="cartao destaque">
-            <span class="rotulo">Faturamento</span>
+            <span class="rotulo">Faturamento bruto</span>
             <strong id="v-faturamento" class="valor-grande">R$ 0,00</strong>
+          </article>
+          <article class="cartao">
+            <span class="rotulo">Devoluções no dia do reembolso</span>
+            <strong id="v-devolucoes" class="valor-grande">—</strong>
+          </article>
+          <article class="cartao destaque">
+            <span class="rotulo">Líquido dos dados recebidos</span>
+            <strong id="v-liquido" class="valor-grande">—</strong>
           </article>
           <article class="cartao">
             <span class="rotulo">Vendas</span>
@@ -94,6 +102,8 @@
           </article>
         </div>
 
+        <p id="aviso-devolucoes" class="aviso" role="status" hidden></p>
+        <p id="ajustes-devolucoes" class="linha-detalhes"></p>
         <p class="linha-detalhes">
           <span>Itens: <strong id="v-itens">0</strong></span>
           <span>Descontos: <strong id="v-desconto">R$ 0,00</strong></span>

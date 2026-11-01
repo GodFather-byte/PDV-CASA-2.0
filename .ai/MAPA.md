@@ -49,6 +49,11 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Assunto | Arquivo |
 |---|---|
 | Venda, itens, pagamento, mesas e comandas | `caixa_controller.py` |
+| Divisão por itens e cálculo de totais (auxiliares do CaixaController) | `caixa_divisao.py`, `caixa_totais.py` |
+| Custo congelado e rateio analítico de devoluções | `custos_venda.py`; fila imutável em `src/sync/devolucoes_envio.py` |
+| Envio por mudança, batimento leve e estado da fila | `src/sync/painel_ritmo.py`, `painel_status.py`; indicador em `ui_qt/estado_nuvem.py` |
+| Ledger e resumo de devoluções na nuvem | `backend/painel_devolucoes.py` |
+| Verificação do commit publicado | `tools/verificar_nuvem.py`, rota pública `/v1/versao`; guia `docs/ENTREGA_1_10.md` |
 | Cartões de mesas, comandas, garotas e balcão no caixa (visual da boate) | modelo `mesas_modelo.py` (`montar_tiles`); desenho e teclado em `ui_qt/painel_mesas.py`; ligação em `ui_qt/caixa.py` (`carregar_mesas`) |
 | Turno, numeração de cupom, fechamento | `turno_controller.py`, `conferencia_turno.py` |
 | Edição do programa (WillPDV ou E&A Superações/adega): marca, pasta de dados, perfil fixo, opções escondidas | `src/core/edicao.py`; usada em `ui_qt/app.py`, `ui_qt/configuracoes.py`, `config_controller.salvar_config`, `database/conexao.py` |

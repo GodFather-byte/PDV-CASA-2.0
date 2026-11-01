@@ -23,9 +23,19 @@
 - `/porteiro` no caixa e na nuvem. Lista as comandas abertas sem a da garota. No iPhone, o botão explica
   Compartilhar > Adicionar à Tela de Início. Guia: `docs/PORTEIRO.md`.
 
+## Entrega 1.10.0
+
+- Painel separa bruto, devoluções e líquido; ledger imutável com ACK próprio e custos congelados apenas para novas vendas.
+- Custos recuperados e comissão dos itens são referências analíticas; não alteram salários, pagamentos nem CMV histórico.
+- Sincronização usa revisão persistente, filas e batimento de 45 s; indicador Qt mostra confirmação e pendências.
+- Esquema 33 adiciona revisão, ACK de devoluções e custos dos itens; migração preserva dados e gera backup.
+- Dependências fixadas com hashes; workflows validam instalação. Build inclui módulos do autoteste e tzdata (fuso no Windows). Deploy verifica SHA público em /v1/versao.
+- Guias: docs/ENTREGA_1_10.md e docs/HOMOLOGACAO_BALCAO.md. Equipamentos físicos ainda pendentes.
+- CaixaController mantém entrada pública; cálculo e divisão delegados a módulos menores.
+
 ## Estado
 
-- PDV **1.9.0**, esquema **32**. Interface do PDV só Qt. Licenciador em Tkinter. Dinheiro em centavos.
+- PDV **1.10.0**, esquema **33**. Interface do PDV só Qt. Licenciador em Tkinter. Dinheiro em centavos.
 - Duas edições: WillPDV e E&A Superações. Cupom não fiscal.
 
 ## Pendências para produção
@@ -33,4 +43,4 @@
 - Atualizar o PDV da loja para o cardápio, o sync de 5 s e o restante que saiu depois do instalador em uso.
 - Homologar Qt no balcão, iPhone físico e a campainha ESP32. Quartos: `docs/QUARTOS.md`.
 - Cobrança Mercado Pago: `MP_ACCESS_TOKEN` e `MP_WEBHOOK_SECRET`. E-mail: `BREVO_API_KEY` e `EMAIL_FROM`.
-- Devolução não atende pré-pago nem rodízio. Bruto, CMV e comissões históricos não são estornados por devolução.
+- Devolução não atende pré-pago nem rodízio. O painel mostra devoluções separadamente; CMV e pagamentos de comissões históricos não são reescritos.

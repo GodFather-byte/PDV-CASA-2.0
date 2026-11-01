@@ -21,12 +21,14 @@ Também daqui sai a troca da senha do painel pelo próprio PDV (`trocar_senha`):
 from __future__ import annotations
 
 import logging
+import json
 import socket
 from uuid import uuid4
 
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
 from src.core.posicao import nome as nome_posicao
+from src.sync import devolucoes_envio
 
 log = logging.getLogger("pdv.painel")
 
@@ -315,6 +317,7 @@ def retrato(banco) -> dict:
         "terminal_computador": (maquina.get("nome_computador") or "").strip() or socket.gethostname(),
         "dia_operacional": hoje, "momento": fmt.agora(),
         "atualizacao_seg": 5 if banco.cfg_bool("sync_quase_tempo_real") else 30,
+        "devolucoes_suportadas": True, "devolucoes_pendentes_envio": devolucoes_envio.pendentes(banco),
         "caixa": caixa, "estoque": estoque,
         "caderneta": {"a_receber_cent": int(devedores["total"]), "clientes_devendo": int(devedores["n"])},
         "entregas_pendentes": banco.valor(
@@ -342,35 +345,61 @@ def marcar_enviadas(banco, vendas: list[dict]) -> int:
     return marcadas
 
 
-def enviar(banco, http=None) -> dict | None:
+_FOTO_PADRAO = object()
+
+
+def _postar(banco, corpo: dict, http=None) -> dict:
+    if http is None:
+        import requests as http
+    r = None
+    try:
+        r = http.post(url_envio(banco.cfg("api_url")), json=corpo,
+                      headers={"Authorization": f"Bearer {banco.cfg('api_token').strip()}"}, timeout=(5, 30))
+        if r.status_code != 200:
+            raise RuntimeError(f"Painel do dono: a nuvem respondeu HTTP {r.status_code}.")
+        dados = r.json()
+        if not isinstance(dados, dict):
+            raise ValueError("Resposta do painel inválida.")
+        return dados
+    except Exception:
+        # Mensagem persistida sem URL, token ou conteúdo da exceção de rede.
+        codigo = getattr(r, "status_code", None)
+        http_erro = f" HTTP {codigo}" if type(codigo) is int else ""
+        banco.cfg_set(CHAVE_ULTIMO_ERRO, f"{fmt.agora()}{http_erro} envio não confirmado; confira a conexão e o log.")
+        raise
+
+
+def confirmar_sucesso(banco) -> None:
+    banco.cfg_set(CHAVE_ULTIMO_ENVIO, fmt.agora())
+    banco.cfg_set(CHAVE_ULTIMO_ERRO, "")
+
+
+def enviar(banco, http=None, *, foto=_FOTO_PADRAO) -> dict | None:
     """Uma rodada de envio. Devolve {"vendas": n, "lotes": n} ou None quando o painel está desligado.
     Lança exceção se a nuvem não respondeu 200 (a sincronização registra e tenta de novo)."""
     if not ligado(banco):
         return None
-    if http is None:
-        import requests as http
-    url = url_envio(banco.cfg("api_url"))
-    cabecalhos = {"Authorization": f"Bearer {banco.cfg('api_token').strip()}"}
+    foto = retrato(banco) if foto is _FOTO_PADRAO else foto
     enviadas = lotes = 0
     while True:
         vendas = coletar_vendas(banco)
-        corpo = {"vendas": vendas, "retrato": retrato(banco), "enviado_em": fmt.agora()}
-        try:
-            r = http.post(url, json=corpo, headers=cabecalhos, timeout=(5, 30))
-        except OSError as e:
-            banco.cfg_set(CHAVE_ULTIMO_ERRO, f"{fmt.agora()} sem conexão: {e}"[:200])
-            raise
-        if r.status_code != 200:
-            banco.cfg_set(CHAVE_ULTIMO_ERRO, f"{fmt.agora()} HTTP {r.status_code}"[:200])
-            raise RuntimeError(f"Painel do dono: a nuvem respondeu HTTP {r.status_code}.")
-        resposta = r.json()
+        retornos = devolucoes_envio.coletar(banco, LOTE)
+        corpo = {"vendas": vendas, "devolucoes": retornos, "enviado_em": fmt.agora()}
+        if foto is not None:
+            corpo["retrato"] = foto
+        resposta = _postar(banco, corpo, http)
         confirmados = {u for u in (resposta.get("uuids") or []) if isinstance(u, str)}
         marcadas = marcar_enviadas(banco, [v for v in vendas if v["uuid"] in confirmados])
         enviadas += marcadas
+        devolvidas = devolucoes_envio.confirmar(banco, retornos, resposta.get("devolucoes_uuids") or [])
         lotes += 1
-        banco.cfg_set(CHAVE_ULTIMO_ENVIO, fmt.agora())
-        banco.cfg_set(CHAVE_ULTIMO_ERRO, "")
-        if len(vendas) < LOTE or not marcadas:
+        if retornos and not devolvidas:
+            banco.cfg_set(CHAVE_ULTIMO_ERRO, f"{fmt.agora()} devoluções não confirmadas; atualize a nuvem.")
+            raise RuntimeError("A nuvem não confirmou as devoluções; permanecem na fila local.")
+        confirmar_sucesso(banco)
+        foto = None                    # os lotes seguintes levam apenas as vendas e devoluções pendentes
+        if (len(vendas) < LOTE and len(retornos) < LOTE) or not (marcadas or devolvidas) \
+                or not (pendentes(banco) or devolucoes_envio.pendentes(banco)):
             break
     if enviadas:
         log.info("Painel do dono: %d venda(s) enviada(s) em %d lote(s).", enviadas, lotes)
