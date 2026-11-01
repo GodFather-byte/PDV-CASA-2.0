@@ -1161,6 +1161,10 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             db, loja.chave_loja, inicio_mes, str(dia)[:10])
         r["bar"] = bar
         r["mes"] = faturamento_do_mes(db, loja.chave_loja, dia_op)
+        from src.whatsapp.alertas import montar as montar_alertas
+        r["alertas"] = montar_alertas(r, retrato, retrato.get("whatsapp") or {})
+        r["perdas"] = retrato.get("perdas") or []
+        r["conferencias"] = retrato.get("fechamentos") or []
         r.update({
             "loja": {"chave": loja.chave_loja, "nome": retrato.get("loja_nome") or loja.nome},
             "dia": dia, "dia_operacional": dia_op.isoformat(),
@@ -1171,6 +1175,61 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             **gestao,
         })
         return r
+
+    @router.get("/v1/painel/whatsapp")
+    def whatsapp(de: str = Query(..., max_length=10), ate: str = Query(..., max_length=10),
+                 sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
+        """Texto do resumo para o link do WhatsApp. Só quando o dono pede; não entra na consulta automática."""
+        inicio, fim = _data_segura(de, None), _data_segura(ate, None)
+        if inicio is None or fim is None or fim < inicio or (fim - inicio).days > 400:
+            raise HTTPException(status_code=422, detail="Informe o período como AAAA-MM-DD, com no máximo 400 dias.")
+        loja = _loja(db, sessao.chave_loja)
+        retrato, _, _ = _mais_recente(_ler_caixas(db, loja.chave_loja))
+        linhas = (db.query(PainelVenda).filter(
+            PainelVenda.chave_loja == loja.chave_loja, PainelVenda.dia >= inicio.isoformat(),
+            PainelVenda.dia <= fim.isoformat()).all())
+        vendas = []
+        for l in linhas:
+            try:
+                v = json.loads(l.dados)
+            except ValueError:
+                v = {}
+            if not isinstance(v, dict):
+                v = {}
+            v.update({"status": l.status, "total_cent": l.total_cent, "desconto_cent": l.desconto_cent,
+                      "fechada_em": l.fechada_em, "garcom": v.get("garcom") or ""})
+            v["itens"] = [i for i in (v.get("itens") or []) if isinstance(i, dict)]
+            v["pagamentos"] = [p for p in (v.get("pagamentos") or []) if isinstance(p, dict)]
+            vendas.append(v)
+        base = resumo_do_dia(vendas)
+        garcons: dict[str, dict] = {}
+        for v in vendas:
+            if v.get("status") != "fechada":
+                continue
+            nome = str(v.get("garcom") or "").strip() or "Sem garçom"
+            bloco = garcons.setdefault(nome, {"nome": nome, "faturamento_cent": 0, "quantidade": 0})
+            bloco["faturamento_cent"] += _int(v.get("total_cent"))
+            bloco["quantidade"] += 1
+        dia_conf = fim.isoformat()
+        conferencias = [f for f in (retrato.get("fechamentos") or []) if str(f.get("dia") or "") == dia_conf] \
+            if inicio == fim else list(retrato.get("fechamentos") or [])[:8]
+        from src.whatsapp.resumo import links as links_whatsapp
+        from src.whatsapp.resumo import texto_resumo
+        cfg = retrato.get("whatsapp") or {}
+        texto = texto_resumo({
+            "loja": retrato.get("loja_nome") or loja.nome,
+            "periodo": f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}",
+            "vendas": base["vendas"],
+            "servico_cent": sum(_int(v.get("servico_cent")) for v in vendas if v.get("status") == "fechada"),
+            "garcons": sorted(garcons.values(), key=lambda g: -g["faturamento_cent"]),
+            "produtos": base["produtos"],
+            "formas": base["formas"],
+            "sangrias_cent": sum(_int(s.get("valor_cent")) for s in (retrato.get("sangrias") or [])
+                                if inicio.isoformat() <= str(s.get("dia") or "") <= fim.isoformat()),
+            "conferencias": conferencias,
+            "perdas": retrato.get("perdas") or [],
+        })
+        return {"texto": texto, "links": links_whatsapp(cfg.get("numeros") or [], texto)}
 
     @router.get("/v1/painel/periodo")
     def periodo(de: str = Query(..., max_length=10), ate: str = Query(..., max_length=10),

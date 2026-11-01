@@ -13,10 +13,8 @@ from uuid import uuid4
 import urllib.error
 
 from licenciador.central import Central, ClientePonte, ErroCentral
-from licenciador.central_bot import BotCentral, TravaCentral, servir
+from licenciador.central_bot import TravaCentral, servir
 from src.core import ed25519, licenca
-from src.sync.telegram_api import ClienteTelegram
-from tests.test_telegram import TelegramFalso
 
 
 class TesteCentral(unittest.TestCase):
@@ -232,21 +230,9 @@ class TesteCentral(unittest.TestCase):
         aprovada = next(d for _, r, d in self.chamadas if r == "/v1/central/caixas")
         self.assertEqual(aprovada["chave_loja"], "Boate-Centro")
 
-    def test_servico_responde_e_encerra_sem_deixar_trava(self):
-        falso = TelegramFalso()
-        falso.digitar(1001, "/lojas")
-        parar = threading.Event()
-
-        def http(url, dados, timeout):
-            resposta = falso(url, dados, timeout)
-            if url.endswith("/getUpdates"):
-                parar.set()
-            return resposta
-        servir(self.central, "bot-teste", parar, http)
-        self.assertIn("LOJA-1", falso.textos(1001)[0])
-        trava = TravaCentral(self.central.arquivo)
-        trava.adquirir()
-        trava.liberar()
+    def test_servico_do_telegram_foi_desligado(self):
+        with self.assertRaisesRegex(ErroCentral, "Telegram da central foi desligado"):
+            servir(self.central, "bot-teste")
 
     def test_recusa_outro_banco_sem_modificar_suas_tabelas(self):
         outro = self.pasta / "outro.db"
@@ -261,41 +247,6 @@ class TesteCentral(unittest.TestCase):
         finally:
             db.close()
 
-    def test_bot_isola_estranhos_grupos_e_nao_expoe_codigo(self):
-        falso = TelegramFalso()
-        bot = BotCentral(self.central, ClienteTelegram("token-teste", falso))
-        item = self.emitir()
-        falso.digitar(2002, "/lojas")
-        falso.digitar(1001, "/lojas", tipo="group")
-        falso.digitar(1001, "/loja LOJA-1")
-        bot.rodada(0)
-        self.assertEqual(len(falso.enviadas), 2)
-        self.assertIn("privada", falso.textos(2002)[0])
-        self.assertNotIn("LOJA-1", falso.textos(2002)[0])
-        self.assertIn("2026-11-21", falso.textos(1001)[0])
-        self.assertNotIn(item["codigo"], "\n".join(falso.textos()))
-
-    def test_bot_emissao_exige_confirmacao_e_nao_cobra(self):
-        falso = TelegramFalso()
-        bot = BotCentral(self.central, ClienteTelegram("token-teste", falso))
-        resposta = bot.responder(1001, "/emitir LOJA-1 1")
-        self.assertIn("Não confirma nem cobra", resposta)
-        self.assertEqual(self.central.db.execute("SELECT COUNT(*) FROM licencas").fetchone()[0], 0)
-        token = resposta.split("/confirmar ")[1]
-        self.assertIn("Emissão local registrada", bot.responder(1001, "/confirmar " + token))
-        self.assertEqual(self.chamadas, [])
-
-    def test_bot_paginacao_nao_trunca_lojas(self):
-        for numero in range(20):
-            self.central.cadastrar(f"CLIENTE-{numero:02}", f"Cliente {numero}")
-        bot = BotCentral(self.central, ClienteTelegram("teste"))
-        primeira = bot.responder(1001, "/lojas 1")
-        ultima = bot.responder(1001, "/lojas 3")
-        self.assertIn("(1/3)", primeira)
-        self.assertIn("LOJA-1", ultima)
-        with self.assertRaises(ErroCentral):
-            bot.responder(1001, "/lojas 0")
-
     def test_publicar_historico_exige_autorizacao_e_nao_emite_ou_estende(self):
         codigo = licenca.gerar_licenca(self.semente, "LOJA-1", 30, date(2026, 10, 21))
         origem = self.pasta / "historico.json"
@@ -308,18 +259,8 @@ class TesteCentral(unittest.TestCase):
         self.assertEqual(self.publicados[identificador]["codigo"], codigo)
         self.assertEqual(self.central.db.execute("SELECT COUNT(*) FROM licencas").fetchone()[0], 1)
 
-    def test_avisos_fornecedor_persistem_e_nao_se_repetem(self):
+    def test_estado_da_ponte_continua_gravado_sem_o_bot(self):
         self.emitir()
         self.central._guardar_estado({"caixas": [], "licencas": [], "solicitacoes": [
             {"id": str(uuid4()), "chave_loja": "LOJA-1", "situacao": "pendente"}]})
-        falso = TelegramFalso()
-        bot = BotCentral(self.central, ClienteTelegram("teste", falso))
-        bot.avisos()
-        bot.avisos()
-        self.assertEqual(len(falso.enviadas), 1)
-        outra = Central(self.central.arquivo)
-        try:
-            BotCentral(outra, bot.cliente).avisos()
-            self.assertEqual(len(falso.enviadas), 1)
-        finally:
-            outra.fechar()
+        self.assertTrue(self.central.arquivo.exists())

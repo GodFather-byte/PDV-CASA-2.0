@@ -14,7 +14,7 @@ O caixa **não depende** da nuvem para vender: sem internet ele continua funcion
 
 Tudo o que é da nuvem está na pasta `backend/` do projeto.
 
-**Modo ponte (1.7.0):** a [central Telegram do fornecedor](CENTRAL_TELEGRAM.md)
+**Modo ponte (1.7.0):** a central do fornecedor (o bot do Telegram foi desligado; veja [o que apagar](CENTRAL_TELEGRAM.md))
 publica códigos assinados no PC exclusivo. Para lojas migradas, a API entrega o
 código publicado e não carrega chave privada nem emite licença. As lojas antigas
 não migradas preservam o fluxo descrito neste guia. Credenciais da central e dos

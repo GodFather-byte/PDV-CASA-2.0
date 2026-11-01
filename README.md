@@ -638,7 +638,7 @@ A suíte de testes ([`testes.yml`](.github/workflows/testes.yml)) roda a cada pu
 
 ## Telegram do dono (acompanhar a casa pelo celular)
 
-> Passo a passo para o dono, botões do bot e perguntas frequentes: [`docs/TELEGRAM.md`](docs/TELEGRAM.md).
+> O Telegram foi desligado. O resumo do dono vai pelo WhatsApp: Configurações > Nuvem > WhatsApp do dono. Veja [`docs/CENTRAL_TELEGRAM.md`](docs/CENTRAL_TELEGRAM.md).
 
 Opcional e desligado por padrão. Em **Configurações > Telegram** o dono liga o PDV a um bot do Telegram (token do @BotFather +
 código de pareamento) e passa a receber no celular: caixa aberto/fechado com a diferença, cupons e itens cancelados, sangrias,
@@ -711,7 +711,7 @@ rotina real do caixa, backup e restauração testados, hardware fiscal/periféri
 | [`INSTALAR_E_TESTAR.md`](docs/INSTALAR_E_TESTAR.md) | gerar, baixar, instalar e testar o WillPDV no Windows (GitHub Actions) |
 | [`LICENCIADOR.md`](docs/LICENCIADOR.md) | o programa WillPDV Licenças (gerador de licenças) |
 | [`NUVEM.md`](docs/NUVEM.md) | colocar a nuvem no ar (Render + Neon), cadastrar boates, acompanhar licenças e avisar versões |
-| [`TELEGRAM.md`](docs/TELEGRAM.md) | o bot do Telegram do dono: passo a passo, botões e perguntas frequentes |
+| [`CENTRAL_TELEGRAM.md`](docs/CENTRAL_TELEGRAM.md) | Telegram desligado: o que apagar fora do programa |
 | [`ESTOQUE.md`](docs/ESTOQUE.md) | o painel de estoque, pedido e lista de compras; fardos e as regras da adega (gelada, atacado, cascos) |
 | [`ADEGA.md`](docs/ADEGA.md) | checklist de implantação numa adega/depósito de bebidas e o treinamento do operador |
 | [`PAINEL_DONO.md`](docs/PAINEL_DONO.md) | painel do dono no celular (app web instalável, servido pela nuvem) |

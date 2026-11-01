@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
 
 from src.controllers.config_controller import modulos_desligados
 from src.controllers.fila_impressao_controller import ServicoFilaImpressao
-from src.controllers.telegram_controller import ServicoTelegram
 from src.controllers.mesas_modelo import montar_tiles
 from src.core import edicao, formatacao as fmt, licenca, registro
 from src.core.erros import ErroNegocio
@@ -224,6 +223,7 @@ class JanelaPrincipal(QMainWindow):
             ("porteiro", "Porteiro no celular", self.abrir_porteiro),
             ("produtos", "Produtos", lambda: self.abrir_cadastro("produtos")),
             ("estoque", "Estoque", self.abrir_estoque),
+            ("contagem", "Contagem de estoque", self.abrir_contagem),
             ("retornaveis", "Retornáveis por cliente", self.abrir_retornaveis),
             ("promocoes", "Promoções e faixas", self.abrir_promocoes),
             ("alertas", "Alertas da operação", self.abrir_alertas),
@@ -238,7 +238,7 @@ class JanelaPrincipal(QMainWindow):
             ("configuracoes", "Configurações gerais", self.abrir_configuracoes),
             ("maquinas", "Máquinas e periféricos", self.abrir_maquinas),
             ("acessos", "Níveis de acesso", self.abrir_acessos),
-            ("telegram", "Telegram do dono", self.abrir_telegram),
+            ("whatsapp", "WhatsApp do dono", self.abrir_whatsapp),
             ("utilitarios", "Utilitários e manutenção", self.abrir_utilitarios),
             ("atualizacoes", "Atualizações do programa", self.abrir_atualizacoes),
             ("importar_produtos", "Importar produtos", self.abrir_importacao_produtos),
@@ -433,7 +433,7 @@ class JanelaPrincipal(QMainWindow):
         self.botoes["configuracoes"].setEnabled(
             self.ctx.pode("cfg_loja") or self.ctx.pode("cfg_configuracoes"))
         for chave, modulo in (("maquinas", "cfg_maquinas"), ("acessos", "cfg_acessos"),
-                              ("telegram", "cfg_telegram")):
+                              ("whatsapp", "cfg_configuracoes"), ("contagem", "lanc_contagem")):
             self.botoes[chave].setEnabled(self.ctx.pode(modulo))
         from src.ui_qt.utilitarios import MODULOS_UTILITARIOS
         self.botoes["utilitarios"].setEnabled(
@@ -480,7 +480,7 @@ class JanelaPrincipal(QMainWindow):
                  "Nuvem configurada." if configurada else "Nuvem não configurada.")
         nuvem += f"\nÚltima consulta de licença concluída: {ultima}." if ultima else "\nSem consulta de licença concluída."
         if erro:
-            nuvem += ("\nFalha na ponte; consulte Configurações ou Suporte no Telegram."
+            nuvem += ("\nFalha na ponte; consulte Configurações ou o fornecedor."
                       if estado_ponte["ativa"] else f"\nÚltima falha de licença: {erro}")
         if banco.cfg_bool("sync_quase_tempo_real"):
             from src.sync.ociosidade import lote_minutos
@@ -534,7 +534,7 @@ class JanelaPrincipal(QMainWindow):
     def mostrar_limites(self):
         self.mensagem.setText(
             "Disponível conforme acesso: caixa, cadastros, estoque, relatórios, configurações, máquinas, acessos, "
-            "Telegram, alertas, retornáveis, promoções, cozinha/bar, utilitários, importação, ficha técnica, "
+            "WhatsApp do dono, alertas, retornáveis, promoções, cozinha/bar, utilitários, importação, ficha técnica, "
             "impressão, backup e restauração. Use a busca lateral para localizar os módulos. "
             "Valide em cópia dos dados. Serviços externos e periféricos indisponíveis não são simulados. "
             "Não abra duas instâncias sobre o mesmo banco.")
@@ -721,15 +721,17 @@ class JanelaPrincipal(QMainWindow):
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
 
-    def abrir_telegram(self):
-        try:
-            from src.ui_qt.telegram import JanelaTelegram
-            janela = self.janelas.get("telegram")
-            if janela is not None:
-                janela.exigir_acesso()
-            return self._unica("telegram", lambda: JanelaTelegram(self.ctx, self))
-        except ErroNegocio as erro:
-            self.mensagem.setText(str(erro))
+    def abrir_contagem(self):
+        from src.ui_qt.contagem import JanelaContagem
+        if not self.ctx.pode("lanc_contagem"):
+            self.mensagem.setText("Sem permissão para a contagem de estoque.")
+            return None
+        janela = JanelaContagem(self.ctx, self)
+        janela.exec()
+        return janela
+
+    def abrir_whatsapp(self):
+        return self.abrir_configuracoes()
 
     def abrir_utilitarios(self):
         try:
@@ -943,7 +945,7 @@ class App:
             idade = self.ctx.utilitarios.idade_backup_horas()
             if idade is None or idade >= 12:
                 self.ctx.utilitarios.backup_automatico("início")
-            for classe, nome in ((ServicoFilaImpressao, "Impressão"), (ServicoTelegram, "Telegram"),
+            for classe, nome in ((ServicoFilaImpressao, "Impressão"),
                                  (ServicoPonte, "Ponte de licenças"), (ServicoPorteiro, "Porteiro"),
                                  (ServicoSincronizacao, "Sincronização da nuvem")):
                 servico = None
@@ -1168,7 +1170,7 @@ def autoteste(pasta: Path) -> list[str]:
             raise RuntimeError("Uma das janelas Qt não abriu.")
         telas_administrativas = (
             app.principal.abrir_configuracoes, app.principal.abrir_maquinas,
-            app.principal.abrir_acessos, app.principal.abrir_telegram,
+            app.principal.abrir_acessos,
             app.principal.abrir_utilitarios, app.principal.abrir_atualizacoes,
             app.principal.abrir_estoque,
             app.principal.abrir_alertas, app.principal.abrir_promocoes,
@@ -1236,7 +1238,7 @@ def autoteste(pasta: Path) -> list[str]:
         return ["Qt Widgets: menu principal e cadastros de produtos/operadores abrem; "
                 "banco em memória, sem rede nem serviços",
                 "caixa Qt: comissão na linha, painel, diálogos de comissão/acerto e saída sem consumo conferidos",
-                "configurações, máquinas, acessos, Telegram, utilitários, atualizações e estoque abrem sem rede nem hardware"]
+                "configurações, máquinas, acessos, utilitários, atualizações e estoque abrem sem rede nem hardware"]
     finally:
         if app is not None:
             app.finalizar()

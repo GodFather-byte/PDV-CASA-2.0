@@ -60,7 +60,6 @@ ACESSOS = [
     ("cfg_loja", "Dados da Loja", "Configurações", 3),
     ("cfg_configuracoes", "Configurações operacionais", "Configurações", 4),
     ("cfg_maquinas", "Máquinas", "Configurações", 4),
-    ("cfg_telegram", "Telegram do dono (acompanhar a casa pelo celular)", "Configurações", 4),
 ]
 
 CONFIG_PADRAO = {
@@ -107,6 +106,11 @@ CONFIG_PADRAO = {
     "api_url": "", "api_token": "", "sync_intervalo_seg": "60",
     "sync_quase_tempo_real": "N",
     "sync_lote_seg": "900", "sync_expediente_de": "", "sync_expediente_ate": "",
+    "whatsapp_dono": "",
+    "whatsapp_alerta_cancelamento_cent": "5000",
+    "whatsapp_alerta_desconto_cent": "5000",
+    "whatsapp_alerta_sangria_cent": "20000",
+    "whatsapp_mesa_horas": "4",
     # Painel do dono no celular: desligado até o dono pedir (as vendas só saem da loja com isto ligado).
     "painel_dono": "N",
     # Cardápio digital no celular (QR da mesa): desligado até o dono publicar o catálogo na nuvem.
@@ -186,7 +190,6 @@ def aplicar(banco) -> None:
     with banco.transacao():
         for chave, valor in CONFIG_PADRAO.items():
             banco.executar("INSERT OR IGNORE INTO config(chave, valor) VALUES (?, ?)", (chave, valor))
-        aplicar_padrao_telegram_23h(banco)
         for modulo, descricao, grupo, nivel in ACESSOS:
             banco.executar(
                 "INSERT OR IGNORE INTO acessos(modulo, descricao, grupo, nivel) VALUES (?,?,?,?)",

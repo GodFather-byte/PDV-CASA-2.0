@@ -75,6 +75,17 @@
           <p id="mes-comparacao" class="detalhe"></p>
         </article>
 
+        <article class="cartao" id="cartao-alertas">
+          <span class="rotulo">Alertas <span id="badge-alertas">0</span></span>
+          <ul id="lista-alertas"></ul>
+          <p class="legenda">Chegam com o envio do caixa (lote ou Atualizar agora). Não há consulta extra.</p>
+          <div>
+            <button type="button" id="botao-resumo-whatsapp">Enviar resumo no WhatsApp</button>
+            <button type="button" id="botao-copiar-resumo">Copiar texto</button>
+            <button type="button" id="botao-pdf">Baixar PDF do período</button>
+          </div>
+        </article>
+
         <div class="linha-dia">
           <label for="seletor-dia">Dia</label>
           <select id="seletor-dia" aria-label="Escolher dia"></select>
@@ -470,6 +481,7 @@
     </nav>
   </div>
 
+  <script src="pdf.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

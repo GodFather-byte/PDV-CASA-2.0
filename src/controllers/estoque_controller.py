@@ -664,3 +664,34 @@ class EstoqueController:
         """Produtos a repor; os filtros opcionais reutilizam exatamente o recorte do painel."""
         falta = [p for p in self._painel(situacao, texto, grupo, adega=adega) if p["repor"] > 0]
         return sorted(falta, key=lambda p: (p["situacao"] != "sem", p["nome"]))
+
+    def simular_contagem(self, contados: list[tuple[int, float]]) -> list[dict]:
+        """Compara a quantidade contada com o saldo teórico. Não grava."""
+        linhas = []
+        for pid, qtd in contados:
+            p = self.produtos.por_id(pid)
+            if p is None or not p["controla_estoque"]:
+                continue
+            contado = self._validar_quantidade(qtd)
+            antes = float(p["qt_atual"] or 0)
+            falta = fmt.arred_qtd(max(antes - contado, 0))
+            preco = int(p["ult_preco_cent"] or 0)
+            linhas.append({
+                "produto_id": pid, "nome": p["nome"], "unidade": p.get("unidade") or "",
+                "teorico": antes, "contado": contado,
+                "diferenca": fmt.arred_qtd(contado - antes),
+                "perda_unidades": falta,
+                "perda_cent": int(round(falta * preco)),
+            })
+        return linhas
+
+    def aplicar_contagem(self, contados: list[tuple[int, float]], descricao: str = "Contagem de estoque") -> dict:
+        """Grava uma contagem e ajusta o saldo. A perda é a falta (contado menor que o teórico) pelo último custo."""
+        linhas = self.simular_contagem(contados)
+        if not linhas:
+            raise ErroNegocio("Informe a quantidade contada de ao menos um produto que controla estoque.")
+        with self.banco.transacao():
+            lanc = self.criar_lancamento("contagem", descricao=descricao)
+            for linha in linhas:
+                self.adicionar_item(lanc, linha["produto_id"], linha["contado"])
+        return {"lancamento_id": lanc, "linhas": linhas, "perda_cent": sum(l["perda_cent"] for l in linhas)}

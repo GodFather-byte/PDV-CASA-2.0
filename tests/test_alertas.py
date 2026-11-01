@@ -6,10 +6,8 @@ from unittest import mock
 from src.controllers.acesso_controller import AcessoController
 from src.controllers.alertas_controller import TODAS, AlertasController
 from src.controllers.cadastro_controller import CadastroController
-from src.controllers.telegram_controller import BOTOES, TelegramController, normalizar_comando
 from src.core.erros import ErroPermissao
 from tests.test_caixa import BaseCaixa
-from tests.test_telegram import DONO, ESTRANHO, BaseTelegram
 
 
 def retrato(banco) -> dict:
@@ -70,19 +68,16 @@ class TesteRegras(BaseAlertas):
         for status, tentativas in (("erro", 3), ("pendente", 1), ("pendente", 0)):
             self.banco.inserir("fila_impressao", {"criado_em": agora, "nome": "cupom", "dados": b"x", "status": status,
                                                   "tentativas": tentativas, "ultimo_erro": "COM3 senha=segredo"})
-        self.banco.inserir("telegram_fila", {"criado_em": agora, "texto": "x", "status": "erro"})
-        self.banco.inserir("telegram_fila", {"criado_em": agora, "texto": "y", "status": "pendente"})
-        self.banco.cfg_set("telegram_ativo", "S")
-        self.banco.cfg_set("telegram_erro", "sem rede")
         for chave, valor in (("painel_dono", "S"), ("api_url", "https://exemplo.invalido/v1/sincronizar"), ("api_token", "t")):
             self.banco.cfg_set(chave, valor)
         f = self.ctl.filas()
         self.assertEqual(f["impressao"], {"pendentes": 2, "falhando": 1, "erros": 1})
-        self.assertEqual((f["telegram"]["pendentes"], f["telegram"]["erros"], f["telegram"]["com_erro"]), (1, 1, True))
         self.assertTrue(f["nuvem"]["ligada"])
+        self.assertNotIn("telegram", f)
         lista = self.ctl.alertas({"operacao"})
         cats = {a["categoria"] for a in lista}
-        self.assertTrue({"impressao", "telegram"} <= cats)
+        self.assertIn("impressao", cats)
+        self.assertNotIn("telegram", cats)
         self.assertEqual(lista[0]["nivel"], "critico")
         self.assertFalse(any("segredo" in a["detalhe"] or "sem rede" in a["detalhe"] for a in lista))
 
@@ -160,55 +155,3 @@ class TestePermissoes(BaseAlertas):
         self.assertEqual(self.ctl.secoes_permitidas(self.adm), set())
 
 
-class TesteTelegramAlertas(BaseTelegram):
-    def setUp(self):
-        super().setUp()
-        ponte = mock.patch.object(TelegramController, "_ponte", side_effect=AssertionError("não pode tocar a central"))
-        self.ponte = ponte.start()
-        self.addCleanup(ponte.stop)
-        self.parear()
-
-    def test_botoes_e_variacoes(self):
-        comandos = [c for _, c in BOTOES]
-        self.assertIn("alertas", comandos)
-        self.assertIn("gerencial", comandos)
-        for texto in ("🚨 Alertas", "/alertas", "alerta", "pendências", "avisos"):
-            self.assertEqual(normalizar_comando(texto), "alertas", texto)
-        for texto in ("🧭 Gerencial", "/gerencial", "painel", "gestão"):
-            self.assertEqual(normalizar_comando(texto), "gerencial", texto)
-
-    def test_alertas_vazio(self):
-        self.assertIn("Nenhum alerta", self.pergunta("🚨 Alertas"))
-
-    def test_alertas_com_pendencias(self):
-        self.novo_produto("GIN", 9000, estoque=True, qt=0)
-        self.vender((self.skol, 1), mesa=5)
-        self.avancar(minutes=45)
-        texto = self.pergunta("/alertas")
-        self.assertIn("GIN", texto)
-        self.assertIn("sem lançamento", texto)
-        self.assertNotIn("R$", texto)
-        self.assertLess(len(texto), 4096)
-        self.ponte.assert_not_called()
-
-    def test_gerencial_reaproveita_resumo_e_mostra_situacao(self):
-        self.venda_fechada()
-        self.vender((self.skol, 1), mesa=5)
-        texto = self.pergunta("🧭 Gerencial")
-        self.assertIn("Situação da casa agora", texto)
-        self.assertIn("Mesas", texto)
-        self.assertLess(len(texto), 4096)
-        self.ponte.assert_not_called()
-
-    def test_estranho_nao_recebe_alertas(self):
-        self.novo_produto("GIN", 9000, estoque=True, qt=0)
-        for comando in ("🚨 Alertas", "🧭 Gerencial"):
-            resposta = self.pergunta(comando, ESTRANHO)
-            self.assertIn("privado", resposta)
-            self.assertNotIn("GIN", resposta)
-        self.assertFalse(any("GIN" in t for t in self.tg_http.textos(DONO)))
-
-    def test_ajuda_cita_os_novos_botoes(self):
-        texto = self.pergunta("ajuda")
-        self.assertIn("Gerencial", texto)
-        self.assertIn("Alertas", texto)

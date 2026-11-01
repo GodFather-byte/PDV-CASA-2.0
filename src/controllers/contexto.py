@@ -17,7 +17,6 @@ from src.controllers.preparo_controller import PreparoController
 from src.controllers.produto_controller import ProdutoController
 from src.controllers.quartos_controller import QuartosController
 from src.controllers.relatorio_controller import RelatorioController
-from src.controllers.telegram_controller import TelegramController
 from src.controllers.turno_controller import TurnoController
 from src.controllers.utilitario_controller import UtilitarioController
 from src.hardware.dispositivos import Balanca, Gaveta
@@ -37,7 +36,6 @@ class Contexto:
         self.impressao = ImpressaoController(banco)
         self.caderneta = CadernetaController(banco)
         self.comissoes = ComissaoController(banco)
-        self.telegram = TelegramController(banco)
         self.ao_mudar_tema = None          # a janela principal põe aqui o que refaz o visual quando o operador troca claro/escuro
 
     @property

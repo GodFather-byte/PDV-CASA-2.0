@@ -33,7 +33,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `src/controllers/` | Regras de negócio, um arquivo por assunto (lista abaixo) |
 | `src/ui_qt/` | Interface do PDV em PySide6/Qt: login, caixa, cadastros, estoque operacional, relatórios, configurações, máquinas, acessos, Telegram e utilitários; escopo em `docs/INTERFACE_QT.md` |
 | `src/hardware/` | Impressora térmica ESC/POS e gaveta, balança, logotipo no cupom, impressoras do Windows |
-| `src/sync/` | `sincronizador.py`, `licenca_nuvem.py`, `atualizacoes.py` (aviso de versão), `telegram_api.py`, `ponte.py` (credencial individual, licença, contato técnico e pedido de renovação), `painel_envio.py` (vendas e retrato de cada caixa para o painel do dono; troca da senha do painel), `cardapio_envio.py` (catálogo do cardápio digital) |
+| `src/sync/` | `sincronizador.py`, `licenca_nuvem.py`, `atualizacoes.py` (aviso de versão), `ponte.py` (credencial individual, licença, contato técnico e pedido de renovação), `painel_envio.py` (vendas e retrato de cada caixa para o painel do dono; troca da senha do painel), `cardapio_envio.py` (catálogo do cardápio digital) |
 | `src/atualizacao/` | Manifesto assinado e o cliente que baixa e instala em silêncio (`manifesto.py`, `cliente.py`). Guia `docs/ATUALIZACAO.md` |
 | `src/porteiro/` | Página do porteiro no celular: lista das comandas abertas (sem a da garota) e consulta por número no caixa (`/porteiro`, Wi-Fi); o retrato vai para a nuvem (`nuvem_envio.py`, 4G). A mesma página em `backend/porteiro.py` |
 | `src/cardapio/` | Preço público do cardápio e a folha A4 dos QR (`preco.py`, `folha.py`). A tela Qt é `ui_qt/cardapio_qr.py` |
@@ -68,7 +68,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Reposição por giro de 30 dias, cobertura de 7 dias e etiquetas | `estoque_controller.py`, `etiqueta_controller.py`; telas de estoque e etiquetas Qt |
 | Retornáveis por cliente (sem caução automática) | `retornaveis_controller.py`; `ui_qt/retornaveis.py` |
 | Promoções e simulação de faixas sem acumular | `promocoes_controller.py`, regras em `produto_controller.py`; `ui_qt/promocoes.py` |
-| Alertas operacionais e painel do dono | `alertas_controller.py`, `telegram_controller.py`; `ui_qt/alertas.py` |
+| Alertas operacionais e painel do dono | `alertas_controller.py`; `ui_qt/alertas.py`; WhatsApp em `src/whatsapp/` |
 | Produtos e importação por planilha | `produto_controller.py`, `importacao_produtos.py` |
 | Cadastros e entidades | `cadastro_controller.py`, `entidades.py` |
 | Operadores e níveis de acesso | `acesso_controller.py` |
@@ -88,7 +88,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Recuperação após interrupção e roteiro isolado | `fila_impressao_controller.py` (`enviando`/`incerto`, conferência humana), `src/homologacao.py`; guia `docs/MELHORIAS_1_9.md` |
 | Relatórios | `relatorio_controller.py`, `relatorio_vendas.py`, `relatorio_gestao.py` |
 | Devoluções por data/turno do reembolso | `relatorio_vendas.py` (`devolucoes`), menus Relatórios > Caixa Qt; bruto histórico preservado |
-| Telegram do dono | `telegram_controller.py`, `telegram_textos.py`, `notificacoes.py` |
+| Resumo do dono no WhatsApp | `src/whatsapp/resumo.py`, `caixa.py`, `alertas.py`; contagem em `ui_qt/contagem.py` |
 | Backup, limpeza e utilitários | `utilitario_controller.py` |
 | Teste de restauração isolada | `protecao.py` (`testar_restauracao_isolada`), `utilitario_controller.py` (`testar_recuperacao`), `ui_qt/restaurar_backup.py` |
 | Diagnóstico de impressora/gaveta/balança/leitor | `diagnostico_controller.py`, `ui_qt/diagnostico.py`; sem teste físico na abertura |
@@ -98,7 +98,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 ## Documentação (`docs/`)
 
 `ESPECIFICACAO.md` (o que o sistema deve fazer), `INSTALAR_E_TESTAR.md`, `LICENCIADOR.md`,
-`NUVEM.md`, `TELEGRAM.md`, `IMPRESSORA.md`, `ESTOQUE.md` (inclui as regras da adega), `ADEGA.md` (checklist de
+`NUVEM.md`, `IMPRESSORA.md`, `ESTOQUE.md` (inclui as regras da adega), `ADEGA.md` (checklist de
 implantação da adega), `IMPORTAR_PRODUTOS.md`, `PILOTO.md`,
 `COBRANCA_LICENCAS_MERCADOPAGO.md` (cobrança e renovação mensal), `PAINEL_DONO.md` (painel do dono no celular), `CARDAPIO.md` (QR do cardápio, só consulta), `PORTEIRO.md` (porteiro no celular, Wi-Fi e 4G),
 `COORDENACAO.md` (histórico de pedidos entre agentes).

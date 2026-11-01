@@ -274,7 +274,7 @@ def _fechamentos_e_sangrias(banco, virada: int, hoje: str) -> tuple[list[dict], 
     inicio, _ = fmt.faixa_dia_operacional(_dia_inicio(hoje, DIAS_MOVIMENTO), virada)
     fechamentos = []
     for t in banco.todos(
-            """SELECT t.numero, t.aberto_em, t.fechado_em, t.valor_inicial_cent, t.valor_final_cent,
+            """SELECT t.id, t.numero, t.aberto_em, t.fechado_em, t.valor_inicial_cent, t.valor_final_cent,
                       t.esperado_cent, t.resultado_cent, o.nome AS operador,
                       (SELECT COALESCE(SUM(valor_cent), 0) FROM movimentos_caixa m
                        WHERE m.turno_id = t.id AND m.tipo = 'saida') AS sangrias_cent,
@@ -283,6 +283,7 @@ def _fechamentos_e_sangrias(banco, virada: int, hoje: str) -> tuple[list[dict], 
                FROM turnos t LEFT JOIN operadores o ON o.id = t.operador_id
                WHERE t.status = 'fechado' AND t.fechado_em >= ?
                ORDER BY t.fechado_em DESC LIMIT ?""", (inicio, LIMITE_FECHAMENTOS)):
+        from src.whatsapp.caixa import _formas_da_auditoria
         fechamentos.append({
             "turno_numero": int(t["numero"]), "operador": t["operador"] or "",
             "aberto_em": (t["aberto_em"] or "")[:19], "fechado_em": (t["fechado_em"] or "")[:19],
@@ -293,6 +294,7 @@ def _fechamentos_e_sangrias(banco, virada: int, hoje: str) -> tuple[list[dict], 
             "resultado_cent": int(t["resultado_cent"] or 0),
             "sangrias_cent": int(t["sangrias_cent"] or 0),
             "suprimentos_cent": int(t["suprimentos_cent"] or 0),
+            "formas": _formas_da_auditoria(banco, t["id"]),
         })
     sangrias = []
     for m in banco.todos(
@@ -307,6 +309,24 @@ def _fechamentos_e_sangrias(banco, virada: int, hoje: str) -> tuple[list[dict], 
             "operador": m["operador"] or "", "turno_numero": int(m["turno_numero"]),
         })
     return fechamentos, sangrias
+
+
+def _whatsapp(banco) -> dict:
+    from src.whatsapp.resumo import numeros
+    return {
+        "numeros": numeros(banco.cfg("whatsapp_dono")),
+        "cancelamento_cent": banco.cfg_int("whatsapp_alerta_cancelamento_cent", 5000),
+        "desconto_cent": banco.cfg_int("whatsapp_alerta_desconto_cent", 5000),
+        "sangria_cent": banco.cfg_int("whatsapp_alerta_sangria_cent", 20000),
+        "mesa_horas": banco.cfg_int("whatsapp_mesa_horas", 4),
+        "expediente_de": (banco.cfg("sync_expediente_de") or "").strip(),
+        "expediente_ate": (banco.cfg("sync_expediente_ate") or "").strip(),
+    }
+
+
+def _perdas(banco) -> list[dict]:
+    from src.whatsapp.caixa import perdas_recentes
+    return perdas_recentes(banco)
 
 
 def retrato(banco) -> dict:
@@ -366,6 +386,8 @@ def retrato(banco) -> dict:
         "comandas": _comandas_abertas(banco),
         "comissoes": _comissoes(banco, virada, hoje),
         "fechamentos": fechamentos, "sangrias": sangrias,
+        "perdas": _perdas(banco),
+        "whatsapp": _whatsapp(banco),
         "faturamento_meses": _meses_fechados(banco, virada, hoje),
     }
 

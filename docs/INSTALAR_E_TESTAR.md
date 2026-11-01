@@ -124,7 +124,7 @@ ainda não tem o par de chaves, veja "WillPDV Licenças: o gerador de licenças"
 4. **Caixa**: abrir turno com fundo de caixa, vender no balcão e numa comanda, pagar em dinheiro e Pix, cancelar um item e uma
    venda, fazer uma sangria, **fechar o turno** e olhar a diferença.
 5. **Utilitários > Backup de dados** e conferir o aviso verde no menu.
-6. **Telegram** (opcional): `docs/TELEGRAM.md`. Precisa de internet no PC.
+6. **WhatsApp do dono** (opcional): Configurações > Nuvem > WhatsApp do dono. Não usa bot.
 7. Impressora térmica e gaveta, se tiver: Configurações > Máquinas (`docs/PILOTO.md`).
 
 ## 6. Se algo der errado
