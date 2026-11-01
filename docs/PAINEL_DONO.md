@@ -29,11 +29,18 @@ Regras completas: [ENTREGA_1_10.md](ENTREGA_1_10.md).
 
 | Aba | Conteúdo |
 |---|---|
-| **Hoje** | Faturamento, nº de vendas, ticket médio, cancelamentos, itens, descontos, alerta de estoque baixo, vendas por hora, formas de pagamento, modalidade, gráfico dos últimos 30 dias e dos últimos 12 meses; seletor de dia. O celular atualiza sozinho a cada 30 segundos (5 s no modo quase em tempo real) |
+| **Hoje** | No topo, **faturamento do mês até agora** comparado com o mesmo período do mês anterior (atualiza sozinho). Abaixo: o dia, taxa de serviço separada do consumo, ticket da mesa, vendas por hora contra o mesmo dia da semana passada, formas de pagamento, cancelamentos com motivo, descontos, estoque baixo, 30 dias e 12 meses |
+| **Período** | De tal dia a tal dia, com atalhos (hoje, ontem, 7 dias, este mês, mês passado): faturamento, vendas, ticket médio, taxa de serviço, formas de pagamento, gráfico por dia e totais por mês. Vale para boate, bar e adega |
 | **Caixa** | Um cartão por caixa (turno aberto, gaveta, sangrias e suprimentos do turno); caderneta; entregas; fechamento e sangrias de cada dia |
-| **Abertas** | Comandas abertas (número, quanto deve, hora, marca de comissão lançada) e o total de comissão por garota (hoje, 7 ou 30 dias) |
-| **Produtos** | Mais vendidos (quantidade e faturamento) em hoje, 7 ou 30 dias, com natural × gelada; economia do atacado do dia; estoque abaixo do mínimo |
+| **Salão** | Mesas e comandas abertas (valor, hora, garçom, itens). Ranking de garçons (consumo, serviço, comissão). Comissão de garota só se a casa usa garotas (`usar_garotas`); a aba some na adega (`usar_mesas` desligado) |
+| **Produtos** | Mais vendidos (quantidade e faturamento) em hoje, 7 ou 30 dias; por grupo e por setor; CMV e margem quando o custo sobe; estoque abaixo do mínimo |
 | **Vendas** | Cada venda do dia (mais recente primeiro) com itens (gelada marcada, cancelados riscados), pagamentos, canceladas em vermelho com o motivo; com mais de um caixa, de qual saiu |
+
+O mês e o período usam as vendas fechadas que já estão na nuvem (cerca de 120 dias). Não dependem do tipo da casa.
+Mesas com itens e garçom, grupo, setor, custo (CMV) e a comissão do garçom só ficam completos depois que o PDV da loja
+é atualizado: o retrato passa a levar `modulos` (`usar_mesas`, `usar_garotas`, `usar_portaria`, `usar_cozinha_bar`).
+Um caixa antigo continua mostrando faturamento, mês, período, formas e estoque; o painel avisa o que falta.
+Portaria não tem bloco no painel.
 
 O "dia" é o **dia operacional** da loja (Configurações > Caixa > hora da virada): numa adega com virada às 6h, a venda
 de 1h da manhã conta no dia anterior, igual aos relatórios do caixa. Cascos aparecem como produtos vendidos (não há saldo

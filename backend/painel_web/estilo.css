@@ -598,6 +598,14 @@ li.zerado .nome strong { color: var(--vermelho); }
 
 :focus-visible { outline: 2px solid var(--verde-medio); outline-offset: 2px; }
 
+.cartao-mes { margin: 0 0 .85rem; }
+.filtros-quebra { flex-wrap: wrap; }
+.filtros-quebra .filtro { flex: 1 1 30%; }
+.tabela-meses { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.tabela-meses th, .tabela-meses td { text-align: left; padding: .45rem .2rem; border-top: 1px solid var(--borda); }
+.tabela-meses td:last-child, .tabela-meses th:last-child,
+.tabela-meses td:nth-child(3), .tabela-meses th:nth-child(3) { text-align: right; }
+
 @media (min-width: 600px) {
   .grade-cartoes { grid-template-columns: repeat(4, 1fr); }
   .cartao.destaque { grid-column: span 2; }

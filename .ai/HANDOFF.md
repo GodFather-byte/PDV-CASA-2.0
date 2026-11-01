@@ -1,5 +1,18 @@
 # HANDOFF
 
+## Painel do dono (bar, boate e adega)
+
+- Aba Hoje abre com **Faturamento do mês até agora**, comparado ao mesmo período do mês anterior.
+  Atualiza com o resto do painel (30 s, ou 5 s). Aba **Período**: de/até e atalhos (hoje, ontem, 7 dias,
+  este mês, mês passado), com faturamento, vendas, ticket médio, taxa de serviço, formas, gráfico por dia
+  e totais por mês. Isso sai das vendas já na nuvem. Guia: `docs/PAINEL_DONO.md`.
+- Salão (mesas e comandas, garçom, itens), garçons, serviço separado, CMV/grupo/setor e o sumiço da
+  comissão de garota dependem do retrato novo (`modulos`). Casa sem `usar_garotas` não vê garota;
+  sem `usar_mesas` não vê o salão. Portaria não tem bloco. Caixa antigo: o painel avisa o que falta
+  e não mostra seção vazia de boate.
+- **Deploy só da nuvem:** mês, período, formas, cancelamentos e estoque que já subiram. **PC da loja:**
+  mesas ao vivo, garçom, grupo, setor, CMV e o perfil explícito.
+
 ## Cardápio digital (QR da mesa)
 
 - Página pública só consulta: `/cardapio/?loja=CHAVE&mesa=N` (`backend/cardapio.py`, `backend/cardapio_web/`).
@@ -9,7 +22,7 @@
   (`src/sync/cardapio_envio.py`, na mesma rodada da sincronização). Reenviar substitui; catálogo igual não chama a nuvem.
   Desligar tira o cardápio do ar na rodada seguinte.
 - **QR do cardápio das mesas…** gera a folha A4 (1 até `num_mesas`, ou um intervalo). O painel do dono ganhou o link Cardápio.
-- Esquema **32**: coluna `produtos.mostrar_no_cardapio` (nasce 1). Guia: `docs/CARDAPIO.md`.
+- Esquema **33**. Coluna `produtos.mostrar_no_cardapio` (nasce 1). Guia: `docs/CARDAPIO.md`.
 - **O PC do caixa precisa ser atualizado** para publicar o catálogo e imprimir os QR. Só o deploy da nuvem sobe a página;
   sem o caixa novo ela responde que o cardápio ainda não foi publicado.
 
