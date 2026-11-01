@@ -1,48 +1,36 @@
 # HANDOFF
 
-## Estado
+## Cardápio digital (QR da mesa)
 
-- PDV **1.9.0**, esquema **31**, interface Qt (PySide6); licenciador Tkinter.
-- Dinheiro em centavos, venda exclusivamente pelo CaixaController. Duas edições: WillPDV e E&A Superações.
-- Este trabalho não muda a versão do executável nem o esquema do banco.
-
-## Revisão: cinco correções
-
-- Confirmação de envio compara os dados enviados com o estado atual, em transação curta fora do HTTP.
-  Cancelamento durante a resposta continua pendente; UUIDs estranhos na resposta não retiram outras vendas da fila.
-- Painel revoga sessões ao desativar loja e confere estado ativo em todas as consultas autenticadas.
-- Limitador de login tem teto de chaves e de falhas por chave, sem expulsar bloqueios vigentes. Saturação recusa
-  chaves novas até liberar espaço; nomes/senhas têm tamanho máximo.
-- Contas editadas validam a combinação final de entrada/quitação antes de gravar.
-- Vendas na nuvem usam upsert SQLite/PostgreSQL: lotes repetidos e envios concorrentes não duplicam o UUID.
-  Cancelamento é definitivo: envio antigo de venda fechada não o sobrescreve.
+- Página pública só consulta: `/cardapio/?loja=CHAVE&mesa=N` (`backend/cardapio.py`, `backend/cardapio_web/`).
+  Nome, grupo/subgrupo, preço vigente (promoção e happy hour, horário de Brasília), texto de sugestão e foto só se for
+  um endereço http(s). Sem custo, estoque, inativo ou `mostrar_no_cardapio` desmarcado.
+- O caixa publica em `POST /v1/cardapio/envio` quando **Configurações > Nuvem > Cardápio digital** está ligado
+  (`src/sync/cardapio_envio.py`, na mesma rodada da sincronização). Reenviar substitui; catálogo igual não chama a nuvem.
+  Desligar tira o cardápio do ar na rodada seguinte.
+- **QR do cardápio das mesas…** gera a folha A4 (1 até `num_mesas`, ou um intervalo). O painel do dono ganhou o link Cardápio.
+- Esquema **32**: coluna `produtos.mostrar_no_cardapio` (nasce 1). Guia: `docs/CARDAPIO.md`.
+- **O PC do caixa precisa ser atualizado** para publicar o catálogo e imprimir os QR. Só o deploy da nuvem sobe a página;
+  sem o caixa novo ela responde que o cardápio ainda não foi publicado.
 
 ## Nuvem quase em tempo real
 
-- Configurações > Nuvem > **Sincronização automática quase em tempo real** (`sync_quase_tempo_real`, nasce N).
-  Com S, ServicoSincronizacao inicia com o Qt e envia em 5 s com conexão própria na thread; dispensa iniciar --sync.
-  Trava por banco e horário compartilhado evitam envio simultâneo/repetido com um --sync existente.
-- Ligar/desligar vale sem reiniciar. Painel do dono precisa estar ligado para enviar vendas, caixa e estoque;
-  porteiro precisa estar ligado com PIN para comandas abertas. Sem conexão, vendas permanecem pendentes.
-- Retrato informa atualização em 5 s para o painel visível no celular (senão 30 s). Porteiro envia mudanças em 5 s
-  nesse modo; consulta da lista do porteiro continua periódica. Falhas aumentam a espera. Render grátis pode dormir.
-- Falha de consulta de licença não impede tentar painel/porteiro. Intervalo normal aceita 5 a 3600 s (padrão 60).
-- Guias: docs/NUVEM.md, docs/PAINEL_DONO.md. Ainda é necessário atualizar o programa do PC para usar as opções novas.
+- `sync_quase_tempo_real` (nasce N): com S, o Qt envia a cada 5 s. Painel do dono e porteiro continuam opt-in.
+  Guias: `docs/NUVEM.md`, `docs/PAINEL_DONO.md`.
 
-## Porteiro no iPhone/iPad
+## Porteiro
 
-- Botão **Instalar no iPhone/iPad** mostra o caminho do Safari: Compartilhar > Adicionar à Tela de Início.
-  Não aparece em standalone; instalação nativa Android preservada. Código: src/porteiro/web/instalacao.js.
-- A mesma página é servida no caixa e na nuvem. Manifesto e ícone Apple preservados; caches atualizados.
-  HTTP local tem limitações; preferir HTTPS da nuvem. Guia: docs/PORTEIRO.md.
+- `/porteiro` no caixa e na nuvem. Lista as comandas abertas sem a da garota. No iPhone, o botão explica
+  Compartilhar > Adicionar à Tela de Início. Guia: `docs/PORTEIRO.md`.
 
-## Validação e homologação
+## Estado
 
-- Regressões nos testes do painel, limpeza, contas, sincronização, porteiro e Qt. JS:
-  `node --test tests/test_porteiro_instalacao.cjs` (7 cenários de iPhone/iPad/Android).
-- CI inclui concorrência de UUID no PostgreSQL e suíte completa Windows/Linux em Python 3.10/3.12.
-- Homologar em iPhone físico, Qt no balcão e ESP32 real. Quartos só contam tempo; cliente paga antes no caixa.
-  Esquema 31, cartões, aviso aos 5 min e campainha em docs/QUARTOS.md.
-- Cobrança Mercado Pago exige MP_ACCESS_TOKEN e MP_WEBHOOK_SECRET; e-mail exige BREVO_API_KEY e EMAIL_FROM.
-- Devolução continua sem pré-pago/rodízio; bruto, CMV e comissões históricos não são estornados automaticamente.
-  Essa evolução de produto fica fora destas cinco correções. Ver docs/DEVOLUCOES.md.
+- PDV **1.9.0**, esquema **32**. Interface do PDV só Qt. Licenciador em Tkinter. Dinheiro em centavos.
+- Duas edições: WillPDV e E&A Superações. Cupom não fiscal.
+
+## Pendências para produção
+
+- Atualizar o PDV da loja para o cardápio, o sync de 5 s e o restante que saiu depois do instalador em uso.
+- Homologar Qt no balcão, iPhone físico e a campainha ESP32. Quartos: `docs/QUARTOS.md`.
+- Cobrança Mercado Pago: `MP_ACCESS_TOKEN` e `MP_WEBHOOK_SECRET`. E-mail: `BREVO_API_KEY` e `EMAIL_FROM`.
+- Devolução não atende pré-pago nem rodízio. Bruto, CMV e comissões históricos não são estornados por devolução.

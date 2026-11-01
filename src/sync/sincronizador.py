@@ -76,6 +76,7 @@ class Sincronizador:
             log.exception("Falha ao consultar atualizações ou licença.")
             sucesso = False
         self._enviar_porteiro()
+        self._enviar_cardapio()
         return self._enviar_painel() and sucesso
 
     def _ponte(self) -> None:
@@ -93,6 +94,14 @@ class Sincronizador:
             nuvem_envio.enviar_se_preciso(self.banco, self._http)
         except Exception:
             log.exception("Falha ao enviar as comandas abertas para a nuvem.")
+
+    def _enviar_cardapio(self) -> None:
+        """Catálogo do cardápio digital. Falha aqui não segura a licença nem o painel: a próxima rodada tenta de novo."""
+        try:
+            from src.sync import cardapio_envio
+            cardapio_envio.enviar(self.banco, self._http)
+        except Exception:
+            log.exception("Falha ao enviar o cardápio digital.")
 
     def _enviar_painel(self) -> bool:
         """Painel do dono (opcional): sobe as vendas que faltam e o retrato do caixa. Falha aqui só espera a próxima rodada."""

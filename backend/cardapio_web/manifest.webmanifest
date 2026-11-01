@@ -1,0 +1,11 @@
+{
+  "name": "Cardápio",
+  "short_name": "Cardápio",
+  "start_url": "/cardapio/",
+  "scope": "/cardapio/",
+  "display": "standalone",
+  "background_color": "#14532d",
+  "theme_color": "#14532d",
+  "lang": "pt-BR",
+  "icons": [{ "src": "icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

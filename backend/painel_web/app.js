@@ -319,6 +319,18 @@
     $("tela-login").hidden = true;
     $("tela-app").hidden = false;
     $("nome-loja").textContent = estado.loja && estado.loja.nome ? estado.loja.nome : (estado.loja && estado.loja.chave) || "Loja";
+    atualizarLinkCardapio();
+  }
+
+  function atualizarLinkCardapio() {
+    const link = $("link-cardapio");
+    const chave = estado.loja && estado.loja.chave;
+    if (!chave) {
+      link.hidden = true;
+      return;
+    }
+    link.hidden = false;
+    link.href = "/cardapio/?loja=" + encodeURIComponent(chave);
   }
 
   function encerrarSessao(avisarServidor) {

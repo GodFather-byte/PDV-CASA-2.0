@@ -12,6 +12,7 @@ on:
       - "src/**"
       - "tests/test_painel_*.py"
       - "tests/test_nuvem.py"
+      - "tests/test_cardapio.py"
       - "render.yaml"
       - ".github/workflows/nuvem-deploy.yml"
   workflow_dispatch:
@@ -33,12 +34,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r backend/requirements.txt httpx requests
+      - run: pip install -r backend/requirements.txt httpx requests segno
       - name: API, painel do dono e laço de sincronização
-        run: python -m unittest tests.test_painel_dono tests.test_painel_caixas tests.test_painel_limpeza tests.test_painel_senha_pdv tests.test_nuvem
+        run: python -m unittest tests.test_painel_dono tests.test_painel_caixas tests.test_painel_limpeza tests.test_painel_senha_pdv tests.test_nuvem tests.test_cardapio
       - name: App web (manifesto válido e arquivos no lugar)
         run: |
           python -m json.tool backend/painel_web/manifest.webmanifest > /dev/null
+          python -m json.tool backend/cardapio_web/manifest.webmanifest > /dev/null
+          test -f backend/cardapio_web/index.html && test -f backend/cardapio_web/app.js
           test -f backend/painel_web/index.html && test -f backend/painel_web/app.js && test -f backend/painel_web/sw.js
           test -f backend/painel_web/icones/icone-192.png && test -f backend/painel_web/icones/icone-512.png
 

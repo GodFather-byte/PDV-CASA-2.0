@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 31
+VERSAO_ESQUEMA = 32
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -262,6 +262,7 @@ TABELAS = [
         texto_sugestao TEXT,
         ncm TEXT, desc_aliq_icms TEXT, situacao_tributaria TEXT,
         aliquota_ipi REAL NOT NULL DEFAULT 0, reducao_base REAL NOT NULL DEFAULT 0,
+        mostrar_no_cardapio INTEGER NOT NULL DEFAULT 1,
         ativo INTEGER NOT NULL DEFAULT 1
     )""",
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_produtos_cbarra ON produtos(cbarra) WHERE cbarra IS NOT NULL AND cbarra <> ''",
@@ -940,6 +941,11 @@ AUDITORIA = [
 # (ver BancoDados._migrar). Bancos novos já nascem na VERSAO_ESQUEMA e não as executam. Cada passo é um
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 MIGRACOES = {
+    # v32: cardápio digital. O produto nasce visível (1); o dono desmarca no cadastro. A chave cardapio_digital
+    # nasce em CONFIG_PADRAO na abertura seguinte.
+    32: [
+        ("coluna", "produtos", "mostrar_no_cardapio", "INTEGER NOT NULL DEFAULT 1"),
+    ],
     # v31: controle de quartos (usar_quartos). A tabela quartos_uso nasce em TABELAS (IF NOT EXISTS); as chaves
     # quartos_* nascem em CONFIG_PADRAO e o módulo util_quartos em ACESSOS, na abertura seguinte. Nada a migrar.
     31: [],

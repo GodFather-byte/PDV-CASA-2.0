@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cardápio</title>
+  <meta name="description" content="Cardápio da casa, só para consulta.">
+  <meta name="theme-color" content="#14532d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Cardápio">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icone.svg">
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+  <header class="topo">
+    <img id="logo" alt="" hidden>
+    <div>
+      <p id="mesa" class="mesa" hidden></p>
+      <h1 id="loja">Cardápio</h1>
+      <p class="aviso">Só consulta. O pedido é feito no caixa.</p>
+    </div>
+  </header>
+  <div class="busca">
+    <label class="sumido" for="campo-busca">Buscar</label>
+    <input id="campo-busca" type="search" placeholder="Buscar no cardápio" enterkeyhint="search" autocomplete="off">
+  </div>
+  <main id="conteudo">
+    <p id="estado" class="estado">Carregando o cardápio…</p>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
