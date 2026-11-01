@@ -151,6 +151,13 @@ class JanelaConfiguracoes(QDialog):
                     "Muda a senha que o dono usa no celular (painel da nuvem). Usa o endereço e o token já salvos.")
                 self.btn_senha_painel.clicked.connect(self.trocar_senha_painel)
                 formulario.addRow(self.btn_senha_painel)
+                orientacao = texto(
+                    "Para enviar vendas, caixa e estoque, habilite também o Painel do dono. "
+                    "Para enviar comandas abertas ao porteiro, habilite o porteiro e defina o PIN. "
+                    "O envio automático funciona com o PDV aberto. Sem internet, as vendas aguardam nova tentativa; "
+                    "o prazo depende da conexão e da disponibilidade da nuvem.", "suave")
+                orientacao.setWordWrap(True)
+                formulario.addRow(orientacao)
             rolagem = QScrollArea()
             rolagem.setWidgetResizable(True)
             rolagem.setWidget(pagina)

@@ -24,6 +24,20 @@ class TesteContas(BaseCaixa):
         self.contas = ContasController(self.banco, self.adm)
         self.sub = self.banco.valor("SELECT id FROM subplanos WHERE nome = 'Aluguel'")
 
+    def test_edicao_confere_datas_finais_e_preserva_registro_ao_recusar(self):
+        cid = self.contas.incluir(self.sub, "X", self.tipo(), 100,
+                                  dt_entrada="01/10/2026", dt_quitacao="02/10/2026")[0]
+        original = self.contas.obter(cid)
+        for campos in ({"dt_entrada": "03/10/2026", "descricao": "Não gravar"},
+                       {"dt_quitacao": "30/09/2026"}):
+            with self.assertRaisesRegex(ErroNegocio, "quitação não pode ser anterior"):
+                self.contas.atualizar(cid, **campos)
+            self.assertEqual(self.contas.obter(cid), original)
+        self.contas.atualizar(cid, dt_entrada="03/10/2026", dt_quitacao="03/10/2026")
+        self.assertEqual(self.contas.obter(cid)["dt_quitacao"], "2026-10-03")
+        self.contas.atualizar(cid, dt_quitacao=None)
+        self.assertIsNone(self.contas.obter(cid)["dt_quitacao"])
+
     def test_conta_mensal_repete_por_n_meses(self):
         ids = self.contas.incluir(self.sub, "Aluguel", self.tipo(), 250000, "31/01/2026", "01/01/2026", meses=3)
         venc = [self.contas.obter(i)["dt_vencimento"] for i in ids]
@@ -79,6 +93,16 @@ class TesteContas(BaseCaixa):
 
 
 class TesteConfig(BaseCaixa):
+    def test_intervalo_da_nuvem_tem_limites_e_modo_rapido_e_opcional(self):
+        cfg = ConfigController(self.banco)
+        self.assertFalse(self.banco.cfg_bool("sync_quase_tempo_real"))
+        for intervalo in (0, 4, 3601):
+            with self.assertRaises(ErroValidacao):
+                cfg.salvar_config({"sync_intervalo_seg": intervalo})
+        cfg.salvar_config({"sync_intervalo_seg": 5, "sync_quase_tempo_real": "S"})
+        self.assertTrue(self.banco.cfg_bool("sync_quase_tempo_real"))
+        self.assertEqual(self.banco.cfg_int("sync_intervalo_seg"), 5)
+
     def test_config_valida_e_normaliza(self):
         cfg = ConfigController(self.banco)
         cfg.salvar_config({"num_mesas": "30", "cobra_servico_mesa": "sim", "servico_pct": "12,5"})

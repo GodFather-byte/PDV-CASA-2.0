@@ -103,6 +103,9 @@ class TestePorteiroNuvem(unittest.TestCase):
         self.assertIn("pt-BR", pagina.text)
         self.assertIn("Comandas abertas", pagina.text)
         self.assertIn("api/abertas", self.http.get("/porteiro/app.js").text)
+        instalacao = self.http.get("/porteiro/instalacao.js")
+        self.assertEqual(instalacao.status_code, 200)
+        self.assertIn("navigator.standalone", instalacao.text)
         self.assertEqual(self.http.get("/porteiro/api/saude").json()["modo"], "nuvem")
         self.assertEqual(self.http.get("/porteiro").status_code, 200)
 

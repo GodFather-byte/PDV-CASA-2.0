@@ -19,8 +19,21 @@
 <body>
   <header class="topo">
     <strong>Porteiro</strong>
-    <button type="button" id="botao-instalar" hidden>Instalar</button>
+    <button type="button" id="botao-instalar" aria-controls="ajuda-instalar" aria-expanded="false" hidden>Instalar</button>
   </header>
+  <section id="ajuda-instalar" class="ajuda-instalar" aria-labelledby="titulo-instalar" tabindex="-1" hidden>
+    <h2 id="titulo-instalar">Instalar no iPhone ou iPad</h2>
+    <ol>
+      <li>Abra esta página no <strong>Safari</strong>.</li>
+      <li>Toque em <strong>Compartilhar</strong> (quadrado com seta para cima). Se necessário, abra o menu do Safari.</li>
+      <li>Escolha <strong>Adicionar à Tela de Início</strong>. Se aparecer, mantenha <strong>Abrir como App</strong> ativado.</li>
+      <li>Confirme em <strong>Adicionar</strong> e abra o ícone <strong>Porteiro</strong> na tela inicial.</li>
+    </ol>
+    <p>Se a opção não aparecer, role as ações do menu Compartilhar. Depois de instalar, informe a loja e o PIN novamente, se solicitado.</p>
+    <p id="instalar-http" hidden>Para instalar como aplicativo, use de preferência o endereço HTTPS da nuvem.
+      O endereço HTTP do caixa pode oferecer apenas um atalho e não habilita a câmera.</p>
+    <button type="button" id="botao-fechar-instalar" class="secundario">Entendi</button>
+  </section>
   <p id="aviso" class="aviso" role="alert" hidden></p>
 
   <main id="tela-pin" hidden>
@@ -95,6 +108,7 @@
     <button type="button" id="botao-nova" class="acao">Voltar às comandas</button>
   </main>
 
+  <script src="instalacao.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

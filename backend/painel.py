@@ -40,6 +40,8 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Column, Integer, String, Text, UniqueConstraint, inspect, text
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert as inserir_postgres
+from sqlalchemy.dialects.sqlite import insert as inserir_sqlite
 
 from backend.database import Base, SessionLocal, engine, get_db
 
@@ -196,16 +198,28 @@ class _Tentativas:
         agora = time.monotonic() if agora is None else agora
         with self._lock:
             fila = self._vigentes(chave, agora)
+            if fila is None and len(self._falhas) >= LIMITE_CHAVES_TENTATIVAS:
+                self._limpar_vencidas(agora)
+                # Saturação não pode expulsar o bloqueio de outra loja, nem aceitar chaves sem limite.
+                return len(self._falhas) >= LIMITE_CHAVES_TENTATIVAS
             return fila is not None and len(fila) >= TENTATIVAS_LOGIN
+
+    def _limpar_vencidas(self, agora: float) -> None:
+        for chave in list(self._falhas):
+            self._vigentes(chave, agora)
 
     def falhou(self, chave: str, agora: float | None = None) -> None:
         agora = time.monotonic() if agora is None else agora
         with self._lock:
-            if len(self._falhas) >= LIMITE_CHAVES_TENTATIVAS:
-                # Quem erra com nomes de loja inventados não pode encher a memória do servidor: varre o que já venceu.
-                for outra in list(self._falhas):
-                    self._vigentes(outra, agora)
-            self._falhas.setdefault(chave, deque()).append(agora)
+            fila = self._vigentes(chave, agora)
+            if fila is None:
+                if len(self._falhas) >= LIMITE_CHAVES_TENTATIVAS:
+                    self._limpar_vencidas(agora)
+                    if len(self._falhas) >= LIMITE_CHAVES_TENTATIVAS:
+                        return
+                fila = self._falhas.setdefault(chave, deque(maxlen=TENTATIVAS_LOGIN))
+            if len(fila) < TENTATIVAS_LOGIN:
+                fila.append(agora)
 
     def acertou(self, chave: str) -> None:
         with self._lock:
@@ -285,23 +299,22 @@ def _guardar_venda(db: Session, chave_loja: str, v: dict, agora: str) -> str | N
         dia = str(v.get("fechada_em") or v.get("aberta_em") or agora)[:10]
     if dia < _corte_das_vendas():
         return uuid          # além da retenção: confirma (o PDV para de mandar) mas não guarda, para a limpeza não apagar depois
-    linha = db.query(PainelVenda).filter_by(chave_loja=chave_loja, uuid=uuid).first()
-    if linha is None:
-        linha = PainelVenda(chave_loja=chave_loja, uuid=uuid)
-        db.add(linha)
-    linha.dia = dia
-    linha.cupom = _int(v.get("cupom"), 0) or None
-    linha.status = v["status"]
-    linha.modalidade = str(v.get("modalidade") or "balcao")[:20]
-    linha.posicao_rotulo = str(v.get("posicao_rotulo") or "")[:80]
-    linha.operador = str(v.get("operador") or "")[:60]
-    linha.aberta_em = str(v.get("aberta_em") or "")[:19] or None
-    linha.fechada_em = str(v.get("fechada_em") or "")[:19] or None
-    linha.total_cent = _int(v.get("total_cent"))
-    linha.desconto_cent = _int(v.get("desconto_cent"))
-    linha.motivo_cancelamento = str(v.get("motivo_cancelamento") or "")[:200] or None
-    linha.dados = json.dumps(v, ensure_ascii=False)
-    linha.recebida_em = agora
+    valores = dict(
+        dia=dia, cupom=_int(v.get("cupom"), 0) or None, status=v["status"],
+        modalidade=str(v.get("modalidade") or "balcao")[:20],
+        posicao_rotulo=str(v.get("posicao_rotulo") or "")[:80], operador=str(v.get("operador") or "")[:60],
+        aberta_em=str(v.get("aberta_em") or "")[:19] or None,
+        fechada_em=str(v.get("fechada_em") or "")[:19] or None,
+        total_cent=_int(v.get("total_cent")), desconto_cent=_int(v.get("desconto_cent")),
+        motivo_cancelamento=str(v.get("motivo_cancelamento") or "")[:200] or None,
+        dados=json.dumps(v, ensure_ascii=False), recebida_em=agora)
+    # Upsert atômico nos dois bancos suportados: duplicatas e envios concorrentes não fazem duas inserções.
+    inserir = inserir_sqlite if db.get_bind().dialect.name == "sqlite" else inserir_postgres
+    comando = inserir(PainelVenda).values(chave_loja=chave_loja, uuid=uuid, **valores)
+    db.execute(comando.on_conflict_do_update(
+        index_elements=["chave_loja", "uuid"], set_=valores,
+        # Cancelamento é definitivo: uma resposta/envio antigo de venda fechada não pode ressuscitá-la.
+        where=(PainelVenda.status != "cancelada") | (comando.excluded.status == "cancelada")))
     return uuid
 
 
@@ -746,6 +759,14 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             raise HTTPException(status_code=404, detail=f"Loja {chave} não encontrada.")
         return loja
 
+    def sessao_ativa(sessao: PainelSessao = Depends(sessao_do_dono), db: Session = Depends(get_db)):
+        loja = db.query(Loja).filter(Loja.chave_loja == sessao.chave_loja).first()
+        if loja is None or not loja.ativa:
+            db.query(PainelSessao).filter_by(chave_loja=sessao.chave_loja).delete(synchronize_session=False)
+            db.commit()
+            raise HTTPException(status_code=401, detail="Sessão inválida ou vencida. Entre de novo.")
+        return sessao
+
     # ---- envio do PDV (token da loja)
     @router.post("/v1/painel/envio")
     def envio(tarefas: BackgroundTasks, dados: dict = Body(...), acesso=Depends(autenticar), db: Session = Depends(get_db)):
@@ -759,7 +780,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         for v in vendas:
             if isinstance(v, dict):
                 uuid = _guardar_venda(db, acesso.loja, v, agora)
-                if uuid:
+                if uuid and uuid not in recebidos:
                     recebidos.append(uuid)
         retrato = dados.get("retrato")
         if isinstance(retrato, dict):
@@ -798,6 +819,8 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         senha = str(dados.get("senha") or "")
         if not chave or not senha:
             raise HTTPException(status_code=422, detail="Informe a loja e a senha.")
+        if len(chave) > 64 or len(senha) > 128:
+            raise HTTPException(status_code=422, detail="Loja ou senha longa demais.")
         if tentativas.bloqueada(chave):
             raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde alguns minutos.")
         loja = db.query(Loja).filter(Loja.chave_loja == chave).first()
@@ -810,14 +833,14 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         return {"token": token, "loja": {"chave": loja.chave_loja, "nome": loja.nome}, "expira_em": expira}
 
     @router.post("/v1/painel/sair")
-    def sair(sessao: PainelSessao = Depends(sessao_do_dono), db: Session = Depends(get_db)):
+    def sair(sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
         db.delete(sessao)
         db.commit()
         return {"ok": True}
 
     # ---- consultas do dono
     @router.get("/v1/painel/resumo")
-    def resumo(dia: Optional[str] = Query(None, max_length=10), sessao: PainelSessao = Depends(sessao_do_dono),
+    def resumo(dia: Optional[str] = Query(None, max_length=10), sessao: PainelSessao = Depends(sessao_ativa),
                db: Session = Depends(get_db)):
         loja = _loja(db, sessao.chave_loja)
         pares = _ler_caixas(db, loja.chave_loja)
@@ -834,6 +857,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             "loja": {"chave": loja.chave_loja, "nome": retrato.get("loja_nome") or loja.nome},
             "dia": dia, "dia_operacional": dia_op.isoformat(),
             "atualizado_em": momento, "atraso_min": _atraso_min(momento, recebido_em),
+            "atualizacao_seg": 5 if any(dados_.get("atualizacao_seg") == 5 for _, dados_ in pares) else 30,
             **_totais_dos_caixas(caixas), "caixas": caixas,
             "dias": dias if dia in dias else [dia] + dias,
             **gestao,
@@ -841,7 +865,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         return r
 
     @router.get("/v1/painel/produtos")
-    def produtos(periodo: str = Query("hoje"), sessao: PainelSessao = Depends(sessao_do_dono),
+    def produtos(periodo: str = Query("hoje"), sessao: PainelSessao = Depends(sessao_ativa),
                  db: Session = Depends(get_db)):
         """Ranking dos mais vendidos. `hoje`, `7d` e `30d` contam a partir do dia operacional da loja."""
         janela = {"hoje": 1, "7d": 7, "30d": 30}.get(periodo)
@@ -871,7 +895,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
 
     @router.get("/v1/painel/vendas")
     def vendas(dia: Optional[str] = Query(None, max_length=10), pagina: int = Query(1, ge=1),
-               sessao: PainelSessao = Depends(sessao_do_dono), db: Session = Depends(get_db)):
+               sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
         retrato, _, _ = _retrato(db, sessao.chave_loja)
         dia = _dia_valido(dia) or retrato.get("dia_operacional") or date.today().isoformat()
         todas = _vendas_do_dia(db, sessao.chave_loja, dia)
@@ -883,7 +907,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
                 "vendas": [{k: v.get(k) for k in chaves} for v in todas[inicio:inicio + VENDAS_POR_PAGINA]]}
 
     @router.get("/v1/painel/historico")
-    def historico(dias: int = Query(14, ge=1, le=90), sessao: PainelSessao = Depends(sessao_do_dono),
+    def historico(dias: int = Query(14, ge=1, le=90), sessao: PainelSessao = Depends(sessao_ativa),
                   db: Session = Depends(get_db)):
         retrato, _, _ = _retrato(db, sessao.chave_loja)
         ultimo = date.fromisoformat(retrato.get("dia_operacional") or date.today().isoformat())

@@ -241,13 +241,15 @@ class TestePinEPagina(BaseCaixa):
 
     def test_arquivos_da_pwa_e_o_qr(self):
         pasta = pasta_web()
-        for nome in ("index.html", "app.js", "estilo.css", "manifest.webmanifest", "sw.js",
+        for nome in ("index.html", "app.js", "instalacao.js", "estilo.css", "manifest.webmanifest", "sw.js",
                      "icones/icone-192.png", "icones/icone-512.png",
                      "icones/icone-maskable-192.png", "icones/icone-maskable-512.png"):
             self.assertTrue((pasta / nome).is_file(), nome)
         html = (pasta / "index.html").read_text(encoding="utf-8")
         self.assertIn('lang="pt-BR"', html)
         self.assertIn("manifest.webmanifest", html)
+        self.assertIn('src="instalacao.js"', html)
+        self.assertIn('rel="apple-touch-icon"', html)
         js = (pasta / "app.js").read_text(encoding="utf-8")
         self.assertIn("dados.titulo", js)
         self.assertIn('register("sw.js")', js)
@@ -255,6 +257,7 @@ class TestePinEPagina(BaseCaixa):
         self.assertIn("liberada", css)
         self.assertIn("devendo", css)
         self.assertIn("/porteiro/api/", (pasta / "sw.js").read_text(encoding="utf-8"))
+        self.assertIn('"./instalacao.js"', (pasta / "sw.js").read_text(encoding="utf-8"))
         manifesto = json.loads((pasta / "manifest.webmanifest").read_text(encoding="utf-8"))
         self.assertEqual(manifesto["lang"], "pt-BR")
         self.assertEqual(manifesto["start_url"], "./")
@@ -374,6 +377,9 @@ class TesteHttp(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b"pt-BR", html)
         self.assertIn(b"manifest.webmanifest", html)
+        status, _, script = self.pedir("GET", "/porteiro/instalacao.js")
+        self.assertEqual(status, 200)
+        self.assertIn(b"navigator.standalone", script)
         icone = urllib.request.urlopen(self.url("/porteiro/icones/icone-192.png"), timeout=5).read()
         self.assertTrue(icone.startswith(b"\x89PNG"))
         vazou = self.cru(b"GET /porteiro/%2e%2e/%2e%2e/src/porteiro/servidor.py HTTP/1.1\r\nHost: x\r\n"

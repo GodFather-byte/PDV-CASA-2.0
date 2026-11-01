@@ -75,6 +75,9 @@ def novo_token(db: Session, chave: str) -> str:
 
 def definir_ativa(db: Session, chave: str, ativa: bool) -> None:
     _obter(db, chave).ativa = ativa
+    if not ativa:
+        from backend.painel import PainelSessao
+        db.query(PainelSessao).filter_by(chave_loja=chave).delete(synchronize_session=False)
     db.commit()
 
 

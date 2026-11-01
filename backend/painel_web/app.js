@@ -1265,9 +1265,15 @@
       const cache = lerCache("resumo:" + (estado.dia || "atual"));
       if (cache && estado.token) mostrarOffline(cache.salvo_em);
     });
-    setInterval(() => {
-      if (document.visibilityState === "visible" && estado.token) atualizarTudo();
-    }, INTERVALO_AUTO_MS);
+    async function atualizarAutomaticamente() {
+      try {
+        if (document.visibilityState === "visible" && estado.token) await atualizarTudo();
+      } finally {
+        const intervalo = estado.resumo && estado.resumo.atualizacao_seg === 5 ? 5000 : INTERVALO_AUTO_MS;
+        setTimeout(atualizarAutomaticamente, intervalo);
+      }
+    }
+    setTimeout(atualizarAutomaticamente, 5000);
 
     configurarInstalacao();
     registrarServiceWorker();

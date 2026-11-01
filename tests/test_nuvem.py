@@ -12,7 +12,7 @@ from pathlib import Path
 from contextlib import redirect_stdout
 from unittest import mock
 
-from src.sync.sincronizador import Sincronizador, proxima_espera
+from src.sync.sincronizador import ServicoSincronizacao, Sincronizador, proxima_espera
 from tests.base import BaseTeste
 
 # O backend lê o banco e o token do ambiente quando é importado: aponta para uma pasta temporária.
@@ -106,6 +106,86 @@ class TesteSincronizador(BaseTeste):
             self.assertTrue(Sincronizador(self.banco, http=object()).rodada())
         ver.assert_not_called()
 
+    def test_modo_rapido_usa_cinco_segundos_sem_mudar_intervalo_normal(self):
+        self.banco.cfg_set("sync_intervalo_seg", 120)
+        sync = Sincronizador(self.banco)
+        self.assertEqual(sync.configuracao()["intervalo"], 120)
+        self.banco.cfg_set("sync_quase_tempo_real", "S")
+        self.assertEqual(sync.configuracao()["intervalo"], 5)
+        self.banco.cfg_set("sync_quase_tempo_real", "N")
+        self.assertEqual(sync.configuracao()["intervalo"], 120)
+
+    def test_falha_da_licenca_nao_impede_envio_do_painel_e_porteiro(self):
+        sync = Sincronizador(self.banco)
+        with mock.patch("src.sync.atualizacoes.verificar", side_effect=RuntimeError("sem licença")), \
+                mock.patch.object(sync, "_enviar_porteiro") as porteiro, \
+                mock.patch.object(sync, "_enviar_painel", return_value=True) as painel, \
+                mock.patch.object(logging.getLogger("pdv.sync"), "exception"):
+            self.assertFalse(sync.rodada())
+        porteiro.assert_called_once()
+        painel.assert_called_once()
+
+    def test_dois_sincronizadores_nao_repetem_envio_no_mesmo_intervalo(self):
+        from src.database.conexao import BancoDados
+        from src.core.instancia import InstanciaUnica
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = str(Path(pasta) / "caixa.db")
+            primeiro = BancoDados(caminho)
+            segundo = BancoDados(caminho, semear=False)
+            try:
+                primeiro.cfg_set("sync_quase_tempo_real", "S")
+                a, b = Sincronizador(primeiro), Sincronizador(segundo)
+                with mock.patch.object(Sincronizador, "_rodada", return_value=True) as rodada:
+                    with mock.patch("src.sync.sincronizador.time.time", return_value=1000):
+                        self.assertTrue(a.rodada())
+                        self.assertTrue(b.rodada())
+                    self.assertEqual(rodada.call_count, 1)
+                    trava = InstanciaUnica(caminho + ".sync")
+                    self.assertTrue(trava.adquirir())
+                    try:
+                        with mock.patch("src.sync.sincronizador.time.time", return_value=1005):
+                            self.assertTrue(b.rodada())
+                        self.assertEqual(rodada.call_count, 1)
+                    finally:
+                        trava.liberar()
+                    with mock.patch("src.sync.sincronizador.time.time", return_value=1005):
+                        self.assertTrue(b.rodada())
+                    self.assertEqual(rodada.call_count, 2)
+            finally:
+                primeiro.fechar()
+                segundo.fechar()
+
+    def test_servico_inicia_desligado_percebe_ativacao_e_usa_thread_propria(self):
+        import threading
+        from src.database.conexao import BancoDados
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = str(Path(pasta) / "caixa.db")
+            banco = BancoDados(caminho)
+            servico = ServicoSincronizacao(caminho)
+            recebido = threading.Event()
+            threads = []
+
+            def rodada(_sync):
+                threads.append(threading.get_ident())
+                recebido.set()
+                return True
+
+            try:
+                with mock.patch.object(Sincronizador, "_rodada", autospec=True, side_effect=rodada):
+                    servico.iniciar()
+                    self.assertFalse(recebido.wait(0.05))
+                    banco.cfg_set("sync_quase_tempo_real", "S")
+                    self.assertTrue(recebido.wait(5))
+                    banco.cfg_set("sync_quase_tempo_real", "N")
+                    servico.parar()
+                self.assertFalse(servico.ativo)
+                self.assertEqual(len(threads), 1)
+                self.assertNotEqual(threads[0], threading.get_ident())
+                self.assertEqual(banco.valor("SELECT 1"), 1)
+            finally:
+                servico.parar()
+                banco.fechar()
+
     def test_rodada_verifica_versao_e_renova_licenca(self):
         with mock.patch("src.sync.atualizacoes.verificar", return_value=None) as ver, \
                 mock.patch("src.sync.licenca_nuvem.renovar") as ren:
@@ -125,6 +205,8 @@ class TesteSincronizador(BaseTeste):
         self.assertEqual([proxima_espera(60, n) for n in range(4)], [60, 120, 240, 480])
         self.assertEqual(proxima_espera(60, 10), 600)
         self.assertEqual(proxima_espera(1, 0), 5)
+        self.assertEqual(proxima_espera(3600, 0), 3600)
+        self.assertEqual(proxima_espera(3600, 10), 3600)
 
 
 @unittest.skipIf(TestClient is None, "fastapi/httpx não instalados")

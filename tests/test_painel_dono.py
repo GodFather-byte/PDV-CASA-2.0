@@ -294,6 +294,96 @@ class BaseNuvem(BasePainel):
 
 @unittest.skipIf(TestClient is None, "fastapi/httpx não instalados")
 class TesteNuvemPainel(BaseNuvem):
+    def test_envios_concorrentes_do_mesmo_uuid_guardam_uma_venda(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        self.venda_fechada((self.skol, 1))
+        lote = painel_envio.coletar_vendas(self.banco)
+        largada = Barrier(2)
+
+        def enviar():
+            largada.wait(timeout=10)
+            return self.http.post("/v1/painel/envio", json={"vendas": lote}, headers=cabecalho()).status_code
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            self.assertEqual(list(executor.map(lambda _: enviar(), range(2))), [200, 200])
+        with nuvem.SessionLocal() as db:
+            self.assertEqual(db.query(painel.PainelVenda).filter_by(uuid=lote[0]["uuid"]).count(), 1)
+
+    def test_modo_rapido_orienta_atualizacao_do_celular_em_cinco_segundos(self):
+        sessao = self.entrar()
+        for ligado, segundos in (("S", 5), ("N", 30)):
+            self.banco.cfg_set("sync_quase_tempo_real", ligado)
+            self.subir()
+            r = self.http.get("/v1/painel/resumo", headers=sessao)
+            self.assertEqual(r.status_code, 200, r.text)
+            self.assertEqual(r.json()["atualizacao_seg"], segundos)
+
+    def test_cancelamento_durante_http_continua_pendente_e_sobe_na_proxima_rodada(self):
+        v = self.venda_fechada((self.skol, 1))
+        http = self.http
+        caixa = self.caixa
+
+        class CancelarDuranteResposta:
+            def post(self, url, json=None, headers=None, timeout=None):
+                resposta = http.post(url, json=json, headers=headers)
+                caixa.cancelar_venda(v["id"], "Cancelado durante o envio")
+                return resposta
+
+        self.assertEqual(painel_envio.enviar(self.banco, CancelarDuranteResposta())["vendas"], 0)
+        self.assertEqual(painel_envio.pendentes(self.banco), 1)
+        self.assertEqual(self.subir()["vendas"], 1)
+        with nuvem.SessionLocal() as db:
+            linha = db.query(painel.PainelVenda).filter_by(uuid=v["uuid"]).one()
+            self.assertEqual(linha.status, "cancelada")
+        self.assertEqual(painel_envio.pendentes(self.banco), 0)
+
+    def test_confirmacao_estranha_nao_retira_outra_venda_da_fila(self):
+        primeira = self.venda_fechada((self.skol, 1))
+        segunda = self.venda_fechada((self.agua, 1))
+        with mock.patch.object(painel_envio, "LOTE", 1):
+            resultado = painel_envio.enviar(self.banco, HttpFalso(confirmar=lambda _: [segunda["uuid"]]))
+        self.assertEqual(resultado, {"vendas": 0, "lotes": 1})
+        self.assertEqual(painel_envio.pendentes(self.banco), 2)
+        self.assertNotEqual(primeira["uuid"], segunda["uuid"])
+
+    def test_lote_repetido_e_resposta_atrasada_nao_ressuscitam_cancelamento(self):
+        v = self.venda_fechada((self.skol, 1))
+        original = painel_envio.coletar_vendas(self.banco)[0]
+        for lote in ([original, original], [original]):
+            r = self.http.post("/v1/painel/envio", json={"vendas": lote}, headers=cabecalho())
+            self.assertEqual(r.status_code, 200, r.text)
+        self.caixa.cancelar_venda(v["id"], "Cancelada")
+        self.subir()
+        r = self.http.post("/v1/painel/envio", json={"vendas": [original]}, headers=cabecalho())
+        self.assertEqual(r.status_code, 200, r.text)
+        with nuvem.SessionLocal() as db:
+            linhas = db.query(painel.PainelVenda).filter_by(uuid=v["uuid"]).all()
+            self.assertEqual(len(linhas), 1)
+            self.assertEqual(linhas[0].status, "cancelada")
+
+    def test_desativar_revoga_todas_as_sessoes_mesmo_apos_reativar(self):
+        sessao = self.entrar()
+        with nuvem.SessionLocal() as db:
+            lojas.definir_ativa(db, "ADEGA-1", False)
+            self.assertEqual(db.query(painel.PainelSessao).filter_by(chave_loja="ADEGA-1").count(), 0)
+            lojas.definir_ativa(db, "ADEGA-1", True)
+        for rota in ("resumo", "produtos", "vendas", "historico"):
+            self.assertEqual(self.http.get(f"/v1/painel/{rota}", headers=sessao).status_code, 401, rota)
+
+    def test_sessao_tambem_recusa_loja_desativada_fora_do_cli(self):
+        sessao = self.entrar()
+        with nuvem.SessionLocal() as db:
+            db.query(nuvem.Loja).filter_by(chave_loja="ADEGA-1").update({"ativa": False})
+            db.commit()
+        for rota in ("resumo", "produtos", "vendas", "historico"):
+            self.assertEqual(self.http.get(f"/v1/painel/{rota}", headers=sessao).status_code, 401, rota)
+
+    def test_login_recusa_campos_excessivos_sem_guardar_chaves(self):
+        for chave, senha in (("x" * 65, "senha"), ("ADEGA-1", "s" * 129)):
+            r = self.http.post("/v1/painel/login", json={"loja": chave, "senha": senha})
+            self.assertEqual(r.status_code, 422)
+
     # ---- envio
     def test_pdv_envia_e_a_nuvem_guarda_sem_duplicar(self):
         v = self.venda_fechada((self.skol, 2))

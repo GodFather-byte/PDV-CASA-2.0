@@ -266,8 +266,23 @@ No caixa, entre em **Configurações > Configurações > aba Nuvem**:
 | Endereço da nuvem | `https://nuvem.seusite.com.br` |
 | Token da API | o token que o `criar` mostrou |
 | Painel do dono no celular | **Sim** só se o dono quiser acompanhar pelo celular (as vendas passam a subir para a nuvem; veja [PAINEL_DONO.md](PAINEL_DONO.md)) |
+| Sincronização automática quase em tempo real | **Sim** para enviar automaticamente a cada 5 segundos enquanto o PDV estiver aberto; nasce desligada |
 
-Na instalação, marque **"Verificar licença e atualizações na nuvem em segundo plano"**: a verificação passa a abrir
+Com o modo quase em tempo real ligado, não é preciso iniciar outro programa: o próprio PDV
+mantém o envio em segundo plano e o painel do celular consulta as novidades a cada 5 segundos,
+enquanto estiver visível. Endereço e token precisam estar configurados. **Painel do dono = Sim**
+autoriza o envio de vendas, caixa e estoque; o porteiro precisa estar habilitado com PIN para
+enviar comandas abertas. Salvar a configuração vale sem reiniciar o PDV.
+
+Cinco segundos é o intervalo entre tentativas com conexão saudável, não uma garantia de entrega.
+Sem internet ou com a nuvem indisponível, a espera aumenta e as vendas pendentes permanecem no caixa.
+O Render gratuito pode demorar a acordar. O recebimento na nuvem e a próxima consulta do celular
+podem somar seus atrasos; o painel mostra a hora do último envio confirmado.
+
+O modo normal continua usando o intervalo configurado (5 a 3600 segundos; padrão 60).
+
+Para manter o modo normal mesmo com a janela do PDV fechada, na instalação marque
+**"Verificar licença e atualizações na nuvem em segundo plano"**: a verificação passa a abrir
 sozinha junto com o Windows. Se o caixa já estiver instalado, rode o instalador de novo e marque essa opção. O histórico
 fica em `%LOCALAPPDATA%\WILL-PDV\logs\sync.log`.
 

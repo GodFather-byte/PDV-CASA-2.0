@@ -101,16 +101,26 @@ def pendentes(banco) -> int:
     return banco.valor("SELECT COUNT(*) FROM vendas WHERE status IN ('fechada','cancelada') AND sincronizado = 0", (), 0)
 
 
-def coletar_vendas(banco, limite: int | None = None) -> list[dict]:
+def coletar_vendas(banco, limite: int | None = None, *, uuids: list[str] | None = None) -> list[dict]:
     """As vendas que faltam subir, da mais antiga para a mais nova, já no formato que a nuvem guarda."""
+    # Venda, itens e pagamentos precisam pertencer ao mesmo instante. A rede fica fora desta transação curta.
+    with banco.transacao():
+        return _coletar_vendas(banco, limite, uuids)
+
+
+def _coletar_vendas(banco, limite: int | None, uuids: list[str] | None) -> list[dict]:
     limite = LOTE if limite is None else limite
+    if uuids is not None and not uuids:
+        return []
+    filtro = "" if uuids is None else f" AND v.uuid IN ({','.join('?' for _ in uuids)})"
     virada = _virada(banco)
     caixa_id = id_do_caixa(banco)
     vendas = banco.todos(
         """SELECT v.*, o.nome AS operador, c.nome AS cliente, t.numero AS turno_numero
            FROM vendas v LEFT JOIN operadores o ON o.id = v.operador_id LEFT JOIN clientes c ON c.id = v.cliente_id
            LEFT JOIN turnos t ON t.id = v.turno_id
-           WHERE v.status IN ('fechada','cancelada') AND v.sincronizado = 0 ORDER BY v.id LIMIT ?""", (limite,))
+           WHERE v.status IN ('fechada','cancelada') AND v.sincronizado = 0""" + filtro + " ORDER BY v.id LIMIT ?",
+        (*(() if uuids is None else uuids), limite))
     saida = []
     for v in vendas:
         v = dict(v)
@@ -304,6 +314,7 @@ def retrato(banco) -> dict:
         "terminal_rotulo": (maquina.get("descricao") or "").strip() or f"Caixa {turnos.terminal}",
         "terminal_computador": (maquina.get("nome_computador") or "").strip() or socket.gethostname(),
         "dia_operacional": hoje, "momento": fmt.agora(),
+        "atualizacao_seg": 5 if banco.cfg_bool("sync_quase_tempo_real") else 30,
         "caixa": caixa, "estoque": estoque,
         "caderneta": {"a_receber_cent": int(devedores["total"]), "clientes_devendo": int(devedores["n"])},
         "entregas_pendentes": banco.valor(
@@ -316,14 +327,19 @@ def retrato(banco) -> dict:
     }
 
 
-def marcar_enviadas(banco, uuids: list[str]) -> int:
-    if not uuids:
+def marcar_enviadas(banco, vendas: list[dict]) -> int:
+    """Confirma somente retratos ainda iguais aos enviados; uma alteração durante o HTTP continua pendente."""
+    if not vendas:
         return 0
-    marcas = ",".join("?" * len(uuids))
+    enviadas = {v["uuid"]: v for v in vendas}
+    marcadas = 0
     with banco.transacao():
-        banco.executar(f"UPDATE vendas SET sincronizado = 1 WHERE uuid IN ({marcas}) AND status IN ('fechada','cancelada')",
-                       tuple(uuids))
-    return len(uuids)
+        atuais = coletar_vendas(banco, limite=len(enviadas), uuids=list(enviadas))
+        for atual in atuais:
+            if atual == enviadas[atual["uuid"]]:
+                marcadas += banco.executar("UPDATE vendas SET sincronizado = 1 WHERE uuid = ? AND sincronizado = 0",
+                                           (atual["uuid"],)).rowcount
+    return marcadas
 
 
 def enviar(banco, http=None) -> dict | None:
@@ -348,12 +364,13 @@ def enviar(banco, http=None) -> dict | None:
             banco.cfg_set(CHAVE_ULTIMO_ERRO, f"{fmt.agora()} HTTP {r.status_code}"[:200])
             raise RuntimeError(f"Painel do dono: a nuvem respondeu HTTP {r.status_code}.")
         resposta = r.json()
-        confirmados = [u for u in (resposta.get("uuids") or []) if isinstance(u, str)]
-        enviadas += marcar_enviadas(banco, confirmados)
+        confirmados = {u for u in (resposta.get("uuids") or []) if isinstance(u, str)}
+        marcadas = marcar_enviadas(banco, [v for v in vendas if v["uuid"] in confirmados])
+        enviadas += marcadas
         lotes += 1
         banco.cfg_set(CHAVE_ULTIMO_ENVIO, fmt.agora())
         banco.cfg_set(CHAVE_ULTIMO_ERRO, "")
-        if len(vendas) < LOTE or not confirmados:
+        if len(vendas) < LOTE or not marcadas:
             break
     if enviadas:
         log.info("Painel do dono: %d venda(s) enviada(s) em %d lote(s).", enviadas, lotes)

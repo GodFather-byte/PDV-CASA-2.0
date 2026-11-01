@@ -38,9 +38,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r backend/requirements.txt httpx
+      - run: pip install -r backend/requirements.txt httpx requests
       - name: Inbox, concorrência, retentativas e reinício (PostgreSQL e SQLite)
-        run: python -m unittest tests.test_cobrancas_mercadopago
+        run: python -m unittest tests.test_cobrancas_mercadopago tests.test_painel_dono
 
   testes:
     name: ${{ matrix.os }} / Python ${{ matrix.python }}
@@ -65,6 +65,8 @@ jobs:
       - name: Testes (Windows)
         if: runner.os == 'Windows'
         run: python -m unittest discover -s tests
+      - name: Instalação da PWA do porteiro (iPhone, iPad e Android)
+        run: node --test tests/test_porteiro_instalacao.cjs
       - name: Testes (Linux, telas num X virtual)
         if: runner.os == 'Linux'
         # 24 bits de cor: com a tela padrão do xvfb-run (8 bits) o Tk (gerador de licenças) cai com segmentation fault.
