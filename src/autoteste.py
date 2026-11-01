@@ -28,6 +28,7 @@ MODULOS = [
     'src.controllers.custos_venda',
     'src.sync.cardapio_envio',
     'src.sync.devolucoes_envio',
+    'src.sync.ociosidade',
     'src.sync.painel_ritmo',
     'src.sync.painel_status',
     'src.ui_qt.cardapio_qr',

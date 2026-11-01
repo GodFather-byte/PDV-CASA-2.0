@@ -106,6 +106,7 @@ CONFIG_PADRAO = {
     "margem_minima_pct": "0",
     "api_url": "", "api_token": "", "sync_intervalo_seg": "60",
     "sync_quase_tempo_real": "N",
+    "sync_lote_seg": "900", "sync_expediente_de": "", "sync_expediente_ate": "",
     # Painel do dono no celular: desligado até o dono pedir (as vendas só saem da loja com isto ligado).
     "painel_dono": "N",
     # Cardápio digital no celular (QR da mesa): desligado até o dono publicar o catálogo na nuvem.

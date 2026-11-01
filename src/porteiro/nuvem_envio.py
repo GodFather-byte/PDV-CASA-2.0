@@ -1,9 +1,9 @@
 """Manda o retrato das comandas abertas para a nuvem, para o porteiro consultar pelo 4G.
 
 O painel do dono só recebe venda fechada. A portaria precisa do que ainda está aberto. O corpo é
-pequeno (só as posições abertas e o hash do PIN, nunca o PIN) e a mesma foto não sai de novo a
-cada segundo: muda, espera um pouco e manda; parada, manda de novo em menos de um minuto para o
-celular saber a hora. Sem endereço ou token da nuvem, ou com o porteiro desligado, não chama a rede.
+pequeno (só as posições abertas e o hash do PIN, nunca o PIN). A mesma foto não sai de novo:
+isso acordaria o Neon. O celular mostra a hora do último envio; o botão "Atualizar agora" ou o
+fechamento do turno pede um envio na hora. No Wi-Fi do caixa a lista continua ao vivo.
 """
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from src.porteiro.servico import porta_configurada, url_do_qr, urls_publicas
 log = logging.getLogger("pdv.porteiro")
 
 ESPERA_MUDANCA = 8          # segundos: um lançamento atrás do outro vira um envio só
-ESPERA_PARADO = 45         # sem mudança, ainda assim renova o horário (o celular mostra "há Ns")
 ESPERA_FALHA_MAX = 300
 
 _estado = {"quando": 0.0, "assinatura": "", "falhas": 0}
@@ -81,8 +80,18 @@ def _assinatura(corpo: dict) -> str:
                        ensure_ascii=False, sort_keys=True, default=str)
 
 
+def precisa_enviar(banco) -> bool:
+    """A foto das comandas mudou desde o último envio. Parada, não renova o horário: isso acordaria o Neon."""
+    if not ligado(banco):
+        return False
+    if not _estado["quando"]:
+        return True
+    return _assinatura(montar(banco)) != _estado["assinatura"]
+
+
 def enviar_se_preciso(banco, http=None, relogio=None, forcar: bool = False) -> dict | None:
-    """Envia se mudou (depois de uns segundos) ou se o último envio já ficou velho. None se está desligado."""
+    """Envia se a foto mudou. Sem mudança não chama a rede, mesmo que o último envio seja antigo.
+    `forcar` é o fechamento do turno ou o botão do celular."""
     if not ligado(banco):
         return None
     relogio = relogio or time.monotonic
@@ -95,9 +104,9 @@ def enviar_se_preciso(banco, http=None, relogio=None, forcar: bool = False) -> d
         if _estado["falhas"]:
             if desde < min(30 * 2 ** (_estado["falhas"] - 1), ESPERA_FALHA_MAX):
                 return {"enviado": False}
-        elif mudou and desde < (5 if banco.cfg_bool("sync_quase_tempo_real") else ESPERA_MUDANCA):
+        elif not mudou:
             return {"enviado": False}
-        elif not mudou and desde < ESPERA_PARADO:
+        elif desde < (5 if banco.cfg_bool("sync_quase_tempo_real") else ESPERA_MUDANCA):
             return {"enviado": False}
     try:
         _post(banco, corpo, http)

@@ -133,9 +133,15 @@ class TesteSincronizador(BaseTeste):
             primeiro = BancoDados(caminho)
             segundo = BancoDados(caminho, semear=False)
             try:
+                primeiro.cfg_set("api_url", "https://nuvem.exemplo")
+                primeiro.cfg_set("api_token", "segredo")
                 primeiro.cfg_set("sync_quase_tempo_real", "S")
                 a, b = Sincronizador(primeiro), Sincronizador(segundo)
-                with mock.patch.object(Sincronizador, "_rodada", return_value=True) as rodada:
+                with mock.patch.object(Sincronizador, "_rodada", return_value=True) as rodada, \
+                        mock.patch.object(Sincronizador, "_pedido_remoto", return_value=None), \
+                        mock.patch("src.sync.ociosidade.ha_pendencia", return_value=True), \
+                        mock.patch("src.sync.ociosidade.manutencao_devida", return_value=False), \
+                        mock.patch("src.sync.ociosidade.ocioso", return_value=True):
                     with mock.patch("src.sync.sincronizador.time.time", return_value=1000):
                         self.assertTrue(a.rodada())
                         self.assertTrue(b.rodada())
@@ -143,12 +149,12 @@ class TesteSincronizador(BaseTeste):
                     trava = InstanciaUnica(caminho + ".sync")
                     self.assertTrue(trava.adquirir())
                     try:
-                        with mock.patch("src.sync.sincronizador.time.time", return_value=1005):
+                        with mock.patch("src.sync.sincronizador.time.time", return_value=1900):
                             self.assertTrue(b.rodada())
                         self.assertEqual(rodada.call_count, 1)
                     finally:
                         trava.liberar()
-                    with mock.patch("src.sync.sincronizador.time.time", return_value=1005):
+                    with mock.patch("src.sync.sincronizador.time.time", return_value=1900):
                         self.assertTrue(b.rodada())
                     self.assertEqual(rodada.call_count, 2)
             finally:
@@ -161,17 +167,20 @@ class TesteSincronizador(BaseTeste):
         with tempfile.TemporaryDirectory() as pasta:
             caminho = str(Path(pasta) / "caixa.db")
             banco = BancoDados(caminho)
+            banco.cfg_set("api_url", "https://nuvem.exemplo")
+            banco.cfg_set("api_token", "segredo")
             servico = ServicoSincronizacao(caminho)
             recebido = threading.Event()
             threads = []
 
-            def rodada(_sync):
+            def rodada(_sync, forcar=False):
                 threads.append(threading.get_ident())
                 recebido.set()
                 return True
 
             try:
-                with mock.patch.object(Sincronizador, "_rodada", autospec=True, side_effect=rodada):
+                with mock.patch.object(Sincronizador, "_rodada", autospec=True, side_effect=rodada), \
+                        mock.patch.object(Sincronizador, "_pedido_remoto", return_value=None):
                     servico.iniciar()
                     self.assertFalse(recebido.wait(0.05))
                     banco.cfg_set("sync_quase_tempo_real", "S")

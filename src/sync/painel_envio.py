@@ -355,7 +355,7 @@ def retrato(banco) -> dict:
         "terminal_rotulo": (maquina.get("descricao") or "").strip() or f"Caixa {turnos.terminal}",
         "terminal_computador": (maquina.get("nome_computador") or "").strip() or socket.gethostname(),
         "dia_operacional": hoje, "momento": fmt.agora(),
-        "atualizacao_seg": 5 if banco.cfg_bool("sync_quase_tempo_real") else 30,
+        "atualizacao_seg": 60,
         "devolucoes_suportadas": True, "devolucoes_pendentes_envio": devolucoes_envio.pendentes(banco),
         "caixa": caixa, "estoque": estoque,
         "caderneta": {"a_receber_cent": int(devedores["total"]), "clientes_devendo": int(devedores["n"])},

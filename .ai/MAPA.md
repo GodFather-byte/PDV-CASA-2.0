@@ -8,7 +8,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 
 | Comando | O que abre |
 |---|---|
-| `python -m src.app` | PDV (`--sync`: segundo plano com a nuvem; `--autoteste`: autoteste). Configurações > Nuvem > `sync_quase_tempo_real` inicia envio na própria aplicação em 5 s (`ServicoSincronizacao`, `src/sync/sincronizador.py`). Com o porteiro ligado, a página do celular sobe na rede do caixa e o retrato das comandas abertas vai para a nuvem |
+| `python -m src.app` | PDV (`--sync`: segundo plano com a nuvem; `--autoteste`: autoteste). Configurações > Nuvem > `sync_quase_tempo_real` olha a fila na própria aplicação; o lote sobe a cada `sync_lote_seg` (padrão 900 s) (`ServicoSincronizacao`, `src/sync/sincronizador.py`, `src/sync/ociosidade.py`). Fechamento de turno e o botão do celular enviam na hora. Com o porteiro ligado, a página do celular sobe na rede do caixa e o retrato das comandas abertas vai no mesmo lote |
 | `python -m src.app --edicao ea_superacoes` | Edição E&A Superações (adega); `iniciar_ea_superacoes.bat` no Windows |
 | `python -m src.app --autoteste-qt [arquivo]` | Mesmo autoteste Qt (alias de `--autoteste`) |
 | `python -m src.app --homologacao [arquivo.json]` | Cinco cenários de recuperação em banco fictício descartável; sem rede ou hardware |

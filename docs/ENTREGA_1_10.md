@@ -26,11 +26,12 @@
 
 ## Sincronização leve e estado da fila
 
-- O modo rápido continua verificando mudanças a cada 5 segundos com o PDV aberto.
+- O modo rápido continua olhando mudanças a cada 5 segundos com o PDV aberto, mas o envio ao Neon
+  sai em lote (padrão 15 minutos), na hora no fechamento do turno, ou quando o celular pede.
 - Um contador transacional identifica alterações nos dados que alimentam o painel, em qualquer conexão SQLite.
   O retrato só é recalculado quando os dados mudam ou o dia operacional vira.
 - O envio compara a assinatura do retrato. Lotes seguintes levam somente vendas/devoluções pendentes.
-  Sem mudanças, um batimento pequeno a cada 45 segundos mantém a confirmação e o horário do caixa na nuvem.
+  Sem mudanças e com a loja parada, não há batimento: o banco pode dormir.
 - Reinício do processo, alteração do destino ou perda do retrato remoto exigem um envio completo.
   Servidores antigos recebem retrato completo; devoluções sem confirmação continuam na fila.
 - A barra inferior do caixa mostra estado, quantidade de vendas e devoluções pendentes e último envio confirmado.

@@ -1,5 +1,19 @@
 # HANDOFF
 
+## Neon pode dormir
+
+- O caixa só chama o banco da nuvem com pendência (venda, comanda, estoque, cardápio), no fechamento
+  do turno, quando o celular pede, ou na manutenção de licença/versão (horas). Sem isso, não há rede.
+- Lote padrão **900 s** (`sync_lote_seg`, 60 a 3600). Batimento no máximo a cada 15 min, e só com movimento
+  e dentro de `sync_expediente_de`/`ate` (vazio = o dia inteiro).
+- `GET /health` e `GET /v1/sync/pedido` não abrem sessão. O pedido do botão **Atualizar agora** fica na
+  memória do Render. Leituras repetidas do painel e do cardápio ficam 45 s em memória.
+- Aba oculta no painel e no porteiro para de consultar. Porteiro no Wi-Fi do caixa continua ao vivo;
+  na nuvem a lista pode atrasar até o lote. O botão pede envio na hora.
+- Uma loja 18 h/dia, 1 venda a cada 13 min: cerca de **6 h/dia** e **180 h/mês** com o compute acordado
+  (5 min ligado a cada flush de 15). Em 0,25 CU, perto de **45 CU-h/mês**, dentro das 100. Painel deixado
+  aberto na tela conta à parte (cerca de 1 consulta por minuto).
+
 ## Atualização automática do caixa
 
 - O aviso antigo (`GET /v1/atualizacoes`) continua. O novo fluxo é `GET /v1/atualizacao/ultima?edicao=&canal=estavel`:
@@ -42,7 +56,8 @@
 
 ## Nuvem quase em tempo real
 
-- `sync_quase_tempo_real` (nasce N): com S, o Qt envia a cada 5 s. Painel do dono e porteiro continuam opt-in.
+- `sync_quase_tempo_real` (nasce N): com S, o Qt olha a fila local. O lote sobe a cada `sync_lote_seg` (900 s).
+  Painel do dono e porteiro continuam opt-in.
   Guias: `docs/NUVEM.md`, `docs/PAINEL_DONO.md`.
 
 ## Porteiro

@@ -356,4 +356,6 @@ class TurnoController:
         res["valor_final"] = valor_final_cent
         res["resultado"] = resultado
         notificacoes.avisar(self.banco, "turno", "turno_fechado", turno_id)
+        from src.sync.ociosidade import pedir_flush
+        pedir_flush(self.banco)
         return res

@@ -112,6 +112,17 @@ def _hash(corpo: dict) -> str:
     return hashlib.sha256(texto.encode("utf-8")).hexdigest()
 
 
+def precisa_enviar(banco) -> bool:
+    """Há catálogo novo (ou uma retirada) que ainda não subiu. Só olha o caixa."""
+    if not banco.cfg("api_url").strip() or not banco.cfg("api_token").strip():
+        return False
+    if not banco.cfg_bool("cardapio_digital", False):
+        return banco.cfg(CHAVE_PUBLICADO) == "S"
+    if banco.cfg(CHAVE_PUBLICADO) != "S":
+        return True
+    return _hash(coletar(banco)) != banco.cfg(CHAVE_HASH)
+
+
 def enviar(banco, http=None) -> dict | None:
     """Publica o catálogo, ou tira do ar se o cardápio foi desligado depois de publicado.
     Devolve None sem nuvem configurada. Não marca nada se a nuvem não responder 200."""

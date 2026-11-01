@@ -16,6 +16,8 @@ let urlCaixa = "";
 let pinMemoria = "";
 let listaTimer = null;
 const INTERVALO_LISTA_MS = 20000;
+const INTERVALO_LISTA_NUVEM_MS = 60000;
+const ESPERA_FLUSH_MS = 35000;
 
 function cabecalhos(extra) {
   const saida = Object.assign({ "Content-Type": "application/json" }, extra || {});
@@ -240,6 +242,7 @@ async function consultarUrl(url, bearer, ms) {
   try {
     const headers = {};
     if (bearer) headers.Authorization = "Bearer " + bearer;
+    headers["X-PDV-Leitura"] = "1";
     resposta = await buscar(url, { headers: headers }, ms);
   } catch (_erro) {
     return null;
@@ -292,10 +295,20 @@ function pararLista() {
 function iniciarLista() {
   carregarLista(false);
   pararLista();
+  const espera = modo === "nuvem" ? INTERVALO_LISTA_NUVEM_MS : INTERVALO_LISTA_MS;
   listaTimer = setInterval(() => {
+    if (document.hidden) return;
     if (document.body.dataset.tela === "tela-lista") carregarLista(true);
-  }, INTERVALO_LISTA_MS);
+  }, espera);
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    pararLista();
+    return;
+  }
+  if (document.body.dataset.tela === "tela-lista") iniciarLista();
+});
 
 async function carregarLista(silencioso) {
   if (urlCaixa && podeTentarCaixa(urlCaixa) && pinMemoria) {
@@ -366,8 +379,16 @@ async function listaNuvem() {
   }
 }
 
+function horaDaLista(momento) {
+  const texto = (momento || "").slice(11, 16);
+  return texto ? "última atualização " + texto : "última atualização —";
+}
+
 function pintarLista(dados) {
   mostrarAviso("");
+  const hora = document.getElementById("lista-hora");
+  if (hora) hora.textContent = horaDaLista(dados.momento);
+  window._momentoLista = dados.momento || "";
   document.getElementById("lista-origem").textContent = dados.origem_txt || "";
   const lista = document.getElementById("lista-comandas");
   const vazio = document.getElementById("lista-vazio");
@@ -545,7 +566,45 @@ document.addEventListener("keydown", (evento) => {
 });
 
 document.getElementById("botao-entrar").addEventListener("click", entrar);
-document.getElementById("botao-atualizar").addEventListener("click", () => carregarLista(false));
+async function atualizarAgora() {
+  const hora = document.getElementById("lista-hora");
+  if (modo !== "nuvem") {
+    carregarLista(false);
+    return;
+  }
+  if (hora) hora.textContent = "atualizando...";
+  let pedido = {};
+  try {
+    const r = await buscar("/v1/sync/pedido", {
+      method: "POST",
+      credentials: "omit",
+      headers: cabecalhos(),
+    }, 8000);
+    pedido = await r.json().catch(() => ({}));
+  } catch (_erro) {
+    pedido = {};
+  }
+  if (!pedido.conhecido) {
+    if (hora) hora.textContent = horaDaLista("");
+    carregarLista(false);
+    return;
+  }
+  const inicio = Date.now();
+  while (Date.now() - inicio < ESPERA_FLUSH_MS) {
+    await new Promise((resolver) => setTimeout(resolver, 2000));
+    try {
+      const e = await buscar("/v1/sync/estado", { headers: cabecalhos() }, 8000);
+      const j = await e.json().catch(() => ({}));
+      if (j && j.id && j.id === pedido.id && j.momento) {
+        await carregarLista(false);
+        return;
+      }
+    } catch (_erro) { /* ainda é só a memória do servidor */ }
+  }
+  if (hora) hora.textContent = horaDaLista(window._momentoLista || "");
+}
+
+document.getElementById("botao-atualizar").addEventListener("click", () => atualizarAgora());
 document.getElementById("botao-buscar").addEventListener("click", () => {
   codigo = "";
   mesa = false;

@@ -139,8 +139,11 @@ CAMPOS_CONFIG = [
     ("smtp_servidor", "Servidor de e-mail (provedor)", "texto", "E-mail"),
     ("chave_loja", "Chave da loja (licença)", "texto", "Nuvem"), ("api_url", "Endereço da nuvem (licença e atualizações)", "texto", "Nuvem"),
     ("api_token", "Token da API", "texto", "Nuvem"),
-    ("sync_quase_tempo_real", "Sincronização automática quase em tempo real (a cada 5 segundos, com o PDV aberto)", "sn", "Nuvem"),
-    ("sync_intervalo_seg", "Intervalo da sincronização no modo normal (segundos, de 5 a 3600)", "int", "Nuvem"),
+    ("sync_quase_tempo_real", "Sincronização automática com o PDV aberto (o lote sobe no intervalo abaixo; nasce desligada)", "sn", "Nuvem"),
+    ("sync_intervalo_seg", "Espera depois de uma falha de rede, no modo normal (segundos, de 5 a 3600)", "int", "Nuvem"),
+    ("sync_lote_seg", "Intervalo do lote enviado à nuvem (segundos, de 60 a 3600; 900 = 15 minutos). Abaixo de 300 o banco não dorme", "int", "Nuvem"),
+    ("sync_expediente_de", "Batimento só a partir desta hora (vazio = o dia inteiro; ex.: 18:00)", "texto", "Nuvem"),
+    ("sync_expediente_ate", "Batimento só até esta hora (vazio = o dia inteiro; ex.: 06:00)", "texto", "Nuvem"),
     ("painel_dono", "Painel do dono no celular: enviar vendas fechadas, caixa e estoque para a nuvem", "sn", "Nuvem"),
     ("cardapio_digital", "Cardápio digital: publicar o catálogo na nuvem para o QR da mesa (só consulta, sem pedido)", "sn", "Nuvem"),
     # Central do fornecedor (src/sync/ponte.py): usa o endereço da nuvem acima e um token só deste caixa.
@@ -379,6 +382,17 @@ class ConfigController:
                     raise ErroValidacao("A porta do porteiro deve ficar entre 1024 e 65535.", {chave: "inválido"})
                 if chave == "sync_intervalo_seg" and not 5 <= int(v) <= 3600:
                     raise ErroValidacao("O intervalo da nuvem deve ficar entre 5 e 3600 segundos.", {chave: "inválido"})
+                if chave == "sync_lote_seg" and not 60 <= int(v) <= 3600:
+                    raise ErroValidacao("O lote da nuvem deve ficar entre 60 e 3600 segundos (900 = 15 minutos).",
+                                        {chave: "inválido"})
+                if chave in ("sync_expediente_de", "sync_expediente_ate"):
+                    texto = str(v).strip()
+                    if texto:
+                        try:
+                            texto = fmt.para_hora(texto) or ""
+                        except ValueError:
+                            raise ErroValidacao("Horário inválido (use hh:mm, por exemplo 18:00).", {chave: "inválido"}) from None
+                    v = texto
                 if chave == "virada_dia_hora" and not 0 <= int(v) <= 23:
                     raise ErroValidacao("A hora da virada do dia vai de 0 a 23.", {chave: "inválido"})
                 if chave == "num_turnos" and not 1 <= int(v) <= 9:
