@@ -989,6 +989,11 @@ def smtp_configurado() -> bool:
                ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM"))
 
 
+def brevo_configurado() -> bool:
+    """A chave basta para preferir a Brevo. O remetente é exigido na hora do envio."""
+    return bool(os.environ.get("BREVO_API_KEY", "").strip())
+
+
 def whatsapp_configurado() -> bool:
     return bool(os.environ.get("WHATSAPP_API_URL", "").strip() and os.environ.get("WHATSAPP_API_TOKEN", "").strip())
 
@@ -1017,7 +1022,57 @@ def link_whatsapp(telefone: str, texto: str) -> str:
     return "https://wa.me/" + telefone.lstrip("+") + "?text=" + quote(enxuto)
 
 
+def enviar_email_brevo(destino: str, assunto: str, corpo: str) -> None:
+    """POST https://api.brevo.com/v3/smtp/email com o cabeçalho api-key. Não usa porta SMTP."""
+    chave = os.environ.get("BREVO_API_KEY", "").strip()
+    remetente = os.environ.get("EMAIL_FROM", "").strip()
+    if not chave:
+        raise ErroCobranca("Configure BREVO_API_KEY no servidor.")
+    if not remetente:
+        raise ErroCobranca("Configure EMAIL_FROM com um remetente verificado na Brevo.")
+    _email(remetente)
+    _email(destino)
+    nome = os.environ.get("EMAIL_FROM_NAME", "").strip()
+    if nome and ("\n" in nome or "\r" in nome or len(nome) > 70):
+        raise ErroCobranca("EMAIL_FROM_NAME inválido.")
+    sender = {"email": remetente}
+    if nome:
+        sender["name"] = nome
+    pedido = Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=para_json({
+            "sender": sender,
+            "to": [{"email": destino}],
+            "subject": assunto,
+            "textContent": corpo,
+        }),
+        method="POST",
+        headers={
+            "api-key": chave,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "WillPDV/1.0",
+        })
+    try:
+        with _abrir(pedido) as resposta:
+            resposta.read(LIMITE_RESPOSTA)
+    except HTTPError as erro:
+        raise ErroCobranca(f"Brevo recusou o envio (HTTP {erro.code}).") from None
+    except (URLError, TimeoutError, OSError, MercadoPagoIndisponivel):
+        raise ErroCobranca("Não foi possível chamar a Brevo.") from None
+
+
 def enviar_email(destino: str, assunto: str, corpo: str) -> None:
+    """Brevo (HTTPS) quando BREVO_API_KEY existe; senão SMTP."""
+    if brevo_configurado():
+        enviar_email_brevo(destino, assunto, corpo)
+        return
+    if not smtp_configurado():
+        raise ErroCobranca("E-mail não configurado. Defina BREVO_API_KEY e EMAIL_FROM, ou o SMTP.")
+    _enviar_email_smtp(destino, assunto, corpo)
+
+
+def _enviar_email_smtp(destino: str, assunto: str, corpo: str) -> None:
     host = os.environ["SMTP_HOST"].strip()
     try:
         porta = int(os.environ["SMTP_PORT"].strip())
@@ -1080,7 +1135,7 @@ def entregar(db: Session, plano: Plano, cobranca: Cobranca) -> dict:
         "whatsapp": "nao_configurado",
         "whatsapp_link": link_whatsapp(plano.whatsapp, texto) if plano.whatsapp else None,
     }
-    if plano.email_gerente and smtp_configurado():
+    if plano.email_gerente and (brevo_configurado() or smtp_configurado()):
         try:
             enviar_email(plano.email_gerente, f"Licença WillPDV {plano.chave_loja} — {cobranca.vencimento}", texto)
             resultado["email"] = "enviado"

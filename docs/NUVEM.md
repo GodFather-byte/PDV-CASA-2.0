@@ -162,6 +162,10 @@ PDV_LICENCA_CHAVE=/opt/willpdv/licenca_privada.key
 # Cobrança Mercado Pago (opcional). Não coloque estes valores no git.
 # MP_ACCESS_TOKEN=
 # MP_WEBHOOK_SECRET=
+# No Render grátis use Brevo (HTTPS). SMTP de saída é bloqueado.
+# BREVO_API_KEY=
+# EMAIL_FROM=
+# EMAIL_FROM_NAME=
 # SMTP_HOST=smtp.gmail.com
 # SMTP_PORT=587
 # SMTP_USER=
