@@ -1,62 +1,48 @@
 # HANDOFF
 
-## Controle de quartos (novo, esquema 31)
-
-- Módulo `usar_quartos` (nasce desligado; Configurações > Módulos). Botão **Quartos (tempo)** no menu, acesso
-  `util_quartos` nível 1. Não existe na edição E&A Superações.
-- Só conta tempo: o cliente paga antes no caixa (venda normal). Blocos de `quartos_minutos_bloco` (30) a
-  `quartos_valor_bloco` (R$ 90, informativo e gravado no início). Estados livre/uso/alerta/estourou pelo relógio;
-  `quartos_uso` guarda início, blocos, liberação e quanto passou do tempo.
-- No caixa: linha `PainelQuartosCaixa` embaixo dos produtos e do pagamento (`ui_qt/caixa.py`, `_pagina_venda`; Total e
-  Troco lado a lado para caber em 768 px de altura), cartões
-  no desenho das comandas; clique ou **Q3** no campo da comanda (`chamar_posicao`) inicia/+ Tempo/Libera. Avisos centralizados em `AvisosQuartos` (um por banco), sem tocar em dobro.
-- Cores: verde livre, azul ocupado, amarelo acabando, vermelho piscando esgotado. Aos 5 min: `AvisoNaTela` (faixa
-  sobreposta no alto do caixa, não modal, OK fecha) + `tocar_som` (bipes do Windows; tons diferentes p/ esgotado).
-- Aviso: janela na frente e campainha ESP32 (`/alerta` agora dá 1 toque curto) do quarto (`quartos_campainhas`, rede local, thread com timeout de
-  2 s). Programa do aparelho em `tools/esp32_campainha/main.py`. Guia: `docs/QUARTOS.md`. Testes: `tests/test_quartos.py`.
-- Pendente: homologar no balcão com um ESP32 real (só testado com o aparelho simulado).
-
-## Painel do dono (celular)
-
-- A PWA continua em `/painel/` (`backend/painel_web/`), com a mesma senha e sessão. O celular atualiza sozinho a cada 30 s.
-- **Hoje:** faturamento, vendas, ticket médio (já vinham das vendas fechadas) e, agora, gráfico dos últimos 30 dias
-  (vendas já guardadas) e dos últimos 12 meses. O gráfico mensal completo sai do retrato do caixa, porque a nuvem
-  apaga a venda depois de cerca de 120 dias. PDV antigo: o gráfico usa só o que a nuvem ainda tem e avisa.
-- **Produtos:** ranking por quantidade e faturamento em hoje / 7 dias / 30 dias (`GET /v1/painel/produtos`).
-  Estoque baixo usa o `estoque_minimo` de cada produto (já subia no retrato); o alerta também aparece em Hoje.
-- **Abertas:** comandas abertas (número, quanto deve, hora) e a marca de comissão lançada — a mesma regra do
-  porteiro e do cartão rosa (`comissoes_garotas` pendente no número da comanda). Comissão por garota no período
-  (pendente e paga). Mesa fica de fora.
-- **Caixa:** além do turno aberto, fechamento (contado, esperado, sobra/falta) e sangrias de cada dia.
-- Isso que não era venda fechada entra no retrato (`src/sync/painel_envio.py`). **O PC do caixa precisa ser
-  atualizado** para comandas, comissões, fechamento, sangrias e os 12 meses. Vendas, ticket e estoque baixo
-  seguem com o PDV que já sincroniza. Guia: `docs/PAINEL_DONO.md`.
-
-## Cobrança da licença (Mercado Pago)
-
-- Sem Asaas. Mensalidade por loja (valor, dia, e-mail, WhatsApp, dados do boleto). A varredura no processo gera
-  boleto e Pix 5 dias antes do vencimento (até 20 dias depois, se o Render dormiu).
-- E-mail: Brevo (`BREVO_API_KEY` + `EMAIL_FROM`) no Render grátis; SMTP só se não houver chave. WhatsApp:
-  `WHATSAPP_API_*` ou link `wa.me`.
-- `POST /v1/admin/cobrancas/teste-email` manda o aviso só para o `destino`, nunca para o e-mail da loja.
-- Webhook `POST /v1/webhooks/mercadopago` (`MP_WEBHOOK_SECRET`), relê o pagamento e, se `approved` no valor,
-  estende a licença um mês a partir do vencimento. Guia: `docs/COBRANCA_LICENCAS_MERCADOPAGO.md`.
-
-## Porteiro
-
-- `/porteiro` no caixa e `/porteiro/?loja=CHAVE` na nuvem. Lista as comandas abertas e deixa de fora a da garota
-  (comissão pendente). Consultar número continua. Guia: `docs/PORTEIRO.md`.
-
 ## Estado
 
-- PDV **1.9.0**, esquema **31**. Interface do PDV só Qt (PySide6). O gerador de licenças continua em Tkinter.
-- Dinheiro em centavos. Duas edições: WillPDV e E&A Superações (`src/core/edicao.py`). Cupom não fiscal.
-- O histórico fino de tela (caixa, fechamento, comanda da garota) está no git; não repetir aqui.
+- PDV **1.9.0**, esquema **31**, interface Qt (PySide6); licenciador Tkinter.
+- Dinheiro em centavos, venda exclusivamente pelo CaixaController. Duas edições: WillPDV e E&A Superações.
+- Este trabalho não muda a versão do executável nem o esquema do banco.
 
-## Pendências para produção
+## Revisão: cinco correções
 
-- Homologar o Qt no balcão antes do Setup novo. Atualizar o PDV da loja para o painel passar a mostrar comandas,
-  comissões, fechamento, sangrias e os 12 meses.
-- Cobrança Mercado Pago só funciona com `MP_ACCESS_TOKEN` e `MP_WEBHOOK_SECRET` no Render, e o e-mail com
-  `BREVO_API_KEY` e `EMAIL_FROM`.
-- Devolução não atende pré-pago nem rodízio. Bruto, CMV e comissões históricos não são estornados por devolução.
+- Confirmação de envio compara os dados enviados com o estado atual, em transação curta fora do HTTP.
+  Cancelamento durante a resposta continua pendente; UUIDs estranhos na resposta não retiram outras vendas da fila.
+- Painel revoga sessões ao desativar loja e confere estado ativo em todas as consultas autenticadas.
+- Limitador de login tem teto de chaves e de falhas por chave, sem expulsar bloqueios vigentes. Saturação recusa
+  chaves novas até liberar espaço; nomes/senhas têm tamanho máximo.
+- Contas editadas validam a combinação final de entrada/quitação antes de gravar.
+- Vendas na nuvem usam upsert SQLite/PostgreSQL: lotes repetidos e envios concorrentes não duplicam o UUID.
+  Cancelamento é definitivo: envio antigo de venda fechada não o sobrescreve.
+
+## Nuvem quase em tempo real
+
+- Configurações > Nuvem > **Sincronização automática quase em tempo real** (`sync_quase_tempo_real`, nasce N).
+  Com S, ServicoSincronizacao inicia com o Qt e envia em 5 s com conexão própria na thread; dispensa iniciar --sync.
+  Trava por banco e horário compartilhado evitam envio simultâneo/repetido com um --sync existente.
+- Ligar/desligar vale sem reiniciar. Painel do dono precisa estar ligado para enviar vendas, caixa e estoque;
+  porteiro precisa estar ligado com PIN para comandas abertas. Sem conexão, vendas permanecem pendentes.
+- Retrato informa atualização em 5 s para o painel visível no celular (senão 30 s). Porteiro envia mudanças em 5 s
+  nesse modo; consulta da lista do porteiro continua periódica. Falhas aumentam a espera. Render grátis pode dormir.
+- Falha de consulta de licença não impede tentar painel/porteiro. Intervalo normal aceita 5 a 3600 s (padrão 60).
+- Guias: docs/NUVEM.md, docs/PAINEL_DONO.md. Ainda é necessário atualizar o programa do PC para usar as opções novas.
+
+## Porteiro no iPhone/iPad
+
+- Botão **Instalar no iPhone/iPad** mostra o caminho do Safari: Compartilhar > Adicionar à Tela de Início.
+  Não aparece em standalone; instalação nativa Android preservada. Código: src/porteiro/web/instalacao.js.
+- A mesma página é servida no caixa e na nuvem. Manifesto e ícone Apple preservados; caches atualizados.
+  HTTP local tem limitações; preferir HTTPS da nuvem. Guia: docs/PORTEIRO.md.
+
+## Validação e homologação
+
+- Regressões nos testes do painel, limpeza, contas, sincronização, porteiro e Qt. JS:
+  `node --test tests/test_porteiro_instalacao.cjs` (7 cenários de iPhone/iPad/Android).
+- CI inclui concorrência de UUID no PostgreSQL e suíte completa Windows/Linux em Python 3.10/3.12.
+- Homologar em iPhone físico, Qt no balcão e ESP32 real. Quartos só contam tempo; cliente paga antes no caixa.
+  Esquema 31, cartões, aviso aos 5 min e campainha em docs/QUARTOS.md.
+- Cobrança Mercado Pago exige MP_ACCESS_TOKEN e MP_WEBHOOK_SECRET; e-mail exige BREVO_API_KEY e EMAIL_FROM.
+- Devolução continua sem pré-pago/rodízio; bruto, CMV e comissões históricos não são estornados automaticamente.
+  Essa evolução de produto fica fora destas cinco correções. Ver docs/DEVOLUCOES.md.

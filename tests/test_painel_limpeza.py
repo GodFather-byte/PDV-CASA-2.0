@@ -179,6 +179,25 @@ class TesteRetencao(BaseNuvem):
 # --------------------------------------------------- a memória das tentativas de login
 @unittest.skipIf(painel is None, "fastapi/httpx não instalados")
 class TesteTentativasDeLogin(unittest.TestCase):
+    def test_saturacao_nao_excede_teto_nem_expulsa_bloqueios_vigentes(self):
+        t = painel._Tentativas()
+        with mock.patch.object(painel, "LIMITE_CHAVES_TENTATIVAS", 5):
+            for _ in range(painel.TENTATIVAS_LOGIN):
+                t.falhou("alvo", agora=1000.0)
+            for n in range(100):
+                t.falhou(f"inventada-{n}", agora=1000.0)
+            self.assertEqual(len(t._falhas), 5)
+            self.assertTrue(t.bloqueada("alvo", agora=1001.0))
+            self.assertTrue(t.bloqueada("nova", agora=1001.0))
+            self.assertFalse(t.bloqueada("nova", agora=1001.0 + painel.JANELA_LOGIN_SEG))
+            self.assertEqual(len(t._falhas), 0)
+
+    def test_falhas_concorrentes_tambem_tem_limite_por_chave(self):
+        t = painel._Tentativas()
+        for _ in range(100):
+            t.falhou("alvo", agora=1000.0)
+        self.assertEqual(len(t._falhas["alvo"]), painel.TENTATIVAS_LOGIN)
+
     def test_consultar_chave_desconhecida_nao_cria_entrada(self):
         t = painel._Tentativas()
         for n in range(100):

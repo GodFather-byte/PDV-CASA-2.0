@@ -46,7 +46,14 @@ teclado ou o leitor. O aviso na tela explica isso.
 
 ### Deixar na tela inicial
 
-- **iPhone:** Compartilhar → Adicionar à Tela de Início. O atalho abre em tela cheia.
+- **iPhone/iPad:** abra no Safari e toque em **Instalar no iPhone/iPad** no topo do porteiro.
+  A página mostra as etapas: **Compartilhar → Adicionar à Tela de Início → Adicionar**.
+  Se aparecer **Abrir como App**, mantenha ativado. O iPhone não permite abrir esse menu automaticamente.
+  Se a opção não estiver visível, role as ações do menu Compartilhar. O botão de ajuda não aparece
+  quando o porteiro já está aberto como aplicativo. Ao abrir o ícone pela primeira vez, informe
+  novamente a loja e o PIN, se solicitado.
+  Prefira o endereço HTTPS da nuvem: em HTTP na rede local pode haver somente um atalho,
+  sem câmera e sem service worker.
 - **Android:** no Chrome, o menu pode oferecer **Instalar app** ou **Adicionar à tela inicial**.
   O Chrome só trata como aplicativo instalável em endereço seguro; em `http://` da rede local o
   atalho abre do mesmo jeito no navegador. A página tem manifesto e service worker para quando o

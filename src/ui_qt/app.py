@@ -23,6 +23,7 @@ from src.core.erros import ErroNegocio
 from src.database.conexao import BancoDados, caminho_padrao
 from src.porteiro.servico import ServicoPorteiro, descrever as descrever_porteiro
 from src.sync.ponte import ServicoPonte
+from src.sync.sincronizador import ServicoSincronizacao
 from src.controllers.contexto import Contexto
 from src.ui_qt import tema
 from src.ui_qt.login import JanelaLogin
@@ -481,7 +482,15 @@ class JanelaPrincipal(QMainWindow):
         if erro:
             nuvem += ("\nFalha na ponte; consulte Configurações ou Suporte no Telegram."
                       if estado_ponte["ativa"] else f"\nÚltima falha de licença: {erro}")
-        nuvem += "\nSincronização de vendas: não executada automaticamente pelo piloto."
+        if banco.cfg_bool("sync_quase_tempo_real"):
+            nuvem += "\nEnvio automático: a cada 5 segundos enquanto o PDV estiver aberto."
+        else:
+            nuvem += "\nEnvio automático desligado; disponível em Configurações > Nuvem."
+        nuvem += f"\nÚltimo envio do painel: {banco.cfg('painel_ultimo_envio') or 'ainda não confirmado'}."
+        if not banco.cfg_bool("painel_dono"):
+            nuvem += "\nPainel do dono desligado: vendas não são enviadas."
+        if banco.cfg("painel_ultimo_erro"):
+            nuvem += "\nÚltimo erro do painel: " + banco.cfg("painel_ultimo_erro")
         if self.app.estado_servicos:
             nuvem += "\n" + " | ".join(self.app.estado_servicos)
         self.indicadores["sync"].setText(nuvem)
@@ -918,7 +927,8 @@ class App:
             if idade is None or idade >= 12:
                 self.ctx.utilitarios.backup_automatico("início")
             for classe, nome in ((ServicoFilaImpressao, "Impressão"), (ServicoTelegram, "Telegram"),
-                                 (ServicoPonte, "Ponte de licenças"), (ServicoPorteiro, "Porteiro")):
+                                 (ServicoPonte, "Ponte de licenças"), (ServicoPorteiro, "Porteiro"),
+                                 (ServicoSincronizacao, "Sincronização da nuvem")):
                 servico = None
                 try:
                     servico = classe(self.banco.caminho)

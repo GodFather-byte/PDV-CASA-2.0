@@ -2,11 +2,12 @@
  * A consulta (/porteiro/api/) vai sempre ao caixa e nunca fica no celular:
  * um saldo antigo liberaria quem ainda deve. */
 
-const VERSAO = "porteiro-v2";
+const VERSAO = "porteiro-v3";
 const SHELL = [
   "./",
   "./index.html",
   "./app.js",
+  "./instalacao.js",
   "./estilo.css",
   "./manifest.webmanifest",
   "./icones/icone-192.png",

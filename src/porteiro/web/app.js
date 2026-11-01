@@ -7,7 +7,6 @@ let mesa = false;
 let consultando = false;
 let fluxo = null;
 let cameraTimer = null;
-let instalar = null;
 let modo = "caixa";
 let token = "";
 let tokenNuvem = "";
@@ -564,20 +563,6 @@ document.getElementById("botao-nova").addEventListener("click", () => {
   desenharCodigo();
   mostrarAviso("");
   mostrar("tela-lista");
-});
-
-window.addEventListener("beforeinstallprompt", (evento) => {
-  evento.preventDefault();
-  instalar = evento;
-  document.getElementById("botao-instalar").hidden = false;
-});
-
-document.getElementById("botao-instalar").addEventListener("click", async () => {
-  if (!instalar) return;
-  instalar.prompt();
-  await instalar.userChoice;
-  instalar = null;
-  document.getElementById("botao-instalar").hidden = true;
 });
 
 if ("serviceWorker" in navigator) {

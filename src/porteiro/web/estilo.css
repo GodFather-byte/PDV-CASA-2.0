@@ -56,6 +56,21 @@ main {
   padding: 12px 16px 28px;
 }
 
+.ajuda-instalar {
+  max-width: 480px;
+  margin: 16px auto;
+  padding: 16px;
+  background: var(--cartao);
+  border: 1px solid var(--linha);
+  border-radius: 14px;
+  line-height: 1.5;
+}
+
+.ajuda-instalar h2 { margin: 0; font-size: 1.2rem; }
+.ajuda-instalar ol { padding-left: 24px; }
+.ajuda-instalar li + li { margin-top: 10px; }
+.ajuda-instalar button { width: 100%; }
+
 h1 { font-size: 1.6rem; margin: 8px 0; }
 
 .sub { color: var(--suave); margin-top: 0; line-height: 1.4; }

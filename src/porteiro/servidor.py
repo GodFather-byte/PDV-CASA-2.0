@@ -30,6 +30,7 @@ MAX_CORPO = 2048
 ARQUIVOS = {
     "index.html": "text/html; charset=utf-8",
     "app.js": "text/javascript; charset=utf-8",
+    "instalacao.js": "text/javascript; charset=utf-8",
     "estilo.css": "text/css; charset=utf-8",
     "manifest.webmanifest": "application/manifest+json; charset=utf-8",
     "sw.js": "text/javascript; charset=utf-8",

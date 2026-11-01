@@ -75,8 +75,11 @@ class ContasController:
         for k in ("dt_entrada", "dt_vencimento", "dt_quitacao"):
             if k in dados:
                 dados[k] = _data(dados[k])
-        self.obter(conta_id)
-        self.banco.atualizar("contas", conta_id, dados)
+        with self.banco.transacao():
+            final = {**self.obter(conta_id), **dados}
+            if final["dt_quitacao"] and final["dt_quitacao"] < final["dt_entrada"]:
+                raise ErroNegocio("A quitação não pode ser anterior à data de entrada.")
+            self.banco.atualizar("contas", conta_id, dados)
 
     def quitar(self, conta_id: int, data: str | None = None) -> None:
         c = self.obter(conta_id)

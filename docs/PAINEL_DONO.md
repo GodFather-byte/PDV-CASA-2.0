@@ -23,7 +23,7 @@ vende offline, guarda tudo                                     guarda a cópia p
 
 | Aba | Conteúdo |
 |---|---|
-| **Hoje** | Faturamento, nº de vendas, ticket médio, cancelamentos, itens, descontos, alerta de estoque baixo, vendas por hora, formas de pagamento, modalidade, gráfico dos últimos 30 dias e dos últimos 12 meses; seletor de dia. O celular atualiza sozinho a cada 30 segundos |
+| **Hoje** | Faturamento, nº de vendas, ticket médio, cancelamentos, itens, descontos, alerta de estoque baixo, vendas por hora, formas de pagamento, modalidade, gráfico dos últimos 30 dias e dos últimos 12 meses; seletor de dia. O celular atualiza sozinho a cada 30 segundos (5 s no modo quase em tempo real) |
 | **Caixa** | Um cartão por caixa (turno aberto, gaveta, sangrias e suprimentos do turno); caderneta; entregas; fechamento e sangrias de cada dia |
 | **Abertas** | Comandas abertas (número, quanto deve, hora, marca de comissão lançada) e o total de comissão por garota (hoje, 7 ou 30 dias) |
 | **Produtos** | Mais vendidos (quantidade e faturamento) em hoje, 7 ou 30 dias, com natural × gelada; economia do atacado do dia; estoque abaixo do mínimo |
@@ -37,7 +37,13 @@ de vasilhames por cliente, conforme a regra escolhida).
 
 Só com **Configurações > Nuvem > "Painel do dono no celular" = Sim**. Desligado (padrão), nada sai da loja.
 
-Sobe, a cada rodada da sincronização (`python -m src.app --sync`, normalmente a cada 60 s):
+Sobe a cada rodada da sincronização: normalmente a cada 60 s com `python -m src.app --sync`,
+ou automaticamente a cada 5 s com **Configurações > Nuvem > Sincronização automática quase em tempo real = Sim**
+e o PDV aberto. Neste modo o painel visível no celular também consulta novidades a cada 5 s;
+sem ele, a atualização do celular continua em 30 s. Falhas de rede aumentam a espera e o Render
+gratuito pode demorar a acordar. O intervalo não é uma garantia de entrega instantânea.
+
+São enviados:
 
 * as **vendas fechadas e canceladas** que ainda não subiram, com itens (nome, quantidade, preço, temperatura, observação)
   e pagamentos (forma e valor). A nuvem confirma o que recebeu e só então o caixa marca como enviada (`vendas.sincronizado`).

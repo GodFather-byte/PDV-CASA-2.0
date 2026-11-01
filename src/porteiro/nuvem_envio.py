@@ -95,7 +95,7 @@ def enviar_se_preciso(banco, http=None, relogio=None, forcar: bool = False) -> d
         if _estado["falhas"]:
             if desde < min(30 * 2 ** (_estado["falhas"] - 1), ESPERA_FALHA_MAX):
                 return {"enviado": False}
-        elif mudou and desde < ESPERA_MUDANCA:
+        elif mudou and desde < (5 if banco.cfg_bool("sync_quase_tempo_real") else ESPERA_MUDANCA):
             return {"enviado": False}
         elif not mudou and desde < ESPERA_PARADO:
             return {"enviado": False}

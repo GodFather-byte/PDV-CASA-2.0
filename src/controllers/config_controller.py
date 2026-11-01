@@ -138,7 +138,9 @@ CAMPOS_CONFIG = [
     ("email_loja", "E-mail da loja", "texto", "E-mail"), ("email_destino", "E-mail de destino dos relatórios", "texto", "E-mail"),
     ("smtp_servidor", "Servidor de e-mail (provedor)", "texto", "E-mail"),
     ("chave_loja", "Chave da loja (licença)", "texto", "Nuvem"), ("api_url", "Endereço da nuvem (licença e atualizações)", "texto", "Nuvem"),
-    ("api_token", "Token da API", "texto", "Nuvem"), ("sync_intervalo_seg", "Intervalo da verificação na nuvem (segundos)", "int", "Nuvem"),
+    ("api_token", "Token da API", "texto", "Nuvem"),
+    ("sync_quase_tempo_real", "Sincronização automática quase em tempo real (a cada 5 segundos, com o PDV aberto)", "sn", "Nuvem"),
+    ("sync_intervalo_seg", "Intervalo da sincronização no modo normal (segundos, de 5 a 3600)", "int", "Nuvem"),
     ("painel_dono", "Painel do dono no celular: enviar vendas fechadas, caixa e estoque para a nuvem", "sn", "Nuvem"),
     # Central do fornecedor (src/sync/ponte.py): usa o endereço da nuvem acima e um token só deste caixa.
     ("central_ponte_ativa", "Central do fornecedor: buscar a licença publicada e enviar o contato deste caixa", "sn", "Nuvem"),
@@ -374,6 +376,8 @@ class ConfigController:
                     raise ErroValidacao("O número de comandas deve ficar entre 0 e 10000.", {chave: "inválido"})
                 if chave == "porteiro_porta" and not 1024 <= int(v) <= 65535:
                     raise ErroValidacao("A porta do porteiro deve ficar entre 1024 e 65535.", {chave: "inválido"})
+                if chave == "sync_intervalo_seg" and not 5 <= int(v) <= 3600:
+                    raise ErroValidacao("O intervalo da nuvem deve ficar entre 5 e 3600 segundos.", {chave: "inválido"})
                 if chave == "virada_dia_hora" and not 0 <= int(v) <= 23:
                     raise ErroValidacao("A hora da virada do dia vai de 0 a 23.", {chave: "inválido"})
                 if chave == "num_turnos" and not 1 <= int(v) <= 9:
