@@ -1,199 +1,46 @@
 # HANDOFF
 
+## Painel do dono (celular)
+
+- A PWA continua em `/painel/` (`backend/painel_web/`), com a mesma senha e sessão. O celular atualiza sozinho a cada 30 s.
+- **Hoje:** faturamento, vendas, ticket médio (já vinham das vendas fechadas) e, agora, gráfico dos últimos 30 dias
+  (vendas já guardadas) e dos últimos 12 meses. O gráfico mensal completo sai do retrato do caixa, porque a nuvem
+  apaga a venda depois de cerca de 120 dias. PDV antigo: o gráfico usa só o que a nuvem ainda tem e avisa.
+- **Produtos:** ranking por quantidade e faturamento em hoje / 7 dias / 30 dias (`GET /v1/painel/produtos`).
+  Estoque baixo usa o `estoque_minimo` de cada produto (já subia no retrato); o alerta também aparece em Hoje.
+- **Abertas:** comandas abertas (número, quanto deve, hora) e a marca de comissão lançada — a mesma regra do
+  porteiro e do cartão rosa (`comissoes_garotas` pendente no número da comanda). Comissão por garota no período
+  (pendente e paga). Mesa fica de fora.
+- **Caixa:** além do turno aberto, fechamento (contado, esperado, sobra/falta) e sangrias de cada dia.
+- Isso que não era venda fechada entra no retrato (`src/sync/painel_envio.py`). **O PC do caixa precisa ser
+  atualizado** para comandas, comissões, fechamento, sangrias e os 12 meses. Vendas, ticket e estoque baixo
+  seguem com o PDV que já sincroniza. Guia: `docs/PAINEL_DONO.md`.
+
 ## Cobrança da licença (Mercado Pago)
 
-- O Asaas saiu: sem `backend/cobrancas.py`, `worker_asaas.py`, `operacao_asaas.py`,
-  `/v1/webhooks/asaas` nem variáveis `ASAAS_*`.
-- A mensalidade recorrente (`cobranca assinatura` ou `POST /v1/admin/cobrancas/assinatura`)
-  guarda valor, dia do mês, e-mail, WhatsApp e os dados do boleto. A varredura no
-  processo gera boleto (`bolbradesco`, ou `MP_BOLETO_METODO`) e Pix 5 dias antes
-  do vencimento (e até 20 dias depois, se o Render estava dormindo).
-- `POST /v1/admin/cobrancas/teste-email` (só `PDV_API_TOKEN`) manda o mesmo aviso
-  da cobrança para o `destino` informado, nunca para o e-mail da loja. Sem
-  cobrança ainda, o texto é marcado TESTE e não cria pagamento.
-- Cada cobrança sai por e-mail. Com `BREVO_API_KEY` e `EMAIL_FROM` (nome opcional
-  em `EMAIL_FROM_NAME`) a API da Brevo manda por HTTPS — é o caminho do Render
-  grátis, que bloqueia SMTP. Sem a chave, cai no SMTP (`SMTP_*`). WhatsApp:
-  `WHATSAPP_API_URL` + `WHATSAPP_API_TOKEN`, POST `{"to","text"}`. Sem o bot, o
-  comando e o painel mostram um link `wa.me`.
-- Pix (copia e cola e página do QR) e link do Checkout Pro para cartão continuam.
-- O webhook `POST /v1/webhooks/mercadopago` valida `x-signature` (`MP_WEBHOOK_SECRET`),
-  relê o pagamento na API e, se estiver `approved` com o valor da cobrança, estende a
-  licença um mês de calendário a partir do vencimento (a mesma regra de antes).
-  Estorno tira só aquela contribuição. A data que já estava na loja fica em
-  `validade_anterior` e não é apagada.
-- Não há worker separado. A varredura roda no processo da API (a cada 6 h, e ~20 s
-  depois que o processo sobe). No Render grátis o serviço dorme; o Mercado Pago
-  reenvia o webhook e a varredura completa o resto quando ele acorda.
-- Segredos só no ambiente: `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `BREVO_API_KEY`,
-  `EMAIL_FROM` e, se houver bot, `WHATSAPP_API_*`. SMTP é reserva. Guia:
-  `docs/COBRANCA_LICENCAS_MERCADOPAGO.md`.
-- Migração aditiva (`garantir_esquema`): cria as tabelas do Mercado Pago e, se a tabela
-  já existia, acrescenta as colunas da assinatura e do boleto. Não mexe em `lojas.licenca_ate`.
+- Sem Asaas. Mensalidade por loja (valor, dia, e-mail, WhatsApp, dados do boleto). A varredura no processo gera
+  boleto e Pix 5 dias antes do vencimento (até 20 dias depois, se o Render dormiu).
+- E-mail: Brevo (`BREVO_API_KEY` + `EMAIL_FROM`) no Render grátis; SMTP só se não houver chave. WhatsApp:
+  `WHATSAPP_API_*` ou link `wa.me`.
+- `POST /v1/admin/cobrancas/teste-email` manda o aviso só para o `destino`, nunca para o e-mail da loja.
+- Webhook `POST /v1/webhooks/mercadopago` (`MP_WEBHOOK_SECRET`), relê o pagamento e, se `approved` no valor,
+  estende a licença um mês a partir do vencimento. Guia: `docs/COBRANCA_LICENCAS_MERCADOPAGO.md`.
 
-## Porteiro no celular
+## Porteiro
 
-- Página no caixa, `http://<ip>:<porta>/porteiro` (padrão 8765), PIN, só leitura: LIBERADA ou DEVENDO.
-  A tela principal lista as comandas abertas (número, quanto deve, hora) e atualiza sozinha;
-  **Consultar número** continua. Comanda de garota (comissão pendente em `comissoes_garotas`)
-  fica de fora da lista, no Wi-Fi e no 4G. No caixa PySide6: **☰ Operações → Porteiro no celular**.
-  Sem Wi-Fi na porta, o mesmo PIN na nuvem (`/porteiro/?loja=CHAVE`);
-  o caixa manda as abertas com a marca `garota` (`src/porteiro/nuvem_envio.py`, `backend/porteiro.py`).
-  A página tenta o caixa e, se ele não responde, a nuvem, e mostra a idade ("atualizado há 30s").
-  Render grátis dorme: a primeira abertura pelo 4G pode demorar. Guia: `docs/PORTEIRO.md`.
+- `/porteiro` no caixa e `/porteiro/?loja=CHAVE` na nuvem. Lista as comandas abertas e deixa de fora a da garota
+  (comissão pendente). Consultar número continua. Guia: `docs/PORTEIRO.md`.
 
 ## Estado
 
-- PDV **1.9.0**, esquema **30**. **A interface do PDV é só Qt (PySide6).** O Tk do PDV foi removido
-  (`src/ui/` apagado; o histórico está no git). `python -m src.app` abre o Qt; `--qt`/`--tk` não existem.
-- **Gerador de licenças (`licenciador/`) continua em Tkinter**, por decisão do dono. Ele guarda seus próprios
-  `tema.py`, `icone.py` e `paleta.py`. É a única parte do repositório que ainda precisa de tkinter
-  (o CI instala `python3-tk` e usa xvfb só por causa dele).
-- Peças que viviam em `src/ui/`: `Contexto` em `src/controllers/contexto.py`, leitura de valor do pagamento em
-  `src/core/valor_pagamento.py`, `entregar_via` em `comissao_controller.py`.
-- `--autoteste` confere módulos, bibliotecas (Qt/SQLite/SSL), telas Qt e backup criptografado;
-  `--autoteste-qt` é alias (o CI do build usa). Instalador sem atalho "Qt (prévia)"; janelas com o ícone do WillPDV.
-- Devoluções/trocas, fechamento explicativo, homologação isolada, backup verificável, diagnóstico de hardware e
-  Telegram agendado (23h): ver `docs/MELHORIAS_1_9.md`, `docs/DEVOLUCOES.md`, `docs/FECHAMENTO_EXPLICATIVO.md`.
-
-## Painel de cartões da boate (restaurado no Qt)
-
-- Ao remover o Tk, o caixa Qt perdeu os cartões coloridos de mesas/comandas (ficou só uma lista). Foram
-  portados de `src/ui/painel_mesas.py` (git: commit `7e26f04`): modelo em `src/controllers/mesas_modelo.py`
-  e painel em `src/ui_qt/painel_mesas.py` (cartões, faixa do balcão, pílulas de situação, selo da garota,
-  busca, abas, setas/Enter/T/dígitos). Painel escuro no modo escuro e claro no claro. A boate já é o perfil de
-  fábrica (`PerfilController.PADRAO`). Colunas por largura da janela (1/2/3).
-- **Visual noturno da boate:** o caixa Qt era meio claro/meio escuro (rótulos quase invisíveis). Agora usa
-  `ESTILO_NOITE` (azul-marinho, destaques neon) no modo escuro e o estilo claro no modo claro
-  (`JanelaCaixa._aplicar_estilo`). O menu principal ganhou a faixa "noite ao vivo" (posições abertas, aguardando
-  acerto, em aberto na casa, comissões a pagar) para casas com mesas (`JanelaPrincipal._atualizar_noite`).
-- **Claro/escuro escolhido pelo cliente:** botão "Mudar para o modo claro/escuro" no topo do menu
-  (`JanelaPrincipal.alternar_tema`); grava `tema_visual`, aplica no programa todo e refaz o caixa aberto na hora.
-  A mesma opção continua em Configurações > Aparência.
-- **Esc/F4 no caixa (como no Tk):** Esc desfaz o que está digitado (comissão, código, quantidade); sem nada
-  pendente volta ao "marcar comanda" (cartões recarregados e campo da posição selecionado); no campo da posição
-  volta ao balcão e a mesa continua aberta; nos cartões volta ao campo da posição (`JanelaCaixa.esc_caixa`).
-- **Fechamento de caixa no modelo clássico (Qt):** "Trocar turno" volta a seguir o fluxo do Tk: conferir a
-  maquininha (forma/qtd/valor, sem o dinheiro esperado) -> valor da gaveta -> confirmação com os avisos (mesas
-  abertas, comissão a pagar) -> conferência por forma -> fecha, backup, impressão das vias -> resumo
-  `PainelFechamento` (SOBRA/FALTA/CAIXA CONFERIDO, Imprimir, Gera Arquivo Texto, Conferência do turno). A página
-  de fechamento do Qt foi removida (`PAGINA_FECHAMENTO` não existe mais).
-- **Trocar de comanda pelas setas:** com o código vazio, ← → (ou ◀ ▶, PgUp/PgDn) vão à comanda anterior/seguinte
-  da lista dos cartões (respeita aba e busca); Esc volta a "marcar comanda". `JanelaCaixa.navegar_comanda`.
-- **Enter fecha a conta (como no Tk):** com o código vazio, Enter vai ao pagamento (`JanelaCaixa.ir_para_pagamento`):
-  forma (setas, número 1-9 ou inicial; Enter confirma) -> valor (já sugerido) -> Enter lança -> Enter fecha. Conta
-  já paga: Enter fecha direto. Pagamento parcial volta à lista de formas. Esc volta um passo (valor -> forma -> itens).
-- **Fechar o turno sem digitar forma por forma:** `ir_para_fechamento` não usa mais `ui_qt/fechamento.coletar`
-  (continua no código, sem uso no caixa). Fluxo: tela "Conferir maquininha" (totais de débito/crédito/Pix e cada
-  lançamento, `TurnoController.maquininha_lancamentos`; botão "Confere com a maquininha") -> só o valor da gaveta ->
-  confirmação -> se a gaveta tiver diferença, pede o motivo -> fecha. Cartão/Pix entram como informados = lançados
-  (o operador confirmou na tela da maquininha); com cheque/ticket físico no turno só a gaveta é declarada. O resumo
-  final ganhou o quadro "Conferir na maquininha" (qtd e valor por forma e total).
-- **Modo claro mais confortável:** fundo cinza-azulado (#e8ecf1), cartões off-white (#f5f7fa), texto grafite
-  (#1e2a3c), bordas suaves e cartões das mesas em tons pastel mais calmos (`tema.py`, `caixa.py`, `painel_mesas.py`).
-- **Comanda sem nada lançado fecha (casas com garotas):** qualquer comanda (não mesa) vazia pode ser fechada: o botão
-  Fechar venda fica habilitado, e F12/Enter/Receber não travam mais no aviso "Lance ao menos um item". Qualquer número vale
-  como garota (o cadastro é opcional). Com shows ligados e garota cadastrada ativa abre o acerto dos shows (como sempre)
-  e, desistindo, pergunta se é para só fechar; senão pede confirmação (sem cadastro a pergunta lembra o código 1002 para
-  cliente sem consumo). Mesa vazia e casa sem o módulo das garotas continuam pedindo item
-  (`JanelaCaixa._fechar_comanda_da_garota_vazia`). **Correção (o que ainda travava no balcão):** com shows ligados (padrão)
-  e garota cadastrada, a janela do acerto (`DialogoAcerto`) recusava Pagar sem shows ("informe os shows"). Agora, como no
-  Tk, o primeiro Pagar avisa e o segundo fecha a conta dela sem valor (`zerado` -> `comissoes.pagar(permitir_zerado=True)`,
-  recibo de acerto R$ 0,00). E todo acerto feito pelo F12 numa comanda sem consumo (zerado, só shows ou só comissão) fecha a
-  comanda junto (`_acertar_e_fechar_comanda` / `_tirar_comanda_vazia`); antes ela ficava aberta e vazia nos cartões.
-  Testes em `tests/test_qt_comanda_garota_vazia.py` usam a janela real do acerto (os antigos a trocavam por um valor pronto).
-- **Acerto da garota (Qt), repaginado:** a janela do acerto (F12 na comanda dela) tem o campo **Nome dela** (vem do cadastro,
-  pode digitar ou trocar). O nome vai só para o acerto (`acertos_garotas.nome`, esquema 30), o recibo, a sangria e os shows do
-  fechamento; o cadastro não muda (o número da comanda pode ser de outra garota em outra noite). Shows continuam no mesmo
-  lugar (o cursor começa neles). O recibo e o comprovante de saída voltaram a sair com o estilo `recibo_garota`/`saida_garota`
-  (linhas da garota, título, data, totais e "Conta fechada" em dobro de altura); o Qt mandava como `comprovante` comum.
-- **Enter/F12 na comanda vazia da garota abre SEMPRE o acerto:** antes só abria com garota cadastrada, ativa e shows ligados;
-  sem cadastro (o comum: o número basta) só perguntava se fechava, sem tela para os shows. Agora `_fechar_comanda_da_garota_vazia`
-  chama o acerto direto (shows, nome, vale, Pix ou conta zerada) e, no Esc, pergunta se é só fechar. `pagar_garota` não recusa
-  mais garota sem comissão; o botão "Pagar garota" aparece em toda comanda vazia (casa com garotas) e também fecha a comanda.
-  Nos testes, `BaseCaixaQt.janela` troca a janela modal do acerto por um "desistiu" que anota em `j.acertos_abertos`.
-- **Comissão em número sem cadastro lança direto:** tirada a pergunta "A garota N não está cadastrada. Lançar assim mesmo?"
-  (`comissao.conferir_lancamento`) e o aviso vermelho "não cadastrada"; a linha mostra "COMISSÃO - garota N". Continuam as
-  perguntas de garota inativa e de valor alto.
-- **Coluna do meio do caixa repaginada (o layout de 3 colunas não mudou):** etiqueta do tipo da venda (`lbl_etq_venda`:
-  BALCÃO/COMANDA/MESA/CADERNETA/ENTREGA e GAROTA em rosa, cores em `ETIQUETAS`); título sem o número repetido
-  ("Comanda 130 · Aberta"); campo do código maior; quantidade com − e + (`_mudar_qtd`, nunca abaixo de 1); o produto achado
-  aparece antes do Enter que lança (`lbl_achado`: nome, estoque se controla, qtd × preço = total); tabela `#itens` com Produto
-  esticado, sem rolagem lateral, linhas de 34 px e zebra; o item recém-lançado fica verde/negrito (`_ultimo_item_id`, até o
-  próximo); comissão em rosa (`LINHAS_COMISSAO`); lista vazia com orientação (`lbl_vazio` no viewport); atalhos como teclas
-  (`lbl_dica_nav` agora é a fileira de `QLabel#tecla`, `TECLAS_DICA`); botões com ícone e cor (`#cancelar`, `#rosa`,
-  `#neutro`); "Operações do caixa" em linha própria. Testes em `tests/test_qt_caixa_visual.py`.
-  **Largura:** o monitor do balcão tem 1366 pontos. A primeira versão exigia 1771 (fileira de atalhos longa + 5 botões numa
-  linha) e a janela esticava para fora da tela; o painel dos cartões ainda passava a 3 colunas e piorava. Agora: 4 atalhos curtos,
-  botões com padding menor; 1ª linha só os cancelar, 2ª linha Pagar garota + Comissões + "☰ Operações"; títulos dos campos
-  não definem a largura mínima; código na lista sem os zeros do cadastro ("101", o
-  cadastro guarda 13 dígitos); colunas Preço/Total estreitas. Mínimo ~1225 COM o estilo do programa (no Linux do CI as fontes somam ~50) (`tema.aplicar`, que
-  aumenta botões e letras: medir sem ele engana). `TesteCaixaCabeNoMonitor` aplica o tema e exige ≤ 1340 nos dois modos,
-  na comanda da garota com comissão (o caso com mais botões).
-- **Relógio no caixa:** com a tela cheia a barra do Windows some; o topo do caixa ganhou `RelogioCaixa` (`ui_qt/relogio.py`):
-  hora:minuto grande, segundos ao lado, "SEG · 26/10/2026" embaixo, QTimer de 1 s, só QLabels (sem desenho próprio). Cores
-  pelos estilos `relogio_*` do caixa (claro e noite).
-- **Comanda com comissão fica rosa:** `cores_do_cartao` (painel_mesas.py) pinta de rosa o cartão da comanda com comissão a
-  pagar (com ou sem consumo); a pílula continua com a situação. O "Parada" ficou avermelhado para não confundir com o rosa.
-- **Código + Enter leva à quantidade (como no Tk):** Enter no código escolhe o produto, mostra nome e preço e leva ao
-  campo da quantidade (selecionada); o segundo Enter (ou o botão Lançar) lança. Direto, sem pausa: "6*código", modo
-  leitor (F3) e produto de balança (pesa). `JanelaCaixa.lancar_item(pedir_quantidade=True)`. Esc desiste do produto.
-- **Forma de pagamento recomeça em Dinheiro** a cada venda: ao fechar a venda e ao trocar de comanda
-  (`JanelaCaixa._forma_padrao`); dentro da mesma venda a escolha fica.
-- **Caixa mais legível e em tela cheia:** valor recebido (16pt) e troco (22pt) maiores, forma de pagamento em letra
-  maior, painel direito com 360px. O caixa abre em tela cheia (config `caixa_tela_cheia`, padrão "S", em Configurações >
-  Aparência); Ctrl+F alterna, botões "Tela cheia" e "Fechar caixa" no cabeçalho (`JanelaCaixa.aplicar_tela_cheia`, chamado
-  por `abrir_caixa` em `app.py`). Modo claro com contornos mais definidos (quadros, botões, campos e cartões das mesas).
-- **Pendente:** seletor de forma em botões grandes (1 Dinheiro, 2 Débito...). Foi feito e retirado: qualquer versão de um
-  `QWidget` próprio no lugar do `QComboBox` do caixa fazia o job Linux/Python 3.10 abortar no encerramento do processo
-  (`munmap_chunk(): invalid pointer`, na coleta de lixo, depois de todos os testes passarem; Python 3.12 e Windows passavam).
-  Retomar depurando num Python 3.10 com Tk+Qt (ver PR #24, commits `f848ae0` a `8315eec`).
-- Não portado ainda: a opção `painel_mesas_fixo` (o Qt sempre mostra o painel).
-
-## Edição E&A Superações (PDV só de adega)
-
-- O mesmo código gera duas edições (`src/core/edicao.py`): **WillPDV** (completo, igual a antes) e **E&A Superações**
-  (adega). A palavra "edição" foi escolhida porque "produto" no código é item à venda.
-- Qual roda: variável `PDV_EDICAO`; no executável, `edicao.txt` ao lado do .exe (fase 3 grava no build); senão WillPDV.
-  Do código-fonte: `python -m src.app --edicao ea_superacoes` ou `iniciar_ea_superacoes.bat`.
-- A adega: marca, logotipo e ícone próprios (`instalador/ea-superacoes-logo.png` e `.ico`, com a grafia corrigida para
-  SUPERAÇÕES), pasta de dados `%LOCALAPPDATA%\EA-SUPERACOES` no executável, perfil Adega aplicado na primeira entrada
-  (`edicao.preparar`, chamado em `App.iniciar`; marca `edicao` no config), mesas/garotas/portaria/rodízio/pré-pago sempre
-  desligados (voltam a N a cada entrada e `salvar_config` recusa ligar), opções de mesas/garotas/comissão/portaria fora das
-  Configurações, sem o botão Cozinha/Bar no menu e sem o botão Comissões no caixa (este some em qualquer casa sem garotas).
-- **Fase 3 (feita):** `python build_pdv.py --edicao ea_superacoes` gera `dist/EASuperacoes/EASuperacoes.exe` (com `edicao.txt`,
-  ícone e logotipo no pacote) e `instalador/saida/EASuperacoes-Setup-<versão>.exe` (`instalador/EASuperacoes.iss`, `AppId`
-  próprio, instala ao lado do WillPDV, imagens `ea-superacoes-assistente*.bmp`). O CI (`build-windows.yml`) tem o job `adega`
-  (autoteste no .exe e no instalado, instalação silenciosa, atualização por cima com o programa aberto) e publica na Release
-  `ultima-versao-adega`. O autoteste agora mostra a edição e confere se a marca dela veio no pacote.
-- **Licença por edição:** o código assinado leva o campo `edicao` (só nas licenças da adega; as do WillPDV continuam
-  idênticas). `licenca.ativar`/`estado` recusam licença de outra edição. Emissão: WillPDV Licenças (escolha do programa na aba
-  Emitir; coluna Programa nas lojas; conferência mostra o programa) e `python -m tools.gerar_licenca emitir --edicao ea_superacoes`.
-  Limites: versões antigas do WillPDV não conhecem o campo e aceitariam uma licença da adega; a **central do Telegram**
-  (`licenciador/central.py`) ainda emite só licença do WillPDV, então um caixa E&A com a ponte ligada recusaria a renovação
-  automática (emitir pelo WillPDV Licenças até a central saber a edição de cada caixa).
-- Conferir no Windows real: o "&" do nome no assistente do Inno (pode aparecer sublinhado) e o ícone no .exe.
-- Cupom continua NÃO FISCAL (confirmado pelo dono); NFC-e não está ativa.
-
-## Testes
-
-- Os testes de telas Tk foram removidos por script (classes/métodos que citavam tkinter, `src.ui`, `ui_robo`).
-  Regras que só eram testadas em tela Tk foram repostas em `tests/test_regras_recuperadas.py` (vias do
-  fechamento 1-3, nome da casa obrigatório, alerta de gaveta no Qt).
-- **Ainda sem teste equivalente confirmado** (ver `git show 4e6e6d2 -- tests/`): falha de impressão não duplicar
-  devolução; ticket de saída 1002 disparado no pagamento; comissão com garota inativa/sem turno; primeiro
-  acesso/perfil; exclusão em massa só com a palavra de confirmação; aviso de giro de caixa sem venda.
-- CI verde no PR #16 (Linux e Windows, Python 3.10 e 3.12).
+- PDV **1.9.0**, esquema **30**. Interface do PDV só Qt (PySide6). O gerador de licenças continua em Tkinter.
+- Dinheiro em centavos. Duas edições: WillPDV e E&A Superações (`src/core/edicao.py`). Cupom não fiscal.
+- O histórico fino de tela (caixa, fechamento, comanda da garota) está no git; não repetir aqui.
 
 ## Pendências para produção
 
-- **Homologar o Qt no balcão** (teclado, impressora, falta de papel, gaveta, balança, leitor) antes do novo
-  Setup: não existe mais interface de reserva.
-- **Gerar o Setup/ZIP 1.9** e validar numa cópia do banco. Outra pasta de instalação não isola
-  `%LOCALAPPDATA%\WILL-PDV`: use `PDV_DB` apontando à cópia, uma instância por banco.
-- Devolução não atende pré-pago nem rodízio; externo é declaração, não estorno bancário; sem crédito de troca.
-- Bruto, CMV e comissões históricos não são estornados por devolução (relatórios deixam isso explícito).
-- Impressão física não tem garantia exactly-once; estado `incerto` exige conferência humana.
-- Bot Telegram precisa estar ativo, com token e dono pareado. Central/licenças pedem ensaio real; preservar a
-  ponte Render/Neon. Cobrança Mercado Pago, iFood e NFC-e SP não estão ativas até o dono colar
-  `MP_ACCESS_TOKEN` e `MP_WEBHOOK_SECRET` e cadastrar o webhook. Substituir credenciais expostas antes.
+- Homologar o Qt no balcão antes do Setup novo. Atualizar o PDV da loja para o painel passar a mostrar comandas,
+  comissões, fechamento, sangrias e os 12 meses.
+- Cobrança Mercado Pago só funciona com `MP_ACCESS_TOKEN` e `MP_WEBHOOK_SECRET` no Render, e o e-mail com
+  `BREVO_API_KEY` e `EMAIL_FROM`.
+- Devolução não atende pré-pago nem rodízio. Bruto, CMV e comissões históricos não são estornados por devolução.

@@ -7,6 +7,8 @@ Duas credenciais, de propósito separadas:
 
 Os dados ficam por loja (chave_loja) e nenhuma consulta cruza lojas. A nuvem guarda a venda como o PDV mandou (itens e
 pagamentos em JSON) e calcula os totais na hora da consulta; para o movimento de uma loja num dia isso é barato.
+Comandas abertas, comissões, fechamentos, sangrias e o faturamento dos últimos 12 meses vêm do retrato do caixa
+(a venda em si continua só fechada ou cancelada).
 
 Uma loja pode ter mais de um caixa (cada um com o seu banco local): as vendas se somam pelo uuid e cada caixa guarda o seu
 retrato (turno, estoque, caderneta, entregas), identificado por `terminal_id`. PDV de versão anterior, que não manda o
@@ -477,6 +479,204 @@ def resumo_do_dia(vendas: list[dict]) -> dict:
     }
 
 
+def _txt(valor, limite: int) -> str:
+    return str(valor or "")[:limite]
+
+
+def _data_segura(texto, padrao: date | None = None) -> date:
+    try:
+        return date.fromisoformat(str(texto)[:10])
+    except (TypeError, ValueError):
+        return padrao or _hoje()
+
+
+def _chaves_meses(ultimo: date, n: int = 12) -> list[str]:
+    ano, mes = ultimo.year, ultimo.month
+    for _ in range(n - 1):
+        mes -= 1
+        if mes == 0:
+            mes, ano = 12, ano - 1
+    chaves = []
+    for _ in range(n):
+        chaves.append(f"{ano:04d}-{mes:02d}")
+        mes += 1
+        if mes == 13:
+            mes, ano = 1, ano + 1
+    return chaves
+
+
+def _grade_meses(ultimo: date, somas: dict[str, dict]) -> list[dict]:
+    return [{"mes": m, "faturamento_cent": int(somas.get(m, {}).get("faturamento_cent", 0)),
+             "quantidade": int(somas.get(m, {}).get("quantidade", 0))} for m in _chaves_meses(ultimo)]
+
+
+def _comandas_publicas(dados: dict) -> list[dict] | None:
+    bruto = dados.get("comandas")
+    if not isinstance(bruto, list):
+        return None
+    saida = []
+    for item in bruto[:80]:
+        if not isinstance(item, dict):
+            continue
+        saida.append({
+            "numero": _int(item.get("numero")), "rotulo": _txt(item.get("rotulo"), 40),
+            "devido_cent": _int(item.get("devido_cent")), "total_cent": _int(item.get("total_cent")),
+            "pago_cent": _int(item.get("pago_cent")), "aberta_em": _txt(item.get("aberta_em"), 19),
+            "aberta_txt": _txt(item.get("aberta_txt"), 20), "garota": bool(item.get("garota")),
+            "situacao": _txt(item.get("situacao"), 20),
+        })
+    return saida
+
+
+def _comissoes_publicas(dados: dict) -> dict | None:
+    bloco = dados.get("comissoes")
+    if not isinstance(bloco, dict):
+        return None
+    linhas = []
+    for item in (bloco.get("linhas") or [])[:300]:
+        if not isinstance(item, dict) or item.get("status") not in ("pendente", "paga"):
+            continue
+        dia = _txt(item.get("dia"), 10)
+        if not DIA_RE.fullmatch(dia):
+            dia = ""
+        linhas.append({
+            "garota": _int(item.get("garota")), "nome": _txt(item.get("nome"), 60),
+            "valor_cent": _int(item.get("valor_cent")), "status": item["status"],
+            "criado_em": _txt(item.get("criado_em"), 19), "dia": dia,
+        })
+    return {"linhas": linhas, "pendente_total_cent": _int(bloco.get("pendente_total_cent"))}
+
+
+def _fechamentos_publicos(dados: dict) -> list[dict] | None:
+    bruto = dados.get("fechamentos")
+    if not isinstance(bruto, list):
+        return None
+    saida = []
+    for item in bruto[:40]:
+        if not isinstance(item, dict):
+            continue
+        dia = _txt(item.get("dia"), 10)
+        if not DIA_RE.fullmatch(dia):
+            continue
+        saida.append({
+            "turno_numero": _int(item.get("turno_numero")), "operador": _txt(item.get("operador"), 60),
+            "aberto_em": _txt(item.get("aberto_em"), 19), "fechado_em": _txt(item.get("fechado_em"), 19), "dia": dia,
+            "valor_inicial_cent": _int(item.get("valor_inicial_cent")),
+            "valor_final_cent": _int(item.get("valor_final_cent")),
+            "esperado_cent": _int(item.get("esperado_cent")), "resultado_cent": _int(item.get("resultado_cent")),
+            "sangrias_cent": _int(item.get("sangrias_cent")), "suprimentos_cent": _int(item.get("suprimentos_cent")),
+        })
+    return saida
+
+
+def _sangrias_publicas(dados: dict) -> list[dict] | None:
+    bruto = dados.get("sangrias")
+    if not isinstance(bruto, list):
+        return None
+    saida = []
+    for item in bruto[:200]:
+        if not isinstance(item, dict):
+            continue
+        dia = _txt(item.get("dia"), 10)
+        if not DIA_RE.fullmatch(dia):
+            continue
+        saida.append({
+            "valor_cent": _int(item.get("valor_cent")), "descricao": _txt(item.get("descricao"), 80),
+            "criado_em": _txt(item.get("criado_em"), 19), "dia": dia,
+            "operador": _txt(item.get("operador"), 60), "turno_numero": _int(item.get("turno_numero")),
+        })
+    return saida
+
+
+def _meses_publicos(dados: dict) -> list[dict] | None:
+    bruto = dados.get("faturamento_meses")
+    if not isinstance(bruto, list):
+        return None
+    saida = []
+    for item in bruto[:24]:
+        if not isinstance(item, dict):
+            continue
+        mes = str(item.get("mes") or "")
+        if not re.fullmatch(r"\d{4}-\d{2}", mes):
+            continue
+        saida.append({"mes": mes, "faturamento_cent": _int(item.get("faturamento_cent")),
+                      "quantidade": _int(item.get("quantidade"))})
+    return saida
+
+
+def _com_origem(itens: list[dict], origem: str) -> list[dict]:
+    if not origem:
+        return itens
+    for item in itens:
+        item["caixa"] = origem
+    return itens
+
+
+def _gestao_dos_retratos(pares: list[tuple], ultimo: date) -> dict:
+    """Junta o que cada caixa mandou no retrato. Lista ausente (PDV antigo) não é o mesmo que lista vazia."""
+    varios = len(pares) > 1
+    comandas, linhas, fechamentos, sangrias = [], [], [], []
+    pendente = 0
+    com_comandas = com_movimento = com_meses = 0
+    somas: dict[str, dict] = defaultdict(lambda: {"faturamento_cent": 0, "quantidade": 0})
+    for linha, dados in pares:
+        origem = _rotulo_do_caixa(linha, dados) if varios else ""
+        lista = _comandas_publicas(dados)
+        if lista is not None:
+            com_comandas += 1
+            comandas.extend(_com_origem(lista, origem))
+        bloco = _comissoes_publicas(dados)
+        if bloco is not None:
+            pendente += bloco["pendente_total_cent"]
+            linhas.extend(_com_origem(bloco["linhas"], origem))
+        fechados = _fechamentos_publicos(dados)
+        if fechados is not None:
+            com_movimento += 1
+            fechamentos.extend(_com_origem(fechados, origem))
+        saidas = _sangrias_publicas(dados)
+        if saidas is not None:
+            sangrias.extend(_com_origem(saidas, origem))
+        meses = _meses_publicos(dados)
+        if meses is not None:
+            com_meses += 1
+            for m in meses:
+                somas[m["mes"]]["faturamento_cent"] += m["faturamento_cent"]
+                somas[m["mes"]]["quantidade"] += m["quantidade"]
+    n = len(pares)
+    return {
+        "comandas": comandas,
+        "comandas_sincronizadas": com_comandas > 0,
+        "comandas_parciais": bool(n) and com_comandas != n,
+        "comissoes": {"linhas": linhas, "pendente_total_cent": pendente},
+        "fechamentos": fechamentos, "sangrias": sangrias,
+        "movimento_sincronizado": com_movimento > 0,
+        "movimento_parcial": bool(n) and com_movimento != n,
+        "faturamento_meses": _grade_meses(ultimo, somas) if com_meses else None,
+        "meses_origem": "caixa" if com_meses else "nuvem",
+        "meses_parcial": not (com_meses and com_meses == n and n > 0),
+    }
+
+
+def _meses_das_vendas(db: Session, chave_loja: str, ultimo: date) -> list[dict]:
+    """Os meses que ainda estão nas vendas guardadas. O que a retenção já apagou fica zerado."""
+    chaves = _chaves_meses(ultimo)
+    primeiro = chaves[0] + "-01"
+    linhas = (db.query(PainelVenda.dia, PainelVenda.total_cent)
+              .filter(PainelVenda.chave_loja == chave_loja, PainelVenda.status == "fechada",
+                      PainelVenda.dia >= primeiro, PainelVenda.dia <= ultimo.isoformat()).all())
+    somas: dict[str, dict] = defaultdict(lambda: {"faturamento_cent": 0, "quantidade": 0})
+    for dia, total in linhas:
+        mes = str(dia)[:7]
+        somas[mes]["faturamento_cent"] += _int(total)
+        somas[mes]["quantidade"] += 1
+    return _grade_meses(ultimo, somas)
+
+
+def ranking_produtos(vendas: list[dict], limite: int = 15) -> list[dict]:
+    """Os mais vendidos de um conjunto de vendas fechadas: quantidade e faturamento, o valor decide a ordem."""
+    return resumo_do_dia(vendas)["produtos"][:limite]
+
+
 # ---------------------------------------------------------------- limpeza
 def limpar_antigos(db: Session) -> dict[str, int]:
     """Apaga o que o painel não mostra mais e devolve quantas linhas saíram de cada coisa. O arquivo da loja é o PDV: a nuvem
@@ -626,13 +826,48 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         dias = _dias_recentes(db, loja.chave_loja)
         dia = _dia_valido(dia) or retrato.get("dia_operacional") or (dias[0] if dias else date.today().isoformat())
         r = resumo_do_dia(_vendas_do_dia(db, loja.chave_loja, dia))
+        dia_op = _data_segura(retrato.get("dia_operacional"), _hoje())
+        gestao = _gestao_dos_retratos(pares, dia_op)
+        if gestao["faturamento_meses"] is None:
+            gestao["faturamento_meses"] = _meses_das_vendas(db, loja.chave_loja, dia_op)
         r.update({
             "loja": {"chave": loja.chave_loja, "nome": retrato.get("loja_nome") or loja.nome},
-            "dia": dia, "atualizado_em": momento, "atraso_min": _atraso_min(momento, recebido_em),
+            "dia": dia, "dia_operacional": dia_op.isoformat(),
+            "atualizado_em": momento, "atraso_min": _atraso_min(momento, recebido_em),
             **_totais_dos_caixas(caixas), "caixas": caixas,
             "dias": dias if dia in dias else [dia] + dias,
+            **gestao,
         })
         return r
+
+    @router.get("/v1/painel/produtos")
+    def produtos(periodo: str = Query("hoje"), sessao: PainelSessao = Depends(sessao_do_dono),
+                 db: Session = Depends(get_db)):
+        """Ranking dos mais vendidos. `hoje`, `7d` e `30d` contam a partir do dia operacional da loja."""
+        janela = {"hoje": 1, "7d": 7, "30d": 30}.get(periodo)
+        if janela is None:
+            raise HTTPException(status_code=422, detail="Período inválido. Use hoje, 7d ou 30d.")
+        retrato, _, _ = _retrato(db, sessao.chave_loja)
+        ate = _data_segura(retrato.get("dia_operacional"), _hoje())
+        de = (ate - timedelta(days=janela - 1)).isoformat()
+        linhas = (db.query(PainelVenda).filter(
+            PainelVenda.chave_loja == sessao.chave_loja, PainelVenda.status == "fechada",
+            PainelVenda.dia >= de, PainelVenda.dia <= ate.isoformat()).all())
+        vendas = []
+        for l in linhas:
+            try:
+                v = json.loads(l.dados)
+            except ValueError:
+                v = {}
+            if not isinstance(v, dict):
+                v = {}
+            v["status"] = "fechada"
+            v["total_cent"] = l.total_cent
+            v["itens"] = [i for i in (v.get("itens") or []) if isinstance(i, dict)]
+            v["pagamentos"] = []
+            vendas.append(v)
+        return {"periodo": periodo, "de": de, "ate": ate.isoformat(),
+                "produtos": ranking_produtos(vendas)}
 
     @router.get("/v1/painel/vendas")
     def vendas(dia: Optional[str] = Query(None, max_length=10), pagina: int = Query(1, ge=1),

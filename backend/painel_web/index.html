@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>WillPDV Painel</title>
-  <meta name="description" content="Painel do dono: vendas, caixa, produtos e estoque da sua loja.">
+  <meta name="description" content="Painel do dono: vendas, caixa, comandas, comissões, produtos e estoque da sua loja.">
   <meta name="theme-color" content="#14532d">
   <meta name="color-scheme" content="light dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -98,6 +98,13 @@
           <span>Descontos: <strong id="v-desconto">R$ 0,00</strong></span>
         </p>
 
+        <section class="bloco" id="bloco-alerta-estoque">
+          <h2>Estoque baixo</h2>
+          <p id="alerta-estoque-resumo" class="legenda"></p>
+          <ul id="lista-alerta-estoque" class="lista"></ul>
+          <p id="vazio-alerta-estoque" class="vazio" hidden>Nenhum produto no mínimo ou abaixo.</p>
+        </section>
+
         <section class="bloco">
           <h2>Vendas por hora</h2>
           <div id="grafico-horas" class="grafico-barras" role="img" aria-label="Vendas por hora"></div>
@@ -117,9 +124,18 @@
         </section>
 
         <section class="bloco">
-          <h2>Últimos 14 dias</h2>
-          <div id="grafico-historico" class="grafico-barras grafico-historico" role="img" aria-label="Faturamento dos últimos 14 dias"></div>
+          <h2>Últimos 30 dias</h2>
+          <div id="grafico-dias" class="grafico-svg-caixa" role="img" aria-label="Faturamento dos últimos 30 dias"></div>
+          <p id="detalhe-dias" class="detalhe-grafico"></p>
           <p id="vazio-historico" class="vazio" hidden>Sem histórico ainda.</p>
+        </section>
+
+        <section class="bloco">
+          <h2>Últimos 12 meses</h2>
+          <p id="nota-meses" class="legenda" hidden></p>
+          <div id="grafico-meses" class="grafico-svg-caixa" role="img" aria-label="Faturamento dos últimos 12 meses"></div>
+          <p id="detalhe-meses" class="detalhe-grafico"></p>
+          <p id="vazio-meses" class="vazio" hidden>Sem faturamento mensal ainda.</p>
         </section>
       </section>
 
@@ -155,12 +171,75 @@
             <strong id="entregas-pendentes" class="valor-grande">0</strong>
           </article>
         </section>
+
+        <section class="bloco">
+          <h2>Fechamento e sangrias</h2>
+          <p id="nota-movimento" class="legenda" hidden></p>
+          <div class="linha-dia">
+            <label for="seletor-movimento">Dia</label>
+            <select id="seletor-movimento" aria-label="Dia do fechamento"></select>
+          </div>
+          <div id="lista-fechamentos"></div>
+          <p id="vazio-fechamentos" class="vazio" hidden>Nenhum fechamento neste dia.</p>
+          <h3>Sangrias</h3>
+          <ul id="lista-sangrias" class="lista"></ul>
+          <p id="vazio-sangrias" class="vazio" hidden>Nenhuma sangria neste dia.</p>
+          <p class="linha-detalhes">Total do dia: <strong id="sangrias-total">R$ 0,00</strong></p>
+        </section>
+      </section>
+
+      <!-- Aba Comandas abertas e comissões -->
+      <section id="aba-abertas" class="aba" role="tabpanel" aria-labelledby="tab-abertas" hidden>
+        <section class="bloco">
+          <h2>Comandas abertas</h2>
+          <p id="nota-comandas" class="legenda" hidden></p>
+          <div class="grade-cartoes">
+            <article class="cartao destaque">
+              <span class="rotulo">Em aberto</span>
+              <strong id="comandas-qtd" class="valor-grande">0</strong>
+            </article>
+            <article class="cartao">
+              <span class="rotulo">A receber</span>
+              <strong id="comandas-devido" class="valor-grande">R$ 0,00</strong>
+            </article>
+            <article class="cartao">
+              <span class="rotulo">Comissão lançada</span>
+              <strong id="comandas-garotas" class="valor-grande">0</strong>
+            </article>
+          </div>
+          <ul id="lista-comandas" class="lista"></ul>
+          <p id="vazio-comandas" class="vazio" hidden>Nenhuma comanda aberta.</p>
+        </section>
+
+        <section class="bloco">
+          <h2>Comissões das garotas</h2>
+          <div class="filtros" role="group" aria-label="Período das comissões">
+            <button type="button" class="filtro ativa" data-grupo="comissoes" data-periodo="hoje">Hoje</button>
+            <button type="button" class="filtro" data-grupo="comissoes" data-periodo="7d">7 dias</button>
+            <button type="button" class="filtro" data-grupo="comissoes" data-periodo="30d">30 dias</button>
+          </div>
+          <p id="nota-comissoes" class="legenda" hidden></p>
+          <article class="cartao">
+            <span class="rotulo">Lançado no período</span>
+            <strong id="comissoes-total" class="valor-grande">R$ 0,00</strong>
+            <small id="comissoes-detalhe" class="detalhe"></small>
+          </article>
+          <p class="linha-detalhes">A pagar agora: <strong id="comissoes-pendente">R$ 0,00</strong></p>
+          <ol id="lista-comissoes" class="lista lista-produtos"></ol>
+          <p id="vazio-comissoes" class="vazio" hidden>Nenhuma comissão neste período.</p>
+        </section>
       </section>
 
       <!-- Aba Produtos & Estoque -->
       <section id="aba-produtos" class="aba" role="tabpanel" aria-labelledby="tab-produtos" hidden>
         <section class="bloco">
           <h2>Mais vendidos</h2>
+          <div class="filtros" role="group" aria-label="Período do ranking">
+            <button type="button" class="filtro ativa" data-grupo="produtos" data-periodo="hoje">Hoje</button>
+            <button type="button" class="filtro" data-grupo="produtos" data-periodo="7d">7 dias</button>
+            <button type="button" class="filtro" data-grupo="produtos" data-periodo="30d">30 dias</button>
+          </div>
+          <p id="ranking-periodo" class="legenda"></p>
           <p class="legenda"><span class="ponto natural"></span> Natural <span class="ponto gelada"></span> Gelada</p>
           <ol id="lista-produtos" class="lista lista-produtos"></ol>
           <p id="vazio-produtos" class="vazio" hidden>Nenhum produto vendido neste dia.</p>
@@ -212,8 +291,12 @@
       <button type="button" role="tab" id="tab-caixa" class="aba-botao" data-aba="caixa" aria-selected="false" aria-controls="aba-caixa">
         <span class="icone" aria-hidden="true">&#x1F4B5;</span>Caixa
       </button>
+      <button type="button" role="tab" id="tab-abertas" class="aba-botao" data-aba="abertas" aria-selected="false" aria-controls="aba-abertas">
+        <span class="icone" aria-hidden="true">&#x1F4CB;</span>Abertas
+      </button>
       <button type="button" role="tab" id="tab-produtos" class="aba-botao" data-aba="produtos" aria-selected="false" aria-controls="aba-produtos">
-        <span class="icone" aria-hidden="true">&#x1F37A;</span>Produtos
+        <span class="icone" aria-hidden="true">&#x1F37A;</span>
+        <span class="rotulo-aba">Produtos<span id="selo-estoque" class="selo" hidden>0</span></span>
       </button>
       <button type="button" role="tab" id="tab-vendas" class="aba-botao" data-aba="vendas" aria-selected="false" aria-controls="aba-vendas">
         <span class="icone" aria-hidden="true">&#x1F9FE;</span>Vendas

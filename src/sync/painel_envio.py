@@ -4,8 +4,11 @@ A cada rodada da sincronização (`python -m src.app --sync`) o PDV manda, com o
   * as vendas fechadas ou canceladas que ainda não subiram (`vendas.sincronizado = 0`), com itens e pagamentos, em lotes;
     a nuvem confirma os uuids recebidos e só então eles são marcados como enviados (cancelar uma venda já enviada zera a
     marca, e ela sobe de novo com o status novo);
-  * um retrato do momento: turno aberto, estoque controlado (zerados e abaixo do mínimo), caderneta a receber e entregas
-    pendentes. O retrato substitui o anterior DESTE caixa na nuvem; é dele que o celular tira "atualizado às HH:MM".
+  * um retrato do momento: turno aberto, estoque controlado (zerados e abaixo do mínimo), caderneta a receber, entregas
+    pendentes, comandas abertas (com a marca de comissão lançada), comissões das garotas dos últimos 30 dias,
+    fechamentos e sangrias dos últimos 31 dias e o faturamento dos últimos 12 meses. O retrato substitui o anterior
+    DESTE caixa na nuvem; é dele que o celular tira "atualizado às HH:MM". O faturamento mensal vai no retrato porque
+    a nuvem não guarda as vendas por mais de cerca de 120 dias.
 
 Cada caixa tem o seu banco, então se identifica (`id_do_caixa`): numa loja com dois caixas a nuvem guarda um retrato de
 cada um, em vez de o último a falar apagar o do outro.
@@ -29,6 +32,13 @@ log = logging.getLogger("pdv.painel")
 
 LOTE = 200                    # vendas por envio: cabe numa chamada curta mesmo em rede ruim
 LIMITE_ABAIXO_MINIMO = 50     # produtos listados no retrato (o resto vira só contagem)
+LIMITE_COMANDAS = 80          # comandas abertas no retrato; o resto não cabe numa chamada curta
+LIMITE_COMISSOES = 300        # lançamentos de comissão dos últimos 30 dias
+LIMITE_FECHAMENTOS = 40
+LIMITE_SANGRIAS = 200
+DIAS_COMISSAO = 30
+DIAS_MOVIMENTO = 31           # fechamentos e sangrias: um mês, com folga para a virada do dia
+MESES_FATURAMENTO = 12
 CHAVE_ULTIMO_ENVIO = "painel_ultimo_envio"
 CHAVE_ULTIMO_ERRO = "painel_ultimo_erro"
 CHAVE_CAIXA_ID = "painel_caixa_id"
@@ -126,8 +136,131 @@ def coletar_vendas(banco, limite: int | None = None) -> list[dict]:
     return saida
 
 
+def _dia_inicio(hoje: str, dias: int) -> str:
+    """O primeiro dia operacional de uma janela que termina em `hoje` (inclusive)."""
+    from datetime import date, timedelta
+    return (date.fromisoformat(hoje) - timedelta(days=dias - 1)).isoformat()
+
+
+def _meses_fechados(banco, virada: int, hoje: str) -> list[dict]:
+    """Faturamento das vendas fechadas, mês a mês, nos últimos 12 meses operacionais.
+
+    A nuvem apaga a venda depois da retenção (cerca de 120 dias). Sem este resumo o gráfico anual
+    do celular ficaria pela metade. Cada mês entra mesmo zerado, para o gráfico ter as doze barras."""
+    from datetime import date
+    fim = date.fromisoformat(hoje)
+    ano, mes = fim.year, fim.month
+    for _ in range(MESES_FATURAMENTO - 1):
+        mes -= 1
+        if mes == 0:
+            mes, ano = 12, ano - 1
+    inicio = date(ano, mes, 1).isoformat()
+    linhas = banco.todos(
+        """SELECT strftime('%Y-%m', datetime(fechada_em, ?)) AS mes,
+                  COUNT(*) AS quantidade, COALESCE(SUM(total_cent), 0) AS faturamento_cent
+           FROM vendas WHERE status = 'fechada' AND fechada_em >= ? GROUP BY mes""",
+        (f"-{int(virada)} hours", f"{inicio} 00:00:00"))
+    por_mes = {r["mes"]: r for r in linhas}
+    saida = []
+    for _ in range(MESES_FATURAMENTO):
+        chave = f"{ano:04d}-{mes:02d}"
+        r = por_mes.get(chave)
+        saida.append({
+            "mes": chave,
+            "faturamento_cent": int(r["faturamento_cent"]) if r else 0,
+            "quantidade": int(r["quantidade"]) if r else 0,
+        })
+        mes += 1
+        if mes == 13:
+            mes, ano = 1, ano + 1
+    return saida
+
+
+def _comandas_abertas(banco) -> list[dict]:
+    """Comandas abertas, inclusive as da garota. O valor em aberto é o mesmo da portaria (consulta.retrato);
+    a marca `garota` também: comissão pendente em comissoes_garotas, no número da comanda. Mesas ficam de fora."""
+    from src.porteiro.consulta import retrato as retrato_portaria
+    saida = []
+    for p in retrato_portaria(banco).get("posicoes") or []:
+        if not p.get("comanda"):
+            continue
+        saida.append({
+            "numero": int(p["numero"]),
+            "rotulo": p.get("rotulo") or str(p["numero"]),
+            "devido_cent": int(p.get("devido_cent") or 0),
+            "total_cent": int(p.get("total_cent") or 0),
+            "pago_cent": int(p.get("pago_cent") or 0),
+            "aberta_em": (p.get("aberta_em") or "")[:19],
+            "aberta_txt": p.get("aberta_txt") or "",
+            "garota": bool(p.get("garota")),
+            "situacao": p.get("situacao") or "",
+        })
+    saida.sort(key=lambda c: (0 if c["situacao"] == "devendo" else 1, c["numero"]))
+    return saida[:LIMITE_COMANDAS]
+
+
+def _comissoes(banco, virada: int, hoje: str) -> dict:
+    """Lançamentos pendentes e pagos da janela (o celular filtra hoje, 7 e 30 dias) e o total ainda a pagar."""
+    inicio, _ = fmt.faixa_dia_operacional(_dia_inicio(hoje, DIAS_COMISSAO), virada)
+    linhas = []
+    for r in banco.todos(
+            """SELECT c.garota, COALESCE(g.nome, '') AS nome, c.valor_cent, c.status, c.criado_em
+               FROM comissoes_garotas c LEFT JOIN garotas g ON g.numero = c.garota
+               WHERE c.status IN ('pendente', 'paga') AND c.criado_em >= ?
+               ORDER BY c.criado_em DESC, c.id DESC LIMIT ?""", (inicio, LIMITE_COMISSOES)):
+        linhas.append({
+            "garota": int(r["garota"]), "nome": r["nome"] or "", "valor_cent": int(r["valor_cent"]),
+            "status": r["status"], "criado_em": (r["criado_em"] or "")[:19],
+            "dia": fmt.dia_operacional(r["criado_em"], virada),
+        })
+    pendente = banco.valor(
+        "SELECT COALESCE(SUM(valor_cent), 0) FROM comissoes_garotas WHERE status = 'pendente'", (), 0)
+    return {"linhas": linhas, "pendente_total_cent": int(pendente)}
+
+
+def _fechamentos_e_sangrias(banco, virada: int, hoje: str) -> tuple[list[dict], list[dict]]:
+    """Fechamentos de turno e sangrias (só saída) da janela. Suprimento entra no fechamento, não na lista de sangrias."""
+    inicio, _ = fmt.faixa_dia_operacional(_dia_inicio(hoje, DIAS_MOVIMENTO), virada)
+    fechamentos = []
+    for t in banco.todos(
+            """SELECT t.numero, t.aberto_em, t.fechado_em, t.valor_inicial_cent, t.valor_final_cent,
+                      t.esperado_cent, t.resultado_cent, o.nome AS operador,
+                      (SELECT COALESCE(SUM(valor_cent), 0) FROM movimentos_caixa m
+                       WHERE m.turno_id = t.id AND m.tipo = 'saida') AS sangrias_cent,
+                      (SELECT COALESCE(SUM(valor_cent), 0) FROM movimentos_caixa m
+                       WHERE m.turno_id = t.id AND m.tipo = 'entrada') AS suprimentos_cent
+               FROM turnos t LEFT JOIN operadores o ON o.id = t.operador_id
+               WHERE t.status = 'fechado' AND t.fechado_em >= ?
+               ORDER BY t.fechado_em DESC LIMIT ?""", (inicio, LIMITE_FECHAMENTOS)):
+        fechamentos.append({
+            "turno_numero": int(t["numero"]), "operador": t["operador"] or "",
+            "aberto_em": (t["aberto_em"] or "")[:19], "fechado_em": (t["fechado_em"] or "")[:19],
+            "dia": fmt.dia_operacional(t["fechado_em"], virada),
+            "valor_inicial_cent": int(t["valor_inicial_cent"] or 0),
+            "valor_final_cent": int(t["valor_final_cent"] or 0),
+            "esperado_cent": int(t["esperado_cent"] or 0),
+            "resultado_cent": int(t["resultado_cent"] or 0),
+            "sangrias_cent": int(t["sangrias_cent"] or 0),
+            "suprimentos_cent": int(t["suprimentos_cent"] or 0),
+        })
+    sangrias = []
+    for m in banco.todos(
+            """SELECT m.valor_cent, m.descricao, m.criado_em, o.nome AS operador, t.numero AS turno_numero
+               FROM movimentos_caixa m JOIN turnos t ON t.id = m.turno_id
+               LEFT JOIN operadores o ON o.id = m.operador_id
+               WHERE m.tipo = 'saida' AND m.criado_em >= ?
+               ORDER BY m.criado_em DESC LIMIT ?""", (inicio, LIMITE_SANGRIAS)):
+        sangrias.append({
+            "valor_cent": int(m["valor_cent"]), "descricao": m["descricao"] or "",
+            "criado_em": (m["criado_em"] or "")[:19], "dia": fmt.dia_operacional(m["criado_em"], virada),
+            "operador": m["operador"] or "", "turno_numero": int(m["turno_numero"]),
+        })
+    return fechamentos, sangrias
+
+
 def retrato(banco) -> dict:
-    """O momento da loja: caixa, estoque, caderneta e entregas. Tudo em centavos e quantidades como estão no banco."""
+    """O momento da loja: caixa, estoque, caderneta, entregas, comandas, comissões e o movimento do caixa.
+    Tudo em centavos e quantidades como estão no banco."""
     from src.controllers.turno_controller import TurnoController
     turnos = TurnoController(banco)
     turno = turnos.atual()
@@ -162,17 +295,24 @@ def retrato(banco) -> dict:
     from src.controllers.config_controller import ConfigController
     config = ConfigController(banco)
     maquina = config.maquina()
+    virada = _virada(banco)
+    hoje = fmt.dia_operacional(None, virada)
+    fechamentos, sangrias = _fechamentos_e_sangrias(banco, virada, hoje)
     return {
-        "loja_nome": config.nome_loja(), "virada_dia_hora": _virada(banco),
+        "loja_nome": config.nome_loja(), "virada_dia_hora": virada,
         "terminal_id": id_do_caixa(banco), "terminal": turnos.terminal,
         "terminal_rotulo": (maquina.get("descricao") or "").strip() or f"Caixa {turnos.terminal}",
         "terminal_computador": (maquina.get("nome_computador") or "").strip() or socket.gethostname(),
-        "dia_operacional": fmt.dia_operacional(None, _virada(banco)), "momento": fmt.agora(),
+        "dia_operacional": hoje, "momento": fmt.agora(),
         "caixa": caixa, "estoque": estoque,
         "caderneta": {"a_receber_cent": int(devedores["total"]), "clientes_devendo": int(devedores["n"])},
         "entregas_pendentes": banco.valor(
             "SELECT COUNT(*) FROM vendas WHERE modalidade = 'entrega' AND status IN ('aberta','conta_enviada')", (), 0),
         "vendas_pendentes_envio": pendentes(banco),
+        "comandas": _comandas_abertas(banco),
+        "comissoes": _comissoes(banco, virada, hoje),
+        "fechamentos": fechamentos, "sangrias": sangrias,
+        "faturamento_meses": _meses_fechados(banco, virada, hoje),
     }
 
 
