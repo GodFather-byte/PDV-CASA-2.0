@@ -1,0 +1,5 @@
+-c requirements.txt
+-c backend/requirements.txt
+httpx>=0.27,<1
+requests>=2.31
+segno>=1.6,<2

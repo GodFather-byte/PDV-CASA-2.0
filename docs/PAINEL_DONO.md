@@ -21,6 +21,12 @@ vende offline, guarda tudo                                     guarda a cópia p
 
 ## O que o dono vê
 
+Na entrega 1.10.0, Hoje separa **bruto, devoluções e líquido**. O reembolso entra no dia operacional
+em que foi realizado. A página avisa quando há caixas antigos ou devoluções pendentes; custos históricos
+indisponíveis são sinalizados. Custo recuperado e ajuste de comissão dos itens são referências de conferência,
+sem estorno automático de salário ou banco. Os gráficos continuam identificados como brutos.
+Regras completas: [ENTREGA_1_10.md](ENTREGA_1_10.md).
+
 | Aba | Conteúdo |
 |---|---|
 | **Hoje** | Faturamento, nº de vendas, ticket médio, cancelamentos, itens, descontos, alerta de estoque baixo, vendas por hora, formas de pagamento, modalidade, gráfico dos últimos 30 dias e dos últimos 12 meses; seletor de dia. O celular atualiza sozinho a cada 30 segundos (5 s no modo quase em tempo real) |

@@ -462,6 +462,13 @@ class UtilitarioController:
         """Vendas antigas que podem sair sem quebrar o histórico de devoluções: a venda fica se alguma devolução dela é
         do período preservado ou se a venda nova da troca fica (aberta ou fechada depois do corte), e vice-versa."""
         ids = {r[0] for r in self.banco.todos(f"SELECT id FROM vendas WHERE {alvo}", (data,))}
+        if self.banco.cfg_bool("painel_dono", False):
+            # Uma limpeza não pode apagar eventos que a nuvem ainda não confirmou.
+            protegidas = {r[0] for r in self.banco.todos("SELECT id FROM vendas WHERE sincronizado = 0")}
+            protegidas.update(r[0] for r in self.banco.todos(
+                "SELECT d.venda_id FROM devolucoes d WHERE NOT EXISTS "
+                "(SELECT 1 FROM painel_devolucoes_enviadas e WHERE e.uuid = d.uuid)"))
+            ids.difference_update(protegidas)
         ligacoes = [(r["venda_id"], r["troca_venda_id"], r["recente"]) for r in self.banco.todos(
             """SELECT d.venda_id, x.venda_id AS troca_venda_id, date(d.criado_em) >= ? AS recente
                FROM devolucoes d LEFT JOIN devolucoes_trocas x ON x.devolucao_id = d.id""", (data,))]

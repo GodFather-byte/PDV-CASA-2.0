@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 32
+VERSAO_ESQUEMA = 33
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -164,6 +164,18 @@ MAQUINAS_DDL = """CREATE TABLE IF NOT EXISTS maquinas (
 )"""
 
 TABELAS = [
+    "CREATE TABLE IF NOT EXISTS painel_revisao (id INTEGER PRIMARY KEY CHECK (id = 1), revisao INTEGER NOT NULL)",
+    "INSERT OR IGNORE INTO painel_revisao(id, revisao) VALUES (1, 0)",
+    """CREATE TABLE IF NOT EXISTS painel_devolucoes_enviadas (
+        uuid TEXT PRIMARY KEY REFERENCES devolucoes(uuid) ON DELETE CASCADE,
+        enviado_em TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS itens_venda_custos (
+        item_id INTEGER PRIMARY KEY REFERENCES itens_venda(id) ON DELETE CASCADE,
+        custo_cent INTEGER NOT NULL CHECK (custo_cent >= 0),
+        recuperavel INTEGER NOT NULL CHECK (recuperavel IN (0, 1)),
+        registrado_em TEXT NOT NULL
+    )""",
     *PAGAMENTOS_ITENS_DDL,
     *RETORNAVEIS_DDL,
     *DEVOLUCOES_DDL,
@@ -703,6 +715,29 @@ TABELAS = [
     "CREATE INDEX IF NOT EXISTS ix_quartos_uso_inicio ON quartos_uso(inicio)",
 ]
 
+def _gatilhos_painel() -> list[str]:
+    """Invalida o retrato em qualquer conexão; confirmações e relógios do sync não exigem recalcular relatórios."""
+    tabelas = ("vendas", "itens_venda", "pagamentos_venda", "produtos", "tipos_pagamento", "turnos",
+               "movimentos_caixa", "comissoes_garotas", "garotas", "clientes", "operadores", "loja", "maquinas",
+               "unidades", "subgrupos", "itens_venda_partes", "devolucoes")
+    comandos = []
+    for tabela in (*tabelas, "config"):
+        for evento in ("INSERT", "UPDATE", "DELETE"):
+            condicao = ""
+            if tabela == "config":
+                prefixo = "OLD" if evento == "DELETE" else "NEW"
+                ignorados = ("sync_", "painel_", "central_", "telegram_", "backup_", "licenca_", "licenca_nuvem_",
+                             "atualizacao_", "porteiro_", "cardapio_", "tentativas:")
+                condicao = " WHEN " + " AND ".join(
+                    f"substr({prefixo}.chave,1,{len(p)}) <> '{p}'" for p in ignorados)
+            comandos.append(f"CREATE TRIGGER IF NOT EXISTS painel_revisao_{tabela}_{evento.lower()} "
+                            f"AFTER {evento} ON {tabela}{condicao} BEGIN "
+                            "UPDATE painel_revisao SET revisao = revisao + 1 WHERE id = 1; END")
+    return comandos
+
+
+TABELAS += _gatilhos_painel()
+
 # As relações históricas não dependem da permanência do cadastro comercial.
 _TABELAS_HISTORICAS = ("itens_venda", "itens_venda_partes", "itens_estoque", "movimentos_estoque")
 TABELAS = [
@@ -941,6 +976,9 @@ AUDITORIA = [
 # (ver BancoDados._migrar). Bancos novos já nascem na VERSAO_ESQUEMA e não as executam. Cada passo é um
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 MIGRACOES = {
+    # v33: confirmações de devoluções separadas do ledger imutável e custo congelado no fechamento.
+    # Tabelas aditivas em TABELAS; não inventar custo histórico para vendas de versões anteriores.
+    33: [],
     # v32: cardápio digital. O produto nasce visível (1); o dono desmarca no cadastro. A chave cardapio_digital
     # nasce em CONFIG_PADRAO na abertura seguinte.
     32: [

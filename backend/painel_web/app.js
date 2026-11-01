@@ -543,6 +543,16 @@
     mostrarAtraso(r.atraso_min);
 
     $("v-faturamento").textContent = formatarCentavos(v.faturamento_cent);
+    $("v-devolucoes").textContent = typeof v.devolucoes_cent === "number" ? formatarCentavos(v.devolucoes_cent) : "—";
+    $("v-liquido").textContent = typeof v.liquido_cent === "number" ? formatarCentavos(v.liquido_cent) : "—";
+    const devolucoes = r.devolucoes || {};
+    const avisoDevolucoes = $("aviso-devolucoes");
+    avisoDevolucoes.hidden = r.devolucoes_completas === true;
+    avisoDevolucoes.textContent = "Devoluções podem estar incompletas. Atualize os caixas e aguarde o envio de todas as pendências.";
+    $("ajustes-devolucoes").textContent = (devolucoes.quantidade || 0) + " devolução(ões). Custo recuperado com retorno ao estoque: " +
+      formatarCentavos(devolucoes.custo_recuperado_cent || 0) + ". Ajuste de comissão dos itens a conferir pelo gerente: " +
+      formatarCentavos(devolucoes.comissao_ajuste_cent || 0) + "." +
+      (devolucoes.custos_incompletos ? " Há devoluções sem custo histórico disponível; os valores de custo são parciais." : "");
     $("v-quantidade").textContent = formatarInteiro(v.quantidade);
     $("v-ticket").textContent = formatarCentavos(v.ticket_medio_cent);
     $("v-canceladas").textContent = formatarInteiro(v.canceladas);
@@ -669,11 +679,12 @@
         valor,
         rotulo: mostrar && d.dia ? d.dia.slice(8, 10) : "",
         destaque: d.dia === diaAtual,
-        titulo: formatarDiaCurto(d.dia) + ": " + formatarCentavos(valor) + " em " + formatarInteiro(d.quantidade) +
+        titulo: formatarDiaCurto(d.dia) + ": bruto " + formatarCentavos(valor) + " em " + formatarInteiro(d.quantidade) +
+          (typeof d.liquido_cent === "number" ? "; devoluções " + formatarCentavos(d.devolucoes_cent) + "; líquido " + formatarCentavos(d.liquido_cent) : "") +
           " venda(s)" + (d.canceladas ? ", " + formatarInteiro(d.canceladas) + " cancelada(s)" : ""),
       };
     });
-    const tem = desenharGrafico(alvo, pontos, "Faturamento dos últimos 30 dias", "detalhe-dias");
+    const tem = desenharGrafico(alvo, pontos, "Faturamento bruto dos últimos 30 dias", "detalhe-dias");
     alvo.hidden = !tem;
     vazio.hidden = tem;
     if (!tem) $("detalhe-dias").textContent = "";
@@ -703,7 +714,7 @@
       titulo: rotuloMes(m.mes) + "/" + String(m.mes || "").slice(2, 4) + ": " + formatarCentavos(m.faturamento_cent) +
         " em " + formatarInteiro(m.quantidade) + " venda(s)",
     }));
-    const tem = desenharGrafico(alvo, pontos, "Faturamento dos últimos 12 meses", "detalhe-meses");
+    const tem = desenharGrafico(alvo, pontos, "Faturamento bruto dos últimos 12 meses", "detalhe-meses");
     alvo.hidden = !tem;
     $("vazio-meses").hidden = tem;
     if (!tem) $("detalhe-meses").textContent = "";

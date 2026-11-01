@@ -245,6 +245,15 @@ def saude():
     return {"status": "ok"}
 
 
+@app.get("/v1/versao")
+def versao_publicada():
+    """Identificação pública da compilação para conferir o deploy, sem configurações ou credenciais."""
+    import re
+    from src.versao import VERSAO
+    commit = os.environ.get("RENDER_GIT_COMMIT", "")
+    return {"versao": VERSAO, "commit": commit if re.fullmatch(r"[0-9a-f]{40}", commit) else None}
+
+
 @app.get("/v1/admin/lojas")
 def admin_lojas(acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db)):
     """Lista do fornecedor (só com o PDV_API_TOKEN): cada loja, se está ativa e até quando pagou. É o 'lojas listar' na

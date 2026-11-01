@@ -1,7 +1,7 @@
 # Nuvem (backend/ + painel do dono): testa e, se passar, aciona o deploy no Render.
 # O Actions NÃO hospeda a nuvem (um job dura no máximo horas): quem fica no ar é o Render ou o servidor próprio
-# (docs/NUVEM.md). O deploy só acontece em push na main, com o segredo RENDER_DEPLOY_HOOK_URL cadastrado
-# (Render > serviço > Settings > Deploy Hook). Sem o segredo, só testa. Guia: docs/PAINEL_DONO.md.
+# (docs/NUVEM.md). Usa o Deploy Hook quando configurado ou aguarda a integração Git do Render.
+# Só confirma sucesso quando /v1/versao serve o commit esperado. Guia: docs/ENTREGA_1_10.md.
 name: "Nuvem: testar e publicar"
 
 on:
@@ -14,6 +14,8 @@ on:
       - "tests/test_nuvem.py"
       - "tests/test_cardapio.py"
       - "render.yaml"
+      - "requirements*.txt"
+      - "tools/verificar_nuvem.py"
       - ".github/workflows/nuvem-deploy.yml"
   workflow_dispatch:
 
@@ -34,9 +36,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r backend/requirements.txt httpx requests segno
+      - run: pip install --require-hashes -r backend/requirements.txt -r requirements-test.txt
       - name: API, painel do dono e laço de sincronização
-        run: python -m unittest tests.test_painel_dono tests.test_painel_caixas tests.test_painel_limpeza tests.test_painel_senha_pdv tests.test_nuvem tests.test_cardapio
+        run: python -m unittest tests.test_painel_dono tests.test_painel_caixas tests.test_painel_limpeza tests.test_painel_senha_pdv tests.test_painel_melhorias tests.test_verificar_nuvem tests.test_nuvem tests.test_cardapio
       - name: App web (manifesto válido e arquivos no lugar)
         run: |
           python -m json.tool backend/painel_web/manifest.webmanifest > /dev/null
@@ -50,16 +52,24 @@ jobs:
     needs: testar
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Acionar o Deploy Hook (se configurado)
         env:
           HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
           if [ -z "$HOOK" ]; then
-            echo "RENDER_DEPLOY_HOOK_URL não cadastrado: testes ok, deploy não acionado."
+            echo "Sem Deploy Hook: aguardando a publicação automática pelo Git no Render."
             exit 0
           fi
           codigo=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$HOOK")
           echo "Render respondeu HTTP $codigo"
           case "$codigo" in 2*) ;; *) echo "Deploy Hook falhou"; exit 1;; esac
+      - name: Confirmar o commit publicado na nuvem
+        env:
+          NUVEM_URL: ${{ vars.PDV_NUVEM_URL || 'https://willpdv-nuvem-6sp0.onrender.com' }}
+        run: python -m tools.verificar_nuvem --url "$NUVEM_URL" --commit "$GITHUB_SHA" --timeout 300

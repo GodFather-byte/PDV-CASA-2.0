@@ -309,6 +309,9 @@ class JanelaCaixa(QMainWindow):
         self._aplicar_estilo()
         self.resize(1240, 760)
         self._montar()
+        from src.ui_qt.estado_nuvem import EstadoNuvem
+        self.estado_nuvem = EstadoNuvem(ctx.banco, self)
+        self.statusBar().addWidget(self.estado_nuvem, 1)
         self.recarregar_tudo()
 
     def _leitor_da_maquina(self) -> bool:

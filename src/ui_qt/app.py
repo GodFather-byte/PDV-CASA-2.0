@@ -491,6 +491,9 @@ class JanelaPrincipal(QMainWindow):
             nuvem += "\nPainel do dono desligado: vendas não são enviadas."
         if banco.cfg("painel_ultimo_erro"):
             nuvem += "\nÚltimo erro do painel: " + banco.cfg("painel_ultimo_erro")
+        from src.sync.painel_status import situacao as situacao_nuvem
+        fila = situacao_nuvem(banco)
+        nuvem += f"\n{fila['texto']}: {fila['vendas_pendentes']} venda(s), {fila['devolucoes_pendentes']} devolução(ões) na fila."
         if self.app.estado_servicos:
             nuvem += "\n" + " | ".join(self.app.estado_servicos)
         self.indicadores["sync"].setText(nuvem)

@@ -363,7 +363,10 @@ Colunas novas no banco da nuvem são criadas sozinhas, sem perder o que já est�
 
 **Pelo GitHub Actions:** o workflow `.github/workflows/nuvem-deploy.yml` roda os testes da nuvem a cada push em `main` que
 mexa em `backend/` ou `src/` e, se passarem, aciona o deploy no Render pelo *Deploy Hook* guardado no segredo
-`RENDER_DEPLOY_HOOK_URL` do repositório (Render > serviço > Settings > Deploy Hook). Sem o segredo, o workflow só testa. O
+`RENDER_DEPLOY_HOOK_URL` do repositório (Render > serviço > Settings > Deploy Hook). Sem o segredo, aguarda o deploy
+automático pela integração Git do Render. Em ambos os casos, `/v1/versao` deve servir o commit esperado para a
+publicação ser aprovada. O endereço público pode ser definido na variável `PDV_NUVEM_URL` do repositório;
+o padrão desta instalação é `https://willpdv-nuvem-6sp0.onrender.com`. Veja [ENTREGA_1_10.md](ENTREGA_1_10.md). O
 Actions **não hospeda** a nuvem: ele testa e publica; quem fica no ar é o Render (ou o seu servidor da seção 2).
 
 ---

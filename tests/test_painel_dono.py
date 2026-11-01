@@ -56,7 +56,7 @@ class HttpFalso:
 
     def post(self, url, json=None, headers=None, timeout=None):
         self.chamadas.append({"url": url, "corpo": json, "headers": headers})
-        uuids = [v["uuid"] for v in json["vendas"]]
+        uuids = [v["uuid"] for v in json.get("vendas", [])]
         if self.confirmar is not None:
             uuids = self.confirmar(uuids)
         return RespostaFalsa(self.status, {"recebidas": len(uuids), "uuids": uuids})
@@ -205,6 +205,7 @@ class TesteEnvioDoPdv(BasePainel):
                 mock.patch("src.sync.licenca_nuvem.renovar"):
             self.assertTrue(Sincronizador(self.banco, http=http).rodada())
         self.assertEqual(len(http.chamadas), 1)
+        self.venda_fechada((self.agua, 1))  # outra mudança exige rede; caixa parado é tratado nos testes de ritmo
         with mock.patch("src.sync.atualizacoes.verificar", return_value=None), \
                 mock.patch("src.sync.licenca_nuvem.renovar"), \
                 mock.patch.object(painel_envio.log, "exception"), \
@@ -241,7 +242,7 @@ class TesteEnvioDoPdv(BasePainel):
 def preparar_lojas():
     db = nuvem.SessionLocal()
     try:
-        for tabela in (painel.PainelVenda, painel.PainelCaixa, painel.PainelSessao, painel.PainelAcesso):
+        for tabela in (painel.devolucoes.PainelDevolucao, painel.PainelVenda, painel.PainelCaixa, painel.PainelSessao, painel.PainelAcesso):
             db.query(tabela).delete()
         db.query(nuvem.Loja).filter(nuvem.Loja.chave_loja.in_(list(TOKENS))).delete(synchronize_session=False)
         for chave, token in TOKENS.items():
@@ -476,6 +477,7 @@ class TesteNuvemPainel(BaseNuvem):
         r = self.http.get("/v1/painel/resumo", headers=self.entrar()).json()
         self.assertEqual((r["dia"], r["loja"]["nome"]), ("2026-10-03", "PDV"))
         self.assertEqual(r["vendas"], {"faturamento_cent": 3900 + 1150 + 2000, "quantidade": 3, "ticket_medio_cent": 2350,
+                                       "bruto_cent": 7050, "devolucoes_cent": 0, "liquido_cent": 7050,
                                        "desconto_cent": 0, "itens": 4, "canceladas": 1, "canceladas_cent": 1050})
         self.assertEqual(r["formas"], [{"tipo": "Pix", "valor_cent": 3900}, {"tipo": "Dinheiro", "valor_cent": 3150}])
         self.assertEqual(r["modalidades"], [{"modalidade": "balcao", "quantidade": 3, "valor_cent": 7050}])
