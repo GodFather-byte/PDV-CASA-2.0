@@ -519,3 +519,45 @@ jobs:
           gh release create ultima-versao-adega --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "E&A Superações - última versão ($VERSAO, commit $curto)" --notes "$notas" \
             publicar/EASuperacoes-Instalador.exe publicar/EASuperacoes-Portatil.zip
+
+  # O repositório é privado: o caixa não baixa o Release do GitHub. Este job só registra o manifesto assinado
+  # na nuvem quando os segredos existem. O arquivo em si fica num HTTPS público (docs/ATUALIZACAO.md).
+  registrar_atualizacao:
+    name: Registrar manifesto da atualização
+    needs: [build, adega]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "*-Instalador-*"
+          merge-multiple: true
+          path: instaladores
+      - name: Assinar e publicar o manifesto
+        env:
+          PDV_ATUALIZACAO_CHAVE: ${{ secrets.PDV_ATUALIZACAO_CHAVE }}
+          PDV_NUVEM_URL: ${{ secrets.PDV_NUVEM_URL }}
+          PDV_API_TOKEN: ${{ secrets.PDV_API_TOKEN }}
+          PDV_ATUALIZACAO_BASE: ${{ secrets.PDV_ATUALIZACAO_BASE }}
+          VERSAO: ${{ needs.build.outputs.versao }}
+        run: |
+          python - << 'PY'
+          import glob, os, subprocess, sys
+          base = os.environ.get("PDV_ATUALIZACAO_BASE", "").rstrip("/")
+          versao = os.environ["VERSAO"]
+          pares = (("willpdv", "WillPDV-Setup-*.exe"), ("ea_superacoes", "EASuperacoes-Setup-*.exe"))
+          for edicao, mascara in pares:
+              achados = glob.glob("instaladores/" + mascara)
+              if not achados:
+                  print("sem instalador", mascara)
+                  continue
+              nome = os.path.basename(achados[0])
+              url = f"{base}/{edicao}/{versao}/{nome}" if base else ""
+              subprocess.run([sys.executable, "-m", "tools.publicar_atualizacao", achados[0],
+                              "--edicao", edicao, "--versao", versao,
+                              "--notas", f"Versão {versao} ({edicao}).", "--url", url], check=True)
+          PY

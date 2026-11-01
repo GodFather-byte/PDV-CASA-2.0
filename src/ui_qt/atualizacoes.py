@@ -68,15 +68,19 @@ class JanelaAtualizacoes(QDialog):
         self.mensagem.setWordWrap(True)
         layout.addWidget(self.mensagem)
         barra = QHBoxLayout()
-        self.btn_consultar = QPushButton("Consultar agora")
+        self.btn_consultar = QPushButton("Verificar atualizações")
         self.btn_consultar.clicked.connect(lambda: self.consultar())
         self.btn_baixar = QPushButton("Baixar a atualização")
         self.btn_baixar.clicked.connect(self.baixar)
         self.btn_dispensar = QPushButton("Não avisar desta versão")
         self.btn_dispensar.clicked.connect(self.dispensar)
+        self.btn_adiar = QPushButton("Adiar um dia")
+        self.btn_adiar.clicked.connect(self.adiar)
+        self.btn_instalar = QPushButton("Instalar com o caixa livre")
+        self.btn_instalar.clicked.connect(self.instalar_se_livre)
         fechar = QPushButton("Fechar")
         fechar.clicked.connect(self.reject)
-        for botao in (self.btn_consultar, self.btn_baixar, self.btn_dispensar, fechar):
+        for botao in (self.btn_consultar, self.btn_baixar, self.btn_dispensar, self.btn_adiar, self.btn_instalar, fechar):
             barra.addWidget(botao)
         layout.addLayout(barra)
         self._sinais = _Sinais()
@@ -204,6 +208,43 @@ class JanelaAtualizacoes(QDialog):
         if self.aviso and self.aviso.get("url_download"):
             webbrowser.open(self.aviso["url_download"])
             return True
+        return False
+
+    def adiar(self):
+        from src.atualizacao.cliente import adiar, aviso
+        try:
+            self.exigir_acesso()
+        except ErroPermissao as erro:
+            self.mensagem.setText(str(erro))
+            return False
+        atual = aviso(self.ctx.banco)
+        if not atual or not atual["adiavel"]:
+            self.mensagem.setText("Esta atualização é obrigatória e não pode ser adiada.")
+            return False
+        adiar(self.ctx.banco, atual["ultima"])
+        self.mensagem.setText(f"A versão {atual['ultima']} fica para depois. O caixa avisa de novo amanhã.")
+        return True
+
+    def instalar_se_livre(self):
+        from src.atualizacao.cliente import caixa_ocupado, rodada
+        try:
+            self.exigir_acesso()
+        except ErroPermissao as erro:
+            self.mensagem.setText(str(erro))
+            return False
+        motivo = caixa_ocupado(self.ctx.banco)
+        if motivo:
+            self.mensagem.setText(f"Ainda não: {motivo}. A instalação espera o caixa ficar livre.")
+            return False
+        try:
+            import requests
+        except ImportError:
+            requests = None
+        resultado = rodada(self.ctx.banco, requests, forcar=True)
+        if resultado.get("acao") == "instalar":
+            self.mensagem.setText(f"Instalando a versão {resultado['versao']}. O programa vai fechar e abrir de novo.")
+            return True
+        self.mensagem.setText("Nada novo para instalar, ou a nuvem não respondeu.")
         return False
 
     def dispensar(self):

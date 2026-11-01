@@ -43,9 +43,14 @@ if __name__ == "__main__":
         from src.autoteste import executar
         resto = [a for a in sys.argv[1:] if not a.startswith("--")]
         sys.exit(executar(resto[0] if resto else None, rede="--rede" in sys.argv[1:]))
+    if "--confirmar-atualizacao" in sys.argv[1:]:
+        from src.atualizacao.cliente import confirmar_atualizacao
+        sys.exit(confirmar_atualizacao())
     if "--sync" in sys.argv[1:]:
         from src.sync.sincronizador import main as sincronizar
         sincronizar()
     else:
+        from src.atualizacao.cliente import ao_iniciar
+        ao_iniciar()
         from src.ui_qt.app import main
         main()
