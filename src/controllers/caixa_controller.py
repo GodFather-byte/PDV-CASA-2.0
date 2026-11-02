@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from uuid import uuid4
 
-from src.controllers import notificacoes
+from src.controllers import notificacoes, ficha_sangria
 from src.controllers.caixa_divisao import DivisaoContaMixin
 from src.controllers.config_controller import codigo_especial
 from src.controllers.estoque_controller import EstoqueController
@@ -262,6 +262,11 @@ class CaixaController(DivisaoContaMixin):
             raise ErroNegocio("Produto não encontrado.")
         if not p["venda"]:
             raise ErroNegocio(f"'{p['nome']}' não está liberado para venda.")
+        ficha_credito = ficha_sangria.eh_ficha(self.banco, p)
+        if ficha_credito and (v["modalidade"] != "mesa" or not v["comanda"]):
+            raise ErroNegocio("Ficha com sangria só pode ser lançada em comanda.")
+        if ficha_credito and (partes or temperatura != "natural" or quantidade_cascos):
+            raise ErroNegocio("Ficha não admite montagem, cascos nem preço gelado.")
         if temperatura not in ("natural", "gelada"):
             raise ErroNegocio("Temperatura inválida: escolha natural ou gelada.")
         if temperatura == "gelada" and (not p["preco_gelada_cent"] or partes):
@@ -359,8 +364,8 @@ class CaixaController(DivisaoContaMixin):
                     "venda_id": venda_id, "produto_id": produto_id, "quantidade": quantidade,
                     "preco_unit_cent": preco, "preco_base_cent": None if partes else preco,
                     "regra_preco_json": json.dumps(retrato, ensure_ascii=False),
-                    "temperatura": temperatura, "total_cent": total, "cobra_servico": p["cobrar_servico"],
-                    "observacao": observacao, "comissao_cent": fmt.pct_de(total, p["comissao_pct"]),
+                    "temperatura": temperatura, "total_cent": total, "cobra_servico": 0 if ficha_credito else p["cobrar_servico"],
+                    "observacao": observacao, "comissao_cent": 0 if ficha_credito else fmt.pct_de(total, p["comissao_pct"]),
                     "partes": max(len(componentes), 1), "operador_id": self.operador_id, "criado_em": agora})
             for c in componentes:
                 self.banco.inserir("itens_venda_partes", {
@@ -374,6 +379,8 @@ class CaixaController(DivisaoContaMixin):
             self._conferir_vinculos(venda_id)
             if v["prepago"]:
                 self._conferir_credito(venda_id, v["total_cent"] - v["taxa_cent"])
+            if ficha_credito:
+                ficha_sangria.registrar_saida(self.banco, self.turnos, item_id, v, total, self.operador_id)
         return item_id
 
     def previa_cascos(self, venda_id: int | None, casco: dict, quantidade: int) -> int:
@@ -505,7 +512,8 @@ class CaixaController(DivisaoContaMixin):
             raise ErroNegocio(f"A comanda chegou ao limite de {fmt.fmt_brl(limite)}. "
                               "Não dá para lançar mais: é preciso acertar a comanda.")
 
-    def cancelar_item(self, item_id: int, motivo: str = "", quantidade: float | None = None) -> int:
+    def cancelar_item(self, item_id: int, motivo: str = "", quantidade: float | None = None,
+                      devolucao_ficha_confirmada: bool = False) -> int:
         """Cancela o item inteiro ou só parte da quantidade (cancelamento parcial). Devolve o id da linha cancelada.
 
         Parcial: a linha é cindida (como em `transferir_item`); a original continua ativa com o resto e uma linha nova,
@@ -517,6 +525,9 @@ class CaixaController(DivisaoContaMixin):
         item = self.banco.um("SELECT * FROM itens_venda WHERE id = ?", (item_id,))
         if item is None or item["cancelado"]:
             raise ErroNegocio("Item não encontrado ou já cancelado.")
+        movimento_ficha = ficha_sangria.saida_do_item(self.banco, item_id)
+        if movimento_ficha and not devolucao_ficha_confirmada:
+            raise ErroNegocio("Esta ficha retirou dinheiro da gaveta. Confirme primeiro a devolução física do valor.")
         parcial = False
         if quantidade is not None:
             try:
@@ -528,6 +539,8 @@ class CaixaController(DivisaoContaMixin):
             if quantidade > item["quantidade"]:
                 raise ErroNegocio(f"Quantidade acima da lançada (máximo {fmt.fmt_qtd(item['quantidade'], 3)}).")
             parcial = quantidade < item["quantidade"]
+        if parcial and movimento_ficha:
+            raise ErroNegocio("Não é permitido cancelar parte de ficha que já retirou dinheiro.")
         if parcial and not motivo:
             raise ErroNegocio("Informe o motivo do cancelamento parcial.")
         if not motivo and self.banco.cfg_bool("exigir_motivo_cancelamento", False):
@@ -548,6 +561,8 @@ class CaixaController(DivisaoContaMixin):
         pago_valor = sum(p["valor_cent"] for p in self.pagamentos(v["id"]) if not p["recarga"])
         agora = fmt.agora()
         with self.banco.transacao():
+            if movimento_ficha:
+                ficha_sangria.registrar_estorno(self.banco, self.turnos, item_id, self.operador_id)
             if parcial:
                 resto = fmt.arred_qtd(item["quantidade"] - quantidade)
                 total_resto = self._total_resto(item, resto, paga)
@@ -961,15 +976,23 @@ class CaixaController(DivisaoContaMixin):
         return self.devolucoes().abrir_troca(devolucao_id)
 
     # ============================================================ cancelar
-    def cancelar_venda(self, venda_id: int, motivo: str = "") -> None:
+    def cancelar_venda(self, venda_id: int, motivo: str = "",
+                       devolucao_ficha_confirmada: bool = False) -> None:
         motivo = (motivo or "").strip()
         if not motivo and self.banco.cfg_bool("exigir_motivo_cancelamento", False):
             raise ErroNegocio("Informe o motivo do cancelamento.")
         """Venda aberta: some se estiver vazia; senão vira cupom cancelado. Cupom fechado:
         só no turno ainda aberto; estorna estoque e caderneta."""
         v = self.obter(venda_id)
+        fichas = ficha_sangria.fichas_ativas_na_venda(self.banco, venda_id)
+        if fichas and v["status"] == "fechada":
+            raise ErroNegocio("Cupom com ficha em dinheiro: realize a devolução pelo procedimento financeiro específico.")
+        if fichas and not devolucao_ficha_confirmada:
+            raise ErroNegocio("Esta comanda tem fichas em dinheiro. Confirme a devolução física dos valores.")
         agora = fmt.agora()
         with self.banco.transacao():
+            for ficha in fichas:
+                ficha_sangria.registrar_estorno(self.banco, self.turnos, ficha["item_id"], self.operador_id)
             if v["status"] in ABERTAS:
                 if not self.itens(venda_id, cancelados=True) and not self.pagamentos(venda_id):
                     self.banco.executar("DELETE FROM vendas WHERE id = ?", (venda_id,))
@@ -1080,6 +1103,8 @@ class CaixaController(DivisaoContaMixin):
             raise ErroNegocio(f"Origem e destino são a mesma {'comanda' if c_destino else 'mesa'}.")
         with self.banco.transacao():
             o = self._mesa_aberta(n_origem, c_origem)
+            if ficha_sangria.fichas_ativas_na_venda(self.banco, o["id"]):
+                raise ErroNegocio("Comanda com ficha em dinheiro não pode ser transferida sem acerto.")
             d = self.banco.um("SELECT id FROM vendas WHERE modalidade = 'mesa' AND comanda = ? AND posicao = ? "
                               "AND status IN ('aberta','conta_enviada')", (int(c_destino), n_destino))
             if d is None:
@@ -1111,6 +1136,8 @@ class CaixaController(DivisaoContaMixin):
             antes = self.obter(destino_id)
             for c, n in pares:
                 o = self._mesa_aberta(n, c)
+                if ficha_sangria.fichas_ativas_na_venda(self.banco, o["id"]):
+                    raise ErroNegocio("Comanda com ficha em dinheiro não pode ser transferida sem acerto.")
                 self._mover_itens(o["id"], destino_id)
                 registrar_transferencia(self.banco, self.operador_id, "mesa", rotulo_posicao(c, n),
                                         rotulo_posicao(c_destino, n_destino), o["subtotal_cent"])
@@ -1133,6 +1160,8 @@ class CaixaController(DivisaoContaMixin):
             raise ErroNegocio(f"Origem e destino são a mesma {'comanda' if c_destino else 'mesa'}.")
         if not 0 < quantidade <= item["quantidade"]:
             raise ErroNegocio(f"Quantidade inválida (máximo {fmt.fmt_qtd(item['quantidade'], 3)}).")
+        if ficha_sangria.saida_do_item(self.banco, item_id):
+            raise ErroNegocio("Ficha já entregue em dinheiro não pode ser transferida isoladamente.")
         paga = self._qtd_paga(item_id)
         if quantidade > fmt.arred_qtd(item["quantidade"] - paga):
             raise ErroNegocio(f"Parte deste item já foi paga nesta conta ({fmt.fmt_qtd(paga, 3)}). Só dá para transferir "
