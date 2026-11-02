@@ -1,3 +1,9 @@
+## Branch: teste imediato da central e análise da ficha código 31 (02/11/2026)
+
+- `src/ui_qt/configuracoes.py`: botão **Testar conexão agora**, executa `ponte.rodada(..., forcar=True)` em `QThreadPool` com conexão independente ao SQLite, apresenta resultado e atualiza o retrato local. O teste pode aplicar uma licença publicada, como a rotina automática já faz. Homologar na loja antes do merge.
+- Casa Verde: caixa cadastrado no Neon, token `pdvcx_` testado com GET 404 (sem licença publicada) e POST contato 200. Contador do aplicativo ainda mostrava 173 falhas (intervalo de 60 minutos).
+- **Ficha código 31: ainda NÃO implementada.** Trata-se de um produto local da Casa Verde. Requisito: ao efetivamente entregar R$ X em dinheiro como ficha/crédito anotado na comanda, registrar saída de caixa exatamente uma vez e imprimir comprovante. Antes de entregar: definir vínculo imutável item/movimento, regras para cancelamentos, estornos, lançamento em comanda aberta, pagamentos e controle de dinheiro físico, impedir duplicidade, testes de fechamento e impressão. Evitar hardcode global do código 31 para outras lojas. Não alterar finanças de produção sem homologação.
+
 # HANDOFF
 
 ## Alertas do painel e erros do caixa
