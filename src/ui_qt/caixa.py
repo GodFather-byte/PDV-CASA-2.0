@@ -2020,6 +2020,8 @@ class JanelaCaixa(QMainWindow):
                     f"Entregar {fmt.fmt_brl(preco_ficha)} em dinheiro e lançar na comanda? "
                     "Uma sangria automática será registrada no caixa.", padrao_sim=False):
                 return
+        if eh_ficha:
+            opcoes["confirmar_entrega_ficha"] = True
         ok, item_id = self._executar(self._lancar, p["id"], qtd, partes, **opcoes)
         if ok:
             self._ultimo_item_id = item_id
