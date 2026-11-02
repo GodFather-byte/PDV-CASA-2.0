@@ -960,6 +960,7 @@ def limpar_antigos(db: Session) -> dict[str, int]:
         "caixas": db.query(PainelCaixa).filter(
             PainelCaixa.recebido_em < (agora - timedelta(days=DIAS_CAIXA_PARADO)).strftime("%Y-%m-%d %H:%M:%S")
         ).delete(synchronize_session=False),
+        "erros_caixa": __import__("backend.erros_caixa", fromlist=["podar"]).podar(db),
     }
     db.commit()
     return removidas
@@ -1047,6 +1048,8 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         if isinstance(retrato, dict):
             _guardar_retrato(db, acesso.loja, retrato, dados.get("enviado_em"), agora)
         recebidas_devolucoes = [devolucoes.guardar(db, acesso.loja, d, agora, _corte_das_vendas()) for d in retornos]
+        from backend.erros_caixa import guardar as guardar_erros
+        erros_aceitos = guardar_erros(db, acesso.loja, dados.get("erros") or [])
         batimento = dados.get("heartbeat")
         heartbeat_confirmado = False
         if isinstance(batimento, dict):
@@ -1067,6 +1070,8 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             resposta["devolucoes_uuids"] = list(dict.fromkeys(recebidas_devolucoes))
         if "heartbeat" in dados:
             resposta["heartbeat_confirmado"] = heartbeat_confirmado
+        if erros_aceitos:
+            resposta["erros"] = erros_aceitos
         return resposta
 
     # ---- senha do painel (administrador ou o próprio PDV da loja)
@@ -1162,7 +1167,8 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         r["bar"] = bar
         r["mes"] = faturamento_do_mes(db, loja.chave_loja, dia_op)
         from src.whatsapp.alertas import montar as montar_alertas
-        r["alertas"] = montar_alertas(r, retrato, retrato.get("whatsapp") or {})
+        r["alertas"] = montar_alertas(r, retrato, retrato.get("whatsapp") or {},
+                                      dia=str(dia)[:10], hoje=_hoje().isoformat())
         r["perdas"] = retrato.get("perdas") or []
         r["conferencias"] = retrato.get("fechamentos") or []
         r.update({

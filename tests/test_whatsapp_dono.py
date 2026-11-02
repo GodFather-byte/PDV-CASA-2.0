@@ -37,19 +37,36 @@ class TesteWhatsApp(BaseCaixa):
         self.assertIn("5511988887777", abertos[-1])
         self.assertIn("Total do período", texto)
 
-    def test_alertas_saem_dos_dados_que_ja_estao_no_retrato(self):
+    def test_alertas_agrupam_o_dia_e_ignoram_fechamento_sem_contagem(self):
+        from src.whatsapp.alertas import contagem_informada
+        self.assertFalse(contagem_informada({"valor_final_cent": None, "resultado_cent": -8000}))
+        self.assertFalse(contagem_informada({"valor_final_cent": 0, "resultado_cent": -8000, "formas": []}))
+        self.assertTrue(contagem_informada({"valor_final_cent": 9000, "formas": [
+            {"tipo": "Dinheiro", "informado_cent": 9000}]}))
+        muitos = [{"turno_numero": n, "operador": "ANA", "resultado_cent": -8000,
+                   "valor_final_cent": 0, "dia": "2026-10-01", "fechado_em": "2026-10-01 06:00:00"}
+                  for n in range(30)]
+        muitos.append({"turno_numero": 9, "operador": "ANA", "resultado_cent": -800,
+                       "valor_final_cent": 9200, "dia": "2026-10-03", "fechado_em": "2026-10-03 06:00:00",
+                       "formas": [{"tipo": "Dinheiro", "informado_cent": 9200, "esperado_cent": 10000}]})
         alertas = montar(
             {"vendas": {"canceladas": 2, "canceladas_cent": 8000, "desconto_cent": 1000}, "loja": {"nome": "Bar"}},
-            {"loja_nome": "Bar", "sangrias": [{"valor_cent": 30000, "descricao": "malote", "criado_em": "2026-10-03 22:00:00"}],
+            {"loja_nome": "Bar", "sangrias": [
+                {"valor_cent": 30000, "descricao": "malote", "criado_em": "2026-10-03 22:00:00", "dia": "2026-10-03"},
+                {"valor_cent": 90000, "descricao": "ontem", "criado_em": "2026-10-02 22:00:00", "dia": "2026-10-02"}],
              "caixa": {"turno_numero": 1}, "momento": "2026-10-03 12:00:00",
              "comandas": [{"rotulo": "C7", "aberta_em": "2026-10-03 01:00:00"}],
-             "fechamentos": [{"turno_numero": 1, "operador": "ANA", "resultado_cent": -500}],
+             "fechamentos": muitos,
              "estoque": {"zerados": 1, "abaixo_minimo_total": 1, "abaixo_minimo": [{"nome": "GIN"}]}},
             {"cancelamento_cent": 5000, "desconto_cent": 5000, "sangria_cent": 20000, "mesa_horas": 4,
-             "expediente_de": "18:00", "expediente_ate": "02:00"})
-        tipos = {a["tipo"] for a in alertas}
-        self.assertTrue({"cancelamento", "sangria", "mesa", "expediente", "conferencia", "estoque"} <= tipos)
+             "caixa_cent": 500, "expediente_de": "18:00", "expediente_ate": "02:00",
+             "tipos": {"desconto": False}},
+            dia="2026-10-03", hoje="2026-10-03")
+        tipos = {a["tipo"]: a["quantidade"] for a in alertas}
+        self.assertEqual(tipos["conferencia"], 1)
+        self.assertEqual(alertas[[a["tipo"] for a in alertas].index("conferencia")]["itens"][0]["valor_cent"], -800)
         self.assertNotIn("desconto", tipos)
+        self.assertLessEqual(len(alertas), 7)
 
     def test_contagem_mostra_a_perda_e_ajusta_o_saldo(self):
         self.banco.executar("UPDATE produtos SET ult_preco_cent = 300 WHERE id = ?", (self.skol,))

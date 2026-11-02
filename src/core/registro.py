@@ -49,6 +49,12 @@ def configurar_logs(pasta: Path | None = None) -> Path:
 def registrar_excecao(tipo, valor, tb, origem: str = "") -> None:
     texto = "".join(traceback.format_exception(tipo, valor, tb))
     log.error("Erro inesperado%s:\n%s", f" ({origem})" if origem else "", texto)
+    try:
+        from src.core.erros_caixa import registrar, texto_excecao
+        mensagem, trilha = texto_excecao(tipo, valor, tb)
+        registrar("error", origem or "caixa", mensagem, trilha, origem)
+    except Exception:
+        return
 
 
 def _excecao_nao_tratada(tipo, valor, tb) -> None:

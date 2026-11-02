@@ -284,17 +284,18 @@ def _fechamentos_e_sangrias(banco, virada: int, hoje: str) -> tuple[list[dict], 
                WHERE t.status = 'fechado' AND t.fechado_em >= ?
                ORDER BY t.fechado_em DESC LIMIT ?""", (inicio, LIMITE_FECHAMENTOS)):
         from src.whatsapp.caixa import _formas_da_auditoria
+        formas = _formas_da_auditoria(banco, t["id"])
         fechamentos.append({
             "turno_numero": int(t["numero"]), "operador": t["operador"] or "",
             "aberto_em": (t["aberto_em"] or "")[:19], "fechado_em": (t["fechado_em"] or "")[:19],
             "dia": fmt.dia_operacional(t["fechado_em"], virada),
             "valor_inicial_cent": int(t["valor_inicial_cent"] or 0),
-            "valor_final_cent": int(t["valor_final_cent"] or 0),
+            "valor_final_cent": None if t["valor_final_cent"] is None else int(t["valor_final_cent"]),
             "esperado_cent": int(t["esperado_cent"] or 0),
             "resultado_cent": int(t["resultado_cent"] or 0),
             "sangrias_cent": int(t["sangrias_cent"] or 0),
             "suprimentos_cent": int(t["suprimentos_cent"] or 0),
-            "formas": _formas_da_auditoria(banco, t["id"]),
+            "formas": formas,
         })
     sangrias = []
     for m in banco.todos(
@@ -319,8 +320,11 @@ def _whatsapp(banco) -> dict:
         "desconto_cent": banco.cfg_int("whatsapp_alerta_desconto_cent", 5000),
         "sangria_cent": banco.cfg_int("whatsapp_alerta_sangria_cent", 20000),
         "mesa_horas": banco.cfg_int("whatsapp_mesa_horas", 4),
+        "caixa_cent": banco.cfg_int("whatsapp_alerta_caixa_cent", 500),
         "expediente_de": (banco.cfg("sync_expediente_de") or "").strip(),
         "expediente_ate": (banco.cfg("sync_expediente_ate") or "").strip(),
+        "tipos": {tipo: banco.cfg_bool(f"whatsapp_alerta_{tipo}", True) for tipo in (
+            "cancelamento", "desconto", "sangria", "mesa", "expediente", "conferencia", "estoque")},
     }
 
 
@@ -446,10 +450,20 @@ def enviar(banco, http=None, *, foto=_FOTO_PADRAO) -> dict | None:
     while True:
         vendas = coletar_vendas(banco)
         retornos = devolucoes_envio.coletar(banco, LOTE)
+        from src.core import erros_caixa
+        erros = erros_caixa.pendentes(banco) if lotes == 0 else []
         corpo = {"vendas": vendas, "devolucoes": retornos, "enviado_em": fmt.agora()}
         if foto is not None:
             corpo["retrato"] = foto
+        if erros:
+            corpo["erros"] = [{
+                "assinatura": e["assinatura"], "nivel": e["nivel"], "modulo": e["modulo"],
+                "mensagem": e["mensagem"], "traceback": e["traceback"], "contexto": e["contexto"],
+                "vezes": int(e["vezes"]), "criado_em": e["criado_em"],
+            } for e in erros]
         resposta = _postar(banco, corpo, http)
+        if erros and isinstance(resposta.get("erros"), list):
+            erros_caixa.marcar_enviados(banco, [a for a in resposta["erros"] if isinstance(a, str)])
         confirmados = {u for u in (resposta.get("uuids") or []) if isinstance(u, str)}
         marcadas = marcar_enviadas(banco, [v for v in vendas if v["uuid"] in confirmados])
         enviadas += marcadas

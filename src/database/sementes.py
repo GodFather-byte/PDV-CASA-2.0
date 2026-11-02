@@ -110,7 +110,12 @@ CONFIG_PADRAO = {
     "whatsapp_alerta_cancelamento_cent": "5000",
     "whatsapp_alerta_desconto_cent": "5000",
     "whatsapp_alerta_sangria_cent": "20000",
+    "whatsapp_alerta_caixa_cent": "500",
     "whatsapp_mesa_horas": "4",
+    "whatsapp_alerta_cancelamento": "S", "whatsapp_alerta_desconto": "S",
+    "whatsapp_alerta_sangria": "S", "whatsapp_alerta_mesa": "S",
+    "whatsapp_alerta_expediente": "S", "whatsapp_alerta_conferencia": "S",
+    "whatsapp_alerta_estoque": "S",
     # Painel do dono no celular: desligado até o dono pedir (as vendas só saem da loja com isto ligado).
     "painel_dono": "N",
     # Cardápio digital no celular (QR da mesa): desligado até o dono publicar o catálogo na nuvem.

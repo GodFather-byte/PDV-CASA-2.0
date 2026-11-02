@@ -29,6 +29,7 @@ MODULOS = [
     'src.sync.cardapio_envio',
     'src.sync.devolucoes_envio',
     'src.sync.ociosidade',
+    'src.core.erros_caixa',
     'src.whatsapp.alertas',
     'src.whatsapp.caixa',
     'src.whatsapp.resumo',
