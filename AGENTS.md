@@ -25,6 +25,16 @@ python -m unittest discover -s tests       # suíte inteira
 python -m unittest tests.test_caixa        # um arquivo só (prefira isto durante o trabalho)
 ```
 
+## Erros do caixa
+
+O caixa grava a exceção localmente e sobe no lote da nuvem (não é uma chamada à parte). Para ver o que já chegou, sem imprimir token, senha ou a URL do banco:
+
+```
+python scripts/ver_erros_caixa.py --loja CHAVE --desde 2026-11-01 --nivel error --limit 20
+```
+
+A fonte é `PDV_API_URL` + `PDV_API_TOKEN` (rota `GET /v1/admin/erros-caixa`) ou, se a API não estiver definida, `PDV_NUVEM_DB_URL` / `DATABASE_URL`. Não cole segredo no comando nem no relatório: o script também filtra a saída.
+
 Python 3.10+. A interface do PDV é **somente Qt (PySide6)**; não há mais Tk no PDV. O gerador de licenças
 (`licenciador/`) continua em Tkinter. No Linux os testes de tela precisam de X virtual (ou `QT_QPA_PLATFORM=offscreen`): `xvfb-run -a -s "-screen 0 1920x1080x24" python -m unittest discover -s tests`.
 O CI (`.github/workflows/testes.yml`) roda em Windows e Linux, Python 3.10 e 3.12.

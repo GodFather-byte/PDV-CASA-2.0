@@ -79,6 +79,8 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+import backend.erros_caixa as _erros_caixa  # noqa: E402  (registra a tabela antes do create_all)
+
 Base.metadata.create_all(bind=engine)
 
 
@@ -310,6 +312,17 @@ def versao_publicada():
     from src.versao import VERSAO
     commit = os.environ.get("RENDER_GIT_COMMIT", "")
     return {"versao": VERSAO, "commit": commit if re.fullmatch(r"[0-9a-f]{40}", commit) else None}
+
+
+@app.get("/v1/admin/erros-caixa")
+def admin_erros_caixa(loja: str = Query("", max_length=64), desde: str = Query("", max_length=19),
+                      nivel: str = Query("", max_length=20), limite: int = Query(50, ge=1, le=200),
+                      acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db)):
+    """Erros do caixa, só com o token do administrador. Não devolve segredo que o caixa já tirou do texto."""
+    if not acesso.admin:
+        raise HTTPException(status_code=403, detail="Só o token do administrador vê os erros do caixa.")
+    from backend.erros_caixa import listar
+    return {"erros": listar(db, loja.strip() or None, desde.strip() or None, nivel.strip() or None, limite)}
 
 
 @app.get("/v1/admin/lojas")

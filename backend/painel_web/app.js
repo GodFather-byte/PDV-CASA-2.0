@@ -522,23 +522,51 @@
     renderizarRanking(r.dados);
   }
 
+  function alertasVistos() {
+    try { return JSON.parse(localStorage.getItem("pdv-alertas-vistos") || "[]"); }
+    catch (_erro) { return []; }
+  }
+
+  function marcarAlertasVistos(ids) {
+    const atual = alertasVistos();
+    ids.forEach((id) => { if (id && atual.indexOf(id) < 0) atual.push(id); });
+    localStorage.setItem("pdv-alertas-vistos", JSON.stringify(atual.slice(-200)));
+  }
+
   function renderizarAlertas(alertas) {
     const lista = $("lista-alertas");
     const badge = $("badge-alertas");
     if (!lista || !badge) return;
-    badge.textContent = String(alertas.length);
+    const vistos = alertasVistos();
+    const grupos = (alertas || []).map((grupo) => {
+      const itens = (grupo.itens || grupo.detalhes || []).filter((item) => vistos.indexOf(item.id) < 0);
+      return Object.assign({}, grupo, { itens: itens, quantidade: itens.length });
+    }).filter((grupo) => grupo.quantidade > 0);
+    badge.textContent = String(grupos.length);
     limpar(lista);
-    if (!alertas.length) {
+    if (!grupos.length) {
       lista.append(el("li", { text: "Nenhum alerta neste recorte." }));
-      return;
     }
-    alertas.forEach((alerta) => {
+    grupos.forEach((grupo) => {
       const item = el("li", {});
-      item.append(el("strong", { text: alerta.titulo || "Alerta" }));
-      item.append(document.createTextNode(" "));
+      const resumo = el("details", {});
+      const titulo = el("summary", { text: (grupo.titulo || "Alerta") + " (" + grupo.quantidade + ")" });
+      resumo.append(titulo);
+      grupo.itens.forEach((detalhe) => {
+        const valor = detalhe.valor_cent === null || detalhe.valor_cent === undefined
+          ? "" : " · " + formatarCentavos(detalhe.valor_cent);
+        resumo.append(el("p", { text: (detalhe.data || "") + valor + " — " + (detalhe.detalhe || "") }));
+      });
+      item.append(resumo);
       const botao = el("button", { type: "button", text: "mandar no WhatsApp" });
-      botao.addEventListener("click", () => compartilharWhatsapp(alerta.texto || alerta.titulo));
+      botao.addEventListener("click", () => compartilharWhatsapp(grupo.texto || grupo.titulo));
+      const visto = el("button", { type: "button", text: "marcar como visto" });
+      visto.addEventListener("click", () => {
+        marcarAlertasVistos(grupo.itens.map((d) => d.id));
+        renderizarAlertas(alertas);
+      });
       item.append(botao);
+      item.append(visto);
       lista.append(item);
     });
     const perdas = (estado.resumo && estado.resumo.perdas) || [];

@@ -91,6 +91,9 @@ def ha_pendencia(banco) -> bool:
         return True
     if nuvem_envio.precisa_enviar(banco):
         return True
+    from src.core import erros_caixa
+    if erros_caixa.pendentes(banco):
+        return True
     return False
 
 

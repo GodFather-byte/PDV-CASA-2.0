@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 33
+VERSAO_ESQUEMA = 34
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -632,6 +632,21 @@ TABELAS = [
         enviado_em TEXT
     )""",
     "CREATE INDEX IF NOT EXISTS ix_telegram_fila ON telegram_fila(status, id)",
+    # Erros do caixa (v34): fila local, sobe no lote da nuvem. A assinatura junta os iguais.
+    """CREATE TABLE IF NOT EXISTS erros_caixa (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        criado_em TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL,
+        nivel TEXT NOT NULL,
+        modulo TEXT NOT NULL,
+        mensagem TEXT NOT NULL,
+        traceback TEXT NOT NULL,
+        contexto TEXT NOT NULL,
+        assinatura TEXT NOT NULL UNIQUE,
+        vezes INTEGER NOT NULL DEFAULT 1,
+        enviado INTEGER NOT NULL DEFAULT 0
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_erros_caixa_enviado ON erros_caixa(enviado, id)",
     # Comissão das garotas (v7): o código 50 do caixa marca a comissão no número da garota (o mesmo da comanda dela).
     # Não é venda: não entra em faturamento nem estoque. Fica 'pendente' até ser paga (sai dinheiro do caixa) ou cancelada.
     """CREATE TABLE IF NOT EXISTS garotas (
@@ -1131,5 +1146,22 @@ MIGRACOES = {
         "WHERE EXISTS (SELECT 1 FROM config WHERE chave = 'perfil_operacao' AND valor = 'adega')",
         *[f"DROP TRIGGER IF EXISTS auditoria_{tabela}_{operacao}"
           for tabela in ("produtos", "itens_venda") for operacao in ("insert", "update", "delete")],
+    ],
+    # v34: fila local de erros do caixa. A tabela também nasce em TABELAS; aqui cobre o banco que já existia.
+    34: [
+        """CREATE TABLE IF NOT EXISTS erros_caixa (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            criado_em TEXT NOT NULL,
+            atualizado_em TEXT NOT NULL,
+            nivel TEXT NOT NULL,
+            modulo TEXT NOT NULL,
+            mensagem TEXT NOT NULL,
+            traceback TEXT NOT NULL,
+            contexto TEXT NOT NULL,
+            assinatura TEXT NOT NULL UNIQUE,
+            vezes INTEGER NOT NULL DEFAULT 1,
+            enviado INTEGER NOT NULL DEFAULT 0
+        )""",
+        "CREATE INDEX IF NOT EXISTS ix_erros_caixa_enviado ON erros_caixa(enviado, id)",
     ],
 }

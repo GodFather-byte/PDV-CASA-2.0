@@ -1,5 +1,16 @@
 # HANDOFF
 
+## Alertas do painel e erros do caixa
+
+- O badge "ALERTAS 30" era o teto da lista. O retrato manda até um mês de fechamentos e cada
+  `resultado_cent` diferente de zero virava um alerta, inclusive fechamento antigo sem contagem
+  (valor final vazio ou zero, sem forma informada). Agora é um aviso por tipo, só do dia pedido,
+  e diferença até R$ 5 (`whatsapp_alerta_caixa_cent`) não conta. Cada tipo liga e desliga na
+  configuração. "Marcar como visto" fica no celular.
+- O PDF do painel baixa no Chrome (Android e desktop) e abre no Safari do iPhone, inclusive como app.
+- Erros do caixa sobem no lote para `erros_caixa`. Consulta: `python scripts/ver_erros_caixa.py`
+  (ver AGENTS.md). Não imprime segredo.
+
 ## WhatsApp do dono, sem Telegram
 
 - O bot do Telegram saiu do caixa e da central. Tabelas `telegram_chats` e `telegram_fila` ficam no

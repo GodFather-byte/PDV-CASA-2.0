@@ -67,7 +67,7 @@ jobs:
         if: runner.os == 'Windows'
         run: python -m unittest discover -s tests
       - name: Instalação da PWA do porteiro (iPhone, iPad e Android)
-        run: node --test tests/test_porteiro_instalacao.cjs
+        run: node --test tests/test_porteiro_instalacao.cjs tests/test_pdf_painel.cjs
       - name: Testes (Linux, telas num X virtual)
         if: runner.os == 'Linux'
         # 24 bits de cor: com a tela padrão do xvfb-run (8 bits) o Tk (gerador de licenças) cai com segmentation fault.

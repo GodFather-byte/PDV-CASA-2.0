@@ -940,6 +940,8 @@ class App:
         sys.excepthook = self._gancho
         self._servicos_habilitados = servicos and self.banco.caminho != ":memory:"
         edicao.preparar(self.banco)                 # adega: perfil na primeira entrada e módulos de boate sempre desligados
+        from src.core.erros_caixa import ligar as ligar_erros
+        ligar_erros(self.banco)
         tema.aplicar(self.aplicacao, self.banco.cfg("tema_visual") or "escuro")
         if self._servicos_habilitados:
             idade = self.ctx.utilitarios.idade_backup_horas()
