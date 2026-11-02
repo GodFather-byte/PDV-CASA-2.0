@@ -20,12 +20,13 @@ log = logging.getLogger("pdv.porteiro")
 
 ESPERA_MUDANCA = 8          # segundos: um lançamento atrás do outro vira um envio só
 ESPERA_FALHA_MAX = 300
+ESPERA_ROTA_AUSENTE = 3600  # evita insistir a cada poucos minutos até o deploy da API
 
-_estado = {"quando": 0.0, "assinatura": "", "falhas": 0}
+_estado = {"quando": 0.0, "assinatura": "", "falhas": 0, "rota_ausente": False}
 
 
 def zerar_envio() -> None:
-    _estado.update(quando=0.0, assinatura="", falhas=0)
+    _estado.update(quando=0.0, assinatura="", falhas=0, rota_ausente=False)
 
 
 def _base(api_url: str) -> str:
@@ -102,7 +103,7 @@ def enviar_se_preciso(banco, http=None, relogio=None, forcar: bool = False) -> d
     desde = agora - _estado["quando"]
     if not forcar and _estado["quando"]:
         if _estado["falhas"]:
-            if desde < min(30 * 2 ** (_estado["falhas"] - 1), ESPERA_FALHA_MAX):
+            if desde < (ESPERA_ROTA_AUSENTE if _estado["rota_ausente"] else min(30 * 2 ** (_estado["falhas"] - 1), ESPERA_FALHA_MAX)):
                 return {"enviado": False}
         elif not mudou:
             return {"enviado": False}
@@ -110,11 +111,12 @@ def enviar_se_preciso(banco, http=None, relogio=None, forcar: bool = False) -> d
             return {"enviado": False}
     try:
         _post(banco, corpo, http)
-    except Exception:
+    except Exception as exc:
+        _estado["rota_ausente"] = "HTTP 404" in str(exc)
         _estado["quando"] = agora
         _estado["falhas"] = min(_estado["falhas"] + 1, 6)
         raise
-    _estado.update(quando=agora, assinatura=assinatura, falhas=0)
+    _estado.update(quando=agora, assinatura=assinatura, falhas=0, rota_ausente=False)
     log.info("Porteiro: %d comanda(s) aberta(s) enviada(s) à nuvem.", len(corpo["posicoes"]))
     return {"enviado": True, "posicoes": len(corpo["posicoes"])}
 
@@ -129,6 +131,8 @@ def _post(banco, corpo: dict, http) -> None:
     except OSError as exc:
         log.warning("Porteiro sem ligação com a nuvem: %s", exc)
         raise
+    if getattr(resposta, "status_code", 0) == 404:
+        raise RuntimeError("Nuvem do porteiro: HTTP 404. Rota /v1/porteiro/retrato indisponível; confira o deploy e a URL da API.")
     if getattr(resposta, "status_code", 0) != 200:
         log.warning("Porteiro: a nuvem respondeu HTTP %s.", getattr(resposta, "status_code", "?"))
         raise RuntimeError(f"Nuvem do porteiro: HTTP {getattr(resposta, 'status_code', '?')}.")

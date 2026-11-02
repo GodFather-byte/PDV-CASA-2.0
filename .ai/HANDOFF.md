@@ -1,5 +1,14 @@
 # HANDOFF
 
+## Casa Verde — suporte 02/11/2026
+
+- ZIP de suporte: repetidos HTTP 401 em /v1/ponte/licenca (credencial do caixa não encontrada), DNS intermitente e timeout de 30 s para envio de painel, HTTP 404 no /v1/porteiro/retrato.
+- Alteração nesta branch: HTTP 404 do porteiro agora informa explicitamente rota ausente/deploy e limita novas tentativas a uma por hora; mantém o retrato local pendente e volta à cadência normal depois de envio bem-sucedido. Testes em tests/test_porteiro_retentativas.py.
+- **A fazer fora do código:** comparar caixa_id e token do caixa na central (não é api_token da loja); verificar cadastro/aprovação sem regenerar ID automaticamente. Verificar deploy /v1/porteiro/retrato no Render; investigar DNS da máquina da Casa Verde e latência do banco. Não inserir tokens em logs.
+- **Validação pendente:** executar python -m unittest tests.test_porteiro_retentativas, depois suíte inteira e homologar no caixa antes de publicar.
+
+# HANDOFF
+
 ## Alertas do painel e erros do caixa
 
 - O badge "ALERTAS 30" era o teto da lista. O retrato manda até um mês de fechamentos e cada
