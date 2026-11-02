@@ -345,6 +345,18 @@ class ImpressaoController:
                    "Gerente / quem recebe o caixa".center(w)]
         return linhas
 
+    def comprovante_ficha(self, valor_cent: int, comanda: int, operador: str, item_id: int) -> str:
+        """Via da ficha em dinheiro, emitida após sangria persistida (cupom não fiscal)."""
+        w = self.largura()
+        return "\n".join(self.cabecalho(w) + _titulo("FICHA - SAÍDA DE DINHEIRO", w) + [
+            _lr("Data:", fmt.fmt_datahora(fmt.agora())[:16], w),
+            _lr("Operador:", operador or "", w), "-" * w,
+            _lr("Comanda:", str(comanda), w),
+            _lr("Lançamento:", str(item_id), w),
+            _lr("Valor da ficha", f"R$ {M(valor_cent)}", w), "-" * w,
+            "Dinheiro entregue ao portador"[:w], "",
+            "_" * w, "Assinatura".center(w), "=" * w])
+
     def comprovante_movimento(self, tipo: str, valor_cent: int, descricao: str, operador: str) -> str:
         w = self.largura()
         titulo = "SANGRIA" if tipo == "saida" else "ENTRADA DE CAIXA"
