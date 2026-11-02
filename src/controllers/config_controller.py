@@ -81,6 +81,7 @@ CAMPOS_CONFIG = [
     ("comissao_valor_ponto", "Quanto vale cada 0,1 ponto de comissão (R$)", "decimal", "Caixa"),
     ("comissao_paga_do_caixa", "Pagamento da comissão já vem marcado para sair da gaveta (sangria)", "sn", "Caixa"),
     ("imprimir_saida_ao_pagar", "Ao pagar a comanda ou mesa, imprimir junto o ticket de saída para a portaria", "sn", "Caixa"),
+    ("codigo_ficha_sangria", "Código do produto que entrega dinheiro como ficha na comanda e faz sangria automática (vazio = desligado; exemplo: 31)", "texto", "Caixa"),
     ("codigo_saida", "Código que libera a saída da comanda sem consumo e imprime o comprovante (vazio = desligado)", "texto",
      "Caixa"),
     ("porteiro_ativo", "Porteiro no celular: página no Wi-Fi do clube para ver se a comanda ainda deve "

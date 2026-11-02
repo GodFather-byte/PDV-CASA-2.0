@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFormLayou
 
 from src.core import formatacao as fmt
 from src.controllers.produto_controller import ProdutoController
+from src.controllers import ficha_sangria
 from src.core.erros import ErroNegocio
 from src.core.identidade_visual import preview_logotipo
 from src.core.posicao import exemplos, parece_posicao, rotulo_do_campo
@@ -2010,6 +2011,17 @@ class JanelaCaixa(QMainWindow):
             if quantidade_cascos is None:
                 return
             opcoes["quantidade_cascos"] = quantidade_cascos
+        eh_ficha = ficha_sangria.eh_ficha(self.ctx.banco, p)
+        if eh_ficha:
+            preco_ficha = fmt.mult_cent(self.ctx.produtos.preco_vigente(p), qtd)
+            if not self._autorizar("caixa_sangria", "exigir_senha_sangria", "Entregar dinheiro em ficha exige autorização:"):
+                return
+            if not self.dialogos.confirmar("Ficha em dinheiro",
+                    f"Entregar {fmt.fmt_brl(preco_ficha)} em dinheiro e lançar na comanda? "
+                    "Uma sangria automática será registrada no caixa.", padrao_sim=False):
+                return
+        if eh_ficha:
+            opcoes["confirmar_entrega_ficha"] = True
         ok, item_id = self._executar(self._lancar, p["id"], qtd, partes, **opcoes)
         if ok:
             self._ultimo_item_id = item_id
@@ -2018,6 +2030,13 @@ class JanelaCaixa(QMainWindow):
             self.ent_qtd.setFocus()
             self.ent_qtd.selectAll()
             return
+        if eh_ficha:
+            mov = ficha_sangria.saida_do_item(self.ctx.banco, item_id)
+            if mov:
+                comanda = self.ctx.caixa.obter(self.venda_id)["posicao"]
+                self._documento_operacao("Comprovante de ficha",
+                    lambda: self.ctx.impressao.comprovante_ficha(mov["valor_cent"], comanda, self.ctx.operador.nome, item_id),
+                    f"ficha_{item_id}", "sangria", abrir_gaveta=True)
         self.avisar(f"{_fmt_qtd(fmt.arred_qtd(qtd))} x {p['nome']} lançado.")
         self.ent_codigo.clear()
         self.ent_qtd.setText("1")
@@ -2099,7 +2118,21 @@ class JanelaCaixa(QMainWindow):
             motivo = self._pedir_motivo("Cancela item", f"Motivo do cancelamento de '{nome}':", "")
         if motivo is None:
             return
-        ok, _ = self._executar(self.ctx.caixa.cancelar_item, item_id, motivo, qtd if parcial else None)
+        ficha = ficha_sangria.saida_do_item(self.ctx.banco, item_id)
+        if ficha and parcial:
+            self.dialogos.aviso("Ficha em dinheiro", "Cancele a ficha inteira; não é possível estornar apenas parte.")
+            return
+        if ficha and not self.dialogos.confirmar("Devolução de dinheiro",
+                f"Você recebeu de volta {fmt.fmt_brl(ficha['valor_cent'])} em DINHEIRO na gaveta? "
+                "O sistema registrará uma entrada para reverter a sangria.", padrao_sim=False):
+            return
+        ok, _ = self._executar(self.ctx.caixa.cancelar_item, item_id, motivo, qtd if parcial else None,
+                              bool(ficha))
+        if ok and ficha:
+            self._documento_operacao("Estorno de ficha",
+                lambda: self.ctx.impressao.comprovante_movimento("entrada", ficha["valor_cent"],
+                            f"ESTORNO FICHA ITEM {item_id}", self.ctx.operador.nome),
+                f"estorno_ficha_{item_id}", "sangria")
         self.recarregar()
         if ok:
             self.avisar(f"Cancelado {_fmt_qtd(qtd)} de '{nome}'." if parcial else "Item cancelado.", AMBAR)
@@ -2144,7 +2177,14 @@ class JanelaCaixa(QMainWindow):
         motivo = self._pedir_motivo("Cancela venda", "Motivo do cancelamento da venda:", "cancelada no caixa")
         if motivo is None:
             return
-        ok, _ = self._executar(self.ctx.caixa.cancelar_venda, v["id"], motivo)
+        fichas = ficha_sangria.fichas_ativas_na_venda(self.ctx.banco, v["id"])
+        if fichas:
+            total_devolver = sum(f["valor_cent"] for f in fichas)
+            if not self.dialogos.confirmar("Devolução de fichas",
+                    f"Você recebeu {fmt.fmt_brl(total_devolver)} em DINHEIRO de volta na gaveta? "
+                    "A operação registrará entradas para estornar todas as fichas desta comanda.", padrao_sim=False):
+                return
+        ok, _ = self._executar(self.ctx.caixa.cancelar_venda, v["id"], motivo, bool(fichas))
         if ok:
             self.venda_id = None
             self.avisar("Venda cancelada.", AMBAR)

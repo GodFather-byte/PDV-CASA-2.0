@@ -64,12 +64,44 @@ class _TrocaSenha(QRunnable):
             self.sinais.concluida.emit(gerada, None)
 
 
+class _SinaisTesteCentral(QObject):
+    concluido = Signal(bool, str)
+
+
+class _TesteCentral(QRunnable):
+    """Teste real da ponte em thread, sem travar a interface e sem revelar tokens."""
+
+    def __init__(self, caminho_banco, sinais):
+        super().__init__()
+        self.caminho_banco = caminho_banco
+        self.sinais = sinais
+
+    def run(self):
+        from src.database.conexao import BancoDados
+        banco = None
+        try:
+            banco = BancoDados(self.caminho_banco, semear=False)
+            resultado = ponte.rodada(banco, forcar=True)
+            if resultado is None:
+                self.sinais.concluido.emit(False, "Central desligada. Habilite-a e salve a aba.")
+            else:
+                self.sinais.concluido.emit(resultado.sucesso, resultado.erro or "Contato com a central confirmado.")
+        except Exception:
+            self.sinais.concluido.emit(False, "Teste não concluído. Confira a conexão e o registro de erros.")
+        finally:
+            if banco is not None:
+                banco.fechar()
+
+
 class JanelaConfiguracoes(QDialog):
     def __init__(self, ctx, parent=None):
         super().__init__(parent)
         self.ctx = ctx
         self._trocando_senha = False
         self._sinais_senha = _SinaisSenha()
+        self._sinais_teste = _SinaisTesteCentral()
+        self._sinais_teste.concluido.connect(self._teste_central_concluido)
+        self._teste_central_ativo = False
         self._sinais_senha.concluida.connect(self._senha_trocada)
         permissoes = self._permissoes()
         if not any(permissoes.values()):
@@ -137,10 +169,13 @@ class JanelaConfiguracoes(QDialog):
                 self.btn_copiar_caixa.setToolTip("Passe este ID ao fornecedor; ele devolve o token do caixa.")
                 self.btn_copiar_caixa.clicked.connect(self.copiar_id_caixa)
                 self.btn_situacao_central = QPushButton("Situação da central do fornecedor…")
+                self.btn_testar_central = QPushButton("Testar conexão agora")
+                self.btn_testar_central.clicked.connect(self.testar_central_agora)
                 self.btn_situacao_central.clicked.connect(self.mostrar_situacao_central)
                 linha_central = QHBoxLayout()
                 linha_central.addWidget(self.btn_copiar_caixa)
                 linha_central.addWidget(self.btn_situacao_central)
+                linha_central.addWidget(self.btn_testar_central)
                 self.btn_novo_caixa = QPushButton("Gerar novo ID do caixa…")
                 self.btn_novo_caixa.setToolTip("Token perdido ou revogado: apaga o token, desliga a central e exige nova aprovação.")
                 self.btn_novo_caixa.clicked.connect(self.gerar_novo_id_caixa)
@@ -217,6 +252,7 @@ class JanelaConfiguracoes(QDialog):
         self.apagar_token_caixa.setEnabled(permissoes["nuvem"])
         self.btn_copiar_caixa.setEnabled(permissoes["nuvem"])
         self.btn_situacao_central.setEnabled(permissoes["nuvem"])
+        self.btn_testar_central.setEnabled(permissoes["nuvem"] and not self._teste_central_ativo)
         self.btn_novo_caixa.setEnabled(permissoes["nuvem"])
         self.btn_integracoes.setEnabled(permissoes["parametros"])
         self.btn_senha_painel.setEnabled(permissoes["nuvem"] and not self._trocando_senha)
@@ -402,6 +438,34 @@ class JanelaConfiguracoes(QDialog):
         self.mensagem.setText(f"Novo ID do caixa (copiado): {novo}. Central desligada até o fornecedor aprovar e entregar "
                               "o token novo; outras alterações não salvas desta aba foram descartadas.")
         return novo
+
+    def testar_central_agora(self):
+        """Força uma rodada do próprio PDV, ignorando o recuo após falhas."""
+        try:
+            self._autorizar("nuvem")
+            if self._teste_central_ativo:
+                return
+            if not ponte.ativa(self.ctx.banco):
+                self.mensagem.setText("Habilite a central e salve as configurações primeiro.")
+                return
+            ponte.validar_configuracao(self.ctx.banco)
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return
+        self._teste_central_ativo = True
+        self.btn_testar_central.setEnabled(False)
+        self.mensagem.setText("Testando a central agora (sem esperar a próxima tentativa automática)…")
+        QThreadPool.globalInstance().start(_TesteCentral(self.ctx.banco.caminho, self._sinais_teste))
+
+    def _teste_central_concluido(self, sucesso, mensagem):
+        self._teste_central_ativo = False
+        try:
+            self._autorizar("nuvem")
+        except ErroNegocio:
+            return
+        self.btn_testar_central.setEnabled(True)
+        self.mensagem.setText(("Central: " + mensagem) if sucesso else ("Falha na central: " + mensagem))
+        QMessageBox.information(self, "Teste da central do fornecedor", ponte.resumo(self.ctx.banco))
 
     def mostrar_situacao_central(self):
         try:

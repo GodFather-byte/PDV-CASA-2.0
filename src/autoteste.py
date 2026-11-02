@@ -40,7 +40,7 @@ MODULOS = [
     "src.autoteste", "src.autoteste_qt", "src.atualizacao.cliente", "src.atualizacao.manifesto", "src.versao",
     "src.controllers.auditoria_controller",
     "src.controllers.acesso_controller", "src.controllers.cadastro_controller", "src.controllers.caderneta_controller",
-    "src.controllers.caixa_controller", "src.controllers.comissao_controller", "src.controllers.conferencia_turno",
+    "src.controllers.caixa_controller", "src.controllers.ficha_sangria", "src.controllers.comissao_controller", "src.controllers.conferencia_turno",
     "src.controllers.config_controller", "src.controllers.contas_controller", "src.controllers.entidades",
     "src.controllers.entrega_controller", "src.controllers.estoque_controller", "src.controllers.fila_impressao_controller",
     "src.controllers.importacao_produtos", "src.controllers.impressao_assistente", "src.controllers.impressao_controller", "src.controllers.notificacoes", "src.controllers.perfil_controller", "src.controllers.preparo_controller", "src.controllers.quartos_controller",
