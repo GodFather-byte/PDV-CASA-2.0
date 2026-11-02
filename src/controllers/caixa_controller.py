@@ -255,7 +255,7 @@ class CaixaController(DivisaoContaMixin):
     # ============================================================== itens
     def adicionar_item(self, venda_id: int, produto_id: int, quantidade: float, observacao: str | None = None,
                        partes: list[int] | None = None, *, temperatura: str = "natural",
-                       quantidade_cascos: int = 0) -> int:
+                       quantidade_cascos: int = 0, confirmar_entrega_ficha: bool = False) -> int:
         v = self._aberta(venda_id)
         p = self.produtos.por_id(produto_id)
         if p is None or not p["ativo"]:
@@ -263,6 +263,8 @@ class CaixaController(DivisaoContaMixin):
         if not p["venda"]:
             raise ErroNegocio(f"'{p['nome']}' não está liberado para venda.")
         ficha_credito = ficha_sangria.eh_ficha(self.banco, p)
+        if ficha_credito and not confirmar_entrega_ficha:
+            raise ErroNegocio("Confirme a entrega física do dinheiro para lançar esta ficha.")
         if ficha_credito and (v["modalidade"] != "mesa" or not v["comanda"]):
             raise ErroNegocio("Ficha com sangria só pode ser lançada em comanda.")
         if ficha_credito and (partes or temperatura != "natural" or quantidade_cascos):
