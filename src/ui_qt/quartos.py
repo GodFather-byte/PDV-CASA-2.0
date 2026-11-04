@@ -537,7 +537,7 @@ class JanelaQuartos(QDialog):
         self.resumo.setText(
             f"Livres: {livres} de {len(situacao)}  ·  Noite: {resumo['usos']} entradas  ·  "
             f"{fmt_duracao(resumo['minutos']) if resumo['minutos'] else '0 min'}  ·  "
-            f"{fmt.fmt_brl(resumo['valor_cent'])}  ·  {resumo['estouros']} passaram do tempo")
+            f"{resumo['estouros']} passaram do tempo")
 
 
 # ------------------------------------------------- quartos no caixa
