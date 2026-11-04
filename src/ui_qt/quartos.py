@@ -554,7 +554,7 @@ _PILULA = {"livre": "Livre", "uso": "Em uso", "alerta": "Acabando", "estourou": 
 class GradeQuartos(QWidget):
     """Grade de cartões compactos dos quartos; o clique devolve o número do quarto."""
     clicado = Signal(int)
-    ALTURA = 58
+    ALTURA = 94
     MIN_COLUNAS, MAX_COLUNAS = 4, 8          # até 8 quartos numa linha só; mais que isso quebra em outra linha
 
     def __init__(self, parent=None):
@@ -616,7 +616,19 @@ class GradeQuartos(QWidget):
             p.setFont(_fonte(15, True))
             p.setPen(QColor(cores["texto"]))
             fm_num = QFontMetrics(_fonte(15, True))
-            p.drawText(QPointF(x1 + pad, y2 - 8), str(item["quarto"]))
+            p.drawText(QPointF(x1 + pad, y1 + 38), str(item["quarto"]))
+            if estado != "livre":
+                nome = item.get("nome_profissional") or "Sem identificação"
+                codigo = item.get("codigo_profissional") or "—"
+                p.setFont(_fonte(10, True))
+                p.setPen(QColor(cores["texto"]))
+                nome = QFontMetrics(p.font()).elidedText(
+                    f"{nome} · {codigo}", Qt.TextElideMode.ElideRight, int(x2 - x1 - 2 * pad))
+                p.drawText(QPointF(x1 + pad, y1 + 59), nome)
+            else:
+                p.setFont(_fonte(9))
+                p.setPen(QColor(cores["suave"]))
+                p.drawText(QPointF(x1 + pad, y1 + 59), "Clique para iniciar")
             espaco = x2 - pad - (x1 + pad + fm_num.horizontalAdvance(str(item["quarto"])) + 6)
             if estado == "livre":
                 rotulo, fonte = _PILULA["livre"], _fonte(10, True)
@@ -662,7 +674,7 @@ class PainelQuartosCaixa(QFrame):
         self.resumo.setStyleSheet("font-size: 11px;")
         lateral.addWidget(self.resumo)
         lateral.addStretch(1)
-        self.btn_painel = QPushButton("Painel")
+        self.btn_painel = QPushButton("Histórico / Painel")
         self.btn_painel.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_painel.setToolTip("Abrir o painel completo dos quartos")
         self.btn_painel.setStyleSheet("padding: 1px 8px; font-size: 11px;")
@@ -673,7 +685,7 @@ class PainelQuartosCaixa(QFrame):
         caixa_lateral.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         caixa_lateral.setStyleSheet("QWidget#quartos_lateral { background: transparent; }")
         caixa_lateral.setLayout(lateral)
-        caixa_lateral.setFixedWidth(82)
+        caixa_lateral.setFixedWidth(104)
         lay.addWidget(caixa_lateral)
         self.grade = GradeQuartos()
         self.grade.clicado.connect(self.acionar)
