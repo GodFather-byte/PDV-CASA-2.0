@@ -230,6 +230,7 @@ class QuartosController:
                 "inicio": _dt(uso["inicio"]), "fim": fim, "blocos": uso["blocos"],
                 "minutos": uso["blocos"] * uso["minutos_bloco"], "restante_seg": restante,
                 "valor_cent": uso["blocos"] * uso["valor_bloco_cent"],
+                "comanda_cliente": uso["comanda_cliente"], "codigo_profissional": uso["codigo_profissional"],
             })
         return lista
 
