@@ -1,3 +1,7 @@
+## Controle de quartos por comandas (04/11/2026)
+
+Branch feature/quartos-comandas-historico-20261104. Esquema 35: campos comanda_cliente e codigo_profissional em quartos_uso. UI pede ambos ao iniciar e mostra no painel grande; historico pesquisavel por codigo. Sem impressao nem nova cobranca. Testes adicionados, ainda nao executados neste ambiente. Validar migracao, testes Qt e instalacao Windows antes do merge.
+
 ## Branch: teste imediato da central e análise da ficha código 31 (02/11/2026)
 
 - `src/ui_qt/configuracoes.py`: botão **Testar conexão agora**, executa `ponte.rodada(..., forcar=True)` em `QThreadPool` com conexão independente ao SQLite, apresenta resultado e atualiza o retrato local. O teste pode aplicar uma licença publicada, como a rotina automática já faz. Homologar na loja antes do merge.
