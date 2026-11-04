@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 35
+VERSAO_ESQUEMA = 36
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -677,7 +677,7 @@ TABELAS = [
     "CREATE INDEX IF NOT EXISTS ix_comissoes_criado ON comissoes_garotas(criado_em)",
     "CREATE INDEX IF NOT EXISTS ix_comissoes_turno ON comissoes_garotas(turno_id)",
     # Acerto da garota (v12): cada pagamento a ela guarda a comissão paga, os shows lançados pelo operador (quantidade e valor de
-    # cada um) e o total entregue. Shows nunca são contados sozinhos: só existem quando o operador digita no fechamento dela.
+    # cada um) e o total entregue. Shows de quartos são vinculados ao acerto pela tabela shows_quartos.
     """CREATE TABLE IF NOT EXISTS acertos_garotas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         garota INTEGER NOT NULL CHECK (garota BETWEEN 1 AND 99999),
@@ -728,6 +728,19 @@ TABELAS = [
         comanda_cliente TEXT,
         codigo_profissional TEXT
     )""",
+    # Shows novos do quarto: não reconstruir históricos que já podem ter sido pagos manualmente.
+    # acerto_id é uma referência histórica sem FK: limpar um acerto não reabre shows pagos.
+    """CREATE TABLE IF NOT EXISTS shows_quartos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uso_id INTEGER NOT NULL REFERENCES quartos_uso(id),
+        garota INTEGER NOT NULL,
+        blocos_total INTEGER NOT NULL,
+        quantidade INTEGER NOT NULL CHECK (quantidade > 0),
+        criado_em TEXT NOT NULL,
+        acerto_id INTEGER,
+        UNIQUE(uso_id, blocos_total)
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_shows_quartos_pendentes ON shows_quartos(garota, acerto_id)",
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_quarto_em_uso ON quartos_uso(quarto) WHERE liberado_em IS NULL",
     "CREATE INDEX IF NOT EXISTS ix_quartos_uso_inicio ON quartos_uso(inicio)",
 ]
@@ -993,6 +1006,7 @@ AUDITORIA = [
 # (ver BancoDados._migrar). Bancos novos já nascem na VERSAO_ESQUEMA e não as executam. Cada passo é um
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 MIGRACOES = {
+    36: [],  # tabela aditiva shows_quartos; sem gerar pagamentos retroativos
     35: [
         ("coluna", "quartos_uso", "comanda_cliente", "TEXT"),
         ("coluna", "quartos_uso", "codigo_profissional", "TEXT"),

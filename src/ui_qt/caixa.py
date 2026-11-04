@@ -705,6 +705,7 @@ class JanelaCaixa(QMainWindow):
         # somem com o módulo desligado e a tela volta ao tamanho de sempre.
         from src.ui_qt.quartos import PainelQuartosCaixa
         self.painel_quartos = PainelQuartosCaixa(self.ctx, self, self._modo_visual())
+        self.painel_quartos.avisos.resolvido.connect(self.recarregar)
         lado.addWidget(self.painel_quartos)
         grade.addLayout(lado, 1)
         return pagina
@@ -995,14 +996,18 @@ class JanelaCaixa(QMainWindow):
     def _aviso_comissao(self, v: dict | None) -> None:
         """Comanda de garota com comissão marcada: quanto há a pagar, o que já foi pago neste turno e como pagar."""
         texto = ""
-        if v and self.comissao_marcada:
+        shows = (self.ctx.comissoes.quantidade_shows_quartos(v["posicao"])
+                 if v and v["modalidade"] == "mesa" and v["comanda"] else 0)
+        if v and (self.comissao_marcada or shows):
             a_pagar = sum(c["valor_cent"] for c in self.comissao_marcada if c["status"] == "pendente")
             paga = sum(c["valor_cent"] for c in self.comissao_marcada if c["status"] == "paga")
             nome = self.ctx.comissoes.nome(v["posicao"])
-            texto = f"COMISSÃO MARCADA NA COMANDA {v['posicao']}{' ' + nome if nome else ''}     A pagar: {fmt.fmt_brl(a_pagar)}"
+            texto = f"ACERTO DA COMANDA {v['posicao']}{' ' + nome if nome else ''}     Comissão a pagar: {fmt.fmt_brl(a_pagar)}"
+            if shows:
+                texto += f"     + {shows} show(s) dos quartos (escolha a tarifa no acerto)"
             if paga:
                 texto += f"     Paga neste turno: {fmt.fmt_brl(paga)}"
-            if a_pagar:
+            if a_pagar or shows:
                 texto += "     F12 paga a garota" if self._comissao_na_linha() else "     Pague pelo botão Comissões"
         self.lbl_aviso_venda.setText(texto)
         self.lbl_aviso_venda.setVisible(bool(texto))
@@ -1063,7 +1068,7 @@ class JanelaCaixa(QMainWindow):
         garotas = []
         if self.ctx.comissoes.ligada() and self.ctx.banco.cfg_bool("painel_mostra_garotas", True):   # garotas a pagar viram cartões
             garotas = [{"rotulo": self.ctx.caixa.rotular_posicao(True, p["garota"]), "total_cent": p["total_cent"],
-                        "nome": p["nome"], "marcacoes": p["lancamentos"]}
+                        "nome": p["nome"], "marcacoes": p["lancamentos"], "shows_quartos": p.get("shows_quartos", 0)}
                        for p in self.ctx.comissoes.pendentes_por_garota()]
         mesas = self.ctx.caixa.mesas()
         # Somente apresentação: lê pagamentos já registrados, sem recalcular ou fechar vendas.
@@ -2591,9 +2596,11 @@ class JanelaCaixa(QMainWindow):
             return
         if self._a_pagar_na_comanda() and self._comissao_na_linha():
             a_pagar = sum(c["valor_cent"] for c in self.comissao_marcada if c["status"] == "pendente")
-            escolha = self.dialogos.escolher("Fechar...", "Esta comanda tem consumo e comissão a pagar. Escolha:", [
+            shows = self.ctx.comissoes.quantidade_shows_quartos(v["posicao"])
+            escolha = self.dialogos.escolher("Fechar...", "Esta comanda tem consumo e acerto da garota. Escolha:", [
                 ("itens", f"Pagar a comanda (R$ {fmt.fmt_num(v['total_cent'])})"),
-                ("comissao", f"Pagar a comissão da garota (R$ {fmt.fmt_num(a_pagar)})")])
+                ("comissao", f"Acertar garota: comissão R$ {fmt.fmt_num(a_pagar)}" +
+                 (f" + {shows} show(s) dos quartos" if shows else ""))])
             if escolha is None:
                 return
             if escolha == "comissao":
@@ -2713,7 +2720,10 @@ class JanelaCaixa(QMainWindow):
         return self.ctx.banco.cfg_bool("comissao_na_linha", True)
 
     def _a_pagar_na_comanda(self) -> bool:
-        return any(c["status"] == "pendente" for c in self.comissao_marcada)
+        v = self.venda()
+        return any(c["status"] == "pendente" for c in self.comissao_marcada) or bool(
+            v and v["modalidade"] == "mesa" and v["comanda"]
+            and self.ctx.comissoes.quantidade_shows_quartos(v["posicao"]))
 
     def _comanda_vazia_de_garota(self, v: dict | None) -> bool:
         """Comanda (não mesa) sem nada lançado, numa casa que usa garotas: pode ser fechada mesmo assim. Qualquer número vale
@@ -3100,6 +3110,9 @@ class JanelaCaixa(QMainWindow):
             aviso += (f"\n\nComissão das garotas a pagar: {fmt.fmt_brl(sum(p['total_cent'] for p in a_pagar))} "
                       f"({len(a_pagar)} garota(s)).\nSe vai pagar com dinheiro da gaveta, responda Não, pague "
                       "(botão Comissões) e conte o caixa de novo.")
+            shows = sum(p.get("shows_quartos", 0) for p in a_pagar)
+            if shows:
+                aviso += f"\nAlém das comissões, há {shows} show(s) dos quartos pendentes de acerto."
         return aviso
 
     def _documento_fechamento(self, res: dict) -> None:

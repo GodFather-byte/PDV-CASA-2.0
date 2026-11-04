@@ -1,6 +1,23 @@
 # Controle de quartos
 
-Conta o tempo de cada quarto. O cliente **paga antes, no caixa** (venda normal); o painel não lança nada na comanda.
+Conta o tempo de cada quarto. O cliente **paga antes, no caixa** (venda normal). O painel registra os shows a pagar
+na comanda da profissional identificada, separados do consumo do cliente.
+
+## Shows e acerto da profissional
+
+Ao iniciar com **Q3 + Enter**, informe o código cadastrado da profissional, escolha o tempo e confirme.
+Cada 30 minutos contratados somam **1 show** imediatamente: 1h = 2 shows, 1h30 = 3 shows.
+**+ Tempo** soma apenas o acréscimo; liberar o quarto ou deixar o relógio passar não gera shows adicionais.
+Com blocos configurados diferentes de 30 minutos, a contagem considera as meias horas completas do tempo total contratado.
+
+A comanda e a lista de comissões mostram a quantidade de shows dos quartos separada dos valores de comissão.
+No acerto, com Quartos ligado, a quantidade é automática e não pode ser digitada novamente. Escolha **R$ 50 ou R$ 60
+por show** (tarifas configuradas em `show_valores`). O total é comissão + shows × tarifa, descontado o vale;
+a parte em Pix e a parte em dinheiro continuam separadas. Os shows pagos ficam vinculados ao acerto e não retornam
+como pendentes ao reabrir o programa. Tempo acrescentado depois de um acerto gera nova pendência.
+
+A integração vale para lançamentos novos. A atualização do banco não transforma históricos antigos em shows a pagar,
+pois esses tempos já podem ter sido acertados manualmente.
 
 ## Ligar
 

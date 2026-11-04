@@ -202,6 +202,8 @@ class TesteQuartosQt(BaseQuartos):
 
     def setUp(self):
         super().setUp()
+        from PySide6.QtCore import QCoreApplication, QEvent
+        self.addCleanup(lambda: QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete))
         self.baixo = CadastroController(self.banco).salvar("operadores", {"nome": "CAIXA", "senha": "1234", "nivel": "1"})
         self.envios = []
         p = mock.patch("src.hardware.campainha.enviar_em_segundo_plano",
@@ -321,6 +323,7 @@ class TesteQuartosQt(BaseQuartos):
         from src.ui_qt.caixa import JanelaCaixa
         from src.ui_qt.quartos import DialogoTempo
         from src.controllers.quartos_controller import fmt_duracao
+        CadastroController(self.banco).salvar("garotas", {"numero": "167", "nome": "Rapha", "ativo": "S"})
         ctx = Contexto(self.banco, AcessoController(self.banco).operador(self.operador_adm()))
         ctx.turnos.abrir(ctx.operador_id, 1, 0)
         j = JanelaCaixa(ctx)
@@ -337,6 +340,7 @@ class TesteQuartosQt(BaseQuartos):
                         self.assertEqual(self.estado(3)["estado"], "livre")
                         confirmar = dlg.botoes.button(QDialogButtonBox.StandardButton.Ok)
                         self.assertFalse(confirmar.isEnabled())
+                        dlg.profissional.setText("167")
                         QTest.keyClick(dlg.profissional, Qt.Key.Key_Return)
                         self.assertTrue(dlg.isVisible())
                         if blocos is None:

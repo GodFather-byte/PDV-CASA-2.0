@@ -210,6 +210,7 @@ class DialogoTempo(QDialog):
     def __init__(self, ctrl: QuartosController, titulo: str, maximo: int = MAX_BLOCOS, parent=None):
         super().__init__(parent)
         self.ctrl = ctrl
+        self.iniciando = titulo.startswith('Iniciar')
         self.setWindowTitle(titulo)
         form = QFormLayout(self)
         minutos = ctrl.config()["minutos_bloco"]
@@ -231,6 +232,9 @@ class DialogoTempo(QDialog):
         self.resumo = QLabel()
         self.resumo.setStyleSheet("font-size: 20px; font-weight: bold;")
         form.addRow(self.resumo)
+        self.mensagem = QLabel()
+        self.mensagem.setWordWrap(True)
+        form.addRow(self.mensagem)
         atalhos = QHBoxLayout()
         for b in (1, 2, 3, 4, 6):
             if b <= maximo:
@@ -248,6 +252,11 @@ class DialogoTempo(QDialog):
         self._atualizar()
 
     def accept(self):
+        codigo = self.profissional.text().strip()
+        if self.iniciando and (not codigo.isdigit() or not self.ctrl.nome_profissional(codigo)):
+            self.mensagem.setText("Informe o código da profissional cadastrada para vincular os shows à comanda dela.")
+            self.profissional.setFocus()
+            return
         if self.tempo.currentData() is not None:
             super().accept()
 
@@ -262,6 +271,9 @@ class DialogoTempo(QDialog):
         self.resumo.setText(
             f"Tempo escolhido: {fmt_duracao(blocos * self.ctrl.config()['minutos_bloco'])}"
             if blocos is not None else "Escolha o tempo e depois confirme.")
+        if blocos is not None:
+            shows = blocos * self.ctrl.config()['minutos_bloco'] // 30
+            self.resumo.setText(self.resumo.text() + f" · {shows} show(s) de 30 minutos")
 
 
 def pedir_iniciar(pai, ctrl: QuartosController, quarto: int):

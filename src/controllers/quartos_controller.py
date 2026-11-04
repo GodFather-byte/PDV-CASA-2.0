@@ -1,6 +1,6 @@
 """Controle de tempo dos quartos (módulo de operação usar_quartos).
 
-O cliente paga antes, no caixa (venda normal pelo CaixaController); aqui só se conta o tempo. O tempo é vendido em
+O cliente paga antes, no caixa (venda normal pelo CaixaController); aqui se conta o tempo e os shows da profissional. O tempo é vendido em
 blocos (padrão 30 min) e o valor do bloco é só informativo na tela. O início fica gravado no banco e o restante é
 calculado pelo relógio: fechar o PDV ou faltar luz não perde a contagem.
 
@@ -170,6 +170,7 @@ class QuartosController:
                 "operador_id": self.operador_id,
                 "comanda_cliente": comanda_cliente, "codigo_profissional": codigo_profissional,
             })
+            self._registrar_shows(uso_id, codigo_profissional, 0, int(blocos), c["minutos_bloco"])
         self.banco.log("quarto_iniciado", f"quarto {quarto}: {fmt_duracao(blocos * c['minutos_bloco'])}",
                        self.operador_id)
         return uso_id
@@ -178,13 +179,25 @@ class QuartosController:
         """O cliente pagou mais tempo: soma blocos ao que está contando (conta a partir do fim previsto)."""
         self._exigir_ligado()
         self._validar(quarto, blocos)
-        uso = self._ativo(quarto)
-        if uso is None:
-            raise ErroNegocio(f"O quarto {quarto} está livre.")
-        if uso["blocos"] + int(blocos) > MAX_BLOCOS:
-            raise ErroValidacao(f"O total passaria de {MAX_BLOCOS} blocos.", {"blocos": "inválido"})
-        self.banco.executar("UPDATE quartos_uso SET blocos = blocos + ? WHERE id = ?", (int(blocos), uso["id"]))
+        with self.banco.transacao():
+            uso = self._ativo(quarto)
+            if uso is None:
+                raise ErroNegocio(f"O quarto {quarto} está livre.")
+            total = uso["blocos"] + int(blocos)
+            if total > MAX_BLOCOS:
+                raise ErroValidacao(f"O total passaria de {MAX_BLOCOS} blocos.", {"blocos": "inválido"})
+            self.banco.executar("UPDATE quartos_uso SET blocos = ? WHERE id = ?", (total, uso["id"]))
+            self._registrar_shows(uso["id"], uso["codigo_profissional"], uso["blocos"], total, uso["minutos_bloco"])
         self.banco.log("quarto_mais_tempo", f"quarto {quarto}: +{blocos} bloco(s)", self.operador_id)
+
+    def _registrar_shows(self, uso_id, profissional, antes, depois, minutos_bloco):
+        """Cada meia hora contratada gera um show, na mesma transação do tempo."""
+        quantidade = depois * minutos_bloco // 30 - antes * minutos_bloco // 30
+        if profissional and quantidade:
+            self.banco.inserir("shows_quartos", {
+                "uso_id": uso_id, "garota": int(profissional), "blocos_total": depois,
+                "quantidade": quantidade, "criado_em": fmt.agora(),
+            })
 
     def liberar(self, quarto: int) -> dict:
         """Encerra o uso; guarda quanto passou do tempo (0 se saiu dentro do tempo)."""

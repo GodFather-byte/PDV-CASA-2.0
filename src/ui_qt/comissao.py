@@ -10,7 +10,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QDialog, QGroupBox, QHBoxLayout, QHeaderView,
-                               QLabel, QLineEdit, QPushButton, QRadioButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
+                               QLabel, QLineEdit, QPushButton, QRadioButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout,
                                QWidget)
 
 from src.controllers.comissao_controller import LIMITE_CONFIRMAR_CENT
@@ -101,9 +101,10 @@ def pagar_garota(caixa, numero: int) -> dict | None:
     if escolha is None:
         return None
     turno = ctx.turnos.atual()
+    extras = {"shows_quartos_ids": escolha.get("shows_quartos_ids", [])}
     ok, pag = caixa._executar(ctx.comissoes.pagar, numero, turno["id"] if turno else None, ctx.operador_id,
                               escolha["do_caixa"], escolha["shows"], escolha["valor_show_cent"], escolha["pix_cent"],
-                              escolha["vale_cent"], permitir_zerado=bool(escolha.get("zerado")), nome=escolha.get("nome"))
+                              escolha["vale_cent"], permitir_zerado=bool(escolha.get("zerado")), nome=escolha.get("nome"), **extras)
     if not ok:
         return None
     try:
@@ -237,8 +238,8 @@ class DialogoComissao(QDialog):
 
 
 class DialogoAcerto(QDialog):
-    """O acerto da garota: a comissão marcada e, se a casa pergunta (`comissao_pede_shows`), os shows que o OPERADOR lança aqui
-    (nada é contado sozinho), o vale que ela já pegou, a parte paga por Pix e se o dinheiro sai da gaveta.
+    """Acerto com comissão e shows: quantidade automática dos quartos ou manual quando não há shows de quartos pendentes.
+    Mostra separadamente vale, Pix e dinheiro da gaveta.
     `resultado` = {"do_caixa", "shows", "valor_show_cent", "pix_cent", "vale_cent", "zerado", "nome"}, como o `dialogo_pagar` do
     caixa clássico. O nome vem do cadastro (se houver) e o operador pode digitar ou trocar: ele vai só para o acerto e o recibo.
     O vale é descontado do total e não sai do caixa de novo; o Pix é sobre o que sobra depois do vale e nunca passa pela gaveta."""
@@ -249,11 +250,21 @@ class DialogoAcerto(QDialog):
         self.ctx = ctx
         self.comissao_cent = comissao_cent
         self.quantidade = quantidade
-        self.pede_shows = ctx.comissoes.pede_shows()
+        self.shows_quartos = ctx.comissoes.shows_quartos_pendentes(numero)
+        self.shows_automaticos = sum(s["quantidade"] for s in self.shows_quartos)
+        self.modo_shows_quartos = bool(self.shows_quartos) or ctx.banco.cfg_bool("usar_quartos", False)
+        self.pede_shows = ctx.comissoes.pede_shows() or self.modo_shows_quartos
         self.resultado: dict | None = None
         self._zerado_confirmado = False                     # o primeiro Pagar sem nada avisa; o segundo fecha a conta zerada
-        self.setWindowTitle("Pagar comissão")
-        caixa = QVBoxLayout(self)
+        self.setWindowTitle("Acerto da garota — comissões e shows")
+        externo = QVBoxLayout(self)
+        rolagem = QScrollArea()
+        rolagem.setWidgetResizable(True)
+        conteudo = QWidget()
+        caixa = QVBoxLayout(conteudo)
+        rolagem.setWidget(conteudo)
+        externo.addWidget(rolagem)
+        self.resize(720, 650)
         titulo = QLabel(f"Garota {numero}")
         titulo.setFont(QFont("Segoe UI", 12, QFont.Bold))
         caixa.addWidget(titulo)
@@ -274,15 +285,24 @@ class DialogoAcerto(QDialog):
         self.ent_qtd: QLineEdit | None = None
         self.grupo_show = QButtonGroup(self)
         if self.pede_shows:
-            quadro = QGroupBox("Shows (lançados por você)")
+            quadro = QGroupBox("Shows dos quartos (automáticos)" if self.modo_shows_quartos else "Shows (lançados por você)")
             q = QVBoxLayout(quadro)
             linha = QHBoxLayout()
             linha.addWidget(QLabel("Quantidade de shows:"))
             self.ent_qtd = _campo(90, 16)
+            if self.modo_shows_quartos:
+                self.ent_qtd.setText(str(self.shows_automaticos))
+                self.ent_qtd.setReadOnly(True)
             self.ent_qtd.textEdited.connect(self.calcular)
             linha.addWidget(self.ent_qtd)
             linha.addStretch(1)
             q.addLayout(linha)
+            if self.modo_shows_quartos:
+                q.addWidget(_mudo("30 minutos = 1 show. Já incluídos abaixo; não lance novamente."))
+                origens = ", ".join(f"quarto {s['quarto']}: {s['quantidade']} show(s)" for s in self.shows_quartos)
+                detalhe = _mudo(origens)
+                detalhe.setWordWrap(True)
+                q.addWidget(detalhe)
             valores = QHBoxLayout()
             valores.addWidget(QLabel("Valor de cada show:"))
             for cent in ctx.comissoes.valores_show():
@@ -337,7 +357,7 @@ class DialogoAcerto(QDialog):
         self.lbl_msg.setWordWrap(True)
         self.lbl_msg.setStyleSheet(f"color: {VERMELHO};")
         caixa.addWidget(self.lbl_msg)
-        _botoes(self, caixa, "Pagar", self.confirmar)
+        _botoes(self, externo, "Pagar", self.confirmar)
         for campo in (self.ent_nome, self.ent_qtd, self.ent_vale, self.ent_pix):
             if campo is not None:
                 campo.returnPressed.connect(self.confirmar)
@@ -374,6 +394,8 @@ class DialogoAcerto(QDialog):
         vale = self._cent(self.ent_vale, total)
         a_pagar = total - (vale or 0)
         self.lbl_total.setText(fmt.fmt_brl(a_pagar))
+        if self.shows_automaticos and not v:
+            self.lbl_total.setText("Escolha o valor por show")
         self.lbl_vale.setText("O vale é inválido ou maior que o total do acerto." if vale is None else
                               f"Total {fmt.fmt_brl(total)}  -  vale {fmt.fmt_brl(vale)}  =  {fmt.fmt_brl(a_pagar)}" if vale else "")
         pix = self._cent(self.ent_pix, a_pagar)
@@ -415,6 +437,8 @@ class DialogoAcerto(QDialog):
             return
         self.resultado = {"do_caixa": self.chk_do_caixa.isChecked(), "shows": n, "valor_show_cent": v, "pix_cent": pix,
                           "vale_cent": vale, "zerado": zerado, "nome": " ".join(self.ent_nome.text().split())}
+        if self.modo_shows_quartos:
+            self.resultado["shows_quartos_ids"] = [s["id"] for s in self.shows_quartos]
         self.accept()
 
 
@@ -471,8 +495,8 @@ class JanelaComissoes(QDialog):
         self.lbl_total.setFont(QFont("Segoe UI", 12, QFont.Bold))
         geral.addWidget(self.lbl_total)
         meio = QHBoxLayout()
-        esq = QGroupBox("Garotas com comissão a pagar")
-        self.tabela_garotas = _tabela(["Nº", "Nome", "Lanç.", "A pagar"])
+        esq = QGroupBox("Garotas com comissão ou shows a pagar")
+        self.tabela_garotas = _tabela(["Nº", "Nome", "Lanç.", "Comissão", "Shows dos quartos"])
         QVBoxLayout(esq).addWidget(self.tabela_garotas)
         meio.addWidget(esq, 1)
         dir_ = QGroupBox("Lançamentos da garota escolhida")
@@ -514,13 +538,16 @@ class JanelaComissoes(QDialog):
         atual = self.garota_escolhida()
         pend = self.ctx.comissoes.pendentes_por_garota()
         self.tabela_garotas.blockSignals(True)
-        _preencher(self.tabela_garotas, [[p["garota"], p["nome"], p["lancamentos"], fmt.fmt_num(p["total_cent"])]
+        _preencher(self.tabela_garotas, [[p["garota"], p["nome"], p["lancamentos"], fmt.fmt_num(p["total_cent"]), p.get("shows_quartos", 0)]
                                          for p in pend], [int(p["garota"]) for p in pend], direita=(0, 2, 3))
         if pend and not (atual is not None and _selecionar(self.tabela_garotas, atual)):
             self.tabela_garotas.setCurrentCell(0, 0)
         self.tabela_garotas.blockSignals(False)
         total = sum(p["total_cent"] for p in pend)
         self.lbl_total.setText(f"Total a pagar às garotas: {fmt.fmt_brl(total)}" if pend else "Nenhuma comissão a pagar.")
+        shows = sum(p.get("shows_quartos", 0) for p in pend)
+        if shows:
+            self.lbl_total.setText(f"Comissões: {fmt.fmt_brl(total)} + {shows} show(s) dos quartos; escolha o valor no acerto.")
         self._mostrar_lancamentos()
 
     def garota_escolhida(self) -> int | None:

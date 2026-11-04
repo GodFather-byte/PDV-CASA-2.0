@@ -55,6 +55,8 @@ def montar_tiles(mesas: list[dict], balcao: dict | None = None, garotas=()) -> l
         else:
             if g is not None:
                 tile["garota"] = fmt.fmt_num(g["total_cent"])
+                if g.get("shows_quartos"):
+                    tile["shows_quartos"] = g["shows_quartos"]
             for chave, valor in (("nome", (m.get("apelido") or m.get("cliente_nome") or "").strip()),
                                  ("pessoas", m.get("pessoas") or 0), ("itens", m.get("n_itens") or 0)):
                 if valor:
@@ -69,6 +71,8 @@ def montar_tiles(mesas: list[dict], balcao: dict | None = None, garotas=()) -> l
 
 
 def _identificar_garota(tile: dict, g: dict) -> None:
+    if g.get("shows_quartos"):
+        tile["shows_quartos"] = g["shows_quartos"]
     if g.get("nome"):
         tile["nome"] = g["nome"]
     if g.get("marcacoes"):

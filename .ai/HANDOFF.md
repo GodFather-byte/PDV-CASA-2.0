@@ -1,19 +1,24 @@
 # Handoff — 04/11/2026
 
-## Escolha explícita do tempo dos quartos
+## Shows dos quartos integrados ao acerto
 
-- `src/ui_qt/quartos.py`: Q3 + Enter abre o diálogo com Tempo sem seleção. Escolher uma duração habilita Confirmar tempo. Enter sem escolha não inicia 30 minutos automaticamente.
-- Atalhos: um, dois, três, quatro e seis blocos (30 min, 1h, 1h30, 2h, 3h na configuração padrão). Lista permite os demais tempos dentro do limite do controlador. Respeita minutos por bloco configurados e limite restante ao adicionar tempo.
-- Mantidos código/nome da profissional e regras de início/adicional do controlador; nenhuma mudança financeira ou no banco.
-- Testes exercitam Q3 + Enter com diálogo real, cinco durações, cancelamento, bloqueio de Enter sem escolha e configuração diferente de bloco. Validação: 58 testes aprovados (`tests.test_quartos`, `tests.test_qt_caixa`, `tests.test_caixa_tela_pagamento`). Falta homologação visual no Windows da loja.
+- Regra confirmada pelo usuário: cada 30 minutos contratados gera um show imediatamente, ao iniciar ou acrescentar tempo. No acerto escolhe R$ 50 ou R$ 60 por show (tarifas de `show_valores`), somando às comissões. Relógio e liberação não geram shows.
+- Esquema 36: `shows_quartos` registra origem, profissional, quantidade e acerto que consumiu os shows. Sem backfill de históricos antigos, que podem ter sido pagos manualmente. Referência histórica `acerto_id` sem FK: limpeza do acerto não pode reabrir pendências.
+- Tempo e lançamento dos shows são atômicos. Pagamento vincula as pendências na mesma transação da sangria/acerto. A tela transmite os IDs vistos; mudança de quantidade ou pagamento por outra conexão exige reabrir o acerto.
+- Com Quartos ligado, quantidade no acerto é automática e não editável, inclusive zero após pagar. Valores de comissão, shows, vale, Pix e dinheiro são separados. Conteúdo tem rolagem e Pagar fica fora da rolagem. Cartões/comanda/lista mostram os shows; recibo identifica origem. Mudanças do painel atualizam a comanda imediatamente.
+- Diálogo de início exige código de profissional cadastrada para vincular os shows. Controlador mantém compatibilidade com chamadas antigas sem profissional; estas não geram shows. Tempos são convertidos em meias horas completas usando o bloco congelado no uso.
+- Testes novos: `tests/test_shows_quartos.py` cobre início, acréscimo, frações, tarifas 50/60, comissão/vale/Pix/recibo/turno, pagamento único, concorrência com duas conexões, rollback, migração, reabertura, formulário e integração de tela.
+- Validação: suíte completa executou 2340 testes sem falhas, seis pulados (Windows/PostgreSQL); após ajustes finais de formulário/limpeza de widgets, 131 testes de shows, quartos, comissões Qt e cartões passaram sem traceback. Também passaram 342 testes de regressão de caixa, comissões, acerto e app durante a implementação. `git diff --check` sem erros. Homologar no Windows da loja antes de operar.
 
-## Correção anterior publicada na main
+## Alterações anteriores
 
-- Commit 37c2327: área de produtos/pagamento com rolagem independente preserva quartos visíveis em telas 1366×768 e 1280×720. Antes exigia altura mínima de 910 px. Não houve geração de instalador.
-- Ambiente: Python 3.12, `.venv`, dependências com hashes. Instalação e inicialização salvas no rascunho do ambiente. Onboarding: 2327 testes, seis pulados (Windows/PostgreSQL), sem falhas.
+- `37c2327` publicado na main: rolagem independente de produtos/pagamento preserva os quartos em telas baixas.
+- `1c9c289` local: Q3 + Enter exige escolha explícita do tempo (30 min, 1h, 1h30, 2h, 3h e demais durações); sem meia hora automática.
+- Esta tarefa não publica na main nem gera instalador. Preservar os commits locais ao continuar.
+- Ambiente: Python 3.12, `.venv`, dependências com hashes, instalação/inicialização salvas no rascunho do ambiente.
 
 ## Pendências anteriores
 
-- Homologar Qt, central/sincronização/licenças, periféricos, atualização automática e instalação Windows na loja.
-- Ficha/crédito do produto local código 31 continua pendente de definição e implementação; não introduzir regra global pelo código.
-- Credenciais de cobrança/e-mail devem ser fornecidas fora do chat. Detalhes anteriores sobre painel, cardápio, devoluções e atualização automática estão no histórico deste arquivo.
+- Homologar central, sincronização/licenças, periféricos, atualização automática e instalação Windows na loja.
+- Ficha/crédito do produto local código 31 continua pendente; não introduzir regra global pelo código.
+- Credenciais de cobrança/e-mail fora do chat. Detalhes anteriores de painel, cardápio, devoluções e atualização automática no histórico deste arquivo.

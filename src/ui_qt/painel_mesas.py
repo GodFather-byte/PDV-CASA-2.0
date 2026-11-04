@@ -69,6 +69,8 @@ def detalhes(t: dict) -> tuple[str, str, str]:
         return "Venda rápida", "", ""
     if t["tipo"] == "garota":
         n = t.get("marcacoes")
+        if t.get("shows_quartos"):
+            return f"{n or 0} drinks · {t['shows_quartos']} shows", "", ""
         if n:
             return (f"{n} drinks marcados" if n != 1 else "1 drink marcado"), "", ""
         return ("Comissão a pagar" if t.get("nome") else ""), "", ""
@@ -80,6 +82,8 @@ def detalhes(t: dict) -> tuple[str, str, str]:
         ident = f"{t['itens']} itens" if t["itens"] != 1 else "1 item"
     else:
         ident = ""
+    if t.get("shows_quartos"):
+        ident = f"{ident} · {t['shows_quartos']} shows".strip(" ·")
     if t.get("saldo") is not None:
         sem_credito = t["saldo"].startswith("-") or t["saldo"] == fmt.fmt_num(0)
         return ident, f"Saldo R$ {t['saldo']}", "vermelho" if sem_credito else "verde"
@@ -459,7 +463,7 @@ class PainelMesas(QWidget):
 
     def atualizar(self, mesas: list[dict], balcao: dict | None = None, atual: str | None = None, garotas=()) -> None:
         tiles = montar_tiles(mesas, balcao, garotas)
-        assinatura = ([(t["chave"], t["tipo"], t["estado"], t["total"], t.get("garota"), t.get("falta"), t.get("saldo"),
+        assinatura = ([(t["chave"], t["tipo"], t["estado"], t["total"], t.get("garota"), t.get("falta"), t.get("saldo"), t.get("shows_quartos"),
                         t["minutos"], t.get("nome"), t.get("pessoas"), t.get("itens"), t.get("marcacoes")) for t in tiles],
                       atual, self.modo)
         if assinatura == self._assinatura:

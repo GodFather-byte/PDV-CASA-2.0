@@ -429,7 +429,7 @@ class ImpressaoController:
         return self.enviar(texto, f"via_comissao_{lanc['garota']}_{lancamento_id}", tipo="via_comissao")
 
     def recibo_comissao(self, pag: dict, operador: str) -> str:
-        """Recibo do acerto da garota (não fiscal): a comissão (quantos lançamentos e o total), os shows que o operador lançou
+        """Recibo do acerto da garota (não fiscal): a comissão (quantos lançamentos e o total), os shows manuais ou dos quartos
         (quantidade x valor), o total entregue e a linha da assinatura. Os lançamentos não saem um a um: só a quantidade e o total.
         Sem shows é o recibo de comissão de sempre; sem comissão nem shows é o recibo do fechamento zerado."""
         w = self.largura()
@@ -445,6 +445,8 @@ class ImpressaoController:
                        "-" * w, _lr("TOTAL PAGO", M(pag["total_cent"]), w)]
         else:
             linhas.append(_lr(f"TOTAL PAGO ({pag['quantidade']})", M(pag["total_cent"]), w))
+        if pag.get("shows_quartos"):
+            linhas.append(f"Shows dos quartos: {pag['shows_quartos']} (incluídos)"[:w])
         pix, vale = pag.get("pix_cent", 0), pag.get("vale_cent", 0)
         if pix or vale:
             dinheiro = pag["total_cent"] - pix - vale

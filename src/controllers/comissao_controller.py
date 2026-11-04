@@ -91,6 +91,14 @@ class ComissaoController:
     def pede_shows(self) -> bool:
         return self.banco.cfg_bool("comissao_pede_shows", True)
 
+    def shows_quartos_pendentes(self, garota) -> list[dict]:
+        return [dict(r) for r in self.banco.todos(
+            "SELECT s.*, q.quarto FROM shows_quartos s JOIN quartos_uso q ON q.id = s.uso_id "
+            "WHERE s.garota = ? AND s.acerto_id IS NULL ORDER BY s.id", (self.validar_numero(garota),))]
+
+    def quantidade_shows_quartos(self, garota) -> int:
+        return sum(s["quantidade"] for s in self.shows_quartos_pendentes(garota))
+
     def valores_show(self) -> list[int]:
         """As tarifas de show escolhíveis no acerto, em centavos e em ordem ("50;60" -> [5000, 6000])."""
         valores = []
@@ -172,11 +180,20 @@ class ComissaoController:
 
     def pendentes_por_garota(self) -> list[dict]:
         """Uma linha por garota com comissão a pagar: número, nome, nº de lançamentos, total e o mais antigo."""
-        return [dict(r) for r in self.banco.todos(
+        linhas = [dict(r) for r in self.banco.todos(
             """SELECT c.garota, COALESCE(g.nome, '') AS nome, COUNT(*) AS lancamentos, SUM(c.valor_cent) AS total_cent,
                       MIN(c.criado_em) AS desde
                FROM comissoes_garotas c LEFT JOIN garotas g ON g.numero = c.garota
                WHERE c.status = 'pendente' GROUP BY c.garota ORDER BY c.garota""")]
+        por_numero = {p["garota"]: p for p in linhas}
+        for s in self.banco.todos(
+                "SELECT s.garota, COALESCE(g.nome, '') AS nome, SUM(s.quantidade) AS shows, MIN(s.criado_em) AS desde "
+                "FROM shows_quartos s LEFT JOIN garotas g ON g.numero = s.garota "
+                "WHERE s.acerto_id IS NULL GROUP BY s.garota"):
+            p = por_numero.setdefault(s["garota"], dict(garota=s["garota"], nome=s["nome"],
+                                                      lancamentos=0, total_cent=0, desde=s["desde"]))
+            p["shows_quartos"] = s["shows"]
+        return [por_numero[n] for n in sorted(por_numero)]
 
     def lancamentos(self, garota, status: str | None = "pendente") -> list[dict]:
         sql = ("""SELECT c.*, o.nome AS operador, t.numero AS turno FROM comissoes_garotas c
@@ -225,7 +242,8 @@ class ComissaoController:
 
     def pagar(self, garota, turno_id: int | None, operador_id: int | None, tirar_do_caixa: bool = True,
               shows: int = 0, valor_show_cent: int = 0, pix_cent: int = 0, vale_cent: int = 0,
-              permitir_zerado: bool = False, nome: str | None = None) -> dict:
+              permitir_zerado: bool = False, nome: str | None = None,
+              shows_quartos_ids: list[int] | None = None) -> dict:
         """Acerta a garota: paga TUDO que está pendente e, se o operador lançou, os shows (`shows` x `valor_show_cent`). Com
         `tirar_do_caixa` registra a saída do dinheiro no turno (uma sangria 'Comissão garota 180 NOME'), então a conferência da
         gaveta já conta com ela. Só shows, sem comissão pendente, também é um acerto válido. Devolve o resumo do pagamento:
@@ -253,6 +271,12 @@ class ComissaoController:
         if vale_cent < 0:
             raise ErroNegocio("O vale não pode ser negativo.")
         with self.banco.transacao():
+            automaticos = self.shows_quartos_pendentes(n)
+            ids = [s["id"] for s in automaticos]
+            if shows_quartos_ids is not None and ids != list(shows_quartos_ids):
+                raise ErroNegocio("Os shows dos quartos mudaram. Reabra o acerto e confira novamente.")
+            if automaticos and shows != sum(s["quantidade"] for s in automaticos):
+                raise ErroNegocio("Use a quantidade automática dos quartos. Reabra o acerto para conferir.")
             itens = self.lancamentos(n, "pendente")
             if not itens and not shows and not permitir_zerado:
                 raise ErroNegocio(f"A garota {n} não tem comissão pendente.")
@@ -284,12 +308,16 @@ class ComissaoController:
                 "garota": n, "turno_id": turno_id, "operador_id": operador_id, "criado_em": agora, "comissao_cent": comissao,
                 "shows_qtd": shows, "show_valor_cent": valor_show_cent, "shows_cent": shows_cent, "total_cent": total,
                 "movimento_id": movimento, "tirou_do_caixa": int(tirou), "pix_cent": pix_cent, "vale_cent": vale_cent, "nome": nome or None})
+            for show_id in ids:
+                self.banco.executar("UPDATE shows_quartos SET acerto_id = ? WHERE id = ? AND acerto_id IS NULL",
+                                    (acerto, show_id))
             self.banco.log("comissao_paga", f"garota {n} {fmt.fmt_brl(total)} ({len(itens)} lançamentos"
                            + (f", {shows} shows de {fmt.fmt_brl(valor_show_cent)}" if shows else "") + ")"
                            + (f" Pix {fmt.fmt_brl(pix_cent)}" if pix_cent else "")
                            + (f" vale descontado {fmt.fmt_brl(vale_cent)}" if vale_cent else "")
                            + ("" if tirar_do_caixa or dinheiro == 0 else " fora do caixa"), operador_id)
         return {"garota": n, "nome": nome, "total_cent": total, "comissao_cent": comissao, "quantidade": len(itens),
+                "shows_quartos": sum(s["quantidade"] for s in automaticos),
                 "shows": shows, "valor_show_cent": valor_show_cent, "shows_cent": shows_cent, "acerto_id": acerto,
                 "pix_cent": pix_cent, "vale_cent": vale_cent, "dinheiro_cent": dinheiro, "movimento_id": movimento, "movimento_descricao": descricao,
                 "lancamentos": itens, "pago_em": agora, "tirou_do_caixa": tirou}
