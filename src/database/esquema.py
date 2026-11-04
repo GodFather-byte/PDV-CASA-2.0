@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 34
+VERSAO_ESQUEMA = 35
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -991,6 +991,12 @@ AUDITORIA = [
 # (ver BancoDados._migrar). Bancos novos já nascem na VERSAO_ESQUEMA e não as executam. Cada passo é um
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 MIGRACOES = {
+    35: [
+        ("coluna", "quartos_uso", "comanda_cliente", "TEXT"),
+        ("coluna", "quartos_uso", "codigo_profissional", "TEXT"),
+        "CREATE INDEX IF NOT EXISTS ix_quartos_cliente ON quartos_uso(comanda_cliente, inicio)",
+        "CREATE INDEX IF NOT EXISTS ix_quartos_profissional ON quartos_uso(codigo_profissional, inicio)",
+    ],
     # v33: confirmações de devoluções separadas do ledger imutável e custo congelado no fechamento.
     # Tabelas aditivas em TABELAS; não inventar custo histórico para vendas de versões anteriores.
     33: [],
