@@ -724,7 +724,9 @@ TABELAS = [
         operador_id INTEGER REFERENCES operadores(id),
         liberado_em TEXT,
         liberado_por INTEGER REFERENCES operadores(id),
-        excedeu_seg INTEGER NOT NULL DEFAULT 0
+        excedeu_seg INTEGER NOT NULL DEFAULT 0,
+        comanda_cliente TEXT,
+        codigo_profissional TEXT
     )""",
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_quarto_em_uso ON quartos_uso(quarto) WHERE liberado_em IS NULL",
     "CREATE INDEX IF NOT EXISTS ix_quartos_uso_inicio ON quartos_uso(inicio)",
