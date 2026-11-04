@@ -260,6 +260,78 @@ class TestShowsQuartosQt(BaseShows):
         d.accept()
         self.assertEqual(d.result(), QDialog.DialogCode.Accepted)
 
+    def test_acerto_soma_automaticos_e_manuais_com_tarifa_vale_e_pix(self):
+        from src.ui_qt.comissao import DialogoAcerto
+        from src.controllers.impressao_controller import ImpressaoController
+        self.iniciar(2)
+        self.lancar(180, 25)
+        ctx = Contexto(self.banco)
+        ctx.operador = ctx.acesso.operador(self.adm)
+        for tarifa in (5000, 6000):
+            d = DialogoAcerto(None, ctx, 180, "ANA", 2500, 1, True)
+            self.addCleanup(d.deleteLater)
+            self.assertTrue(d.ent_qtd.isReadOnly())
+            self.assertFalse(d.ent_shows_manuais.isReadOnly())
+            d.ent_shows_manuais.setText("3")
+            d.grupo_show.button(tarifa).click()
+            self.assertIn("2 automáticos + 3 manuais = 5", d.lbl_total_shows.text())
+            d.ent_vale.setText("10,00")
+            d.ent_pix.setText("50,00")
+            d.confirmar()
+            self.assertEqual(d.resultado["shows"], 5)
+        r = d.resultado
+        p = self.com.pagar(180, self.turno, self.adm, r["do_caixa"], r["shows"], r["valor_show_cent"],
+                           r["pix_cent"], r["vale_cent"], shows_quartos_ids=r["shows_quartos_ids"])
+        self.assertEqual((p["shows_quartos"], p["shows_manuais"], p["total_cent"], p["dinheiro_cent"]),
+                         (2, 3, 32500, 26500))
+        recibo = ImpressaoController(self.banco).recibo_comissao(p, "ADM")
+        self.assertIn("Shows dos quartos: 2", recibo)
+        self.assertIn("Shows manuais: 3", recibo)
+        self.assertEqual(self.com.shows_do_turno(self.turno)["quantidade"], 5)
+        self.assertEqual(self.com.quantidade_shows_quartos(180), 0)
+        self.q.adicionar_tempo(3, 1)
+        novo = DialogoAcerto(None, ctx, 180, "ANA", 0, 0)
+        self.addCleanup(novo.deleteLater)
+        self.assertEqual(novo.ent_qtd.text(), "1")
+        self.assertEqual(novo.ent_shows_manuais.text(), "")
+        with self.assertRaises(ErroNegocio):
+            self.com.pagar(180, self.turno, self.adm, shows=5, valor_show_cent=6000,
+                           shows_quartos_ids=r["shows_quartos_ids"])
+
+    def test_shows_antigos_manuais_sem_automaticos_com_quartos_ligados(self):
+        from src.ui_qt.comissao import DialogoAcerto
+        ctx = Contexto(self.banco)
+        ctx.operador = ctx.acesso.operador(self.adm)
+        self.banco.cfg_set("comissao_pede_shows", "N")
+        d = DialogoAcerto(None, ctx, 180, "ANA", 0, 0)
+        self.addCleanup(d.deleteLater)
+        self.assertEqual(d.ent_qtd.text(), "0")
+        d.ent_shows_manuais.setText("4")
+        d.grupo_show.button(5000).click()
+        d.tudo_no_pix()
+        d.confirmar()
+        r = d.resultado
+        p = self.com.pagar(180, self.turno, self.adm, False, r["shows"], r["valor_show_cent"],
+                           r["pix_cent"], shows_quartos_ids=r["shows_quartos_ids"])
+        self.assertEqual((p["shows"], p["shows_manuais"], p["shows_quartos"], p["total_cent"], p["pix_cent"]),
+                         (4, 4, 0, 20000, 20000))
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM movimentos_caixa"), 0)
+
+    def test_quantidade_manual_invalida_nao_reduz_automaticos(self):
+        from src.ui_qt.comissao import DialogoAcerto
+        self.iniciar(2)
+        ctx = Contexto(self.banco)
+        for quantidade in ("-1", "1,5", "abc", "998"):
+            with self.subTest(quantidade=quantidade):
+                d = DialogoAcerto(None, ctx, 180, "ANA", 0, 0)
+                self.addCleanup(d.deleteLater)
+                d.ent_shows_manuais.setText(quantidade)
+                d.grupo_show.button(5000).click()
+                d.confirmar()
+                self.assertIsNone(d.resultado)
+                self.assertTrue(d.lbl_msg.text())
+        self.assertEqual(self.com.quantidade_shows_quartos(180), 2)
+
     def test_comanda_so_com_shows_tem_cartao_aviso_e_acerto(self):
         from src.ui_qt.caixa import JanelaCaixa
         from src.ui_qt.painel_mesas import detalhes

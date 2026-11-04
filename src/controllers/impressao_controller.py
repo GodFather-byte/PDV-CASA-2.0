@@ -447,6 +447,8 @@ class ImpressaoController:
             linhas.append(_lr(f"TOTAL PAGO ({pag['quantidade']})", M(pag["total_cent"]), w))
         if pag.get("shows_quartos"):
             linhas.append(f"Shows dos quartos: {pag['shows_quartos']} (incluídos)"[:w])
+        if pag.get("shows_quartos") and pag.get("shows_manuais"):
+            linhas.append(f"Shows manuais: {pag['shows_manuais']} (incluídos)"[:w])
         pix, vale = pag.get("pix_cent", 0), pag.get("vale_cent", 0)
         if pix or vale:
             dinheiro = pag["total_cent"] - pix - vale

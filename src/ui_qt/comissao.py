@@ -238,7 +238,7 @@ class DialogoComissao(QDialog):
 
 
 class DialogoAcerto(QDialog):
-    """Acerto com comissão e shows: quantidade automática dos quartos ou manual quando não há shows de quartos pendentes.
+    """Acerto com comissão e shows: soma os automáticos dos quartos aos manuais informados separadamente.
     Mostra separadamente vale, Pix e dinheiro da gaveta.
     `resultado` = {"do_caixa", "shows", "valor_show_cent", "pix_cent", "vale_cent", "zerado", "nome"}, como o `dialogo_pagar` do
     caixa clássico. O nome vem do cadastro (se houver) e o operador pode digitar ou trocar: ele vai só para o acerto e o recibo.
@@ -283,12 +283,14 @@ class DialogoAcerto(QDialog):
         caixa.addWidget(lbl_com)
 
         self.ent_qtd: QLineEdit | None = None
+        self.ent_shows_manuais: QLineEdit | None = None
+        self.lbl_total_shows: QLabel | None = None
         self.grupo_show = QButtonGroup(self)
         if self.pede_shows:
-            quadro = QGroupBox("Shows dos quartos (automáticos)" if self.modo_shows_quartos else "Shows (lançados por você)")
+            quadro = QGroupBox("Shows automáticos e manuais" if self.modo_shows_quartos else "Shows (lançados por você)")
             q = QVBoxLayout(quadro)
             linha = QHBoxLayout()
-            linha.addWidget(QLabel("Quantidade de shows:"))
+            linha.addWidget(QLabel("Shows dos quartos (automáticos):" if self.modo_shows_quartos else "Quantidade de shows:"))
             self.ent_qtd = _campo(90, 16)
             if self.modo_shows_quartos:
                 self.ent_qtd.setText(str(self.shows_automaticos))
@@ -303,6 +305,19 @@ class DialogoAcerto(QDialog):
                 detalhe = _mudo(origens)
                 detalhe.setWordWrap(True)
                 q.addWidget(detalhe)
+                manuais = QHBoxLayout()
+                manuais.addWidget(QLabel("Shows manuais / anteriores:"))
+                self.ent_shows_manuais = _campo(90, 16)
+                self.ent_shows_manuais.setPlaceholderText("0")
+                self.ent_shows_manuais.textEdited.connect(self.calcular)
+                manuais.addWidget(self.ent_shows_manuais)
+                manuais.addStretch(1)
+                q.addLayout(manuais)
+                dica = _mudo("Informe só os shows que ainda não estão nos automáticos e que não foram pagos.")
+                dica.setWordWrap(True)
+                q.addWidget(dica)
+                self.lbl_total_shows = QLabel()
+                q.addWidget(self.lbl_total_shows)
             valores = QHBoxLayout()
             valores.addWidget(QLabel("Valor de cada show:"))
             for cent in ctx.comissoes.valores_show():
@@ -358,14 +373,17 @@ class DialogoAcerto(QDialog):
         self.lbl_msg.setStyleSheet(f"color: {VERMELHO};")
         caixa.addWidget(self.lbl_msg)
         _botoes(self, externo, "Pagar", self.confirmar)
-        for campo in (self.ent_nome, self.ent_qtd, self.ent_vale, self.ent_pix):
+        for campo in (self.ent_nome, self.ent_qtd, self.ent_shows_manuais, self.ent_vale, self.ent_pix):
             if campo is not None:
                 campo.returnPressed.connect(self.confirmar)
         self.calcular()
-        (self.ent_qtd or self.ent_vale).setFocus()
+        (self.ent_shows_manuais or self.ent_qtd or self.ent_vale).setFocus()
 
     # ------------------------------------------------------------------ leitura dos campos
     def _shows_txt(self) -> str:
+        if self.ent_shows_manuais is not None:
+            manuais = self.ctx.comissoes.validar_quantidade_shows(self.ent_shows_manuais.text())
+            return str(self.shows_automaticos + manuais)
         return self.ent_qtd.text() if self.ent_qtd is not None else "0"
 
     def _valor_show(self) -> int:
@@ -389,12 +407,23 @@ class DialogoAcerto(QDialog):
 
     def calcular(self, *_args) -> None:
         """Atualiza o total e a divisão dinheiro/Pix. Sem shows, o total é só a comissão."""
+        try:
+            qtd = self.ctx.comissoes.validar_quantidade_shows(self._shows_txt())
+            if self.lbl_total_shows is not None:
+                self.lbl_total_shows.setText(
+                    f"{self.shows_automaticos} automáticos + {qtd - self.shows_automaticos} manuais = {qtd} shows no total")
+        except ErroNegocio as erro:
+            qtd = None
+            if self.lbl_total_shows is not None:
+                self.lbl_total_shows.setText(str(erro))
         n, v = self._shows()
         total = self.comissao_cent + n * v
         vale = self._cent(self.ent_vale, total)
         a_pagar = total - (vale or 0)
         self.lbl_total.setText(fmt.fmt_brl(a_pagar))
-        if self.shows_automaticos and not v:
+        if qtd is None:
+            self.lbl_total.setText("Confira a quantidade de shows")
+        elif qtd and not v:
             self.lbl_total.setText("Escolha o valor por show")
         self.lbl_vale.setText("O vale é inválido ou maior que o total do acerto." if vale is None else
                               f"Total {fmt.fmt_brl(total)}  -  vale {fmt.fmt_brl(vale)}  =  {fmt.fmt_brl(a_pagar)}" if vale else "")

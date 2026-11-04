@@ -112,14 +112,20 @@ class ComissaoController:
         return sorted(valores) or list(SHOW_VALORES_PADRAO)
 
     @staticmethod
-    def validar_shows(quantidade, valor_cent) -> tuple[int, int]:
-        """(quantidade, valor de cada show em centavos) já conferidos; sem shows devolve (0, 0)."""
+    def validar_quantidade_shows(quantidade) -> int:
+        """Valida a contagem independentemente da tarifa, inclusive antes de escolhê-la."""
         try:
             qtd = int(str(quantidade).strip() or 0)
         except (TypeError, ValueError):
             raise ErroNegocio("Quantidade de shows inválida: digite só números.") from None
         if qtd < 0 or qtd > SHOWS_MAXIMO:
             raise ErroNegocio(f"A quantidade de shows vai de 0 a {SHOWS_MAXIMO}.")
+        return qtd
+
+    @staticmethod
+    def validar_shows(quantidade, valor_cent) -> tuple[int, int]:
+        """(quantidade, valor de cada show em centavos) já conferidos; sem shows devolve (0, 0)."""
+        qtd = ComissaoController.validar_quantidade_shows(quantidade)
         if qtd == 0:
             return 0, 0
         valor_cent = int(valor_cent or 0)
@@ -275,8 +281,8 @@ class ComissaoController:
             ids = [s["id"] for s in automaticos]
             if shows_quartos_ids is not None and ids != list(shows_quartos_ids):
                 raise ErroNegocio("Os shows dos quartos mudaram. Reabra o acerto e confira novamente.")
-            if automaticos and shows != sum(s["quantidade"] for s in automaticos):
-                raise ErroNegocio("Use a quantidade automática dos quartos. Reabra o acerto para conferir.")
+            if shows < sum(s["quantidade"] for s in automaticos):
+                raise ErroNegocio("O total de shows não pode ser menor que os shows automáticos dos quartos.")
             itens = self.lancamentos(n, "pendente")
             if not itens and not shows and not permitir_zerado:
                 raise ErroNegocio(f"A garota {n} não tem comissão pendente.")
@@ -318,6 +324,7 @@ class ComissaoController:
                            + ("" if tirar_do_caixa or dinheiro == 0 else " fora do caixa"), operador_id)
         return {"garota": n, "nome": nome, "total_cent": total, "comissao_cent": comissao, "quantidade": len(itens),
                 "shows_quartos": sum(s["quantidade"] for s in automaticos),
+                "shows_manuais": shows - sum(s["quantidade"] for s in automaticos),
                 "shows": shows, "valor_show_cent": valor_show_cent, "shows_cent": shows_cent, "acerto_id": acerto,
                 "pix_cent": pix_cent, "vale_cent": vale_cent, "dinheiro_cent": dinheiro, "movimento_id": movimento, "movimento_descricao": descricao,
                 "lancamentos": itens, "pago_em": agora, "tirou_do_caixa": tirou}

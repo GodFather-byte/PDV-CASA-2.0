@@ -11,7 +11,10 @@ Cada 30 minutos contratados somam **1 show** imediatamente: 1h = 2 shows, 1h30 =
 Com blocos configurados diferentes de 30 minutos, a contagem considera as meias horas completas do tempo total contratado.
 
 A comanda e a lista de comissões mostram a quantidade de shows dos quartos separada dos valores de comissão.
-No acerto, com Quartos ligado, a quantidade é automática e não pode ser digitada novamente. Escolha **R$ 50 ou R$ 60
+No acerto, com Quartos ligado, **Shows dos quartos (automáticos)** é uma contagem protegida. Use o campo separado
+**Shows manuais / anteriores** para os shows feitos antes da atualização ou ainda não registrados pelos quartos.
+Informe apenas shows que não estejam nos automáticos e não tenham sido pagos. A tela mostra
+**automáticos + manuais = total de shows**, inclusive quando não há automáticos. Escolha **R$ 50 ou R$ 60
 por show** (tarifas configuradas em `show_valores`). O total é comissão + shows × tarifa, descontado o vale;
 a parte em Pix e a parte em dinheiro continuam separadas. Os shows pagos ficam vinculados ao acerto e não retornam
 como pendentes ao reabrir o programa. Tempo acrescentado depois de um acerto gera nova pendência.
