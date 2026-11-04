@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from tests.test_painel_dono import BaseNuvem, HttpFalso, RespostaFalsa, _ClienteSemTimeout, cabecalho, nuvem, painel
 from src.core.erros import ErroNegocio
+from src.database.esquema import VERSAO_ESQUEMA
 from src.sync import devolucoes_envio, painel_envio, painel_ritmo, painel_status
 
 
@@ -100,7 +101,7 @@ class TesteMelhoriasPainel(BaseNuvem):
                 con.execute("PRAGMA user_version = 32")
             migrado = BancoDados(str(arquivo))
             try:
-                self.assertEqual(migrado.valor("PRAGMA user_version"), 34)
+                self.assertEqual(migrado.valor("PRAGMA user_version"), VERSAO_ESQUEMA)
                 self.assertEqual(migrado.valor("SELECT total_cent FROM vendas WHERE uuid = ?", (venda["uuid"],)), 800)
                 self.assertEqual(migrado.valor("SELECT COUNT(*) FROM itens_venda_custos"), 0)
                 self.assertEqual(migrado.todos("PRAGMA foreign_key_check"), [])
