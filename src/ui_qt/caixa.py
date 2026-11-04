@@ -25,7 +25,7 @@ from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QColor, QFont, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
-                               QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy, QSpinBox, QStackedWidget,
+                               QMenu, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QStackedWidget,
                                QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
@@ -450,8 +450,16 @@ class JanelaCaixa(QMainWindow):
         # Produtos e pagamento lado a lado; embaixo dos dois, a linha dos quartos (quando o módulo está ligado).
         lado = QVBoxLayout()
         lado.setSpacing(8)
-        colunas = QHBoxLayout()
-        lado.addLayout(colunas, 1)
+        # A busca e os pagamentos podem crescer sem empurrar os quartos para fora da tela.
+        # A rolagem absorve a altura mínima dos formulários em monitores menores.
+        operacao = QWidget()
+        colunas = QHBoxLayout(operacao)
+        colunas.setContentsMargins(0, 0, 0, 0)
+        self.rolagem_operacao = QScrollArea()
+        self.rolagem_operacao.setFrameShape(QFrame.Shape.NoFrame)
+        self.rolagem_operacao.setWidgetResizable(True)
+        self.rolagem_operacao.setWidget(operacao)
+        lado.addWidget(self.rolagem_operacao, 1)
         centro, c_cen = _cartao()
         self.lbl_etq_venda = QLabel("BALCÃO")         # o tipo da venda em destaque (rosa na comanda da garota)
         self.lbl_etq_venda.setAlignment(Qt.AlignCenter)

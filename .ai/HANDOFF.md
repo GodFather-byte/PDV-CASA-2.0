@@ -1,122 +1,16 @@
-## Controle de quartos por comandas (04/11/2026)
+# Handoff — 04/11/2026
 
-Branch feature/quartos-comandas-historico-20261104. Esquema 35: campos comanda_cliente e codigo_profissional em quartos_uso. UI pede ambos ao iniciar e mostra no painel grande; historico pesquisavel por codigo. Sem impressao nem nova cobranca. Testes adicionados, ainda nao executados neste ambiente. Validar migracao, testes Qt e instalacao Windows antes do merge.
+## Correção do corte dos quartos no caixa
 
-## Branch: teste imediato da central e análise da ficha código 31 (02/11/2026)
+- `src/ui_qt/caixa.py`: produtos e pagamento ficam em uma área de rolagem independente, com quartos abaixo. A altura mínima anterior do caixa com sete quartos era 910 px e cortava o painel em monitores de 768 px. A busca de produtos não deve aumentar a janela nem empurrar os quartos para fora.
+- `tests/test_quartos.py`: regressão busca e lança produto com sete quartos em 1366×768 e 1280×720; verifica limites e tamanho do painel.
+- Validação Linux/PySide6 offscreen: 56 testes aprovados (`tests.test_quartos`, `tests.test_qt_caixa`, `tests.test_caixa_tela_pagamento`). `git diff --check` sem erros. Validar visualmente no Windows da loja; não houve geração de instalador nesta tarefa.
+- Ambiente de desenvolvimento: Python 3.12, `.venv`, dependências fixadas com hashes. Instruções de instalação e inicialização salvas no rascunho do ambiente. No onboarding anterior, suíte completa: 2327 testes, seis pulados (Windows/PostgreSQL), sem falhas.
 
-- `src/ui_qt/configuracoes.py`: botão **Testar conexão agora**, executa `ponte.rodada(..., forcar=True)` em `QThreadPool` com conexão independente ao SQLite, apresenta resultado e atualiza o retrato local. O teste pode aplicar uma licença publicada, como a rotina automática já faz. Homologar na loja antes do merge.
-- Casa Verde: caixa cadastrado no Neon, token `pdvcx_` testado com GET 404 (sem licença publicada) e POST contato 200. Contador do aplicativo ainda mostrava 173 falhas (intervalo de 60 minutos).
-- **Ficha código 31: ainda NÃO implementada.** Trata-se de um produto local da Casa Verde. Requisito: ao efetivamente entregar R$ X em dinheiro como ficha/crédito anotado na comanda, registrar saída de caixa exatamente uma vez e imprimir comprovante. Antes de entregar: definir vínculo imutável item/movimento, regras para cancelamentos, estornos, lançamento em comanda aberta, pagamentos e controle de dinheiro físico, impedir duplicidade, testes de fechamento e impressão. Evitar hardcode global do código 31 para outras lojas. Não alterar finanças de produção sem homologação.
+## Continuidade anterior
 
-# HANDOFF
-
-## Alertas do painel e erros do caixa
-
-- O badge "ALERTAS 30" era o teto da lista. O retrato manda até um mês de fechamentos e cada
-  `resultado_cent` diferente de zero virava um alerta, inclusive fechamento antigo sem contagem
-  (valor final vazio ou zero, sem forma informada). Agora é um aviso por tipo, só do dia pedido,
-  e diferença até R$ 5 (`whatsapp_alerta_caixa_cent`) não conta. Cada tipo liga e desliga na
-  configuração. "Marcar como visto" fica no celular.
-- O PDF do painel baixa no Chrome (Android e desktop) e abre no Safari do iPhone, inclusive como app.
-- Erros do caixa sobem no lote para `erros_caixa`. Consulta: `python scripts/ver_erros_caixa.py`
-  (ver AGENTS.md). Não imprime segredo.
-
-## WhatsApp do dono, sem Telegram
-
-- O bot do Telegram saiu do caixa e da central. Tabelas `telegram_chats` e `telegram_fila` ficam no
-  banco da loja, sem uso. Fora do repo: apagar o bot no BotFather e `WILLCENTRAL_TELEGRAM_TOKEN`
-  no PC do fornecedor. Não há worker de Telegram no Render.
-- Fechamento do turno abre `https://wa.me/<número>?text=...` com o resumo do dia (Configurações >
-  Nuvem > WhatsApp do dono, vários números). O painel tem **Enviar resumo no WhatsApp**, **Copiar texto**
-  e **Baixar PDF** do dia ou do período. A consulta do texto é sob demanda, não um timer.
-- Alertas (cancelamento, desconto, sangria, mesa parada, caixa fora do horário, diferença de caixa,
-  estoque baixo) vêm dentro do resumo que o celular já pede. Cada um tem **mandar no WhatsApp**.
-- Contagem de estoque no PDV compara contado e teórico e mostra a perda. O retrato leva as perdas e a
-  conferência por forma para o painel.
-
-## Neon pode dormir
-
-- O caixa só chama o banco da nuvem com pendência (venda, comanda, estoque, cardápio), no fechamento
-  do turno, quando o celular pede, ou na manutenção de licença/versão (horas). Sem isso, não há rede.
-- Lote padrão **900 s** (`sync_lote_seg`, 60 a 3600). Batimento no máximo a cada 15 min, e só com movimento
-  e dentro de `sync_expediente_de`/`ate` (vazio = o dia inteiro).
-- `GET /health` e `GET /v1/sync/pedido` não abrem sessão. O pedido do botão **Atualizar agora** fica na
-  memória do Render. Leituras repetidas do painel e do cardápio ficam 45 s em memória.
-- Aba oculta no painel e no porteiro para de consultar. Porteiro no Wi-Fi do caixa continua ao vivo;
-  na nuvem a lista pode atrasar até o lote. O botão pede envio na hora.
-- Uma loja 18 h/dia, 1 venda a cada 13 min: cerca de **6 h/dia** e **180 h/mês** com o compute acordado
-  (5 min ligado a cada flush de 15). Em 0,25 CU, perto de **45 CU-h/mês**, dentro das 100. Painel deixado
-  aberto na tela conta à parte (cerca de 1 consulta por minuto).
-
-## Atualização automática do caixa
-
-- O aviso antigo (`GET /v1/atualizacoes`) continua. O novo fluxo é `GET /v1/atualizacao/ultima?edicao=&canal=estavel`:
-  versão, SHA-256, tamanho, URL, notas e assinatura Ed25519 (chave própria, não a da licença).
-- O caixa baixa no `--sync` e ao abrir, confere hash e assinatura, e instala com Inno `/VERYSILENT` só sem venda,
-  mesa ou comanda aberta. Adiar um dia; obrigatória ou abaixo da mínima não adia. Dados ficam no `%LOCALAPPDATA%`.
-  Se a versão nova não confirmar, o script restaura a pasta anterior e abre de novo, junto com `--sync`.
-- O arquivo NÃO fica no GitHub privado nem no disco do Render. URL pública (Cloudflare R2) ou
-  `PDV_ATUALIZACAO_DIR` num servidor com disco. Guia com o passo a passo: `docs/ATUALIZACAO.md`.
-- **Última instalação manual:** os caixas sem este código não se atualizam sozinhos. A chave pública já está
-  em `src/atualizacao/manifesto.py`. A semente privada não está no git: guarde em `PDV_ATUALIZACAO_CHAVE`.
-- O autoteste do executável lista `src.atualizacao.cliente`, `src.atualizacao.manifesto` e os módulos do
-  cardápio (`src.cardapio.*`, `src.sync.cardapio_envio`, `src.ui_qt.cardapio_qr`). Módulo novo em `src/` entra em `MODULOS`.
-
-## Painel do dono (bar, boate e adega)
-
-- Aba Hoje abre com **Faturamento do mês até agora**, comparado ao mesmo período do mês anterior.
-  Atualiza com o resto do painel (30 s, ou 5 s). Aba **Período**: de/até e atalhos (hoje, ontem, 7 dias,
-  este mês, mês passado), com faturamento, vendas, ticket médio, taxa de serviço, formas, gráfico por dia
-  e totais por mês. Isso sai das vendas já na nuvem. Guia: `docs/PAINEL_DONO.md`.
-- Salão (mesas e comandas, garçom, itens), garçons, serviço separado, CMV/grupo/setor e o sumiço da
-  comissão de garota dependem do retrato novo (`modulos`). Casa sem `usar_garotas` não vê garota;
-  sem `usar_mesas` não vê o salão. Portaria não tem bloco. Caixa antigo: o painel avisa o que falta
-  e não mostra seção vazia de boate.
-- **Deploy só da nuvem:** mês, período, formas, cancelamentos e estoque que já subiram. **PC da loja:**
-  mesas ao vivo, garçom, grupo, setor, CMV e o perfil explícito.
-
-## Cardápio digital (QR da mesa)
-
-- Página pública só consulta: `/cardapio/?loja=CHAVE&mesa=N` (`backend/cardapio.py`, `backend/cardapio_web/`).
-  Nome, grupo/subgrupo, preço vigente (promoção e happy hour, horário de Brasília), texto de sugestão e foto só se for
-  um endereço http(s). Sem custo, estoque, inativo ou `mostrar_no_cardapio` desmarcado.
-- O caixa publica em `POST /v1/cardapio/envio` quando **Configurações > Nuvem > Cardápio digital** está ligado
-  (`src/sync/cardapio_envio.py`, na mesma rodada da sincronização). Reenviar substitui; catálogo igual não chama a nuvem.
-  Desligar tira o cardápio do ar na rodada seguinte.
-- **QR do cardápio das mesas…** gera a folha A4 (1 até `num_mesas`, ou um intervalo). O painel do dono ganhou o link Cardápio.
-- Esquema **33**. Coluna `produtos.mostrar_no_cardapio` (nasce 1). Guia: `docs/CARDAPIO.md`.
-- **O PC do caixa precisa ser atualizado** para publicar o catálogo e imprimir os QR. Só o deploy da nuvem sobe a página;
-  sem o caixa novo ela responde que o cardápio ainda não foi publicado.
-
-## Nuvem quase em tempo real
-
-- `sync_quase_tempo_real` (nasce N): com S, o Qt olha a fila local. O lote sobe a cada `sync_lote_seg` (900 s).
-  Painel do dono e porteiro continuam opt-in.
-  Guias: `docs/NUVEM.md`, `docs/PAINEL_DONO.md`.
-
-## Porteiro
-
-- `/porteiro` no caixa e na nuvem. Lista as comandas abertas sem a da garota. No iPhone, o botão explica
-  Compartilhar > Adicionar à Tela de Início. Guia: `docs/PORTEIRO.md`.
-
-## Entrega 1.10.0
-
-- Painel separa bruto, devoluções e líquido; ledger imutável com ACK próprio e custos congelados apenas para novas vendas.
-- Custos recuperados e comissão dos itens são referências analíticas; não alteram salários, pagamentos nem CMV histórico.
-- Sincronização usa revisão persistente, filas e batimento de 45 s; indicador Qt mostra confirmação e pendências.
-- Esquema 33 adiciona revisão, ACK de devoluções e custos dos itens; migração preserva dados e gera backup.
-- Dependências fixadas com hashes; workflows validam instalação. Build inclui módulos do autoteste e tzdata (fuso no Windows). Deploy verifica SHA público em /v1/versao.
-- Guias: docs/ENTREGA_1_10.md e docs/HOMOLOGACAO_BALCAO.md. Equipamentos físicos ainda pendentes.
-- CaixaController mantém entrada pública; cálculo e divisão delegados a módulos menores.
-
-## Estado
-
-- PDV **1.10.0**, esquema **33**. Interface do PDV só Qt. Licenciador em Tkinter. Dinheiro em centavos.
-- Duas edições: WillPDV e E&A Superações. Cupom não fiscal.
-
-## Pendências para produção
-
-- Atualizar o PDV da loja para o cardápio, o sync de 5 s e o restante que saiu depois do instalador em uso.
-- Homologar Qt no balcão, iPhone físico e a campainha ESP32. Quartos: `docs/QUARTOS.md`.
-- Cobrança Mercado Pago: `MP_ACCESS_TOKEN` e `MP_WEBHOOK_SECRET`. E-mail: `BREVO_API_KEY` e `EMAIL_FROM`.
-- Devolução não atende pré-pago nem rodízio. O painel mostra devoluções separadamente; CMV e pagamentos de comissões históricos não são reescritos.
+- Controle de quartos por profissional e histórico já estava no checkout; não se alteraram regras financeiras, esquema ou controladores nesta correção.
+- Teste imediato da central em Configurações e sincronização/licenças aguardam homologação na loja.
+- Ficha/crédito do produto local código 31 continua pendente de definição e implementação; não introduzir regra global pelo código.
+- Qt, periféricos reais, atualização automática e instalação Windows precisam de homologação no balcão. Credenciais de cobrança/e-mail devem ser fornecidas fora do chat.
+- Consulte o histórico deste arquivo no Git para detalhes anteriores sobre painel, cardápio, devoluções e atualização automática.

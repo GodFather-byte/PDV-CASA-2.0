@@ -393,6 +393,44 @@ class TesteQuartosQt(BaseQuartos):
             f.atualizar()
         self.assertEqual([c.args[0] for c in som.call_args_list], ["alerta", "estourou"])
 
+    def test_lancar_produto_nao_corta_quartos_em_tela_baixa(self):
+        from PySide6.QtCore import QPoint
+        from src.ui_qt.caixa import JanelaCaixa
+        self.banco.cfg_set("imprimir_cupom", "0")
+        self.novo_produto("COCA LATA", 500, codigo="20")
+        self.novo_produto("COCA 2L", 900, codigo="21")
+        ctx = Contexto(self.banco, AcessoController(self.banco).operador(self.operador_adm()))
+        ctx.turnos.abrir(ctx.operador_id, 1, 0)
+        j = JanelaCaixa(ctx)
+        self.addCleanup(j.deleteLater)
+        j.show()
+
+        def conferir_quartos():
+            self.app.processEvents()
+            self.assertLessEqual(j.height(), altura)
+            painel = j.painel_quartos
+            pos = painel.mapTo(j.centralWidget(), QPoint(0, 0))
+            self.assertTrue(painel.isVisible())
+            self.assertGreaterEqual(pos.y(), 0)
+            self.assertLessEqual(pos.y() + painel.height(), j.centralWidget().height())
+            self.assertGreaterEqual(painel.height(), painel.grade.height())
+            self.assertEqual(len(painel.itens), 7)
+
+        for largura, altura in ((1366, 768), (1280, 720)):
+            with self.subTest(resolucao=(largura, altura)):
+                j.resize(largura, altura)
+                conferir_quartos()
+                tamanho = j.painel_quartos.size()
+                j.ent_codigo.setText("COCA")
+                j.lancar_item()
+                self.assertTrue(j.lista_produtos.isVisible())
+                conferir_quartos()
+                self.assertEqual(j.painel_quartos.size(), tamanho)
+                j.lancar_item()
+                self.assertFalse(j.lista_produtos.isVisible())
+                self.assertGreater(j.tabela.rowCount(), 0)
+                conferir_quartos()
+
     def test_tela_do_caixa_tem_os_quartos_e_o_atalho(self):
         from src.ui_qt import quartos as tela
         from src.ui_qt.caixa import JanelaCaixa
