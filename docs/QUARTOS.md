@@ -59,3 +59,7 @@ eletricista para a parte da tomada.
 
 Código: regra em `src/controllers/quartos_controller.py`, envio em `src/hardware/campainha.py`, tela em
 `src/ui_qt/quartos.py`, testes em `tests/test_quartos.py`.
+
+## Identificação por comandas e histórico
+
+Na entrada, informe a comanda do cliente (ex.: 045) e o código da profissional (ex.: 167). São códigos de 1 a 6 dígitos e zeros à esquerda são preservados. Não há nova cobrança ou impressão. O painel exibe os códigos e oferece Histórico de quartos, pesquisável por qualquer código, com entrada, saída e operador. O sistema impede que a mesma profissional seja registrada em dois quartos simultaneamente. Usos antigos continuam no histórico sem códigos, pois não é possível reconstruí-los. O cronômetro e os avisos existentes permanecem.
