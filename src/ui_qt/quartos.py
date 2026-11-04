@@ -213,7 +213,14 @@ class DialogoTempo(QDialog):
         self.setWindowTitle(titulo)
         form = QFormLayout(self)
         minutos = ctrl.config()["minutos_bloco"]
-        self.comanda = QLineEdit()\n        self.comanda.setPlaceholderText('Ex.: 045')\n        self.profissional = QLineEdit()\n        self.profissional.setPlaceholderText('Ex.: 167')\n        if titulo.startswith('Iniciar'):\n            form.addRow('Comanda cliente:', self.comanda)\n            form.addRow('Código profissional:', self.profissional)\n        self.blocos = QSpinBox()
+        self.comanda = QLineEdit()
+        self.comanda.setPlaceholderText('Ex.: 045')
+        self.profissional = QLineEdit()
+        self.profissional.setPlaceholderText('Ex.: 167')
+        if titulo.startswith('Iniciar'):
+            form.addRow('Comanda cliente:', self.comanda)
+            form.addRow('Código profissional:', self.profissional)
+        self.blocos = QSpinBox()
         self.blocos.setRange(1, max(1, maximo))
         self.blocos.setStyleSheet("font-size: 22px; padding: 6px;")
         form.addRow(f"Blocos de {fmt_duracao(minutos)}:", self.blocos)
