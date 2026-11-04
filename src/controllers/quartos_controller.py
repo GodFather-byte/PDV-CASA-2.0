@@ -138,7 +138,7 @@ class QuartosController:
         where = " WHERE " + " AND ".join(filtros) if filtros else ""
         params.append(max(1, min(int(limite), 1000)))
         registros = [dict(r) for r in self.banco.todos(
-            "SELECT id, quarto, inicio, liberado_em, comanda_cliente, codigo_profissional, 
+            "SELECT id, quarto, inicio, liberado_em, comanda_cliente, codigo_profissional, "
             "operador_id, liberado_por, blocos, minutos_bloco, excedeu_seg "
             "FROM quartos_uso" + where + " ORDER BY inicio DESC, id DESC LIMIT ?", tuple(params))]
         for registro in registros:
