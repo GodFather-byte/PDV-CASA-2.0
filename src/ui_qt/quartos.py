@@ -236,7 +236,7 @@ class DialogoTempo(QDialog):
         self._atualizar()
 
     def _atualizar(self):
-        self.resumo.setText(self.ctrl.rotulo_blocos(self.blocos.value()))
+        self.resumo.setText(fmt_duracao(self.blocos.value() * self.ctrl.config()["minutos_bloco"]))
 
 
 def pedir_iniciar(pai, ctrl: QuartosController, quarto: int):
