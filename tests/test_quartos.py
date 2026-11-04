@@ -314,6 +314,68 @@ class TesteQuartosQt(BaseQuartos):
             f._menu.actions()[1].trigger()
         self.assertEqual(f.texto_do_quarto(2), "2 · livre")
 
+    def test_q3_pede_tempo_antes_de_iniciar(self):
+        from PySide6.QtCore import QTimer
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QApplication, QDialogButtonBox, QPushButton
+        from src.ui_qt.caixa import JanelaCaixa
+        from src.ui_qt.quartos import DialogoTempo
+        from src.controllers.quartos_controller import fmt_duracao
+        ctx = Contexto(self.banco, AcessoController(self.banco).operador(self.operador_adm()))
+        ctx.turnos.abrir(ctx.operador_id, 1, 0)
+        j = JanelaCaixa(ctx)
+        self.addCleanup(j.deleteLater)
+        j.show()
+        for blocos in (1, 2, 3, 4, 6, None):
+            with self.subTest(blocos=blocos):
+                erros = []
+
+                def escolher():
+                    dlg = QApplication.activeModalWidget()
+                    try:
+                        self.assertIsInstance(dlg, DialogoTempo)
+                        self.assertEqual(self.estado(3)["estado"], "livre")
+                        confirmar = dlg.botoes.button(QDialogButtonBox.StandardButton.Ok)
+                        self.assertFalse(confirmar.isEnabled())
+                        QTest.keyClick(dlg.profissional, Qt.Key.Key_Return)
+                        self.assertTrue(dlg.isVisible())
+                        if blocos is None:
+                            dlg.reject()
+                            return
+                        botao = next(b for b in dlg.findChildren(QPushButton)
+                                     if b.text() == fmt_duracao(blocos * 30))
+                        botao.click()
+                        self.assertEqual(dlg.tempo.currentData(), blocos)
+                        self.assertTrue(confirmar.isEnabled())
+                        self.assertEqual(self.estado(3)["estado"], "livre")
+                        confirmar.click()
+                    except BaseException as erro:
+                        erros.append(erro)
+                        if dlg is not None:
+                            dlg.reject()
+
+                j.ent_pos.setText("Q3")
+                QTimer.singleShot(0, escolher)
+                QTest.keyClick(j.ent_pos, Qt.Key.Key_Return)
+                if erros:
+                    raise erros[0]
+                if blocos is None:
+                    self.assertEqual(self.estado(3)["estado"], "livre")
+                else:
+                    self.assertEqual(self.estado(3)["minutos"], blocos * 30)
+                    self.q.liberar(3)
+                    j.painel_quartos.atualizar()
+
+    def test_escolha_de_tempo_respeita_bloco_configurado_e_limite(self):
+        from src.ui_qt.quartos import DialogoTempo
+        self.banco.cfg_set("quartos_minutos_bloco", "60")
+        dlg = DialogoTempo(self.q, "Adicionar tempo — quarto 3", maximo=2)
+        self.addCleanup(dlg.deleteLater)
+        self.assertEqual([dlg.tempo.itemText(i) for i in range(dlg.tempo.count())], ["1h", "2h"])
+        self.assertEqual(dlg.tempo.currentData(), 1)
+        dlg.tempo.setCurrentIndex(1)
+        self.assertIn("2h", dlg.resumo.text())
+
     def test_desistir_da_escolha_nao_inicia(self):
         from src.ui_qt import quartos as tela
         f = self.painel()

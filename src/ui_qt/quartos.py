@@ -16,8 +16,8 @@ import threading
 from PySide6.QtCore import QObject, QPoint, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFontMetrics, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QMenu,
-    QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget, QLineEdit, QTableWidget, QTableWidgetItem,
+    QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QMenu,
+    QMessageBox, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget, QLineEdit, QTableWidget, QTableWidgetItem,
 )
 
 from src.controllers.config_controller import modulos_desligados
@@ -221,27 +221,35 @@ class DialogoTempo(QDialog):
             form.addRow('Nome:', self.nome_profissional)
             self.profissional.textChanged.connect(self._atualizar_profissional)
             self.profissional.setFocus()
-        self.blocos = QSpinBox()
-        self.blocos.setRange(1, max(1, maximo))
-        self.blocos.setStyleSheet("font-size: 22px; padding: 6px;")
-        form.addRow(f"Blocos de {fmt_duracao(minutos)}:", self.blocos)
+        self.tempo = QComboBox()
+        self.tempo.setPlaceholderText("Escolha o tempo do quarto")
+        for blocos in range(1, max(1, maximo) + 1):
+            self.tempo.addItem(fmt_duracao(blocos * minutos), blocos)
+        # Iniciar exige uma escolha explícita: Enter não lança meia hora por padrão.
+        self.tempo.setCurrentIndex(-1 if titulo.startswith('Iniciar') else 0)
+        form.addRow("Tempo:", self.tempo)
         self.resumo = QLabel()
         self.resumo.setStyleSheet("font-size: 20px; font-weight: bold;")
         form.addRow(self.resumo)
         atalhos = QHBoxLayout()
-        for b in (1, 2, 4, 6):
+        for b in (1, 2, 3, 4, 6):
             if b <= maximo:
                 botao = QPushButton(fmt_duracao(b * minutos))
                 botao.setAutoDefault(False)
-                botao.clicked.connect(lambda _=False, v=b: self.blocos.setValue(v))
+                botao.clicked.connect(lambda _=False, v=b: self.tempo.setCurrentIndex(v - 1))
                 atalhos.addWidget(botao)
         form.addRow(atalhos)
-        botoes = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        botoes.accepted.connect(self.accept)
-        botoes.rejected.connect(self.reject)
-        form.addRow(botoes)
-        self.blocos.valueChanged.connect(self._atualizar)
+        self.botoes = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.botoes.button(QDialogButtonBox.StandardButton.Ok).setText("Confirmar tempo")
+        self.botoes.accepted.connect(self.accept)
+        self.botoes.rejected.connect(self.reject)
+        form.addRow(self.botoes)
+        self.tempo.currentIndexChanged.connect(self._atualizar)
         self._atualizar()
+
+    def accept(self):
+        if self.tempo.currentData() is not None:
+            super().accept()
 
     def _atualizar_profissional(self):
         codigo = self.profissional.text().strip()
@@ -249,14 +257,18 @@ class DialogoTempo(QDialog):
         self.nome_profissional.setText(nome or 'Não cadastrada em Comissões')
 
     def _atualizar(self):
-        self.resumo.setText(fmt_duracao(self.blocos.value() * self.ctrl.config()["minutos_bloco"]))
+        blocos = self.tempo.currentData()
+        self.botoes.button(QDialogButtonBox.StandardButton.Ok).setEnabled(blocos is not None)
+        self.resumo.setText(
+            f"Tempo escolhido: {fmt_duracao(blocos * self.ctrl.config()['minutos_bloco'])}"
+            if blocos is not None else "Escolha o tempo e depois confirme.")
 
 
 def pedir_iniciar(pai, ctrl: QuartosController, quarto: int):
     """Mostra a escolha do tempo; devolve a ação para executar ou None se desistiu."""
     dlg = DialogoTempo(ctrl, f"Iniciar quarto {quarto}", parent=pai)
     if dlg.exec() == QDialog.DialogCode.Accepted:
-        blocos = dlg.blocos.value()
+        blocos = dlg.tempo.currentData()
         return lambda: ctrl.iniciar(quarto, blocos, codigo_profissional=dlg.profissional.text())
     return None
 
@@ -267,7 +279,7 @@ def pedir_mais_tempo(pai, ctrl: QuartosController, item: dict):
         raise ErroNegocio(f"O quarto {item['quarto']} já está no tempo máximo.")
     dlg = DialogoTempo(ctrl, f"Adicionar tempo — quarto {item['quarto']}", maximo, parent=pai)
     if dlg.exec() == QDialog.DialogCode.Accepted:
-        blocos = dlg.blocos.value()
+        blocos = dlg.tempo.currentData()
         return lambda: ctrl.adicionar_tempo(item["quarto"], blocos)
     return None
 
