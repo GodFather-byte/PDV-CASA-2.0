@@ -217,6 +217,10 @@ class DialogoTempo(QDialog):
         self.profissional.setPlaceholderText('Ex.: 167')
         if titulo.startswith('Iniciar'):
             form.addRow('Código profissional:', self.profissional)
+            self.nome_profissional = QLabel('Digite a comanda da profissional')
+            form.addRow('Nome:', self.nome_profissional)
+            self.profissional.textChanged.connect(self._atualizar_profissional)
+            self.profissional.setFocus()
         self.blocos = QSpinBox()
         self.blocos.setRange(1, max(1, maximo))
         self.blocos.setStyleSheet("font-size: 22px; padding: 6px;")
@@ -238,6 +242,11 @@ class DialogoTempo(QDialog):
         form.addRow(botoes)
         self.blocos.valueChanged.connect(self._atualizar)
         self._atualizar()
+
+    def _atualizar_profissional(self):
+        codigo = self.profissional.text().strip()
+        nome = self.ctrl.nome_profissional(codigo) if codigo.isdigit() else None
+        self.nome_profissional.setText(nome or 'Não cadastrada em Comissões')
 
     def _atualizar(self):
         self.resumo.setText(fmt_duracao(self.blocos.value() * self.ctrl.config()["minutos_bloco"]))
