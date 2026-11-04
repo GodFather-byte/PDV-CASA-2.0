@@ -554,8 +554,8 @@ _PILULA = {"livre": "Livre", "uso": "Em uso", "alerta": "Acabando", "estourou": 
 class GradeQuartos(QWidget):
     """Grade de cartões compactos dos quartos; o clique devolve o número do quarto."""
     clicado = Signal(int)
-    ALTURA = 94
-    MIN_COLUNAS, MAX_COLUNAS = 4, 8          # até 8 quartos numa linha só; mais que isso quebra em outra linha
+    ALTURA = 108
+    MIN_COLUNAS, MAX_COLUNAS = 2, 4          # cartões maiores em até quatro colunas
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -674,7 +674,7 @@ class PainelQuartosCaixa(QFrame):
         self.resumo.setStyleSheet("font-size: 11px;")
         lateral.addWidget(self.resumo)
         lateral.addStretch(1)
-        self.btn_painel = QPushButton("Histórico / Painel")
+        self.btn_painel = QPushButton("Painel completo")
         self.btn_painel.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_painel.setToolTip("Abrir o painel completo dos quartos")
         self.btn_painel.setStyleSheet("padding: 1px 8px; font-size: 11px;")
@@ -685,7 +685,7 @@ class PainelQuartosCaixa(QFrame):
         caixa_lateral.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         caixa_lateral.setStyleSheet("QWidget#quartos_lateral { background: transparent; }")
         caixa_lateral.setLayout(lateral)
-        caixa_lateral.setFixedWidth(104)
+        caixa_lateral.setFixedWidth(112)
         lay.addWidget(caixa_lateral)
         self.grade = GradeQuartos()
         self.grade.clicado.connect(self.acionar)
