@@ -114,6 +114,14 @@ class QuartosController:
             raise ErroValidacao(f"{nome}: use de 1 a 6 dígitos.")
         return codigo
 
+    def nome_profissional(self, codigo: str | None) -> str | None:
+        """Consulta o mesmo cadastro de garotas usado nas comissões."""
+        if not codigo:
+            return None
+        registro = self.banco.um(
+            "SELECT nome FROM garotas WHERE numero = ?", (int(codigo),))
+        return registro["nome"] if registro else None
+
     def historico(self, quarto: int | None = None, codigo: str | None = None,
                   limite: int = 200) -> list[dict]:
         """Consulta histórica, inclusive utilizações ainda abertas, sem valores financeiros."""
@@ -129,10 +137,13 @@ class QuartosController:
             params.extend([self._codigo(codigo, "Código")] * 2)
         where = " WHERE " + " AND ".join(filtros) if filtros else ""
         params.append(max(1, min(int(limite), 1000)))
-        return [dict(r) for r in self.banco.todos(
-            "SELECT id, quarto, inicio, liberado_em, comanda_cliente, codigo_profissional, "
+        registros = [dict(r) for r in self.banco.todos(
+            "SELECT id, quarto, inicio, liberado_em, comanda_cliente, codigo_profissional, 
             "operador_id, liberado_por, blocos, minutos_bloco, excedeu_seg "
             "FROM quartos_uso" + where + " ORDER BY inicio DESC, id DESC LIMIT ?", tuple(params))]
+        for registro in registros:
+            registro["nome_profissional"] = self.nome_profissional(registro["codigo_profissional"])
+        return registros
 
     def iniciar(self, quarto: int, blocos: int, comanda_cliente: str | None = None,
                 codigo_profissional: str | None = None) -> int:
@@ -144,9 +155,9 @@ class QuartosController:
         c = self.config()
         comanda_cliente = self._codigo(comanda_cliente, "Comanda do cliente")
         codigo_profissional = self._codigo(codigo_profissional, "Código da profissional")
-        if bool(comanda_cliente) != bool(codigo_profissional):
-            raise ErroValidacao("Informe a comanda do cliente e o código da profissional juntos.")
         if codigo_profissional:
+            if not self.nome_profissional(codigo_profissional):
+                raise ErroValidacao("Profissional não cadastrada. Cadastre em Comissões primeiro.")
             ocupado = self.banco.um(
                 "SELECT quarto FROM quartos_uso WHERE codigo_profissional = ? AND liberado_em IS NULL",
                 (codigo_profissional,))
@@ -232,6 +243,8 @@ class QuartosController:
                 "valor_cent": uso["blocos"] * uso["valor_bloco_cent"],
                 "comanda_cliente": uso["comanda_cliente"], "codigo_profissional": uso["codigo_profissional"],
             })
+        for item in lista:
+            item["nome_profissional"] = self.nome_profissional(item.get("codigo_profissional"))
         return lista
 
     def resumo_noite(self) -> dict:
