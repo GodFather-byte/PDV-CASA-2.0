@@ -429,6 +429,9 @@ class JanelaQuartos(QDialog):
         self.mensagem = texto("", "aviso")
         layout.addWidget(self.mensagem)
         barra = QHBoxLayout()
+        historico = QPushButton("Histórico de quartos")
+        historico.clicked.connect(self.abrir_historico)
+        barra.addWidget(historico)
         barra.addStretch()
         fechar = QPushButton("Fechar (Esc)")
         fechar.setAutoDefault(False)
@@ -446,6 +449,10 @@ class JanelaQuartos(QDialog):
         self.verificar_campainhas()
         self.timer.start()
         self.timer_campainhas.start()
+
+    def abrir_historico(self):
+        self.exigir_acesso()
+        DialogoHistoricoQuartos(self.controlador(), self).exec()
 
     def exigir_acesso(self):
         if self.ctx.operador_id is None or self.ctx.operador_id != self._operador_id:
