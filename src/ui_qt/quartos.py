@@ -213,12 +213,9 @@ class DialogoTempo(QDialog):
         self.setWindowTitle(titulo)
         form = QFormLayout(self)
         minutos = ctrl.config()["minutos_bloco"]
-        self.comanda = QLineEdit()
-        self.comanda.setPlaceholderText('Ex.: 045')
         self.profissional = QLineEdit()
         self.profissional.setPlaceholderText('Ex.: 167')
         if titulo.startswith('Iniciar'):
-            form.addRow('Comanda cliente:', self.comanda)
             form.addRow('Código profissional:', self.profissional)
         self.blocos = QSpinBox()
         self.blocos.setRange(1, max(1, maximo))
@@ -251,7 +248,7 @@ def pedir_iniciar(pai, ctrl: QuartosController, quarto: int):
     dlg = DialogoTempo(ctrl, f"Iniciar quarto {quarto}", parent=pai)
     if dlg.exec() == QDialog.DialogCode.Accepted:
         blocos = dlg.blocos.value()
-        return lambda: ctrl.iniciar(quarto, blocos, dlg.comanda.text(), dlg.profissional.text())
+        return lambda: ctrl.iniciar(quarto, blocos, codigo_profissional=dlg.profissional.text())
     return None
 
 
@@ -358,6 +355,7 @@ class CartaoQuarto(QFrame):
             self.info.setText("")
             return
         self.info.setText(
+            f"{item.get('nome_profissional') or 'Profissional não identificada'} · {item.get('codigo_profissional') or '—'}\\n"
             f"{fmt_duracao(item['minutos'])}\n"
             f"Entrou {item['inicio']:%H:%M} · Sai {item['fim']:%H:%M}")
         if estado == "estourou":
@@ -379,7 +377,7 @@ class DialogoHistoricoQuartos(QDialog):
         lay = QVBoxLayout(self)
         filtros = QHBoxLayout()
         self.codigo = QLineEdit()
-        self.codigo.setPlaceholderText("Buscar comanda ou código da profissional")
+        self.codigo.setPlaceholderText("Buscar código da profissional")
         filtros.addWidget(self.codigo)
         botao = QPushButton("Buscar")
         botao.clicked.connect(self.atualizar)
@@ -387,7 +385,7 @@ class DialogoHistoricoQuartos(QDialog):
         lay.addLayout(filtros)
         self.tabela = QTableWidget(0, 6)
         self.tabela.setHorizontalHeaderLabels(
-            ["Quarto", "Cliente", "Profissional", "Entrada", "Saída", "Operador"])
+            ["Quarto", "Código", "Profissional", "Entrada", "Saída", "Operador"])
         self.tabela.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         lay.addWidget(self.tabela)
         self.atualizar()
@@ -400,8 +398,8 @@ class DialogoHistoricoQuartos(QDialog):
             return
         self.tabela.setRowCount(len(registros))
         for linha, r in enumerate(registros):
-            valores = [r["quarto"], r["comanda_cliente"] or "—",
-                       r["codigo_profissional"] or "—", r["inicio"],
+            valores = [r["quarto"], r["codigo_profissional"] or "—",
+                       r["nome_profissional"] or "—", r["inicio"],
                        r["liberado_em"] or "Em uso", r["operador_id"] or "—"]
             for coluna, valor in enumerate(valores):
                 self.tabela.setItem(linha, coluna, QTableWidgetItem(str(valor)))
