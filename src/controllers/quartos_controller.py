@@ -105,18 +105,59 @@ class QuartosController:
         if not 1 <= int(blocos) <= MAX_BLOCOS:
             raise ErroValidacao(f"Escolha de 1 a {MAX_BLOCOS} blocos de tempo.", {"blocos": "inválido"})
 
-    def iniciar(self, quarto: int, blocos: int) -> int:
+    @staticmethod
+    def _codigo(valor: str | None, nome: str) -> str | None:
+        if valor is None or not str(valor).strip():
+            return None
+        codigo = str(valor).strip()
+        if not codigo.isdigit() or not 1 <= len(codigo) <= 6:
+            raise ErroValidacao(f"{nome}: use de 1 a 6 dígitos.")
+        return codigo
+
+    def historico(self, quarto: int | None = None, codigo: str | None = None,
+                  limite: int = 200) -> list[dict]:
+        """Consulta histórica, inclusive utilizações ainda abertas, sem valores financeiros."""
+        self._exigir_ligado()
+        filtros, params = [], []
+        if quarto is not None:
+            if not 1 <= int(quarto) <= MAX_QUARTOS:
+                raise ErroValidacao("Quarto inválido.")
+            filtros.append("quarto = ?")
+            params.append(int(quarto))
+        if codigo:
+            filtros.append("(comanda_cliente = ? OR codigo_profissional = ?)")
+            params.extend([self._codigo(codigo, "Código")] * 2)
+        where = " WHERE " + " AND ".join(filtros) if filtros else ""
+        params.append(max(1, min(int(limite), 1000)))
+        return [dict(r) for r in self.banco.todos(
+            "SELECT id, quarto, inicio, liberado_em, comanda_cliente, codigo_profissional, "
+            "operador_id, liberado_por, blocos, minutos_bloco, excedeu_seg "
+            "FROM quartos_uso" + where + " ORDER BY inicio DESC, id DESC LIMIT ?", tuple(params))]
+
+    def iniciar(self, quarto: int, blocos: int, comanda_cliente: str | None = None,
+                codigo_profissional: str | None = None) -> int:
         """Começa a contar o tempo do quarto (o cliente já pagou no caixa)."""
         self._exigir_ligado()
         self._validar(quarto, blocos)
         if self._ativo(quarto):
             raise ErroNegocio(f"O quarto {quarto} já está em uso. Libere antes de iniciar de novo.")
         c = self.config()
+        comanda_cliente = self._codigo(comanda_cliente, "Comanda do cliente")
+        codigo_profissional = self._codigo(codigo_profissional, "Código da profissional")
+        if bool(comanda_cliente) != bool(codigo_profissional):
+            raise ErroValidacao("Informe a comanda do cliente e o código da profissional juntos.")
+        if codigo_profissional:
+            ocupado = self.banco.um(
+                "SELECT quarto FROM quartos_uso WHERE codigo_profissional = ? AND liberado_em IS NULL",
+                (codigo_profissional,))
+            if ocupado:
+                raise ErroNegocio(f"Código {codigo_profissional} já está no quarto {ocupado['quarto']}.")
         with self.banco.transacao():
             uso_id = self.banco.inserir("quartos_uso", {
                 "quarto": int(quarto), "inicio": fmt.agora(), "blocos": int(blocos),
                 "minutos_bloco": c["minutos_bloco"], "valor_bloco_cent": c["valor_bloco_cent"],
                 "operador_id": self.operador_id,
+                "comanda_cliente": comanda_cliente, "codigo_profissional": codigo_profissional,
             })
         self.banco.log("quarto_iniciado", f"quarto {quarto}: {fmt_duracao(blocos * c['minutos_bloco'])}",
                        self.operador_id)
@@ -177,6 +218,7 @@ class QuartosController:
                 "quarto": n, "estado": estado, "uso_id": uso["id"], "inicio": inicio, "fim": fim,
                 "blocos": uso["blocos"], "minutos": minutos, "restante_seg": restante,
                 "valor_cent": uso["blocos"] * uso["valor_bloco_cent"],
+                "comanda_cliente": uso["comanda_cliente"], "codigo_profissional": uso["codigo_profissional"],
             })
         # Quarto em uso acima do número configurado (o dono diminuiu a quantidade): continua visível até ser liberado.
         for n in sorted(q for q in ativos if q > c["quartos"]):
@@ -188,6 +230,7 @@ class QuartosController:
                 "inicio": _dt(uso["inicio"]), "fim": fim, "blocos": uso["blocos"],
                 "minutos": uso["blocos"] * uso["minutos_bloco"], "restante_seg": restante,
                 "valor_cent": uso["blocos"] * uso["valor_bloco_cent"],
+                "comanda_cliente": uso["comanda_cliente"], "codigo_profissional": uso["codigo_profissional"],
             })
         return lista
 

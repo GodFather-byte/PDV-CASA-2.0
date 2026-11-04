@@ -17,7 +17,7 @@ from PySide6.QtCore import QObject, QPoint, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFontMetrics, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QMenu,
-    QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget,
+    QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget, QLineEdit, QTableWidget, QTableWidgetItem,
 )
 
 from src.controllers.config_controller import modulos_desligados
@@ -213,7 +213,7 @@ class DialogoTempo(QDialog):
         self.setWindowTitle(titulo)
         form = QFormLayout(self)
         minutos = ctrl.config()["minutos_bloco"]
-        self.blocos = QSpinBox()
+        self.comanda = QLineEdit()\n        self.comanda.setPlaceholderText('Ex.: 045')\n        self.profissional = QLineEdit()\n        self.profissional.setPlaceholderText('Ex.: 167')\n        if titulo.startswith('Iniciar'):\n            form.addRow('Comanda cliente:', self.comanda)\n            form.addRow('Código profissional:', self.profissional)\n        self.blocos = QSpinBox()
         self.blocos.setRange(1, max(1, maximo))
         self.blocos.setStyleSheet("font-size: 22px; padding: 6px;")
         form.addRow(f"Blocos de {fmt_duracao(minutos)}:", self.blocos)
@@ -236,7 +236,7 @@ class DialogoTempo(QDialog):
         self._atualizar()
 
     def _atualizar(self):
-        self.resumo.setText(self.ctrl.rotulo_blocos(self.blocos.value()))
+        self.resumo.setText(fmt_duracao(self.blocos.value() * self.ctrl.config()["minutos_bloco"]))
 
 
 def pedir_iniciar(pai, ctrl: QuartosController, quarto: int):
@@ -244,7 +244,7 @@ def pedir_iniciar(pai, ctrl: QuartosController, quarto: int):
     dlg = DialogoTempo(ctrl, f"Iniciar quarto {quarto}", parent=pai)
     if dlg.exec() == QDialog.DialogCode.Accepted:
         blocos = dlg.blocos.value()
-        return lambda: ctrl.iniciar(quarto, blocos)
+        return lambda: ctrl.iniciar(quarto, blocos, dlg.comanda.text(), dlg.profissional.text())
     return None
 
 
@@ -362,6 +362,45 @@ class CartaoQuarto(QFrame):
             self.tempo.setText(fmt_relogio(item["restante_seg"]))
 
 
+class DialogoHistoricoQuartos(QDialog):
+    """Histórico por quarto ou comanda, sem valores financeiros."""
+    def __init__(self, ctrl: QuartosController, parent=None):
+        super().__init__(parent)
+        self.ctrl = ctrl
+        self.setWindowTitle("Histórico de quartos")
+        self.resize(900, 520)
+        lay = QVBoxLayout(self)
+        filtros = QHBoxLayout()
+        self.codigo = QLineEdit()
+        self.codigo.setPlaceholderText("Buscar comanda ou código da profissional")
+        filtros.addWidget(self.codigo)
+        botao = QPushButton("Buscar")
+        botao.clicked.connect(self.atualizar)
+        filtros.addWidget(botao)
+        lay.addLayout(filtros)
+        self.tabela = QTableWidget(0, 6)
+        self.tabela.setHorizontalHeaderLabels(
+            ["Quarto", "Cliente", "Profissional", "Entrada", "Saída", "Operador"])
+        self.tabela.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        lay.addWidget(self.tabela)
+        self.atualizar()
+
+    def atualizar(self):
+        try:
+            registros = self.ctrl.historico(codigo=self.codigo.text().strip() or None)
+        except ErroNegocio as erro:
+            QMessageBox.warning(self, "Histórico", str(erro))
+            return
+        self.tabela.setRowCount(len(registros))
+        for linha, r in enumerate(registros):
+            valores = [r["quarto"], r["comanda_cliente"] or "—",
+                       r["codigo_profissional"] or "—", r["inicio"],
+                       r["liberado_em"] or "Em uso", r["operador_id"] or "—"]
+            for coluna, valor in enumerate(valores):
+                self.tabela.setItem(linha, coluna, QTableWidgetItem(str(valor)))
+        self.tabela.resizeColumnsToContents()
+
+
 class JanelaQuartos(QDialog):
     def __init__(self, ctx, parent=None):
         super().__init__(parent)
@@ -390,6 +429,9 @@ class JanelaQuartos(QDialog):
         self.mensagem = texto("", "aviso")
         layout.addWidget(self.mensagem)
         barra = QHBoxLayout()
+        historico = QPushButton("Histórico de quartos")
+        historico.clicked.connect(self.abrir_historico)
+        barra.addWidget(historico)
         barra.addStretch()
         fechar = QPushButton("Fechar (Esc)")
         fechar.setAutoDefault(False)
@@ -407,6 +449,10 @@ class JanelaQuartos(QDialog):
         self.verificar_campainhas()
         self.timer.start()
         self.timer_campainhas.start()
+
+    def abrir_historico(self):
+        self.exigir_acesso()
+        DialogoHistoricoQuartos(self.controlador(), self).exec()
 
     def exigir_acesso(self):
         if self.ctx.operador_id is None or self.ctx.operador_id != self._operador_id:
@@ -491,7 +537,7 @@ class JanelaQuartos(QDialog):
         self.resumo.setText(
             f"Livres: {livres} de {len(situacao)}  ·  Noite: {resumo['usos']} entradas  ·  "
             f"{fmt_duracao(resumo['minutos']) if resumo['minutos'] else '0 min'}  ·  "
-            f"{fmt.fmt_brl(resumo['valor_cent'])}  ·  {resumo['estouros']} passaram do tempo")
+            f"{resumo['estouros']} passaram do tempo")
 
 
 # ------------------------------------------------- quartos no caixa

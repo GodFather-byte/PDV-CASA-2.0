@@ -48,6 +48,25 @@ class TesteRegrasQuartos(BaseQuartos):
         self.banco.cfg_set("usar_quartos", "S")
         self.assertNotIn("util_quartos", modulos_desligados(self.banco))
 
+    def test_comandas_e_historico_sem_cobranca(self):
+        uso = self.q.iniciar(2, 1, "045", "167")
+        ativo = self.estado(2)
+        self.assertEqual(ativo["comanda_cliente"], "045")
+        self.assertEqual(ativo["codigo_profissional"], "167")
+        with self.assertRaises(ErroNegocio):
+            self.q.iniciar(3, 1, "055", "167")
+        self.assertEqual(self.q.historico(codigo="167")[0]["id"], uso)
+        self.q.liberar(2)
+        self.assertIsNotNone(self.q.historico(quarto=2)[0]["liberado_em"])
+        self.q.iniciar(3, 1, "055", "167")
+        self.assertEqual(len(self.q.historico(codigo="167")), 2)
+
+    def test_codigo_invalido_e_identificacao_incompleta(self):
+        for cliente, profissional in [("12", ""), ("abc", "167"), ("12", "abc"), ("", "167")]:
+            with self.assertRaises(ErroValidacao):
+                self.q.iniciar(1, 1, cliente, profissional)
+        self.assertEqual(self.estado(1)["estado"], "livre")
+
     def test_tres_horas_sao_seis_blocos_de_90(self):
         self.q.iniciar(1, 6)
         e = self.estado(1)
