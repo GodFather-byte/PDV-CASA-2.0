@@ -358,7 +358,7 @@ class CartaoQuarto(QFrame):
             self.info.setText("")
             return
         self.info.setText(
-            f"{fmt_duracao(item['minutos'])} ({fmt.fmt_brl(item['valor_cent'])})\n"
+            f"{fmt_duracao(item['minutos'])}\n"
             f"Entrou {item['inicio']:%H:%M} · Sai {item['fim']:%H:%M}")
         if estado == "estourou":
             self.piscar = not self.piscar
