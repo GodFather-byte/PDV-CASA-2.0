@@ -286,7 +286,7 @@ class TesteQuartosQt(BaseQuartos):
         self.assertEqual(f.texto_do_quarto(3), "3 · 3:00:00")
         self.assertEqual(f.texto_do_quarto(1), "1 · livre")
         self.assertEqual(f.resumo.text().strip(), "6 livres")
-        self.assertEqual((f.grade.colunas, f.grade.height()), (7, f.grade.ALTURA))   # os 7 numa linha só
+        self.assertEqual((f.grade.colunas, f.grade.height()), (4, 2 * f.grade.ALTURA))   # cartões maiores em duas linhas
         self.avancar(hours=3, minutes=2)
         f.atualizar()
         self.assertEqual(f.texto_do_quarto(3), "3 · +02:00")
