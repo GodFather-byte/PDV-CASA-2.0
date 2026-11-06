@@ -9,7 +9,8 @@ No campo do produto do caixa, na conta do cliente, digite só **o número da gar
 sistema escolhe o quarto na hora do pagamento. Para forçar um quarto, **`113Q3`** (garota 113 no quarto 3). Vale a
 regra **a partir de 100** (`quartos_garota_minimo`): número de garota cadastrada de 100 em diante é sempre a garota, mesmo
 que algum produto tenha o mesmo código (lance esse produto pelo leitor ou pelo nome); abaixo de 100 é sempre produto.
-Dentro da própria comanda da garota, o número dela não vira quarto. Para abrir a comanda 113, use o campo **Número** (não o do produto). Entra o item **QUARTO 30 min** (o show, no
+Dentro da própria comanda da garota, o número dela não vira quarto. **Repetir o número soma meia hora na mesma linha**:
+`113` e depois `113` = 1h (2 shows para ela), e a tela mostra "agora 1h". Para abrir a comanda 113, use o campo **Número** (não o do produto). Entra o item **QUARTO 30 min** (o show, no
 valor do bloco, por exemplo R$ 90) já ligado à garota. A **quantidade** são os blocos: `2*113Q3` (ou 2 na quantidade)
 = 1h. (`G113` / `G113Q3` também funcionam.) Lançar o produto do quarto pelo código ou
 pelo nome também funciona: o caixa pergunta o número da garota (obrigatório). Bebidas e o resto vão na mesma conta.

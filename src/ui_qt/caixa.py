@@ -2333,10 +2333,13 @@ class JanelaCaixa(QMainWindow):
             self.recarregar()
             return False
         self._ultimo_item_id = item_id
-        minutos = int(blocos) * quartos.config()["minutos_bloco"]
+        total_blocos = int(self.ctx.banco.valor("SELECT quantidade FROM itens_venda WHERE id = ?", (item_id,), blocos))
         from src.controllers.quartos_controller import fmt_duracao
-        self.avisar(f"Quarto {fmt_duracao(minutos)} · {cadastro['nome']} ({garota})"
-                    + (f" · quarto {quarto}" if quarto else "") + " lançado. O tempo começa quando a conta for paga.")
+        minutos = total_blocos * quartos.config()["minutos_bloco"]
+        somou = total_blocos > int(blocos)
+        self.avisar(f"Quarto · {cadastro['nome']} ({garota})" + (f" · quarto {quarto}" if quarto else "")
+                    + (f": agora {fmt_duracao(minutos)}" if somou else f": {fmt_duracao(minutos)}")
+                    + ". O tempo começa quando a conta for paga.")
         self.ent_codigo.clear()
         self.ent_qtd.setText("1")
         self.recarregar()

@@ -364,11 +364,23 @@ class CaixaController(DivisaoContaMixin):
                     existente = None
                 if existente and self._qtd_paga(existente["id"]) > 0:
                     existente = None        # linha já paga por item não recebe leitura nova: o vínculo não cobre o novo
+            if garota_quarto is not None:
+                # 113 de novo na mesma conta: mais meia hora na mesma linha (o pagamento já somaria; assim a tela mostra).
+                existente = self.banco.um(
+                    """SELECT * FROM itens_venda WHERE venda_id = ? AND produto_id = ? AND cancelado = 0
+                       AND garota_quarto = ? AND quarto_pedido IS ? ORDER BY id DESC LIMIT 1""",
+                    (venda_id, produto_id, garota_quarto, quarto_pedido))
+                if existente and (self._qtd_paga(existente["id"]) > 0
+                                  or 0 < maximo < fmt.arred_qtd(existente["quantidade"] + quantidade)):
+                    existente = None
             if existente:
                 item_id = existente["id"]
                 nova_qtd = fmt.arred_qtd(existente["quantidade"] + quantidade)
-                self.banco.executar("UPDATE itens_venda SET quantidade = ?, cascos_emprestados = cascos_emprestados + ? "
-                                    "WHERE id = ?", (nova_qtd, cascos_emprestados, item_id))
+                novo_total = fmt.mult_cent(existente["preco_unit_cent"], nova_qtd)
+                self.banco.executar("UPDATE itens_venda SET quantidade = ?, cascos_emprestados = cascos_emprestados + ?, "
+                                    "total_cent = ?, comissao_cent = ? WHERE id = ?",
+                                    (nova_qtd, cascos_emprestados, novo_total, fmt.pct_de(novo_total, p["comissao_pct"]),
+                                     item_id))
                 anterior = self.produtos.ler_regra_preco(dict(existente))
                 if anterior is None:
                     base_legada = {"tipo": "legado", "preco_cent": existente["preco_base_cent"]}

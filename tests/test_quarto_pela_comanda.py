@@ -63,6 +63,16 @@ class TesteQuartoPelaComanda(BaseShows):
         self.caixa.fechar(vid)
         quartos = {r["garota"]: (r["quarto"], r["blocos"]) for r in self.caixa.ultimos_quartos}
         self.assertEqual(quartos, {180: (1, 2), 181: (2, 1)})
+        linhas = self.banco.todos("SELECT garota_quarto, quantidade FROM itens_venda WHERE venda_id = ? ORDER BY id", (vid,))
+        self.assertEqual([tuple(r) for r in linhas], [(180, 2), (181, 1)])          # a repetição somou na linha da ANA
+
+    def test_repetir_na_mesa_soma_com_o_total_certo(self):
+        self.banco.cfg_set("usar_mesas", "S")
+        vid, _ = self.caixa.abrir_mesa(7)
+        for _ in range(3):
+            self.caixa.adicionar_item(vid, self.produto["id"], 1, garota_quarto=180)
+        linha = self.banco.um("SELECT quantidade, total_cent FROM itens_venda WHERE venda_id = ?", (vid,))
+        self.assertEqual((linha["quantidade"], linha["total_cent"]), (3, 27000))
 
     def test_sem_quarto_livre_vai_para_a_fila_e_inicia_quando_liberar(self):
         for quarto in (1, 2, 3):

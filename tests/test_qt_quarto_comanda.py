@@ -85,9 +85,9 @@ class TesteQuartoNaComandaQt(BaseCaixaQt):
         self.lancar(self.j, "180")
         self.assertEqual((self.itens()[0]["garota_quarto"], self.itens()[0]["quarto_pedido"]), (180, None))
         self.lancar(self.j, "2*180")
-        self.assertEqual(self.itens()[1]["quantidade"], 2)
+        self.assertEqual(self.itens()[0]["quantidade"], 3)                      # somou na mesma linha: 1h30
         self.lancar(self.j, "101")                                    # produto continua produto
-        self.assertEqual(self.itens()[2]["garota_quarto"], None)
+        self.assertEqual(self.itens()[1]["garota_quarto"], None)
         self.pagar_tudo()
         self.assertIn("ANA (180)  ·  1h30", self.j.dialogos.avisos[-1])
 
@@ -103,6 +103,17 @@ class TesteQuartoNaComandaQt(BaseCaixaQt):
         self.lancar(self.j, "180")
         self.assertEqual(self.itens()[2]["garota_quarto"], None)              # mínimo mudou: 180 virou produto
         self.assertEqual(self.j.dialogos.perguntas, [])
+
+    def test_repetir_o_numero_soma_meia_hora_na_mesma_linha(self):
+        self.lancar(self.j, "180")
+        self.lancar(self.j, "101")
+        self.lancar(self.j, "180")
+        linhas = [i for i in self.itens() if i["garota_quarto"] == 180]
+        self.assertEqual([(i["quantidade"], i["total_cent"]) for i in linhas], [(2, 18000)])
+        self.assertIn("ANA (180): agora 1h", self.j.lbl_status.text())
+        self.pagar_tudo()
+        self.assertIn("ANA (180)  ·  1h", self.j.dialogos.avisos[-1])
+        self.assertEqual(self.ctx.comissoes.quantidade_shows_quartos(180), 2)
 
     def test_com_quartos_desligado_g180_e_so_texto_de_busca(self):
         self.banco.cfg_set("usar_quartos", "N")
