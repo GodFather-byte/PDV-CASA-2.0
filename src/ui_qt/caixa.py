@@ -950,6 +950,10 @@ class JanelaCaixa(QMainWindow):
             if v["prepago"]:
                 situacao += "  ·  " + ("Pré-pago" if caixa.saldo_prepago(v["id"])["saldo"] > 0 else "Sem crédito")
             self.lbl_venda.setText(f"{nome_posicao(v['comanda'], v['posicao'])}  ·  {situacao}")
+        if v is not None and v.get("garota_quarto"):
+            garota = self.ctx.quartos.garota_cadastrada(v["garota_quarto"]) or {}
+            self.lbl_venda.setText(self.lbl_venda.text() + f"  ·  Garota {v['garota_quarto']} {garota.get('nome', '')}"
+                                   .rstrip() + (f" · quarto {v['quarto_pedido']}" if v.get("quarto_pedido") else ""))
         self.lbl_total.setText(fmt.fmt_num(total))
         self.lbl_total_rotulo.setText("Total (R$)")
         self.lbl_detalhe.setText(self._detalhe_total(v))
@@ -2065,11 +2069,6 @@ class JanelaCaixa(QMainWindow):
             if partes is None:
                 return
         opcoes = {}
-        if self.ctx.quartos.ligado() and self.ctx.quartos.eh_produto_quarto(p["id"]):
-            garota = self._pedir_garota_do_quarto()
-            if garota is None:
-                return
-            opcoes["garota_quarto"] = garota
         if p.get("preco_gelada_cent", 0) > 0:
             temperatura = self.dialogos.escolher(
                 "Temperatura da bebida", f"{p['nome']}: como o cliente vai levar? "
@@ -2287,14 +2286,6 @@ class JanelaCaixa(QMainWindow):
         if ok:
             self.avisar(f"'{nome}': quantidade {_fmt_qtd(atual)} → {_fmt_qtd(nova)}.", AMBAR if nova < atual else VERDE)
 
-    def _pedir_garota_do_quarto(self) -> int | None:
-        def converter(texto: str) -> int:
-            s = texto.strip()
-            if not s.isdecimal() or not self.ctx.quartos.garota_cadastrada(int(s)):
-                raise ValueError("Número de garota não cadastrado (Comissões).")
-            return int(s)
-        return self._pedir_convertido("Quarto / show", "Número da garota (o show vai para a comanda dela):", converter)
-
     def _numero_e_da_garota(self, texto: str) -> bool:
         """113 no código, na conta do cliente: a partir de `quartos_garota_minimo` (padrão 100), o número de uma garota
         cadastrada é o show/quarto dela, mesmo se algum produto tiver o mesmo código. Abaixo disso é sempre produto."""
@@ -2310,36 +2301,36 @@ class JanelaCaixa(QMainWindow):
         return True
 
     def lancar_quarto(self, garota: int, quarto: int | None = None) -> bool:
-        """G25 (ou G25Q3) no código: lança o show/quarto da garota 25 na conta aberta; a quantidade são os blocos.
-        O tempo começa e o show vai para a comanda dela quando a conta for paga."""
-        try:
-            blocos = fmt.para_qtd(self.ent_qtd.text() or "1")
-        except ValueError:
-            blocos = 0
-        if blocos <= 0 or blocos != int(blocos):
-            self.avisar("Quarto: informe a quantidade de blocos em número inteiro.", VERMELHO)
-            return False
+        """113 (ou 113Q3) na conta do cliente: marca a garota, sem valor. Os shows da conta (produto do show, ex.: 33)
+        ficam dela: ao pagar, o tempo vai para o quarto e os shows para a comanda dela."""
         quartos = self.ctx.quartos
         cadastro = quartos.garota_cadastrada(garota)
         if cadastro is None:
             self.avisar(f"Garota {garota} não cadastrada. Cadastre em Comissões.", VERMELHO)
             return False
-        ok, produto = self._executar(quartos.produto_quarto)
+        anterior = self.venda_id
+
+        def marcar():
+            with self.ctx.banco.transacao():
+                if self.venda_id is None:
+                    self.venda_id = self.ctx.caixa.abrir_balcao()
+                return self.ctx.caixa.marcar_garota(self.venda_id, garota, quarto)
+        ok, _ = self._executar(marcar)
         if not ok:
-            return False
-        ok, item_id = self._executar(self._lancar, produto["id"], int(blocos), None,
-                                     garota_quarto=garota, quarto_pedido=quarto)
-        if not ok:
+            self.venda_id = anterior
             self.recarregar()
             return False
-        self._ultimo_item_id = item_id
-        total_blocos = int(self.ctx.banco.valor("SELECT quantidade FROM itens_venda WHERE id = ?", (item_id,), blocos))
+        show = quartos.produto_quarto()
+        blocos = self.ctx.banco.valor(
+            "SELECT COALESCE(SUM(quantidade), 0) FROM itens_venda WHERE venda_id = ? AND produto_id = ? AND cancelado = 0 "
+            "AND garota_quarto = ?", (self.venda_id, show["id"], garota), 0)
         from src.controllers.quartos_controller import fmt_duracao
-        minutos = total_blocos * quartos.config()["minutos_bloco"]
-        somou = total_blocos > int(blocos)
-        self.avisar(f"Quarto · {cadastro['nome']} ({garota})" + (f" · quarto {quarto}" if quarto else "")
-                    + (f": agora {fmt_duracao(minutos)}" if somou else f": {fmt_duracao(minutos)}")
-                    + ". O tempo começa quando a conta for paga.")
+        texto = f"Garota {garota} {cadastro['nome']} na conta" + (f" · quarto {quarto}" if quarto else "")
+        if blocos:
+            texto += f": {fmt_duracao(int(blocos) * quartos.config()['minutos_bloco'])} de show. O tempo começa ao pagar."
+        else:
+            texto += f". Lance o show ({show['nome']})."
+        self.avisar(texto)
         self.ent_codigo.clear()
         self.ent_qtd.setText("1")
         self.recarregar()

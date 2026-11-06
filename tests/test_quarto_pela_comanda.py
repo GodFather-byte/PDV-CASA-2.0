@@ -124,3 +124,45 @@ class TesteQuartoPelaComanda(BaseShows):
         self.banco.cfg_set("usar_quartos", "N")
         with self.assertRaisesRegex(ErroNegocio, "desligado"):
             self.caixa.adicionar_item(vid, self.produto["id"], 1, garota_quarto=180)
+
+
+class TesteShowDoCodigo33(BaseShows):
+    def setUp(self):
+        super().setUp()
+        self.show = self.novo_produto("PG 30 MIN", 10000, codigo="33")
+        self.banco.cfg_set("quartos_codigo_show", "33")
+
+    def test_codigo_33_e_o_produto_do_show_e_o_valor_do_bloco(self):
+        self.assertEqual(self.q.produto_quarto()["id"], self.show)
+        self.assertTrue(self.q.eh_produto_quarto(self.show))
+        self.assertEqual(self.q.config()["valor_bloco_cent"], 10000)
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM produtos WHERE nome LIKE 'QUARTO%'"), 0)
+
+    def test_marcar_liga_os_shows_antes_e_depois_sem_valor(self):
+        vid = self.caixa.abrir_balcao()
+        antes = self.caixa.adicionar_item(vid, self.show, 1)
+        self.assertEqual(self.caixa.marcar_garota(vid, 180, 2), 1)
+        depois = self.caixa.adicionar_item(vid, self.show, 1)
+        linhas = {r["id"]: (r["garota_quarto"], r["quarto_pedido"]) for r in self.banco.todos(
+            "SELECT id, garota_quarto, quarto_pedido FROM itens_venda WHERE venda_id = ?", (vid,))}
+        self.assertEqual(linhas[antes], (180, 2))
+        self.assertEqual(linhas[depois][0], 180)
+        self.assertEqual(self.caixa.obter(vid)["total_cent"], 20000)
+        self.caixa.adicionar_pagamento(vid, self.tipo("Dinheiro"), 20000)
+        self.caixa.fechar(vid)
+        uso = self.banco.um("SELECT quarto, blocos FROM quartos_uso WHERE codigo_profissional = '180'")
+        self.assertEqual((uso["quarto"], uso["blocos"]), (2, 2))
+        self.assertEqual(self.com.quantidade_shows_quartos(180), 2)
+
+    def test_show_sem_garota_nao_fecha_e_marcar_valida(self):
+        vid = self.caixa.abrir_balcao()
+        self.caixa.adicionar_item(vid, self.show, 1)
+        self.caixa.adicionar_pagamento(vid, self.tipo("Dinheiro"), 10000)
+        with self.assertRaisesRegex(ErroNegocio, "Falta o número da garota"):
+            self.caixa.fechar(vid)
+        for garota, quarto, trecho in ((999, None, "não cadastrada"), (180, 99, "inexistente")):
+            with self.assertRaisesRegex(ErroNegocio, trecho):
+                self.caixa.marcar_garota(vid, garota, quarto)
+        self.banco.cfg_set("usar_quartos", "N")
+        self.caixa.fechar(vid)                                          # Quartos desligado: 33 é produto comum
+        self.assertEqual(self.caixa.obter(vid)["status"], "fechada")

@@ -69,10 +69,14 @@ class QuartosController:
 
     def config(self) -> dict:
         b = self.banco
-        try:
-            valor = fmt.para_centavos(b.cfg("quartos_valor_bloco", "90") or 0)
-        except ValueError:
-            valor = 0
+        show = self._produto_show_configurado()
+        if show is not None:
+            valor = show["preco_cent"]                  # o preço do show (ex.: código 33) é o valor de cada bloco
+        else:
+            try:
+                valor = fmt.para_centavos(b.cfg("quartos_valor_bloco", "90") or 0)
+            except ValueError:
+                valor = 0
         return {
             "quartos": max(1, min(MAX_QUARTOS, b.cfg_int("quartos_qtd", 7))),
             "minutos_bloco": max(1, b.cfg_int("quartos_minutos_bloco", 30)),
@@ -217,10 +221,23 @@ class QuartosController:
         return {"quarto": quarto, "excedeu_seg": excedeu}
 
     # ------------------------------------------------ quarto pela comanda do cliente
+    def _produto_show_configurado(self) -> dict | None:
+        """O produto do show escolhido em `quartos_codigo_show` (ex.: 33), se existir e estiver ativo."""
+        codigo = (self.banco.cfg("quartos_codigo_show", "") or "").strip()
+        if not codigo:
+            return None
+        from src.controllers.produto_controller import ProdutoController
+        p = ProdutoController(self.banco).buscar_codigo(codigo)
+        return p if p and p["ativo"] else None
+
     def produto_quarto(self) -> dict:
-        """O produto do show/quarto (um bloco de tempo, preço = valor do bloco). Criado na primeira vez, se não existir."""
+        """O produto do show/quarto (um bloco de tempo). Com `quartos_codigo_show` (ex.: 33), é esse produto; senão, o
+        QUARTO criado pelo sistema na primeira vez (preço = valor do bloco)."""
         from src.controllers.cadastro_controller import CadastroController
         from src.controllers.produto_controller import ProdutoController
+        show = self._produto_show_configurado()
+        if show is not None:
+            return show
         produtos = ProdutoController(self.banco)
         atual = self.banco.cfg_int("quartos_produto", 0)
         p = produtos.por_id(atual) if atual else None
@@ -239,7 +256,12 @@ class QuartosController:
         return produtos.por_id(pid)
 
     def eh_produto_quarto(self, produto_id) -> bool:
-        return bool(produto_id) and self.banco.cfg_int("quartos_produto", 0) == produto_id
+        if not produto_id:
+            return False
+        show = self._produto_show_configurado()
+        if show is not None:
+            return show["id"] == produto_id
+        return self.banco.cfg_int("quartos_produto", 0) == produto_id
 
     def garota_cadastrada(self, numero) -> dict | None:
         try:

@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 41
+VERSAO_ESQUEMA = 42
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -510,7 +510,9 @@ TABELAS = [
         saida_entrega_em TEXT,
         cancelada_por INTEGER REFERENCES operadores(id),
         motivo_cancelamento TEXT,
-        sincronizado INTEGER NOT NULL DEFAULT 0
+        sincronizado INTEGER NOT NULL DEFAULT 0,
+        garota_quarto INTEGER,
+        quarto_pedido INTEGER
     )""",
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_vendas_cupom ON vendas(cupom) WHERE cupom IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS ix_vendas_status ON vendas(status, modalidade)",
@@ -1042,6 +1044,12 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v42: a garota marcada na conta do cliente (número dela digitado, sem valor) e o quarto pedido; os shows lançados
+    # na conta (produto do show, ex.: código 33) vão para ela ao pagar.
+    42: [
+        ("coluna", "vendas", "garota_quarto", "INTEGER"),
+        ("coluna", "vendas", "quarto_pedido", "INTEGER"),
+    ],
     # v41: quarto pela comanda do cliente (tabela quartos_vendas nasce em TABELAS). Vendas antigas não viram quarto.
     41: [
         ("coluna", "itens_venda", "garota_quarto", "INTEGER"),

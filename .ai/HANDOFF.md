@@ -1,5 +1,12 @@
 # Handoff — 06/11/2026
 
+## Show pelo código 33; número da garota só marca (pedido do usuário depois do PR #57)
+
+- `quartos_codigo_show` (ex.: 33) define o produto do show; o preço dele vira o valor do bloco (`QuartosController.config`).
+- Número da garota na conta (`CaixaController.marcar_garota`, esquema v42: `vendas.garota_quarto/quarto_pedido`) não
+  tem valor: liga a ela os shows já lançados e os próximos. Repetir o número não soma. `fechar` recusa show sem
+  garota (`_conferir_shows_com_garota`). Sem código configurado, segue o produto QUARTO automático.
+
 ## Quarto automático pela comanda do cliente (branch nova, depois do merge do PR #56)
 
 - `113` (número de garota cadastrada a partir de `quartos_garota_minimo`=100 vence produto; abaixo é produto), `113Q3` (quarto 3) ou `113Q`, no código do caixa, lança (G113 também vale); o produto do quarto (criado sozinho, `cfg quartos_produto`, preço =
