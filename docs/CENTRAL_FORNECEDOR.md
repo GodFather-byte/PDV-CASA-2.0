@@ -19,6 +19,20 @@ As novas tabelas `fornecedor_sessoes`, `fornecedor_auditoria`, `fornecedor_chama
 e `fornecedor_emissao_nuvem` são criadas na inicialização. Não altera o esquema SQLite
 dos caixas. A chave privada fica no arquivo secreto do servidor, nunca no navegador.
 
+## Cadastrar e instalar uma loja sem terminal
+
+1. **Cadastrar loja**: identificação, nome, programa (WillPDV ou Will Adega) e motivo. A central mostra uma vez o
+   **código de instalação** (`WILL1-...`), que junta o endereço da nuvem, a loja e o token. Guarde como senha.
+2. Registre a validade (liberação manual) ou o plano mensal da loja.
+3. No caixa, tela de entrada, **Ativar licença ou instalar loja**: colar o código configura a nuvem (endereço, loja,
+   token), liga o envio do painel do dono e já busca a licença. Se o caixa estava em outra loja, ele pergunta antes.
+4. No detalhe da loja, **Instalação e acesso do dono**:
+   - **Gerar senha do painel do dono**: senha nova para o celular (endereço da nuvem + `/painel/`); a antiga cai.
+   - **Gerar novo código de instalação**: troca o token (por exemplo, se vazou). Os caixas instalados precisam
+     receber o código novo pelo mesmo botão.
+
+Os comandos `python -m backend.lojas ...` continuam funcionando, mas não são mais necessários para o dia a dia.
+
 ## Lojas, pagamentos e licenças
 
 - Lojas já cadastradas aparecem automaticamente. Cadastrar uma loja exibe seu token

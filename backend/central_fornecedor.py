@@ -213,8 +213,25 @@ def instalar(app, Loja):
                 "edicoes": [{"chave": c, "nome": e.nome} for c, e in EDICOES.items()],
                 "consultado_em": agora()}
 
+    def endereco_nuvem(request: Request) -> str:
+        """Endereço público da nuvem para o código de instalação (no Render, RENDER_EXTERNAL_URL)."""
+        base = os.environ.get("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+        if base:
+            return base
+        base = str(request.base_url).rstrip("/")
+        if base.startswith("http://") and request.url.hostname not in ("localhost", "127.0.0.1"):
+            base = "https://" + base[len("http://"):]
+        return base
+
+    def instalacao(request: Request, chave: str, token: str) -> str:
+        from src.core import codigo_instalacao
+        try:
+            return codigo_instalacao.gerar(endereco_nuvem(request), chave, token)
+        except ValueError:
+            return ""          # endereço fora do padrão: o token continua valendo para configurar à mão
+
     @app.post("/v1/fornecedor/lojas")
-    def criar(dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
+    def criar(request: Request, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
         from backend.lojas import criar as criar_loja, ErroLoja
         chave, nome = texto(dados, "chave", 64), texto(dados, "nome", 160)
         motivo = texto(dados, "motivo", 500)
@@ -226,7 +243,30 @@ def instalar(app, Loja):
             raise HTTPException(422, str(erro)) from None
         db.query(Loja).filter_by(chave_loja=chave).update({"edicao": edicao_loja})
         db.commit()
-        return {"chave": chave, "token": token}
+        return {"chave": chave, "token": token, "codigo_instalacao": instalacao(request, chave, token)}
+
+    @app.post("/v1/fornecedor/lojas/{chave}/novo-token")
+    def trocar_token(request: Request, chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
+        """Token e código de instalação novos (o antigo deixa de valer: os caixas da loja precisam do novo)."""
+        from backend.lojas import novo_token
+        obter(db, chave)
+        motivo = texto(dados, "motivo", 500)
+        if dados.get("confirmacao") != chave:
+            raise HTTPException(422, "Confirme a identificação exata da loja.")
+        auditar(db, "novo_token", chave, motivo)
+        token = novo_token(db, chave)              # grava junto a auditoria
+        return {"token": token, "codigo_instalacao": instalacao(request, chave, token)}
+
+    @app.post("/v1/fornecedor/lojas/{chave}/senha-painel")
+    def senha_painel(chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
+        """Senha nova do painel do dono no celular (aparece uma vez; encerra as sessões com a senha antiga)."""
+        from backend import painel
+        obter(db, chave)
+        motivo = texto(dados, "motivo", 500)
+        senha = painel.gerar_senha()
+        auditar(db, "senha_painel", chave, motivo)
+        painel.definir_senha(db, chave, senha)      # grava junto a auditoria
+        return {"senha": senha}
 
     @app.get("/v1/fornecedor/lojas/{chave}")
     def detalhes(chave: str, _=Depends(sessao), db=Depends(get_db)):

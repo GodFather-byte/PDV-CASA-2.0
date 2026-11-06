@@ -40,9 +40,12 @@ Diagnóstico, melhorias entregues, plano em fases e próxima evolução:
 6. **Estoque inicial:** Estoque > Lançamento > Estoque inicial (ou a coluna Quantidade da planilha). Contar as latas no
    unitário; fardos fechados contam em unidades.
 7. **Backup:** Utilitários > Backup: pasta no pendrive/Drive e senha. Fazer um backup e uma restauração de teste.
-8. **Painel do dono (opcional):** só se a nuvem estiver no ar: cadastrar a loja na nuvem, token em Configurações > Nuvem,
-   ligar "Painel do dono no celular", definir a senha (`python -m backend.lojas painel LOJA`) e instalar o app no celular
-   do dono. Sem nuvem, pule; nada no caixa depende disso.
+8. **Nuvem, licença e painel do dono (sem terminal):** na central do fornecedor (`/central/`), cadastre a loja com o
+   programa **Will Adega** e registre a validade ou o plano. Copie o **código de instalação** (começa com `WILL1-`).
+   No caixa, na tela de entrada, clique em **Ativar licença ou instalar loja** e cole o código: a nuvem, o envio do
+   painel do dono e a licença ficam configurados. Para o celular do dono, use **Gerar senha do painel do dono** no
+   detalhe da loja na central e passe o endereço `/painel/`, a loja e a senha. Sem nuvem, use o código de licença do
+   Will Licenças no mesmo botão; nada no caixa depende da nuvem.
 
 ## Treinamento do operador (10 minutos)
 

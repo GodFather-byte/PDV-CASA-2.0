@@ -18,6 +18,10 @@ Branch `claude/cloud-environment-setup-6auvo5` (PR #56), com a main `e364e2d` (c
   `FotoProdutoController` (normaliza JPEG 480/160 px, limites 8 MB/40 Mpx; busca no Open Food Facts só em
   `*.openfoodfacts.org` via https, sem redirecionamento), aba Foto no cadastro, foto do último item no caixa (coluna do
   pagamento, some com a venda vazia) e cardápio (endereço https ou miniatura embutida com orçamento de 1,5 MB).
+- **Cadastro sem terminal:** a central gera o código de instalação `WILL1-` (endereço + loja + token) ao cadastrar e em
+  "Gerar novo código de instalação"; "Gerar senha do painel do dono" substitui `backend.lojas painel`. No caixa, o
+  botão da tela de entrada aceita o código: grava `api_url`, `chave_loja`, `api_token`, liga `painel_dono` e busca a
+  licença (pergunta antes de trocar de loja).
 - Suíte completa local: 2371 testes OK (6 pulados), Node 9/9.
 
 ## Pendências

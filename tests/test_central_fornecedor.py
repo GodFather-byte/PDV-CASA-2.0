@@ -1,5 +1,6 @@
 """Acesso do fornecedor, isolamento das lojas, suporte e transferência de emissão."""
 from datetime import date, timedelta
+import json
 import os
 import unittest
 from unittest.mock import patch
@@ -312,6 +313,42 @@ class TesteProgramaDaLojaECorrecoes(TesteCentralFornecedor):
         self.http.cookies.clear()
         self.login()
         self.assertLessEqual(len(central._tentativas), 2000)
+
+    def test_cadastro_devolve_codigo_de_instalacao_que_funciona(self):
+        from src.core import codigo_instalacao
+        r = self.post("/lojas", {"chave": "ADEGA-7", "nome": "Adega 7", "motivo": "Venda", "edicao": "willadega"}).json()
+        dados = codigo_instalacao.ler(r["codigo_instalacao"])
+        self.assertEqual(dados, {"url": "https://testserver", "chave": "ADEGA-7", "token": r["token"]})
+        self.assertNotEqual(self.http.get("/v1/licenca", headers={"Authorization": "Bearer " + r["token"]}).status_code, 401)
+        with patch.dict(os.environ, {"RENDER_EXTERNAL_URL": "https://willpdv-nuvem-6sp0.onrender.com/"}):
+            r = self.post("/lojas/ADEGA-7/novo-token", {"motivo": "PC novo", "confirmacao": "ADEGA-7"}).json()
+        self.assertEqual(codigo_instalacao.ler(r["codigo_instalacao"])["url"], "https://willpdv-nuvem-6sp0.onrender.com")
+        with nuvem.SessionLocal() as db:
+            db.query(nuvem.Loja).filter_by(chave_loja="ADEGA-7").delete()
+            db.commit()
+
+    def test_novo_token_exige_confirmacao_e_derruba_o_antigo(self):
+        self.assertEqual(self.post("/lojas/LOJA-1/novo-token", {"motivo": "x", "confirmacao": "LOJA-2"}).status_code, 422)
+        self.assertNotEqual(self.http.get("/v1/licenca", headers=cabecalho()).status_code, 401)
+        r = self.post("/lojas/LOJA-1/novo-token", {"motivo": "Token vazou", "confirmacao": "LOJA-1"})
+        self.assertEqual(r.status_code, 200, r.text)
+        novo = r.json()["token"]
+        self.assertEqual(self.http.get("/v1/licenca", headers=cabecalho()).status_code, 401)
+        self.assertNotEqual(self.http.get("/v1/licenca", headers={"Authorization": "Bearer " + novo}).status_code, 401)
+        eventos = self.http.get("/v1/fornecedor/auditoria").json()["eventos"]
+        self.assertEqual(eventos[0]["acao"], "novo_token")
+        self.assertNotIn(novo, json.dumps(eventos))
+
+    def test_senha_do_painel_do_dono_sem_terminal(self):
+        from backend import painel
+        r = self.post("/lojas/LOJA-1/senha-painel", {"motivo": "Dono pediu"})
+        self.assertEqual(r.status_code, 200, r.text)
+        senha = r.json()["senha"]
+        with nuvem.SessionLocal() as db:
+            guardado = db.query(painel.PainelAcesso).filter_by(chave_loja="LOJA-1").one().senha_hash
+        self.assertTrue(painel.conferir_senha(senha, guardado))
+        self.assertNotIn(senha, json.dumps(self.http.get("/v1/fornecedor/auditoria").json()))
+        self.assertEqual(self.post("/lojas/NAO-EXISTE/senha-painel", {"motivo": "x"}).status_code, 404)
 
     def test_assinar_ate_limita_a_cem_anos(self):
         codigo, expira = emissao.assinar_ate(SEMENTE, "LOJA-1", date(2400, 1, 1), "willadega", date(2026, 11, 6))
