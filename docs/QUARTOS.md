@@ -5,15 +5,20 @@ na comanda da profissional identificada, separados do consumo do cliente.
 
 ## Jeito mais rápido: o quarto vai na comanda do cliente
 
-No campo do produto do caixa, na conta do cliente, digite só **o número da garota**: **`113`** + Enter. Pronto: o
-sistema escolhe o quarto na hora do pagamento. Para forçar um quarto, **`113Q3`** (garota 113 no quarto 3). Vale a
-regra **a partir de 100** (`quartos_garota_minimo`): número de garota cadastrada de 100 em diante é sempre a garota, mesmo
-que algum produto tenha o mesmo código (lance esse produto pelo leitor ou pelo nome); abaixo de 100 é sempre produto.
-Dentro da própria comanda da garota, o número dela não vira quarto. **Repetir o número soma meia hora na mesma linha**:
-`113` e depois `113` = 1h (2 shows para ela), e a tela mostra "agora 1h". Para abrir a comanda 113, use o campo **Número** (não o do produto). Entra o item **QUARTO 30 min** (o show, no
-valor do bloco, por exemplo R$ 90) já ligado à garota. A **quantidade** são os blocos: `2*113Q3` (ou 2 na quantidade)
-= 1h. (`G113` / `G113Q3` também funcionam.) Lançar o produto do quarto pelo código ou
-pelo nome também funciona: o caixa pergunta o número da garota (obrigatório). Bebidas e o resto vão na mesma conta.
+Configure uma vez, em Configurações > Módulos, **"Quartos: código do produto do show"** = o código do seu PG/show
+(ex.: **33**). O preço desse produto (ex.: R$ 100) é o valor de cada bloco de 30 min.
+
+Na conta do cliente, no campo do produto:
+- **`33`** lança o show de 30 min, com o valor. `33` de novo (ou `2*33`) = 1h e 2 shows.
+- **`113`** (o número da garota) **não lança valor**: só diz de quem são os shows da conta. A conta mostra
+  "Garota 113 ANA" no alto e na linha do show. A ordem não importa: `33` e depois `113`, ou `113` e depois `33`.
+- **`113Q3`** escolhe o quarto 3 (sem Q, o sistema escolhe).
+- Bebidas e o resto vão na mesma conta.
+
+Vale a regra **a partir de 100** (`quartos_garota_minimo`): número de garota cadastrada de 100 em diante é a garota;
+abaixo de 100 é sempre produto. Dentro da própria comanda da garota, o número dela não vira marcação. Para abrir a
+comanda 113, use o campo **Número**. Com show na conta e **sem o número da garota**, o caixa não fecha e avisa.
+Sem o código do show configurado, o sistema usa um produto QUARTO criado por ele (preço = `quartos_valor_bloco`).
 
 **Ao pagar a conta**, o sistema faz sozinho:
 - **Garota já num quarto** (cliente pagou mais tempo): soma no quarto dela e conta mais show.

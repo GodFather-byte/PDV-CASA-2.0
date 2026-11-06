@@ -132,6 +132,8 @@ CAMPOS_CONFIG = [
     ("quartos_minutos_bloco", "Quartos: minutos de cada bloco de tempo", "int", "Módulos"),
     ("quartos_valor_bloco", "Quartos: valor de cada bloco (R$, só informativo na tela)", "texto", "Módulos"),
     ("quartos_alerta_min", "Quartos: avisar quantos minutos antes de acabar", "int", "Módulos"),
+    ("quartos_codigo_show", "Quartos: código do produto do show (ex.: 33; o preço dele é o valor de cada bloco de "
+     "tempo; vazio = produto QUARTO criado pelo sistema)", "texto", "Módulos"),
     ("quartos_garota_minimo", "Quartos: número a partir do qual, digitado na conta do cliente, é a garota (lança o "
      "quarto dela; abaixo disso é produto)", "int", "Módulos"),
     ("quartos_campainhas", "Quartos: campainhas (quarto=endereço do aparelho; ex.: 1=192.168.0.51; 2=192.168.0.52)",

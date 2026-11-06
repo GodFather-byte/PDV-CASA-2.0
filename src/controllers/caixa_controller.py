@@ -306,6 +306,9 @@ class CaixaController(DivisaoContaMixin):
                 raise ErroNegocio("Para anotar casco emprestado, a venda precisa ter o cliente (caderneta ou entrega).")
             if cascos_emprestados > int(quantidade) - quantidade_cascos:
                 raise ErroNegocio("Os cascos emprestados não podem passar das garrafas sem casco cobrado.")
+        if garota_quarto is None and v.get("garota_quarto") and self._quartos().eh_produto_quarto(produto_id):
+            garota_quarto = v["garota_quarto"]           # show lançado depois do número dela: já é dela
+            quarto_pedido = quarto_pedido if quarto_pedido is not None else v.get("quarto_pedido")
         if garota_quarto is not None or quarto_pedido is not None:
             self._validar_quarto_lancado(p, quantidade, garota_quarto, quarto_pedido)
         self._conferir_limite_comanda(v)
@@ -954,6 +957,7 @@ class CaixaController(DivisaoContaMixin):
                excesso_como_credito: bool | None = None) -> dict:
         self.ultimos_quartos = []
         v = self._aberta(venda_id)
+        self._conferir_shows_com_garota(v)
         turno = self.turnos.exigir_aberto()
         itens = self.itens(venda_id)
         sem_preco = self.banco.um(
@@ -1139,6 +1143,49 @@ class CaixaController(DivisaoContaMixin):
     def _quartos(self):
         from src.controllers.quartos_controller import QuartosController
         return QuartosController(self.banco, self.operador_id)
+
+    def marcar_garota(self, venda_id: int, garota: int, quarto: int | None = None) -> int:
+        """O número da garota digitado na conta do cliente: não tem valor; diz de quem são os shows da conta (ao pagar, o
+        tempo vai para o quarto e os shows para a comanda dela). Liga a ela os shows já lançados sem garota e os
+        próximos. Devolve quantas linhas de show foram ligadas agora."""
+        v = self._aberta(venda_id)
+        quartos = self._quartos()
+        if not quartos.ligado():
+            raise ErroNegocio("O módulo Quartos está desligado (Configurações > Módulos).")
+        if isinstance(garota, bool) or not isinstance(garota, int) or not quartos.garota_cadastrada(garota):
+            raise ErroNegocio(f"Garota {garota} não cadastrada. Cadastre em Comissões.")
+        if quarto is not None and (isinstance(quarto, bool) or not isinstance(quarto, int)
+                                   or not 1 <= quarto <= quartos.config()["quartos"]):
+            raise ErroNegocio("Quarto inexistente.")
+        show = quartos.produto_quarto()
+        with self.banco.transacao():
+            self.banco.executar("UPDATE vendas SET garota_quarto = ?, quarto_pedido = ? WHERE id = ?",
+                                (garota, quarto, venda_id))
+            ligadas = self.banco.executar(
+                "UPDATE itens_venda SET garota_quarto = ?, quarto_pedido = COALESCE(?, quarto_pedido) "
+                "WHERE venda_id = ? AND produto_id = ? AND cancelado = 0 AND garota_quarto IS NULL",
+                (garota, quarto, venda_id, show["id"])).rowcount
+            self.banco.log("garota_na_conta", f"venda {v['id']}: garota {garota}" + (f" quarto {quarto}" if quarto else ""),
+                           self.operador_id)
+        return ligadas
+
+    def _conferir_shows_com_garota(self, v: dict) -> None:
+        """Show na conta sem o número da garota: liga à garota marcada; sem nenhuma, não deixa fechar (o show é dela)."""
+        quartos = self._quartos()
+        if not quartos.ligado():
+            return
+        show = quartos._produto_show_configurado() or self.produtos.por_id(self.banco.cfg_int("quartos_produto", 0))
+        if show is None or not self.banco.um(
+                "SELECT 1 FROM itens_venda WHERE venda_id = ? AND produto_id = ? AND cancelado = 0 AND garota_quarto IS NULL",
+                (v["id"], show["id"])):
+            return
+        if not v.get("garota_quarto"):
+            raise ErroNegocio(f"Falta o número da garota para o {show['nome']}: digite o número dela (ex.: 113) na conta "
+                              "antes de receber.")
+        self.banco.executar(
+            "UPDATE itens_venda SET garota_quarto = ?, quarto_pedido = COALESCE(quarto_pedido, ?) "
+            "WHERE venda_id = ? AND produto_id = ? AND cancelado = 0 AND garota_quarto IS NULL",
+            (v["garota_quarto"], v.get("quarto_pedido"), v["id"], show["id"]))
 
     def _validar_quarto_lancado(self, p: dict, quantidade: float, garota, quarto) -> None:
         """Show/quarto na comanda do cliente: produto do quarto, garota cadastrada, blocos inteiros, quarto existente."""
