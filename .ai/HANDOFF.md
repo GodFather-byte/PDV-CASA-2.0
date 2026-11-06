@@ -2,7 +2,7 @@
 
 ## Will Adega para venda (segunda, 09/11)
 
-Branch `claude/cloud-environment-setup-6auvo5`, dois commits sobre a main `59f1715`:
+Branch `claude/cloud-environment-setup-6auvo5` (PR #56), com a main `e364e2d` (central do fornecedor) incorporada:
 
 - `14ab336` **E&A Superações virou Will Adega.** Chave da edição `willadega` (não há mais `ea_superacoes`: o
   usuário confirmou que não existe loja instalada com a edição antiga). Nome "Will Adega", marca "WILL ADEGA",
@@ -30,8 +30,21 @@ Branch `claude/cloud-environment-setup-6auvo5`, dois commits sobre a main `59f17
 - Antes de vender: gerar o instalador pelo CI, instalar num Windows limpo, emitir licença `willadega` e fazer uma venda
   completa com leitor, impressora e gaveta (checklist em `docs/ADEGA.md`).
 - Reposição: prazo por fornecedor e unidade de compra por produto ficaram de fora (exigem migração); decidir no piloto.
-- Revisão da branch `codex/central-fornecedor` (Codex): 5 problemas relatados ao usuário, incluindo licença emitida
-  pela nuvem sem a edição (perderia a Will Adega). Lá a chave ainda é `ea_superacoes`: ao fazer rebase, trocar.
+- **Central do fornecedor (já na main, PR #55):** a revisão do Claude achou 5 problemas, ainda não corrigidos. O mais
+  grave para a Will Adega: a nuvem assina licença sempre como WillPDV (`backend/licencas_fornecedor.py` em
+  `renovar_ponte`, `backend/central_fornecedor.py` em `emitir_licenca` e o `GET /v1/licenca` antigo), então loja Will Adega
+  que renove pela nuvem recebe código que o caixa recusa. Decidir com o usuário onde guardar a edição da loja na nuvem.
+  Os outros: limite de login por IP do proxy (bloqueio global), validade manual que reduz prazo e validade acima de
+  36500 dias que derruba a consulta de licença.
+
+## Central do fornecedor (Codex, main `78bd596`)
+
+- Publicada no Render (`/central/`, rotas `/v1/fornecedor/*`); guia em `docs/CENTRAL_FORNECEDOR.md`. Login com
+  `PDV_API_TOKEN`, sessão HttpOnly com CSRF; lojas, cobranças, transferência explícita da emissão para a nuvem,
+  suporte (erros, chamados, diagnóstico) e atualização por manifesto assinado. Só tabelas novas na nuvem.
+- Nenhuma loja real foi transferida nem pacote publicado. Antes de retirar o Will Licenças: backup da chave, transferir
+  e testar uma loja real com a central local fechada. Revisão visual em celular/desktop pendente.
+- Worktree do Codex: `C:\Users\ITAUTEC\source\willpdv-central` (a cópia antiga do OneDrive não deve ser reaproveitada).
 
 ## Continuidade (anterior)
 

@@ -14,6 +14,7 @@ on:
       - "tests/test_nuvem.py"
       - "tests/test_cardapio.py"
       - "tests/test_atualizacao_automatica.py"
+      - "tests/test_central_fornecedor.py"
       - "render.yaml"
       - "requirements*.txt"
       - "tools/verificar_nuvem.py"
@@ -39,13 +40,14 @@ jobs:
           python-version: "3.12"
       - run: pip install --require-hashes -r backend/requirements.txt -r requirements-test.txt
       - name: API, painel do dono e laço de sincronização
-        run: python -m unittest tests.test_painel_dono tests.test_painel_caixas tests.test_painel_limpeza tests.test_painel_senha_pdv tests.test_painel_melhorias tests.test_painel_bar tests.test_verificar_nuvem tests.test_nuvem tests.test_cardapio tests.test_atualizacao_automatica
+        run: python -m unittest tests.test_central_fornecedor tests.test_ponte_backend tests.test_cobrancas_mercadopago tests.test_assinatura_mercadopago tests.test_painel_dono tests.test_painel_caixas tests.test_painel_limpeza tests.test_painel_senha_pdv tests.test_painel_melhorias tests.test_painel_bar tests.test_verificar_nuvem tests.test_nuvem tests.test_cardapio tests.test_atualizacao_automatica
       - name: App web (manifesto válido e arquivos no lugar)
         run: |
           python -m json.tool backend/painel_web/manifest.webmanifest > /dev/null
           python -m json.tool backend/cardapio_web/manifest.webmanifest > /dev/null
           test -f backend/cardapio_web/index.html && test -f backend/cardapio_web/app.js
           test -f backend/painel_web/index.html && test -f backend/painel_web/app.js && test -f backend/painel_web/sw.js
+          test -f backend/central_web/index.html && test -f backend/central_web/app.js && test -f backend/central_web/estilo.css
           test -f backend/painel_web/icones/icone-192.png && test -f backend/painel_web/icones/icone-512.png
 
   publicar:

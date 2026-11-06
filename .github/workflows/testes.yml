@@ -40,7 +40,7 @@ jobs:
           python-version: "3.12"
       - run: pip install --require-hashes -r backend/requirements.txt -r requirements-test.txt
       - name: Inbox, concorrência, retentativas e reinício (PostgreSQL e SQLite)
-        run: python -m unittest tests.test_cobrancas_mercadopago tests.test_painel_dono tests.test_painel_melhorias
+        run: python -m unittest tests.test_central_fornecedor tests.test_ponte_backend tests.test_cobrancas_mercadopago tests.test_painel_dono tests.test_painel_melhorias
 
   testes:
     name: ${{ matrix.os }} / Python ${{ matrix.python }}

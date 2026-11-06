@@ -378,8 +378,10 @@ def licenca(acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db))
     if acesso.admin:
         raise HTTPException(status_code=403, detail="Use o token da loja.")
     loja = db.query(Loja).filter(Loja.chave_loja == acesso.loja).first()
+    from backend.licencas_fornecedor import renovar_ponte
+    renovar_ponte(db, loja.chave_loja)
     publicada = _ponte.licenca_legado(db, loja.chave_loja)
-    if publicada is not None:       # loja migrada: só o código assinado pela central, nunca assinatura na nuvem
+    if publicada is not None:       # ponte local ou emissão na nuvem explicitamente habilitada pelo fornecedor
         return publicada
     if not loja.licenca_ate:
         raise HTTPException(status_code=404, detail="Nenhuma assinatura registrada para esta loja.")
@@ -417,3 +419,7 @@ _cardapio.instalar(app, Loja, autenticar)
 from backend import atualizacao_remota as _atualizacao_remota  # noqa: E402
 
 _atualizacao_remota.instalar_no_app(app, autenticar)
+
+from backend import central_fornecedor as _central_fornecedor  # noqa: E402
+
+_central_fornecedor.instalar(app, Loja)
