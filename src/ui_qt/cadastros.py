@@ -78,6 +78,12 @@ class FormularioCadastro(QDialog):
             editor.setEnabled(not campo.somente_leitura)
             self.campos[campo.nome] = editor
             secoes[campo.secao].addRow(campo.rotulo + (" *" if campo.obrigatorio else ""), editor)
+        self.editor_foto = None
+        if chave == "produtos":
+            from src.ui_qt.foto_produto import EditorFoto
+            self.editor_foto = EditorFoto(ctx, id_, lambda: self.campos["cbarra"].text())
+            abas.addTab(self.editor_foto, "Foto")
+        self.abas = abas
         layout.addWidget(abas)
         self.mensagem = texto("", "aviso")
         layout.addWidget(self.mensagem)
@@ -114,6 +120,12 @@ class FormularioCadastro(QDialog):
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
             return
+        if self.editor_foto is not None:
+            try:
+                self.editor_foto.aplicar(self.id_)
+            except ErroNegocio as erro:          # o produto já foi salvo: avisa e deixa a pessoa tentar de novo
+                self.mensagem.setText(f"Produto salvo, mas a foto não: {erro}")
+                return
         for campo in self.entidade.campos:
             if campo.tipo == "senha":
                 self.campos[campo.nome].clear()

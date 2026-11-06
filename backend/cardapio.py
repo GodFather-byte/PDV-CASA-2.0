@@ -26,7 +26,9 @@ CHAVE_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 DATA_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 HORA_RE = re.compile(r"\d{2}:\d{2}")
 _FOTO_MAX = 300
+_FOTO_EMBUTIDA_MAX = 12000      # miniatura do produto enviada pelo caixa (foto escolhida de arquivo)
 _LOGO_MAX = 60000
+_FOTO_EMBUTIDA = re.compile(r"data:image/jpeg;base64,[A-Za-z0-9+/]+={0,2}")
 
 
 class CardapioLoja(Base):
@@ -71,6 +73,8 @@ def _dia(valor) -> int | None:
 
 def _url(valor) -> str:
     texto = str(valor or "").strip()
+    if texto.startswith("data:"):
+        return texto if len(texto) <= _FOTO_EMBUTIDA_MAX and _FOTO_EMBUTIDA.fullmatch(texto) else ""
     if len(texto) > _FOTO_MAX or not texto.lower().startswith(("https://", "http://")):
         return ""
     return texto

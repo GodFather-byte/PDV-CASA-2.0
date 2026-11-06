@@ -41,6 +41,7 @@ from src.hardware.dispositivos import DispositivoIndisponivel
 from src.controllers.caixa_controller import LIMITE_PARTES_DIVISAO
 from src.core.valor_pagamento import LIMITE_TROCO_CENT, ler_valor_pagamento
 from src.ui_qt import comissao
+from src.ui_qt.foto_produto import QuadroFoto
 from src.ui_qt.painel_mesas import CORES as CORES_MESAS, PainelMesas
 from src.ui_qt.relogio import RelogioCaixa
 
@@ -693,6 +694,16 @@ class JanelaCaixa(QMainWindow):
         self.lbl_msg_pag = _rotulo("", "mudo")
         c_dir.addWidget(self.lbl_msg_pag)
         c_dir.addStretch(1)
+        # Foto do último produto lançado, no espaço que sobra (não aumenta a altura mínima do caixa).
+        self.foto_item = QuadroFoto(200)
+        self.foto_item.setObjectName("foto_item")
+        self.foto_item.hide()
+        c_dir.addWidget(self.foto_item, 3)
+        self.lbl_foto_item = _rotulo("", "mudo")
+        self.lbl_foto_item.setAlignment(Qt.AlignCenter)
+        self.lbl_foto_item.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.lbl_foto_item.hide()
+        c_dir.addWidget(self.lbl_foto_item)
         self.btn_fechar_venda = QPushButton("Fechar venda (F12)")
         self.btn_fechar_venda.setObjectName("primario")
         self.btn_fechar_venda.clicked.connect(self.fechar_venda)
@@ -835,6 +846,18 @@ class JanelaCaixa(QMainWindow):
         i = self.cmb_forma.findData(atual) if atual is not None else -1
         self.cmb_forma.setCurrentIndex(i if i >= 0 else 0)
         self.cmb_forma.blockSignals(False)
+    def _mostrar_foto(self, produto: dict | None) -> None:
+        """Foto do produto que acabou de ser lançado, para o operador conferir. Sem foto, o espaço fica livre."""
+        from src.controllers.foto_produto_controller import FotoProdutoController
+        dados = FotoProdutoController(self.ctx.banco).imagem(produto["id"]) if produto else None
+        if self.foto_item.definir(dados):
+            self.lbl_foto_item.setText(produto["nome"])
+            self.foto_item.show()
+            self.lbl_foto_item.show()
+        else:
+            self.foto_item.hide()
+            self.lbl_foto_item.hide()
+
     def recarregar(self) -> None:
         """Atualiza a venda da tela (itens, total, pagamentos) e a lista de mesas e comandas abertas."""
         v = self.venda()
@@ -846,6 +869,8 @@ class JanelaCaixa(QMainWindow):
         caixa = self.ctx.caixa
         self.tabela.setRowCount(0)
         itens = caixa.itens(v["id"]) if v else []
+        if not itens:
+            self._mostrar_foto(None)                  # venda nova ou fechada: a foto do último item sai junto
         for it in itens:
             linha = self.tabela.rowCount()
             self.tabela.insertRow(linha)
@@ -2058,6 +2083,7 @@ class JanelaCaixa(QMainWindow):
         ok, item_id = self._executar(self._lancar, p["id"], qtd, partes, **opcoes)
         if ok:
             self._ultimo_item_id = item_id
+            self._mostrar_foto(p)
         if not ok:
             self.recarregar()
             self.ent_qtd.setFocus()

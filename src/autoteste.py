@@ -60,6 +60,7 @@ MODULOS = [
     "src.controllers.alertas_controller", "src.controllers.etiqueta_controller",
     "src.controllers.promocoes_controller", "src.controllers.retornaveis_controller", "src.controllers.diagnostico_controller",
     "src.controllers.devolucoes_controller", "src.homologacao", "src.controllers.contexto", "src.core.valor_pagamento",
+    "src.controllers.foto_produto_controller", "src.ui_qt.foto_produto",
     "src.ui_qt.app", "src.ui_qt.tema", "src.ui_qt.login", "src.ui_qt.cadastros", "src.ui_qt.caixa", "src.ui_qt.auditoria",
     "src.ui_qt.comissao", "src.ui_qt.assistente_impressora", "src.ui_qt.composicao",
     "src.ui_qt.configuracoes", "src.ui_qt.estoque", "src.ui_qt.fila_impressao",

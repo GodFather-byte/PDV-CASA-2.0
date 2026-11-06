@@ -92,6 +92,23 @@ referência antiga, depois selecione e salve novamente o arquivo original.
 
 Reposição pelo giro: ver "Depois da instalação" abaixo.
 
+### Foto dos produtos
+
+Em **Cadastros > Produtos**, abra o produto e vá à aba **Foto**:
+
+- **Escolher arquivo…**: JPG, PNG, BMP ou WEBP de até 8 MB (foto do celular, do site do fornecedor etc.).
+- **Buscar pelo código de barras**: procura a foto na base pública Open Food Facts usando o campo *Código de barras*.
+  Precisa de internet no computador do caixa (sites `world.openfoodfacts.org` e `images.openfoodfacts.org`). Nem todo
+  produto brasileiro tem foto lá; quando não acha, use um arquivo. A foto é de voluntários (licença CC BY-SA):
+  **confira se é o produto certo** antes de salvar.
+- **Remover foto**. Nada muda até clicar em **Salvar**.
+
+A foto é reduzida (até 480 px, JPEG) e guardada **dentro do banco**: entra no backup e acompanha a troca de computador.
+No caixa, ela aparece na coluna do pagamento quando o produto é lançado (para o operador conferir o que bipou) e some
+quando a venda termina; produto sem foto deixa o espaço livre. No **cardápio online**, a foto da internet vai pelo
+endereço dela e a de arquivo vai como miniatura (até cerca de 1,5 MB de miniaturas por envio; o que passar usa a figura
+da categoria). A nuvem precisa estar atualizada para aceitar as miniaturas.
+
 ### Operação no balcão
 
 | O que | Como |

@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 36
+VERSAO_ESQUEMA = 37
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -647,6 +647,17 @@ TABELAS = [
         enviado INTEGER NOT NULL DEFAULT 0
     )""",
     "CREATE INDEX IF NOT EXISTS ix_erros_caixa_enviado ON erros_caixa(enviado, id)",
+    # Foto do produto (v37): fica no banco (entra no backup e muda de computador junto). `imagem` é a cópia
+    # normalizada (JPEG, até 480 px) e `miniatura` a do cardápio (JPEG, até 160 px). `origem` guarda o endereço https
+    # quando a foto veio da internet (o cardápio usa o endereço em vez da miniatura). Apagar o produto apaga a foto.
+    """CREATE TABLE IF NOT EXISTS produto_fotos (
+        produto_id INTEGER PRIMARY KEY REFERENCES produtos(id) ON DELETE CASCADE,
+        imagem BLOB NOT NULL,
+        miniatura BLOB NOT NULL,
+        origem TEXT NOT NULL DEFAULT '',
+        sha256 TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+    )""",
     # Comissão das garotas (v7): o código 50 do caixa marca a comissão no número da garota (o mesmo da comanda dela).
     # Não é venda: não entra em faturamento nem estoque. Fica 'pendente' até ser paga (sai dinheiro do caixa) ou cancelada.
     """CREATE TABLE IF NOT EXISTS garotas (
@@ -1007,6 +1018,7 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    37: [],  # tabela aditiva produto_fotos (nasce em TABELAS); nenhum produto antigo ganha foto
     36: [],  # tabela aditiva shows_quartos; sem gerar pagamentos retroativos
     35: [
         ("coluna", "quartos_uso", "comanda_cliente", "TEXT"),
