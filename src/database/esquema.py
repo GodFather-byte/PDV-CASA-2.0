@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 37
+VERSAO_ESQUEMA = 38
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -268,6 +268,8 @@ TABELAS = [
         promo_de TEXT, promo_ate TEXT, promo_preco_cent INTEGER NOT NULL DEFAULT 0,
         sem_inicial INTEGER, sem_final INTEGER, sem_preco_cent INTEGER NOT NULL DEFAULT 0,
         hora_ini TEXT, hora_fim TEXT, hora_preco_cent INTEGER NOT NULL DEFAULT 0,
+        promo_gelada_cent INTEGER NOT NULL DEFAULT 0, sem_gelada_cent INTEGER NOT NULL DEFAULT 0,
+        hora_gelada_cent INTEGER NOT NULL DEFAULT 0,
         validade_dias INTEGER NOT NULL DEFAULT 0,
         balanca INTEGER NOT NULL DEFAULT 0,
         automatico INTEGER NOT NULL DEFAULT 0,
@@ -872,7 +874,8 @@ _AUDITORIA_CAMPOS = {
                  "sem_inicial sem_final sem_preco_cent hora_ini hora_fim hora_preco_cent "
                  "cobrar_servico venda aceita_decimal partes maior montagem composto comissao_pct "
                  "preco_gelada_cent atacado_qtd preco_atacado_cent atacado_gelada_qtd "
-                 "preco_atacado_gelada_cent casco_produto_id").split(),
+                 "preco_atacado_gelada_cent casco_produto_id promo_gelada_cent sem_gelada_cent "
+                 "hora_gelada_cent").split(),
     "produtos_historico": "id qt_atual custo_cent ativo excluido_em".split(),
     "unidades": "id nome abreviatura".split(),
     "grupos": "id nome".split(),
@@ -1018,6 +1021,12 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v38: promoção também no preço da gelada (mesmas janelas da natural); 0 = sem promoção da gelada.
+    38: [
+        ("coluna", "produtos", "promo_gelada_cent", "INTEGER NOT NULL DEFAULT 0"),
+        ("coluna", "produtos", "sem_gelada_cent", "INTEGER NOT NULL DEFAULT 0"),
+        ("coluna", "produtos", "hora_gelada_cent", "INTEGER NOT NULL DEFAULT 0"),
+    ],
     37: [],  # tabela aditiva produto_fotos (nasce em TABELAS); nenhum produto antigo ganha foto
     36: [],  # tabela aditiva shows_quartos; sem gerar pagamentos retroativos
     35: [

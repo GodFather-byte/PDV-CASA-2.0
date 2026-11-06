@@ -211,6 +211,28 @@ class ProdutoController:
         return {**regra, "preco_cadastro_cent": produto["preco_cent"],
                 "avaliado_em": q.strftime("%Y-%m-%d %H:%M:%S")}
 
+    @staticmethod
+    def regra_preco_gelada(produto: dict, quando: datetime | None = None) -> dict:
+        """Preço da gelada com promoção: as mesmas janelas da natural (período, dias da semana, horário), cada uma com o
+        seu preço de gelada. Vale a menor das ativas, e só se for menor que o preço gelado normal."""
+        gelada = produto.get("preco_gelada_cent") or 0
+        q = quando or fmt.agora_dt()
+        base = {"tipo": "gelada", "preco_cent": gelada, "avaliado_em": q.strftime("%Y-%m-%d %H:%M:%S")}
+        if gelada <= 0:
+            return base
+        espelho = {**produto,
+                   "preco_cent": gelada,
+                   "promo_preco_cent": produto.get("promo_gelada_cent") or 0,
+                   "sem_preco_cent": produto.get("sem_gelada_cent") or 0,
+                   "hora_preco_cent": produto.get("hora_gelada_cent") or 0}
+        regra = ProdutoController.regra_preco_vigente(espelho, q)
+        if regra["tipo"] != "promocao":
+            return base
+        return {**regra, "temperatura": "gelada", "preco_gelada_cent": gelada}
+
+    def preco_gelada_vigente(self, produto: dict, quando: datetime | None = None) -> int:
+        return self.regra_preco_gelada(produto, quando)["preco_cent"]
+
     def preco_partes(self, base: dict, partes: list[dict], quando: datetime | None = None) -> int:
         """Preço de um item dividido/combo. Composto: preço único do produto-base.
         Senão: o maior preço entre as partes (opção 'Maior') ou a média proporcional."""

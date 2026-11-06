@@ -316,9 +316,12 @@ class CaixaController(DivisaoContaMixin):
                     "criterio": "composto" if p["composto"] else "maior" if p["maior"] else "média"}
         else:
             componentes = []
-            preco = p["preco_gelada_cent"] if temperatura == "gelada" else self.produtos.preco_vigente(p, quando)
-            base = ({"tipo": "gelada", "preco_cent": preco, "avaliado_em": agora}
-                    if temperatura == "gelada" else self.produtos.regra_preco_vigente(p, quando))
+            if temperatura == "gelada":                # promoção da gelada nas mesmas janelas da natural
+                base = self.produtos.regra_preco_gelada(p, quando)
+                preco = base["preco_cent"]
+            else:
+                preco = self.produtos.preco_vigente(p, quando)
+                base = self.produtos.regra_preco_vigente(p, quando)
         if preco <= 0:
             raise ErroNegocio(f"'{p['nome']}' está sem preço de venda. Defina o preço no cadastro antes de vender.")
 

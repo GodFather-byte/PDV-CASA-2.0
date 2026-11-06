@@ -2048,7 +2048,7 @@ class JanelaCaixa(QMainWindow):
                 "Temperatura da bebida", f"{p['nome']}: como o cliente vai levar? "
                 "(preço unitário de tabela; atacado automático no balcão)",
                 [("natural", f"Natural · {fmt.fmt_brl(self.ctx.produtos.preco_vigente(p))}"),
-                 ("gelada", f"Gelada · {fmt.fmt_brl(p['preco_gelada_cent'])}")])
+                 ("gelada", f"Gelada · {fmt.fmt_brl(self.ctx.produtos.preco_gelada_vigente(p))}")])
             if temperatura is None:
                 return
             opcoes["temperatura"] = temperatura

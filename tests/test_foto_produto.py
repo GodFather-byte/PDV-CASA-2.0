@@ -167,7 +167,8 @@ class TesteGravacao(BaseTeste):
             migrado = BancoDados(caminho)
             try:
                 self.assertEqual(migrado.valor("SELECT COUNT(*) FROM produto_fotos"), 0)
-                self.assertEqual(migrado.valor("PRAGMA user_version"), 37)
+                from src.database.esquema import VERSAO_ESQUEMA
+                self.assertEqual(migrado.valor("PRAGMA user_version"), VERSAO_ESQUEMA)
             finally:
                 migrado.fechar()
 

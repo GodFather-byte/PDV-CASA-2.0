@@ -152,5 +152,8 @@ da categoria). A nuvem precisa estar atualizada para aceitar as miniaturas.
   histórica. Vendas antigas sem retrato são identificadas como legadas, sem inventar faixa ou promoção.
 - Conferir no fim do primeiro dia: fechamento do turno bate com a gaveta; estoque dos 5 produtos que mais saem; cupom
   legível; gaveta abre.
-- Pendências conhecidas (não impedem a operação): promoção por período vale só no preço natural, sem controle de empréstimo/saldo de cascos por cliente, sem etiqueta de
+- **Promoção da gelada:** na aba Promoções do produto, cada janela (período, dias da semana, horário) tem também o
+  campo "Preço gelada". Vale nas mesmas datas/horários da promoção natural; 0 deixa a gelada no preço normal. O
+  atacado da gelada continua valendo quando for menor que a promoção.
+- Pendências conhecidas (não impedem a operação): sem controle de empréstimo/saldo de cascos por cliente, sem etiqueta de
   gôndola (a Tabela de preços impressa traz natural, gelada e atacado), sem NFC-e.
