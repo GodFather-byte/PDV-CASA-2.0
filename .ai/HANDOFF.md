@@ -1,40 +1,41 @@
-# Handoff — Central do fornecedor — 06/11/2026
+﻿# Handoff — Central do fornecedor publicada — 06/11/2026
 
-## Escopo autorizado
+## Entrega
 
-O usuário pediu um painel próprio na nuvem para acompanhar lojas, pagamentos e licenças e prestar suporte pelo celular/PC com auxílio de Codex e Claude Code. Base atualizada `59f1715`; worktree separado em `C:\Users\ITAUTEC\source\willpdv-central`, branch `codex/central-fornecedor`. Não reutilizar o rascunho Asaas da cópia antiga em OneDrive, 107 commits atrás.
+- PR #55 integrado: https://github.com/GodFather-byte/PDV-CASA-2.0/pull/55.
+- Código publicado no Render: `78bd596c5d1f6d85a17fa33d3db7db2682704ccc`.
+- Painel: https://willpdv-nuvem-6sp0.onrender.com/central/.
+- Render: GodFather's workspace (`tea-d3ekasbuibrs73caqdog`), serviço `willpdv-nuvem` (`srv-dbf5untg1s2s73ejihdg`), deploy `dep-dbmt945ckfvc739177p0` confirmado live. Nenhuma variável, segredo ou plano de infraestrutura foi alterado.
+- Worktree: `C:\Users\ITAUTEC\source\willpdv-central`. A cópia antiga do OneDrive está 107 commits atrás da base desta entrega e contém um rascunho Asaas não publicado; não reaproveitá-lo.
 
-## Implementação
+## O que está implementado
 
-- `/central/`: interface responsiva do fornecedor; `/v1/fornecedor/*`: sessão HttpOnly/SameSite Strict, Secure em HTTPS, validade 8h, hash persistido e revogação por logout/rotação de `PDV_API_TOKEN`. Limite de login por processo, proteção CSRF e respostas sem cache. Não usa localStorage para segredos.
-- Lojas existentes, cadastro com token exibido uma vez, situação/validade, planos Mercado Pago e cobranças paginadas, conciliação, ativação/desativação, validade manual para loja sem plano e emissão de código usando a chave existente da nuvem. Ações administrativas auditadas.
-- Transferência explícita da emissão por loja: confere chave, preserva prazo e validade anterior do plano, mantém tokens e ponte. `renovar_ponte` só age em lojas transferidas; renova na consulta de licença normal ou do caixa individual. Não reduz o prazo já publicado.
-- Suporte: erros já enviados pelos caixas, último contato, chamados, diagnóstico em texto para revisão/uso externo com IA. Aprovação/revogação de caixas individuais e confirmação da licença aplicada. Sem shell remoto, tela remota, API de IA ou reparo automático do banco.
-- Atualizações: publicar manifesto assinado pelo mecanismo existente; HTTPS e confirmação de edição/canal. Não confirma instalação. Versão/edição passaram a ser enviadas no retrato de caixas atualizados.
-- Tabelas novas somente na nuvem; esquema SQLite local preservado. `/v1/central/*` da ponte antiga não foi sobrescrito.
-- Guia `docs/CENTRAL_FORNECEDOR.md`, mapa e CI atualizados. Testes do fornecedor incluídos também no PostgreSQL do CI.
+- Central exclusiva em `/central/`; rotas `/v1/fornecedor/*`. As rotas antigas `/v1/central/*` da ponte foram preservadas.
+- Login com o `PDV_API_TOKEN` já configurado no servidor, sessão HttpOnly/SameSite Strict/Secure em HTTPS, oito horas, hash persistido e revogação por logout/rotação do token. CSRF, limite de tentativas por processo e respostas sem cache. Segredos não ficam em localStorage nem na URL.
+- Lojas existentes, cadastro com token exibido uma vez, mensalidades, cobranças paginadas, conciliação no Mercado Pago, ativação/desativação, plano mensal, validade manual para lojas sem plano e emissão assinada com a chave existente. Ações auditadas.
+- Transferência explícita da emissão por loja: confere a chave da nuvem, preserva maior prazo e validade anterior do plano, mantém tokens/ponte e renova nas consultas normais ou de caixas individuais. Sem transferência, o comportamento antigo é preservado.
+- Suporte: último envio dos caixas, versões quando informadas, erros, chamados e diagnóstico em texto para uso externo no Codex/Claude Code. Aprovação/revogação de caixas individuais e confirmação da licença aplicada.
+- Atualizações por manifesto assinado, HTTPS, confirmação de edição/canal; distribuição pela infraestrutura já existente. Versão/edição acrescentadas ao retrato dos caixas atualizados.
+- Apenas tabelas novas na nuvem. Esquema SQLite local e dados de vendas não foram alterados. Guia: `docs/CENTRAL_FORNECEDOR.md`.
 
-## Validação
+## Validação concluída
 
-- 90 testes de central/ponte/cobrança/assinatura: aprovados, 1 ignorado. Foram seguidos de 13 testes da central aprovados após incluir caixa individual.
-- JavaScript passou em `node --check` (Node do Cursor); HTML com IDs únicos; `git diff --check` e compilação Python passaram.
-- API local e página `/central/` responderam HTTP 200 em ambiente temporário com lojas fictícias. Ferramenta de navegador e Node REPL expiraram; não alegar revisão visual completa.
-- Rodada adicional de nuvem, renovação, atualização e painel: 109 testes aprovados, sem falhas.
-- Uma chamada anterior usou nomes inexistentes `test_ponte_nuvem` e `test_cobranca_mercadopago`: falhou somente nesses dois imports. Os nomes corretos são `test_ponte_backend` e `test_cobrancas_mercadopago`, aprovados na rodada de 90.
-- Testes usam bancos temporários e sementes fictícias; não migram lojas reais, não cobram clientes, não publicam pacotes de correção nem alteram credenciais reais.
+- CI do PR: https://github.com/GodFather-byte/PDV-CASA-2.0/actions/runs/42222160715. Cinco jobs aprovados: PostgreSQL 16 e suítes completas Windows/Linux com Python 3.10/3.12. Head validado `626cba5`.
+- Rodadas locais: 90 testes (1 ignorado), 109 testes e 13 testes centrais aprovados; teste específico de manifesto inválido também passou. Há sobreposição; não somar como casos distintos.
+- Node `--check`, compilação Python e `git diff --check` passaram. Página local respondeu HTTP 200; os testes usaram bancos temporários e sementes fictícias.
+- Produção: `/v1/versao` confirmou o commit esperado; `/central/`, JS e CSS retornaram 200 com no-store; `/v1/fornecedor/lojas` anônimo retornou 401; login com credencial fictícia por HTTPS retornou 401, comprovando que a verificação de HTTPS não bloqueia o proxy atual. Não foi feito login com segredo real.
+- CUA e Node REPL expiraram; revisão visual em celular/desktop permanece pendente. A prévia temporária na porta 8765 foi encerrada.
 
-## Publicação e limites
+## Próximos passos com o usuário
 
-- Render confirmado: GodFather's workspace, serviço `willpdv-nuvem`, branch main, URL `https://willpdv-nuvem-6sp0.onrender.com`. Auto deploy ligado. Confirmar o commit via `/v1/versao` após publicar.
-- Usuário ofereceu revisão do Claude; orientar a revisar a branch/diff sem editar em paralelo. Ainda não recebida revisão.
-- Antes de desinstalar Will Licenças: backup externo da chave/históricos, migrar e testar uma loja real com o PC do fornecedor desligado e só então repetir nas demais. Não desinstalado nenhum programa.
-- A versão do PC do cliente precisa incluir o atualizador para receber pacotes; caixas antigos exigem instalador inicial. Atualizações são por edição/canal, sem rollout por loja nesta entrega.
-- Controle integral do Windows exige solução de acesso remoto instalada e autorizada; esta entrega trata suporte dentro do WILLPDV.
+- Entrar no painel com a credencial administrativa já existente no Render. Não solicitar segredos pelo chat.
+- Nenhuma loja real foi transferida, nenhum pagamento foi gerado/conferido em produção, nenhum pacote de atualização foi publicado e nenhum programa foi desinstalado por esta entrega.
+- Antes de retirar Will Licenças: backup externo da chave/históricos, transferir e testar uma loja real com a central local fechada; confirmar renovação no caixa e só então repetir nas demais.
+- Usuário ofereceu revisão externa do Claude; nenhum relatório foi recebido antes da publicação. Incorporar eventuais achados numa nova alteração, sem desfazer as entregas anteriores.
+- Diagnóstico/chamados/atualização são o suporte desta versão. Não há shell, controle de tela, execução automática de IA ou reparo arbitrário do banco. Controle integral do Windows depende de solução instalada/autorizada na loja.
+- Pacotes são por edição/canal; não há rollout por loja nesta entrega. Caixas sem o atualizador precisam de instalador inicial. Publicação não prova instalação concluída.
+- Este commit de documentação usa skip ci/skip render: o código executável já foi aprovado/publicado e não mudou; `/v1/versao` permanece no commit de código acima.
 
-## Continuidade anterior preservada
+## Continuidade anterior
 
-Main base já inclui ajustes de estoque, quartos, shows, migração antiga de itens e formulário de contas Linux. Não desfazer `59f1715`, `7700458`, `2103b7a` ou `fb13f93`. Ajuste de impressora `9324c64` é trabalho separado. Validar periféricos e escala no Windows real. Segredos permanecem fora do chat/git.
-
-## Revisão e publicação
-
-PR #55 aberto: https://github.com/GodFather-byte/PDV-CASA-2.0/pull/55. CI do GitHub em andamento; não integrado à main nem publicado nesta etapa. Revisão visual ainda pendente por indisponibilidade da ferramenta de navegador.
+Preservados ajustes de estoque/quartos/shows, migração antiga de itens e formulário Linux da base `59f1715`. Não desfazer `7700458`, `2103b7a` ou `fb13f93`. Ajuste de impressora `9324c64` é trabalho separado. Homologar periféricos e escala no Windows real.
