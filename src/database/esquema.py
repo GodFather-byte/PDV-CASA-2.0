@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 39
+VERSAO_ESQUEMA = 40
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -525,6 +525,7 @@ TABELAS = [
         preco_base_cent INTEGER,
         regra_preco_json TEXT,
         temperatura TEXT NOT NULL DEFAULT 'natural' CHECK (temperatura IN ('natural', 'gelada')),
+        cascos_emprestados INTEGER NOT NULL DEFAULT 0 CHECK (cascos_emprestados >= 0),
         total_cent INTEGER NOT NULL,
         cobra_servico INTEGER NOT NULL DEFAULT 1,
         observacao TEXT,
@@ -1022,6 +1023,11 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v40: cascos que o cliente identificado levou sem trazer (anotados como empréstimo no fechamento); vendas antigas
+    # ficam com 0: troca ou casco não cobrado do passado não prova empréstimo.
+    40: [
+        ("coluna", "itens_venda", "cascos_emprestados", "INTEGER NOT NULL DEFAULT 0"),
+    ],
     # v39: prazo de entrega do fornecedor (dias) para a reposição pelo giro; 0 = não informado.
     39: [
         ("coluna", "fornecedores", "prazo_entrega_dias", "INTEGER NOT NULL DEFAULT 0"),

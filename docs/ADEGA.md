@@ -123,7 +123,7 @@ da categoria). A nuvem precisa estar atualizada para aceitar as miniaturas.
 | Vender | Bipar. `6*` antes do bipe (ou `6*código`) lança 6 de uma vez. Bipes repetidos somam na mesma linha. |
 | Natural ou gelada | Aparece a pergunta só em produto com preço gelada: N / G ou clique. |
 | Atacado | Automático ao atingir o mínimo do produto (por temperatura). A linha mostra `[Atacado]` e o total da economia. |
-| Casco | Produto retornável pergunta quantos cascos cobrar: 0 quando trouxe tudo. O casco entra como linha separada. |
+| Casco | Produto retornável pergunta quantos cascos cobrar: 0 quando trouxe tudo. O casco entra como linha separada. Em venda com cliente (fiado ou entrega), pergunta também quantas garrafas ele levou **sem trazer o casco**: ao fechar a venda, isso fica anotado no nome dele como empréstimo (Lançamentos > Retornáveis; botão **Quem deve cascos**). Cancelar o cupom desfaz a anotação. |
 | Mudou a quantidade | Selecione a linha e **Ctrl+Q** (ou Operações > Alterar quantidade do item). Aumentar soma na mesma linha e recalcula o atacado; diminuir pede a mesma autorização e o motivo do cancelamento. Produto com casco só diminui por aqui; para aumentar, bipe de novo (ele pergunta os cascos). |
 | Fechar | F12, forma de pagamento, valor recebido (troco calculado), Enter. Cupom imprime se estiver ligado. |
 | Fiado | F5 escolhe o cliente (limite por cliente); recebimento na mesma tela sem itens. |
@@ -157,5 +157,4 @@ da categoria). A nuvem precisa estar atualizada para aceitar as miniaturas.
 - **Promoção da gelada:** na aba Promoções do produto, cada janela (período, dias da semana, horário) tem também o
   campo "Preço gelada". Vale nas mesmas datas/horários da promoção natural; 0 deixa a gelada no preço normal. O
   atacado da gelada continua valendo quando for menor que a promoção.
-- Pendências conhecidas (não impedem a operação): sem controle de empréstimo/saldo de cascos por cliente, sem etiqueta de
-  gôndola (a Tabela de preços impressa traz natural, gelada e atacado), sem NFC-e.
+- Pendências conhecidas (não impedem a operação): sem NFC-e (cupom não fiscal).

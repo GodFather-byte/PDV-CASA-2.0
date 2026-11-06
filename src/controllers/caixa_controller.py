@@ -255,7 +255,8 @@ class CaixaController(DivisaoContaMixin):
     # ============================================================== itens
     def adicionar_item(self, venda_id: int, produto_id: int, quantidade: float, observacao: str | None = None,
                        partes: list[int] | None = None, *, temperatura: str = "natural",
-                       quantidade_cascos: int = 0, confirmar_entrega_ficha: bool = False) -> int:
+                       quantidade_cascos: int = 0, confirmar_entrega_ficha: bool = False,
+                       cascos_emprestados: int = 0) -> int:
         v = self._aberta(venda_id)
         p = self.produtos.por_id(produto_id)
         if p is None or not p["ativo"]:
@@ -295,6 +296,15 @@ class CaixaController(DivisaoContaMixin):
                 raise ErroNegocio("Cadastre um casco válido e disponível para venda neste produto.")
         if v["modalidade"] == "caderneta" and v["cliente_id"] is None:
             raise ErroNegocio("Selecione o cliente da caderneta antes de lançar itens.")
+        if isinstance(cascos_emprestados, bool) or not isinstance(cascos_emprestados, int) or cascos_emprestados < 0:
+            raise ErroNegocio("Informe uma quantidade inteira de cascos levados sem devolver.")
+        if cascos_emprestados:
+            if not p["casco_produto_id"] or partes:
+                raise ErroNegocio("Só bebida retornável (com casco cadastrado) anota casco emprestado.")
+            if not v["cliente_id"]:
+                raise ErroNegocio("Para anotar casco emprestado, a venda precisa ter o cliente (caderneta ou entrega).")
+            if cascos_emprestados > int(quantidade) - quantidade_cascos:
+                raise ErroNegocio("Os cascos emprestados não podem passar das garrafas sem casco cobrado.")
         self._conferir_limite_comanda(v)
 
         quando = fmt.agora_dt()
@@ -354,7 +364,8 @@ class CaixaController(DivisaoContaMixin):
             if existente:
                 item_id = existente["id"]
                 nova_qtd = fmt.arred_qtd(existente["quantidade"] + quantidade)
-                self.banco.executar("UPDATE itens_venda SET quantidade = ? WHERE id = ?", (nova_qtd, item_id))
+                self.banco.executar("UPDATE itens_venda SET quantidade = ?, cascos_emprestados = cascos_emprestados + ? "
+                                    "WHERE id = ?", (nova_qtd, cascos_emprestados, item_id))
                 anterior = self.produtos.ler_regra_preco(dict(existente))
                 if anterior is None:
                     base_legada = {"tipo": "legado", "preco_cent": existente["preco_base_cent"]}
@@ -371,7 +382,8 @@ class CaixaController(DivisaoContaMixin):
                     "regra_preco_json": json.dumps(retrato, ensure_ascii=False),
                     "temperatura": temperatura, "total_cent": total, "cobra_servico": 0 if ficha_credito else p["cobrar_servico"],
                     "observacao": observacao, "comissao_cent": 0 if ficha_credito else fmt.pct_de(total, p["comissao_pct"]),
-                    "partes": max(len(componentes), 1), "operador_id": self.operador_id, "criado_em": agora})
+                    "partes": max(len(componentes), 1), "operador_id": self.operador_id, "criado_em": agora,
+                    "cascos_emprestados": cascos_emprestados})
             for c in componentes:
                 self.banco.inserir("itens_venda_partes", {
                     "item_id": item_id, "produto_id": c["id"], "fracao": 1 / len(componentes)})
@@ -992,6 +1004,7 @@ class CaixaController(DivisaoContaMixin):
                     from src.controllers.custos_venda import registrar as registrar_custos
                     registrar_custos(self.banco, venda_id, self.produtos, self.estoque)
                     self.estoque.baixar_venda(venda_id)
+                    self._cascos_emprestados(v, "emprestimo")
                 if eh_debito:
                     self.banco.inserir("caderneta", {
                         "cliente_id": v["cliente_id"], "venda_id": venda_id, "tipo": "debito", "valor_cent": total,
@@ -1093,6 +1106,7 @@ class CaixaController(DivisaoContaMixin):
                 self._devolver_adiantamentos(venda_id, turno)
                 self.estoque.estornar_venda(venda_id)
                 self._estornar_caderneta(v)
+                self._cascos_emprestados(v, "devolucao")
                 self.banco.atualizar("vendas", venda_id, {
                     "status": "cancelada", "cancelada_por": self.operador_id, "motivo_cancelamento": motivo,
                     "sincronizado": 0})
@@ -1100,6 +1114,28 @@ class CaixaController(DivisaoContaMixin):
                 raise ErroNegocio("Este cupom já está cancelado.")
             self.banco.log("venda_cancelada", f"venda {venda_id} cupom {v['cupom']} {motivo}".strip(), self.operador_id)
         notificacoes.avisar(self.banco, "cancelamento", "venda_cancelada", venda_id)
+
+    def _cascos_emprestados(self, v: dict, tipo: str) -> None:
+        """Fechamento: anota no cliente os cascos que ele levou sem trazer. Cancelamento do cupom: desfaz a anotação."""
+        if not v.get("cliente_id"):
+            return
+        por_casco: dict[int, int] = {}
+        for r in self.banco.todos(
+                """SELECT p.casco_produto_id, i.cascos_emprestados, i.quantidade FROM itens_venda i
+                   JOIN produtos p ON p.id = i.produto_id
+                   WHERE i.venda_id = ? AND i.cancelado = 0 AND i.cascos_emprestados > 0
+                     AND p.casco_produto_id IS NOT NULL""", (v["id"],)):
+            por_casco[r["casco_produto_id"]] = por_casco.get(r["casco_produto_id"], 0) + min(
+                r["cascos_emprestados"], int(r["quantidade"]))
+        if not por_casco:
+            return
+        from src.controllers.retornaveis_controller import RetornaveisController
+        retornaveis = RetornaveisController(self.banco, self.operador_id)
+        rotulo = self.obter(v["id"])["cupom"] or v["id"]
+        for casco_id, quantidade in por_casco.items():
+            motivo = (f"Venda {rotulo}: levou sem trazer o casco" if tipo == "emprestimo"
+                      else f"Cancelamento da venda {rotulo}: casco não foi emprestado")
+            retornaveis.registrar_pelo_caixa(v["cliente_id"], casco_id, tipo, quantidade, motivo)
 
     def _devolver_adiantamentos(self, venda_id: int, turno: dict) -> int:
         """Cancelamento de conta que recebeu dinheiro em um turno já fechado: aquele turno continua com o valor (ele

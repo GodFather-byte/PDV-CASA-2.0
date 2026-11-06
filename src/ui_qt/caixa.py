@@ -2071,6 +2071,23 @@ class JanelaCaixa(QMainWindow):
             if quantidade_cascos is None:
                 return
             opcoes["quantidade_cascos"] = quantidade_cascos
+            venda = self.ctx.caixa.obter(self.venda_id) if self.venda_id else None
+            sem_cobrar = maximo - quantidade_cascos
+            if venda and venda.get("cliente_id") and sem_cobrar > 0:
+                cliente = self.ctx.banco.valor("SELECT nome FROM clientes WHERE id = ?", (venda["cliente_id"],), "")
+                def emprestados(texto):
+                    s = texto.strip()
+                    if not s.isascii() or not s.isdecimal() or not 0 <= int(s) <= sem_cobrar:
+                        raise ValueError(f"Informe um número inteiro de 0 a {sem_cobrar}.")
+                    return int(s)
+                levados = self._pedir_convertido(
+                    "Cascos emprestados", f"Das {sem_cobrar} garrafa(s) sem casco cobrado, quantas {cliente} levou SEM "
+                    f"trazer o casco?\nFica anotado no nome dele como empréstimo (0 = trouxe todos os cascos).",
+                    emprestados, "0")
+                if levados is None:
+                    return
+                if levados:
+                    opcoes["cascos_emprestados"] = levados
         eh_ficha = ficha_sangria.eh_ficha(self.ctx.banco, p)
         if eh_ficha:
             preco_ficha = fmt.mult_cent(self.ctx.produtos.preco_vigente(p), qtd)
