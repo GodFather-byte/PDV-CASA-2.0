@@ -137,6 +137,26 @@ class TestPaineisResponsivos(BaseQt):
                 j.selecao.setCurrentIndex(j.selecao.findData(chave))
                 self.acomodar(j)
 
+    def test_contas_com_fontes_alternativas_mantem_campos_e_acoes_na_tela(self):
+        from src.ui_qt.contas import JanelaContas
+        for familia in ("DejaVu Sans", "Liberation Sans", "sans-serif"):
+            with self.subTest(fonte=familia), patch.object(
+                tema, 'ESTILO', tema.ESTILO.replace("'Segoe UI'", f"'{familia}'")
+            ):
+                tema.aplicar(self.aplicacao)
+                j = self.janela(JanelaContas(self.ctx))
+                self.acomodar(j)
+                for campo in (j.subplano, j.descricao, j.tipo, j.valor, j.documento,
+                              j.nota, j.fornecedor, j.entrada, j.vencimento, j.quitacao,
+                              j.meses, j.f_de, j.f_ate, j.f_por, j.f_situacao, j.f_previsao,
+                              j.busca, j.btn_listar, j.btn_gravar, j.btn_quitar):
+                    self.assertTrue(campo.isVisible())
+                    inicio = campo.mapTo(j, QPoint(0, 0))
+                    self.assertTrue(j.rect().contains(inicio))
+                    self.assertTrue(j.rect().contains(inicio + QPoint(campo.width()-1, campo.height()-1)))
+                self.assertGreater(j.grade.height(), 68)
+                j.hide()
+
     def test_quartos_paginados_sem_perder_avisos_ou_atalhos(self):
         self.banco.cfg_set('quartos_qtd', '50')
         self.ctx.turnos.abrir(self.ctx.operador_id, 1, 0)

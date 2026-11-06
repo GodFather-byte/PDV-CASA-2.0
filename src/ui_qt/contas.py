@@ -62,6 +62,7 @@ class JanelaContas(QDialog):
         )
         for indice, (rotulo, campo) in enumerate(campos):
             grupo = QFormLayout()
+            grupo.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
             grupo.addRow(rotulo, campo)
             formulario.addLayout(grupo, indice // 4, indice % 4)
         formulario.addWidget(self.mercadoria, 3, 0)
@@ -88,6 +89,7 @@ class JanelaContas(QDialog):
                                ("Data por", self.f_por), ("Situação", self.f_situacao),
                                ("Previsão", self.f_previsao), ("Busca", self.busca)):
             grupo = QFormLayout()
+            grupo.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
             grupo.addRow(rotulo, campo)
             filtros.addLayout(grupo)
         self.btn_listar = QPushButton("Consultar (F5)")
