@@ -202,5 +202,20 @@ class FotoProdutoController:
     def tem_foto(self, produto_id) -> bool:
         return bool(self.banco.valor("SELECT 1 FROM produto_fotos WHERE produto_id = ?", (produto_id,), 0))
 
+    def sem_foto_com_codigo(self, limite: int = 500) -> list[dict]:
+        """Produtos ativos à venda, sem foto e com código de barras de 8 a 14 números: candidatos à busca em lote."""
+        saida = []
+        for r in self.banco.todos(
+                """SELECT p.id, p.nome, p.cbarra FROM produtos p
+                   WHERE p.ativo = 1 AND p.venda = 1 AND COALESCE(p.cbarra, '') <> ''
+                     AND NOT EXISTS (SELECT 1 FROM produto_fotos f WHERE f.produto_id = p.id)
+                   ORDER BY p.nome"""):
+            gtin = re.sub(r"\D", "", r["cbarra"] or "")
+            if GTIN.fullmatch(gtin):
+                saida.append({"id": r["id"], "nome": r["nome"], "cbarra": gtin})
+            if len(saida) >= limite:
+                break
+        return saida
+
     def origem(self, produto_id) -> str:
         return self.banco.valor("SELECT origem FROM produto_fotos WHERE produto_id = ?", (produto_id,), "") or ""

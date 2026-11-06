@@ -104,3 +104,43 @@ class TesteFotoNasTelas(BaseCaixaQt):
         j.dialogos.confirmacoes = [True]
         j.btn_cancelar_venda.click()                                      # venda vazia: a foto sai
         self.assertFalse(j.foto_item.isVisibleTo(j))
+
+    def test_busca_em_lote_mostra_resultados_e_grava_so_os_aprovados(self):
+        from PySide6.QtCore import Qt
+        from src.core.erros import ErroNegocio
+        from src.ui_qt.foto_produto import JanelaFotosEmLote
+        skol = self.novo_produto("SKOL LATA", 450, cbarra="7891149103102")
+        brahma = self.novo_produto("BRAHMA LATA", 450, cbarra="7891149101900")
+        heineken = self.novo_produto("HEINEKEN", 700, cbarra="78936683")
+        self.novo_produto("GELO", 1000)                                         # sem código: fica de fora
+        com_foto = self.novo_produto("VINHO", 4000, cbarra="7891234567895")
+        self.fotos.gravar(com_foto, fotos.preparar(imagem(20, 20)))
+        consultados = []
+
+        def buscar(gtin):
+            consultados.append(gtin)
+            if gtin == "7891149101900":
+                raise ErroNegocio("Não achamos foto para este código de barras.")
+            return fotos.preparar(imagem(300, 300, "JPEG", "RGB"), FOTO_URL)
+
+        janela = JanelaFotosEmLote(self.ctx, buscar=buscar)
+        self.janelas_cadastro.append(janela)
+        self.assertEqual([p["nome"] for p in janela.pendentes], ["BRAHMA LATA", "HEINEKEN", "SKOL LATA"])
+        janela.buscar_todos(sincrono=True)
+        self.assertEqual(sorted(consultados), ["7891149101900", "7891149103102", "78936683"])
+        self.assertEqual(janela.lista.count(), 3)
+        self.assertIn("sem foto", janela.lista.item(0).text())
+        self.assertEqual(sorted(janela.aprovadas()), sorted([heineken, skol]))
+        janela.lista.item(1).setCheckState(Qt.Unchecked)                      # HEINEKEN: foto errada
+        self.assertEqual(janela.salvar_aprovadas(), 1)
+        self.assertTrue(self.fotos.tem_foto(skol))
+        self.assertFalse(self.fotos.tem_foto(heineken))
+        self.assertFalse(self.fotos.tem_foto(brahma))
+        self.assertEqual(self.fotos.origem(skol), FOTO_URL)
+
+    def test_cadastro_de_produtos_tem_o_botao_buscar_fotos(self):
+        from PySide6.QtWidgets import QPushButton
+        from src.ui_qt.cadastros import JanelaCadastro
+        janela = JanelaCadastro(self.ctx, "produtos")
+        self.janelas_cadastro.append(janela)
+        self.assertIn("Buscar fotos", [b.text() for b in janela.findChildren(QPushButton)])

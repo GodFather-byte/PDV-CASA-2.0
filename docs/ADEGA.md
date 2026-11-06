@@ -106,6 +106,10 @@ Em **Cadastros > Produtos**, abra o produto e vá à aba **Foto**:
   **confira se é o produto certo** antes de salvar.
 - **Remover foto**. Nada muda até clicar em **Salvar**.
 
+**Muitos produtos de uma vez:** em Cadastros > Produtos, botão **Buscar fotos**. Ele procura pelo código de barras
+todos os produtos à venda sem foto, mostra cada foto encontrada com uma marcação e só grava as que ficarem marcadas
+ao clicar em **Salvar aprovadas**. Desmarque as que não forem do produto certo. Dá para parar no meio.
+
 A foto é reduzida (até 480 px, JPEG) e guardada **dentro do banco**: entra no backup e acompanha a troca de computador.
 No caixa, ela aparece na coluna do pagamento quando o produto é lançado (para o operador conferir o que bipou) e some
 quando a venda termina; produto sem foto deixa o espaço livre. No **cardápio online**, a foto da internet vai pelo

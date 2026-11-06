@@ -225,6 +225,7 @@ class JanelaCadastro(QDialog):
             for rotulo, acao in (
                 ("Tabela de preços", self.tabela_precos),
                 ("Observações", lambda: self.abrir_cadastro_relacionado("observacoes")),
+                ("Buscar fotos", self.buscar_fotos),
             ):
                 botao = QPushButton(rotulo)
                 botao.clicked.connect(acao)
@@ -463,6 +464,18 @@ class JanelaCadastro(QDialog):
         id_ = self.selecionado()
         if id_ is not None:
             self._formulario(id_)
+
+    def buscar_fotos(self):
+        """Fotos de todos os produtos sem foto, pelo código de barras, com aprovação uma a uma."""
+        from src.ui_qt.foto_produto import JanelaFotosEmLote
+        try:
+            self.exigir_acesso()
+        except ErroNegocio as erro:
+            QMessageBox.warning(self, "Buscar fotos", str(erro))
+            return None
+        janela = JanelaFotosEmLote(self.ctx, self)
+        janela.exec()
+        return janela
 
     def criar_embalagem(self):
         try:

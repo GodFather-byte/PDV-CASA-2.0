@@ -1,10 +1,11 @@
 """Foto do produto nas telas Qt: o quadro que se ajusta ao espaço (caixa e cadastro) e o editor do cadastro."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
+    QApplication, QDialog, QFileDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QSizePolicy,
+    QVBoxLayout, QWidget,
 )
 
 from src.controllers import foto_produto_controller as fotos
@@ -136,3 +137,148 @@ class EditorFoto(QWidget):
         elif self.remover_ao_salvar:
             self.controle.remover(produto_id)
         self.pendente, self.remover_ao_salvar, self.produto_id = None, False, produto_id
+
+
+class JanelaFotosEmLote(QDialog):
+    """Busca a foto de todos os produtos sem foto pelo código de barras; a pessoa aprova uma a uma antes de gravar.
+
+    A busca roda numa thread (a tela não trava) com uma pausa entre produtos, para não sobrecarregar a base pública.
+    Os resultados voltam por uma fila lida pela thread da tela; nada é gravado sem clicar em "Salvar aprovadas"."""
+
+    PAUSA_SEGUNDOS = 0.7
+
+    def __init__(self, ctx, parent=None, buscar=None):
+        super().__init__(parent)
+        from queue import Queue
+        from threading import Event
+        from PySide6.QtCore import QTimer
+        self.ctx = ctx
+        self.controle = fotos.FotoProdutoController(ctx.banco)
+        self._buscar = buscar or fotos.buscar_na_internet
+        self._fila: Queue = Queue()
+        self._parar = Event()
+        self._thread = None
+        self.achadas: dict[int, fotos.FotoPreparada] = {}
+        self.setWindowTitle("Buscar fotos dos produtos")
+        self.resize(760, 620)
+        layout = QVBoxLayout(self)
+        self.pendentes = self.controle.sem_foto_com_codigo()
+        layout.addWidget(texto(
+            f"{len(self.pendentes)} produto(s) à venda sem foto e com código de barras. A busca usa a base pública "
+            "Open Food Facts e precisa de internet. Desmarque as fotos que não forem do produto certo antes de salvar.",
+            "suave"))
+        self.lista = QListWidget()
+        self.lista.setIconSize(QSize(72, 72))
+        layout.addWidget(self.lista, 1)
+        self.situacao = texto("", "suave")
+        layout.addWidget(self.situacao)
+        botoes = QHBoxLayout()
+        self.btn_buscar = QPushButton("Buscar fotos")
+        self.btn_buscar.clicked.connect(lambda: self.buscar_todos())
+        self.btn_parar = QPushButton("Parar")
+        self.btn_parar.setEnabled(False)
+        self.btn_parar.clicked.connect(self._parar.set)
+        self.btn_salvar = QPushButton("Salvar aprovadas")
+        self.btn_salvar.setEnabled(False)
+        self.btn_salvar.clicked.connect(self.salvar_aprovadas)
+        for botao in (self.btn_buscar, self.btn_parar, self.btn_salvar):
+            botoes.addWidget(botao)
+        layout.addLayout(botoes)
+        self._timer = QTimer(self)
+        self._timer.setInterval(150)
+        self._timer.timeout.connect(self._receber)
+        if not self.pendentes:
+            self.btn_buscar.setEnabled(False)
+            self.situacao.setText("Todos os produtos com código de barras já têm foto.")
+
+    def _trabalhar(self, pendentes, pausa):
+        import time
+        for indice, produto in enumerate(pendentes):
+            if self._parar.is_set():
+                break
+            try:
+                self._fila.put(("achou", produto, self._buscar(produto["cbarra"])))
+            except ErroNegocio as erro:
+                self._fila.put(("nao", produto, str(erro)))
+            except Exception as erro:  # noqa: BLE001 - qualquer falha de rede vira linha "não achou"
+                self._fila.put(("nao", produto, type(erro).__name__))
+            if pausa and indice + 1 < len(pendentes) and self._parar.wait(pausa):
+                break
+        self._fila.put(("fim", None, None))
+
+    def buscar_todos(self, sincrono: bool = False) -> None:
+        if self._thread is not None:
+            return
+        self.lista.clear()
+        self.achadas.clear()
+        self._parar.clear()
+        self.btn_buscar.setEnabled(False)
+        self.btn_parar.setEnabled(True)
+        self.situacao.setText("Buscando…")
+        if sincrono:                                  # testes: sem thread e sem pausa
+            self._trabalhar(self.pendentes, 0)
+            self._receber()
+            return
+        from threading import Thread
+        self._thread = Thread(target=self._trabalhar, args=(list(self.pendentes), self.PAUSA_SEGUNDOS), daemon=True)
+        self._thread.start()
+        self._timer.start()
+
+    def _receber(self) -> None:
+        from queue import Empty
+        from PySide6.QtGui import QIcon
+        while True:
+            try:
+                tipo, produto, dado = self._fila.get_nowait()
+            except Empty:
+                return
+            if tipo == "fim":
+                self._timer.stop()
+                self._thread = None
+                self.btn_buscar.setEnabled(True)
+                self.btn_parar.setEnabled(False)
+                self.btn_salvar.setEnabled(bool(self.achadas))
+                self.situacao.setText(f"{len(self.achadas)} foto(s) encontrada(s) de {self.lista.count()} produto(s) "
+                                      "consultado(s). Confira e salve as aprovadas.")
+                continue
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, produto["id"])
+            if tipo == "achou":
+                self.achadas[produto["id"]] = dado
+                pixmap = QPixmap()
+                pixmap.loadFromData(dado.miniatura)
+                item.setIcon(QIcon(pixmap))
+                item.setText(f"{produto['nome']}  ·  {produto['cbarra']}")
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                item.setCheckState(Qt.Checked)
+            else:
+                item.setText(f"{produto['nome']}  ·  {produto['cbarra']}  —  sem foto: {dado}")
+                item.setFlags(item.flags() & ~Qt.ItemIsUserCheckable)
+            self.lista.addItem(item)
+            self.situacao.setText(f"Consultados {self.lista.count()} de {len(self.pendentes)}…")
+
+    def aprovadas(self) -> list[int]:
+        ids = []
+        for i in range(self.lista.count()):
+            item = self.lista.item(i)
+            pid = item.data(Qt.UserRole)
+            if pid in self.achadas and item.checkState() == Qt.Checked:
+                ids.append(pid)
+        return ids
+
+    def salvar_aprovadas(self) -> int:
+        gravadas = 0
+        for pid in self.aprovadas():
+            try:
+                self.controle.gravar(pid, self.achadas[pid])
+                gravadas += 1
+            except ErroNegocio:
+                continue                              # produto apagado no meio do caminho: segue com os outros
+        self.situacao.setText(f"{gravadas} foto(s) salva(s).")
+        self.btn_salvar.setEnabled(False)
+        return gravadas
+
+    def done(self, resultado):
+        self._parar.set()
+        self._timer.stop()
+        super().done(resultado)
