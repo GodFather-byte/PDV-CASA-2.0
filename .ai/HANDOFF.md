@@ -1,4 +1,4 @@
-﻿# Handoff — Central do fornecedor — 06/11/2026
+# Handoff — Central do fornecedor — 06/11/2026
 
 ## Escopo autorizado
 
@@ -19,7 +19,7 @@ O usuário pediu um painel próprio na nuvem para acompanhar lojas, pagamentos e
 - 90 testes de central/ponte/cobrança/assinatura: aprovados, 1 ignorado. Foram seguidos de 13 testes da central aprovados após incluir caixa individual.
 - JavaScript passou em `node --check` (Node do Cursor); HTML com IDs únicos; `git diff --check` e compilação Python passaram.
 - API local e página `/central/` responderam HTTP 200 em ambiente temporário com lojas fictícias. Ferramenta de navegador e Node REPL expiraram; não alegar revisão visual completa.
-- Rodada adicional de nuvem, renovação, atualização e painel em andamento; registrar resultado ao terminar.
+- Rodada adicional de nuvem, renovação, atualização e painel: 109 testes aprovados, sem falhas.
 - Uma chamada anterior usou nomes inexistentes `test_ponte_nuvem` e `test_cobranca_mercadopago`: falhou somente nesses dois imports. Os nomes corretos são `test_ponte_backend` e `test_cobrancas_mercadopago`, aprovados na rodada de 90.
 - Testes usam bancos temporários e sementes fictícias; não migram lojas reais, não cobram clientes, não publicam pacotes de correção nem alteram credenciais reais.
 
@@ -34,3 +34,7 @@ O usuário pediu um painel próprio na nuvem para acompanhar lojas, pagamentos e
 ## Continuidade anterior preservada
 
 Main base já inclui ajustes de estoque, quartos, shows, migração antiga de itens e formulário de contas Linux. Não desfazer `59f1715`, `7700458`, `2103b7a` ou `fb13f93`. Ajuste de impressora `9324c64` é trabalho separado. Validar periféricos e escala no Windows real. Segredos permanecem fora do chat/git.
+
+## Revisão e publicação
+
+PR #55 aberto: https://github.com/GodFather-byte/PDV-CASA-2.0/pull/55. CI do GitHub em andamento; não integrado à main nem publicado nesta etapa. Revisão visual ainda pendente por indisponibilidade da ferramenta de navegador.
