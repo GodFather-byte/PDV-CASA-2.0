@@ -25,7 +25,8 @@ import json
 import socket
 from uuid import uuid4
 
-from src.core import formatacao as fmt
+from src.core import edicao, formatacao as fmt
+from src.versao import VERSAO
 from src.core.erros import ErroNegocio
 from src.core.posicao import nome as nome_posicao
 from src.sync import devolucoes_envio
@@ -375,6 +376,8 @@ def retrato(banco) -> dict:
     fechamentos, sangrias = _fechamentos_e_sangrias(banco, virada, hoje)
     return {
         "loja_nome": config.nome_loja(), "virada_dia_hora": virada,
+        "versao_programa": VERSAO,
+        "edicao_programa": edicao.atual().chave,
         "terminal_id": id_do_caixa(banco), "terminal": turnos.terminal,
         "terminal_rotulo": (maquina.get("descricao") or "").strip() or f"Caixa {turnos.terminal}",
         "terminal_computador": (maquina.get("nome_computador") or "").strip() or socket.gethostname(),

@@ -366,6 +366,8 @@ def instalar(app: FastAPI, Loja, hash_token) -> APIRouter:
     # ---- caixa (token do caixa)
     @router.get("/v1/ponte/licenca")
     def ponte_licenca(caixa: PonteCaixa = Depends(autenticar_caixa), db: Session = Depends(get_db)):
+        from backend.licencas_fornecedor import renovar_ponte
+        renovar_ponte(db, caixa.chave_loja)
         lic = _ultima(db, caixa.chave_loja)
         if lic is None:
             raise HTTPException(status_code=404, detail="Nenhuma licença publicada para esta loja.")
