@@ -17,6 +17,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `python -m licenciador.central_cli` | Administração local da central (subcomando obrigatório; `--help` lista opções) |
 | `python -m tools.gerar_licenca` | Licenças pela linha de comando (`novo-par`, `emitir`, `ver`) |
 | `python -m uvicorn backend.main:app` | API da nuvem |
+| `/central/` na API da nuvem | Central web exclusiva do fornecedor: lojas, cobranças, emissão, suporte e atualizações; `backend/central_fornecedor.py`, `backend/licencas_fornecedor.py` e `backend/central_web/`. Guia `docs/CENTRAL_FORNECEDOR.md` |
 | `python scripts/ver_erros_caixa.py` | Erros do caixa já na nuvem (`PDV_API_URL`+`PDV_API_TOKEN` ou `PDV_NUVEM_DB_URL`; não imprime segredo) |
 | `python -m backend.lojas` / `backend.atualizacoes` | Lojas, assinatura e versões na nuvem |
 | `python -m backend.lojas cobranca` | Assinatura mensal, boleto/Pix, reenvio e conciliação no Mercado Pago |

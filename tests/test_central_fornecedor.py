@@ -1,0 +1,195 @@
+"""Acesso do fornecedor, isolamento das lojas, suporte e transferência de emissão."""
+from datetime import date, timedelta
+import os
+import unittest
+from unittest.mock import patch
+from uuid import uuid4
+
+from tests.test_nuvem import TestClient, nuvem, preparar_lojas, cabecalho, ADMIN
+from backend import central_fornecedor as central, licencas_fornecedor as emissao, ponte
+from backend import cobranca_mercadopago as cobranca
+from src.core import ed25519, licenca
+
+SEMENTE = bytes.fromhex("33" * 32)
+PUBLICA = ed25519.chave_publica(SEMENTE).hex()
+
+
+@unittest.skipIf(TestClient is None, "Dependências da nuvem ausentes")
+class TesteCentralFornecedor(unittest.TestCase):
+    def setUp(self):
+        preparar_lojas()
+        with nuvem.SessionLocal() as db:
+            for modelo in (central.SessaoFornecedor, central.AuditoriaFornecedor, central.ChamadoFornecedor,
+                           emissao.EmissaoNuvem, ponte.PonteCaixa, ponte.PonteLicenca, ponte.PonteLoja,
+                           cobranca.Cobranca, cobranca.Plano):
+                db.query(modelo).delete()
+            db.commit()
+        with central._trava:
+            central._tentativas.clear()
+        chave_real = patch.object(nuvem, "semente_licenca", return_value=None)
+        chave_real.start()
+        self.addCleanup(chave_real.stop)
+        self.http = TestClient(nuvem.app, base_url="https://testserver")
+        self.csrf = self.login()
+
+    def tearDown(self):
+        self.http.close()
+        with nuvem.SessionLocal() as db:
+            for modelo in (central.SessaoFornecedor, central.AuditoriaFornecedor, central.ChamadoFornecedor,
+                           emissao.EmissaoNuvem, ponte.PonteCaixa, ponte.PonteLicenca, ponte.PonteLoja,
+                           cobranca.Cobranca, cobranca.Plano):
+                db.query(modelo).delete()
+            db.commit()
+
+    def login(self, credencial="token-de-teste"):
+        r = self.http.post("/v1/fornecedor/login", json={"credencial": credencial}, headers={"X-Central-Login": "1"})
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.json()["csrf"]
+
+    def post(self, rota, dados):
+        return self.http.post("/v1/fornecedor" + rota, json=dados, headers={"X-Central-CSRF": self.csrf})
+
+    def test_cookie_protegido_hash_no_banco_e_logout_revoga(self):
+        valor = self.http.cookies.get(central.COOKIE)
+        with nuvem.SessionLocal() as db:
+            s = db.query(central.SessaoFornecedor).one()
+            self.assertNotEqual(s.token_hash, valor)
+        self.assertEqual(self.http.get("/v1/fornecedor/lojas").status_code, 200)
+        self.assertEqual(self.post("/sair", {}).status_code, 200)
+        self.http.cookies.set(central.COOKIE, valor)
+        self.assertEqual(self.http.get("/v1/fornecedor/lojas").status_code, 401)
+
+    def test_cliente_e_admin_bearer_nao_substituem_sessao_e_ponte_nao_colide(self):
+        self.http.cookies.clear()
+        for headers in (cabecalho(), ADMIN, {}):
+            self.assertEqual(self.http.get("/v1/fornecedor/lojas", headers=headers).status_code, 401)
+        # A rota da central antiga continua com o próprio contrato e autenticação.
+        self.assertNotEqual(self.http.get("/v1/central/lojas").status_code, 200)
+
+    def test_csrf_obrigatorio_e_token_rotacionado_revoga_sessoes(self):
+        dados = {"nome": "Alterada", "ativa": False, "motivo": "teste"}
+        self.assertEqual(self.http.post("/v1/fornecedor/lojas/LOJA-1/alterar", json=dados).status_code, 403)
+        with patch.dict(os.environ, {"PDV_API_TOKEN": "credencial-rotacionada"}):
+            self.assertEqual(self.http.get("/v1/fornecedor/lojas").status_code, 401)
+
+    def test_sessao_expirada_e_recusada(self):
+        with nuvem.SessionLocal() as db:
+            db.query(central.SessaoFornecedor).update({"expira_em": "2000-01-01 00:00:00"})
+            db.commit()
+        self.assertEqual(self.http.get("/v1/fornecedor/lojas").status_code, 401)
+
+    def test_login_limita_tentativas_cookie_http_only_e_nao_cache(self):
+        r = self.http.post("/v1/fornecedor/login", json={"credencial": "token-de-teste"}, headers={"X-Central-Login": "1"})
+        self.assertIn("HttpOnly", r.headers["set-cookie"])
+        self.assertIn("Secure", r.headers["set-cookie"])
+        self.assertIn("SameSite=strict", r.headers["set-cookie"])
+        self.assertEqual(r.headers["cache-control"], "no-store")
+        for _ in range(6):
+            self.assertEqual(self.http.post("/v1/fornecedor/login", json={"credencial": "errada"}, headers={"X-Central-Login": "1"}).status_code, 401)
+        self.assertEqual(self.http.post("/v1/fornecedor/login", json={"credencial": "errada"}, headers={"X-Central-Login": "1"}).status_code, 429)
+
+    def test_cadastro_token_unico_e_auditoria_sem_segredo(self):
+        r = self.post("/lojas", {"chave": "NOVA", "nome": "Nova loja", "motivo": "Contrato"})
+        self.assertEqual(r.status_code, 200, r.text)
+        token = r.json()["token"]
+        self.assertNotIn(token, self.http.get("/v1/fornecedor/lojas").text)
+        eventos = self.http.get("/v1/fornecedor/auditoria").text
+        self.assertIn("criar_loja", eventos)
+        self.assertNotIn(token, eventos)
+
+    def test_chamado_ciclo_e_isolamento_por_loja(self):
+        r = self.post("/lojas/LOJA-1/chamados", {"titulo": "Erro ao abrir", "descricao": "Passos para reproduzir"})
+        self.assertEqual(r.status_code, 200, r.text)
+        ident = r.json()["id"]
+        r = self.post(f"/chamados/{ident}", {"estado": "resolvido", "resolucao": "Atualização validada"})
+        self.assertEqual(r.json()["estado"], "resolvido")
+        self.assertEqual(self.http.get("/v1/fornecedor/lojas/LOJA-2").json()["chamados"], [])
+        self.assertEqual(self.post("/lojas/INEXISTENTE/chamados", {"titulo": "Erro", "descricao": "teste"}).status_code, 404)
+
+    def test_cobrancas_paginadas_e_filtradas_por_loja(self):
+        with nuvem.SessionLocal() as db:
+            for i in range(52):
+                db.add(cobranca.Cobranca(id=str(i), plano="p", chave_loja="LOJA-1", chave_vencimento=str(i),
+                                        valor_cent=9900, vencimento="2027-01-01", status="pendente",
+                                        criada_em=central.agora(), consultada_em=central.agora()))
+            db.commit()
+        r = self.http.get("/v1/fornecedor/lojas/LOJA-1/cobrancas").json()
+        self.assertEqual(len(r["cobrancas"]), 50)
+        self.assertTrue(r["mais"])
+        self.assertEqual(len(self.http.get("/v1/fornecedor/lojas/LOJA-1/cobrancas?pagina=2").json()["cobrancas"]), 2)
+        self.assertEqual(self.http.get("/v1/fornecedor/lojas/LOJA-2/cobrancas").json()["cobrancas"], [])
+        self.assertEqual(self.http.get("/v1/fornecedor/lojas/LOJA-1/cobrancas?pagina=0").status_code, 422)
+
+    def preparar_ponte(self, dias=20):
+        codigo = licenca.gerar_licenca(SEMENTE, "LOJA-1", dias, date.today())
+        with nuvem.SessionLocal() as db:
+            db.add(ponte.PonteLoja(chave_loja="LOJA-1", modo_ponte=True, ativado_em=central.agora()))
+            db.add(ponte.PonteLicenca(id=str(uuid4()), chave_loja="LOJA-1", codigo=codigo,
+                                     emitida_em=date.today().isoformat(), expira_em=(date.today()+timedelta(days=dias)).isoformat(),
+                                     publicada_em=central.agora()))
+            db.commit()
+        return codigo
+
+    def test_migracao_recusa_sem_chave_e_preserva_prazo_quando_configurada(self):
+        self.preparar_ponte()
+        dados = {"confirmacao": "LOJA-1", "motivo": "Transferência validada"}
+        with patch.object(nuvem, "semente_licenca", return_value=None):
+            self.assertEqual(self.post("/lojas/LOJA-1/migrar-emissao", dados).status_code, 409)
+        with patch.object(nuvem, "semente_licenca", return_value=SEMENTE), patch.object(licenca, "CHAVE_PUBLICA_HEX", PUBLICA):
+            self.assertEqual(self.post("/lojas/LOJA-1/migrar-emissao", dados).status_code, 200)
+            lojas = self.http.get("/v1/fornecedor/lojas").json()["lojas"]
+            loja = next(l for l in lojas if l["chave"] == "LOJA-1")
+            self.assertEqual(loja["emissao"], "nuvem")
+            self.assertEqual(loja["paga_ate"], (date.today()+timedelta(days=20)).isoformat())
+
+    def test_ponte_opt_in_renova_na_nuvem_sem_pc_e_nao_retrocede(self):
+        antigo = self.preparar_ponte()
+        with nuvem.SessionLocal() as db:
+            db.add(emissao.EmissaoNuvem(loja="LOJA-1", habilitada_em=central.agora()))
+            db.query(nuvem.Loja).filter_by(chave_loja="LOJA-1").update({"licenca_ate": (date.today()+timedelta(days=50)).isoformat()})
+            db.commit()
+        with patch.object(nuvem, "semente_licenca", return_value=SEMENTE), patch.object(licenca, "CHAVE_PUBLICA_HEX", PUBLICA):
+            r = self.http.get("/v1/licenca", headers=cabecalho())
+            self.assertEqual(r.status_code, 200, r.text)
+            self.assertNotEqual(r.json()["codigo"], antigo)
+            self.assertEqual(licenca.ler_licenca(r.json()["codigo"], bytes.fromhex(PUBLICA))["loja"], "LOJA-1")
+            self.assertEqual(self.http.get("/v1/licenca", headers=cabecalho()).json(), r.json())
+            with nuvem.SessionLocal() as db:
+                db.query(nuvem.Loja).filter_by(chave_loja="LOJA-1").update({"licenca_ate": (date.today()+timedelta(days=5)).isoformat()})
+                db.commit()
+            self.assertEqual(self.http.get("/v1/licenca", headers=cabecalho()).json(), r.json())
+
+    def test_ponte_sem_opt_in_continua_usando_codigo_local(self):
+        codigo = self.preparar_ponte()
+        with nuvem.SessionLocal() as db:
+            db.query(nuvem.Loja).filter_by(chave_loja="LOJA-1").update({"licenca_ate": "2099-01-01"})
+            db.commit()
+        self.assertEqual(self.http.get("/v1/licenca", headers=cabecalho()).json()["codigo"], codigo)
+
+    def test_manifesto_sem_assinatura_e_recusado_e_diagnostico_nao_executa_comandos(self):
+        r = self.post("/atualizacoes", {"motivo": "Correção", "pacote": {"edicao": "willpdv", "canal": "estavel", "versao": "9.9.9", "sha256": "ab"*32, "tamanho": 4, "url": "https://exemplo.com/setup.exe"}})
+        self.assertEqual(r.status_code, 422)
+        r = self.http.get("/v1/fornecedor/lojas/LOJA-1/diagnostico")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("não confiáveis", r.json()["texto"])
+        self.assertEqual(self.post("/lojas/LOJA-1/executar", {"comando": "qualquer"}).status_code, 404)
+
+    def test_aprovar_caixa_credencial_unica_revogacao_e_renovacao_ponte(self):
+        ident = str(uuid4())
+        r = self.post("/lojas/LOJA-1/caixas", {"caixa_id": ident, "motivo": "Instalação"})
+        self.assertEqual(r.status_code, 200, r.text)
+        token = r.json()["token"]
+        self.assertNotIn(token, self.http.get("/v1/fornecedor/lojas/LOJA-1").text)
+        self.assertEqual(self.post("/lojas/LOJA-1/caixas", {"caixa_id": ident, "motivo": "Duplicado"}).status_code, 409)
+        self.assertEqual(self.post(f"/lojas/LOJA-2/caixas/{ident}/revogar", {"motivo": "Outra loja"}).status_code, 404)
+        self.preparar_ponte()
+        with nuvem.SessionLocal() as db:
+            db.add(emissao.EmissaoNuvem(loja="LOJA-1", habilitada_em=central.agora()))
+            db.query(nuvem.Loja).filter_by(chave_loja="LOJA-1").update({"licenca_ate": (date.today()+timedelta(days=60)).isoformat()})
+            db.commit()
+        with patch.object(nuvem, "semente_licenca", return_value=SEMENTE), patch.object(licenca, "CHAVE_PUBLICA_HEX", PUBLICA):
+            r = self.http.get("/v1/ponte/licenca", headers={"Authorization": "Bearer " + token})
+            self.assertEqual(r.status_code, 200, r.text)
+            self.assertEqual(r.json()["expira_em"], (date.today()+timedelta(days=60)).isoformat())
+        self.assertEqual(self.post(f"/lojas/LOJA-1/caixas/{ident}/revogar", {"motivo": "Troca de PC"}).status_code, 200)
+        self.assertEqual(self.http.get("/v1/ponte/licenca", headers={"Authorization": "Bearer " + token}).status_code, 403)

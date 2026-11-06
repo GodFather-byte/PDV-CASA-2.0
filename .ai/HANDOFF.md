@@ -1,26 +1,40 @@
-# Handoff — 06/11/2026
+# Handoff — Central do fornecedor — 06/11/2026
 
-## Correção das duas falhas Linux no GitHub
+## Escopo autorizado
 
-- Execução `42200090513` do commit `7700458`: Windows 3.10/3.12 e PostgreSQL passaram. Linux 3.10/3.12 falharam somente em `JanelaContas`: largura mínima 1282 para área cliente 1280. Instalador e nuvem passaram.
-- `src/ui_qt/contas.py`: rótulos acima dos campos no formulário e filtros (`QFormLayout.WrapAllRows`), removendo a soma horizontal de rótulo + campo em cada coluna. Não reduz limite do teste, não oculta controles nem muda regras financeiras.
-- Novo teste com DejaVu Sans, Liberation Sans e sans-serif confere área 1280×680, campos/ações visíveis e dentro da janela e espaço da tabela. 39 testes de painéis responsivos e contas aprovados; `git diff --check` limpo. Log `/tmp/pdv-contas-fontes.log`.
-- Usuário já autorizou publicar tudo; esta correção integra a mesma entrega. Publicar na main e conferir os jobs Linux do novo commit.
+O usuário pediu um painel próprio na nuvem para acompanhar lojas, pagamentos e licenças e prestar suporte pelo celular/PC com auxílio de Codex e Claude Code. Base atualizada `59f1715`; worktree separado em `C:\Users\ITAUTEC\source\willpdv-central`, branch `codex/central-fornecedor`. Não reutilizar o rascunho Asaas da cópia antiga em OneDrive, 107 commits atrás.
 
-## Entrega publicada na main `7700458`
+## Implementação
 
-- Estoque: `permitir_venda_sem_estoque` ligada por padrão, inclusive em bancos existentes. Venda pode deixar saldo negativo com auditoria; estorno exato. Opção desligada restaura bloqueio. Saídas/ajustes manuais continuam validados.
-- Quartos: módulo ligado permite operadores ativos 0 a 4 em qualquer turno, independentemente do mínimo antigo. Configurações administrativas restritas. Paginação de oito quartos, Q + número e avisos considerando todos.
-- Qt: menu agrupado, indicadores em abas, controles compactos e janelas na área útil. Caixa sem rolagem geral; busca em popup. Acerto em duas colunas e filtros de relatórios em grade. Listas/históricos continuam rolando. Referência autorizada 1366×768; testes em área cliente 1280×680.
-- Documentação: `docs/OPERACAO_CAIXA_E_TELAS.md`. Verificar no Windows real a escala de tela e periféricos.
-- Teste de pagamento simultâneo dos shows: preparar conexões antes de disputar pagamento; cada conexão nasce/usa/fecha na própria thread. Barreira só no pagamento e `ExitStack` para limpeza. Mantém um pago, outro recusado e saída única R$ 50. Corrigiu o erro anterior `BrokenBarrierError` no Windows 3.10; os dois jobs Windows passaram na execução acima.
-- Validação anterior: 133 testes locais de integração da entrega e 25 repetições da concorrência aprovados. CI anterior completo teve apenas a falha de largura descrita acima nos dois Linux (2363 casos em cada job). Não confundir mensagens simuladas de backup e notificação no log com falhas reais.
+- `/central/`: interface responsiva do fornecedor; `/v1/fornecedor/*`: sessão HttpOnly/SameSite Strict, Secure em HTTPS, validade 8h, hash persistido e revogação por logout/rotação de `PDV_API_TOKEN`. Limite de login por processo, proteção CSRF e respostas sem cache. Não usa localStorage para segredos.
+- Lojas existentes, cadastro com token exibido uma vez, situação/validade, planos Mercado Pago e cobranças paginadas, conciliação, ativação/desativação, validade manual para loja sem plano e emissão de código usando a chave existente da nuvem. Ações administrativas auditadas.
+- Transferência explícita da emissão por loja: confere chave, preserva prazo e validade anterior do plano, mantém tokens e ponte. `renovar_ponte` só age em lojas transferidas; renova na consulta de licença normal ou do caixa individual. Não reduz o prazo já publicado.
+- Suporte: erros já enviados pelos caixas, último contato, chamados, diagnóstico em texto para revisão/uso externo com IA. Aprovação/revogação de caixas individuais e confirmação da licença aplicada. Sem shell remoto, tela remota, API de IA ou reparo automático do banco.
+- Atualizações: publicar manifesto assinado pelo mecanismo existente; HTTPS e confirmação de edição/canal. Não confirma instalação. Versão/edição passaram a ser enviadas no retrato de caixas atualizados.
+- Tabelas novas somente na nuvem; esquema SQLite local preservado. `/v1/central/*` da ponte antiga não foi sobrescrito.
+- Guia `docs/CENTRAL_FORNECEDOR.md`, mapa e CI atualizados. Testes do fornecedor incluídos também no PostgreSQL do CI.
 
-## Continuidade
+## Validação
 
-- `2fc841e`: comprovantes de comissão/acerto apenas número/nome, sem "Garota", assinatura genérica; cálculos/registros mantidos.
-- `2103b7a`: migração v17 de itens antigos de 14 para DDL de 20 campos por nome, preservando defaults/backup/rollback. Não apagar banco da loja.
-- `fb13f93`: shows automáticos dos quartos + manuais/anteriores no acerto (50/60), esquema 36, sem backfill e sem repetição dos IDs pagos.
-- `9324c64` na branch work é ajuste local de impressora separado; Codex no PC ajusta impressora, evitar sobreposição.
-- Tabela de 160 sugestões em `/workspace/entregas/bar_adega`; preencher preços zerados. Consulta online GTIN não implementada por escolha do usuário.
-- Ambiente Python 3.12/.venv; Qt offscreen e Tk requer Xvfb. Ficha código 31 pendente; credenciais fora do chat.
+- 90 testes de central/ponte/cobrança/assinatura: aprovados, 1 ignorado. Foram seguidos de 13 testes da central aprovados após incluir caixa individual.
+- JavaScript passou em `node --check` (Node do Cursor); HTML com IDs únicos; `git diff --check` e compilação Python passaram.
+- API local e página `/central/` responderam HTTP 200 em ambiente temporário com lojas fictícias. Ferramenta de navegador e Node REPL expiraram; não alegar revisão visual completa.
+- Rodada adicional de nuvem, renovação, atualização e painel: 109 testes aprovados, sem falhas.
+- Uma chamada anterior usou nomes inexistentes `test_ponte_nuvem` e `test_cobranca_mercadopago`: falhou somente nesses dois imports. Os nomes corretos são `test_ponte_backend` e `test_cobrancas_mercadopago`, aprovados na rodada de 90.
+- Testes usam bancos temporários e sementes fictícias; não migram lojas reais, não cobram clientes, não publicam pacotes de correção nem alteram credenciais reais.
+
+## Publicação e limites
+
+- Render confirmado: GodFather's workspace, serviço `willpdv-nuvem`, branch main, URL `https://willpdv-nuvem-6sp0.onrender.com`. Auto deploy ligado. Confirmar o commit via `/v1/versao` após publicar.
+- Usuário ofereceu revisão do Claude; orientar a revisar a branch/diff sem editar em paralelo. Ainda não recebida revisão.
+- Antes de desinstalar Will Licenças: backup externo da chave/históricos, migrar e testar uma loja real com o PC do fornecedor desligado e só então repetir nas demais. Não desinstalado nenhum programa.
+- A versão do PC do cliente precisa incluir o atualizador para receber pacotes; caixas antigos exigem instalador inicial. Atualizações são por edição/canal, sem rollout por loja nesta entrega.
+- Controle integral do Windows exige solução de acesso remoto instalada e autorizada; esta entrega trata suporte dentro do WILLPDV.
+
+## Continuidade anterior preservada
+
+Main base já inclui ajustes de estoque, quartos, shows, migração antiga de itens e formulário de contas Linux. Não desfazer `59f1715`, `7700458`, `2103b7a` ou `fb13f93`. Ajuste de impressora `9324c64` é trabalho separado. Validar periféricos e escala no Windows real. Segredos permanecem fora do chat/git.
+
+## Revisão e publicação
+
+PR #55 aberto: https://github.com/GodFather-byte/PDV-CASA-2.0/pull/55. CI do GitHub em andamento; não integrado à main nem publicado nesta etapa. Revisão visual ainda pendente por indisponibilidade da ferramenta de navegador.
