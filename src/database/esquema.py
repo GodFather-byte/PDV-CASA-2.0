@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 40
+VERSAO_ESQUEMA = 41
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -526,6 +526,8 @@ TABELAS = [
         regra_preco_json TEXT,
         temperatura TEXT NOT NULL DEFAULT 'natural' CHECK (temperatura IN ('natural', 'gelada')),
         cascos_emprestados INTEGER NOT NULL DEFAULT 0 CHECK (cascos_emprestados >= 0),
+        garota_quarto INTEGER,
+        quarto_pedido INTEGER,
         total_cent INTEGER NOT NULL,
         cobra_servico INTEGER NOT NULL DEFAULT 1,
         observacao TEXT,
@@ -757,6 +759,23 @@ TABELAS = [
     )""",
     "CREATE INDEX IF NOT EXISTS ix_shows_quartos_pendentes ON shows_quartos(garota, acerto_id)",
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_quarto_em_uso ON quartos_uso(quarto) WHERE liberado_em IS NULL",
+    # v41: quarto lançado na comanda do cliente (G25). Ao pagar, cada garota da venda vira um início, uma soma de tempo
+    # no quarto em que ela já está ou uma espera na fila; `show_ids` permite desfazer se o cupom for cancelado.
+    """CREATE TABLE IF NOT EXISTS quartos_vendas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        venda_id INTEGER NOT NULL REFERENCES vendas(id),
+        garota INTEGER NOT NULL,
+        blocos INTEGER NOT NULL CHECK (blocos > 0),
+        quarto INTEGER,
+        uso_id INTEGER REFERENCES quartos_uso(id),
+        situacao TEXT NOT NULL CHECK (situacao IN ('aguardando', 'iniciado', 'somado', 'cancelado')),
+        show_ids TEXT NOT NULL DEFAULT '',
+        comanda TEXT,
+        criado_em TEXT NOT NULL,
+        resolvido_em TEXT
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_quartos_vendas_venda ON quartos_vendas(venda_id)",
+    "CREATE INDEX IF NOT EXISTS ix_quartos_vendas_fila ON quartos_vendas(situacao, id)",
     "CREATE INDEX IF NOT EXISTS ix_quartos_uso_inicio ON quartos_uso(inicio)",
 ]
 
@@ -1023,6 +1042,11 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v41: quarto pela comanda do cliente (tabela quartos_vendas nasce em TABELAS). Vendas antigas não viram quarto.
+    41: [
+        ("coluna", "itens_venda", "garota_quarto", "INTEGER"),
+        ("coluna", "itens_venda", "quarto_pedido", "INTEGER"),
+    ],
     # v40: cascos que o cliente identificado levou sem trazer (anotados como empréstimo no fechamento); vendas antigas
     # ficam com 0: troca ou casco não cobrado do passado não prova empréstimo.
     40: [

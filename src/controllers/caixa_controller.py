@@ -256,7 +256,8 @@ class CaixaController(DivisaoContaMixin):
     def adicionar_item(self, venda_id: int, produto_id: int, quantidade: float, observacao: str | None = None,
                        partes: list[int] | None = None, *, temperatura: str = "natural",
                        quantidade_cascos: int = 0, confirmar_entrega_ficha: bool = False,
-                       cascos_emprestados: int = 0) -> int:
+                       cascos_emprestados: int = 0, garota_quarto: int | None = None,
+                       quarto_pedido: int | None = None) -> int:
         v = self._aberta(venda_id)
         p = self.produtos.por_id(produto_id)
         if p is None or not p["ativo"]:
@@ -305,6 +306,8 @@ class CaixaController(DivisaoContaMixin):
                 raise ErroNegocio("Para anotar casco emprestado, a venda precisa ter o cliente (caderneta ou entrega).")
             if cascos_emprestados > int(quantidade) - quantidade_cascos:
                 raise ErroNegocio("Os cascos emprestados não podem passar das garrafas sem casco cobrado.")
+        if garota_quarto is not None or quarto_pedido is not None:
+            self._validar_quarto_lancado(p, quantidade, garota_quarto, quarto_pedido)
         self._conferir_limite_comanda(v)
 
         quando = fmt.agora_dt()
@@ -346,7 +349,7 @@ class CaixaController(DivisaoContaMixin):
         total = fmt.mult_cent(preco, quantidade)
         with self.banco.transacao():
             existente = None
-            if (v["modalidade"] == "balcao" and not partes
+            if (v["modalidade"] == "balcao" and not partes and garota_quarto is None
                     and self.banco.cfg_bool("agrupar_itens_balcao", False)
                     and not self.banco.valor("SELECT impressora_remota FROM subgrupos WHERE id = ?", (p["subgrupo_id"],))):
                 existente = self.banco.um(
@@ -383,7 +386,8 @@ class CaixaController(DivisaoContaMixin):
                     "temperatura": temperatura, "total_cent": total, "cobra_servico": 0 if ficha_credito else p["cobrar_servico"],
                     "observacao": observacao, "comissao_cent": 0 if ficha_credito else fmt.pct_de(total, p["comissao_pct"]),
                     "partes": max(len(componentes), 1), "operador_id": self.operador_id, "criado_em": agora,
-                    "cascos_emprestados": cascos_emprestados})
+                    "cascos_emprestados": cascos_emprestados, "garota_quarto": garota_quarto,
+                    "quarto_pedido": quarto_pedido})
             for c in componentes:
                 self.banco.inserir("itens_venda_partes", {
                     "item_id": item_id, "produto_id": c["id"], "fracao": 1 / len(componentes)})
@@ -936,6 +940,7 @@ class CaixaController(DivisaoContaMixin):
 
     def fechar(self, venda_id: int, garcom_id: int | None = None, pessoas: int | None = None,
                excesso_como_credito: bool | None = None) -> dict:
+        self.ultimos_quartos = []
         v = self._aberta(venda_id)
         turno = self.turnos.exigir_aberto()
         itens = self.itens(venda_id)
@@ -1005,6 +1010,7 @@ class CaixaController(DivisaoContaMixin):
                     registrar_custos(self.banco, venda_id, self.produtos, self.estoque)
                     self.estoque.baixar_venda(venda_id)
                     self._cascos_emprestados(v, "emprestimo")
+                    self.ultimos_quartos = self._quartos().registrar_venda(self.obter(venda_id))
                 if eh_debito:
                     self.banco.inserir("caderneta", {
                         "cliente_id": v["cliente_id"], "venda_id": venda_id, "tipo": "debito", "valor_cent": total,
@@ -1107,6 +1113,7 @@ class CaixaController(DivisaoContaMixin):
                 self.estoque.estornar_venda(venda_id)
                 self._estornar_caderneta(v)
                 self._cascos_emprestados(v, "devolucao")
+                self._quartos().desfazer_venda(venda_id)
                 self.banco.atualizar("vendas", venda_id, {
                     "status": "cancelada", "cancelada_por": self.operador_id, "motivo_cancelamento": motivo,
                     "sincronizado": 0})
@@ -1114,6 +1121,28 @@ class CaixaController(DivisaoContaMixin):
                 raise ErroNegocio("Este cupom já está cancelado.")
             self.banco.log("venda_cancelada", f"venda {venda_id} cupom {v['cupom']} {motivo}".strip(), self.operador_id)
         notificacoes.avisar(self.banco, "cancelamento", "venda_cancelada", venda_id)
+
+    ultimos_quartos: list[dict] = []          # o que o último fechamento fez nos quartos (para a tela avisar)
+
+    def _quartos(self):
+        from src.controllers.quartos_controller import QuartosController
+        return QuartosController(self.banco, self.operador_id)
+
+    def _validar_quarto_lancado(self, p: dict, quantidade: float, garota, quarto) -> None:
+        """Show/quarto na comanda do cliente: produto do quarto, garota cadastrada, blocos inteiros, quarto existente."""
+        quartos = self._quartos()
+        if not quartos.ligado():
+            raise ErroNegocio("O módulo Quartos está desligado (Configurações > Módulos).")
+        if not quartos.eh_produto_quarto(p["id"]):
+            raise ErroNegocio("Só o produto do quarto leva o número da garota.")
+        if garota is None or isinstance(garota, bool) or not isinstance(garota, int) or not quartos.garota_cadastrada(garota):
+            raise ErroNegocio("Informe o número de uma garota cadastrada (Comissões) para o quarto."
+                              if garota is None else f"Garota {garota} não cadastrada. Cadastre em Comissões.")
+        if quantidade != int(quantidade):
+            raise ErroNegocio("O quarto é vendido em blocos inteiros de tempo.")
+        if quarto is not None:
+            if isinstance(quarto, bool) or not isinstance(quarto, int) or not 1 <= quarto <= quartos.config()["quartos"]:
+                raise ErroNegocio("Quarto inexistente.")
 
     def _cascos_emprestados(self, v: dict, tipo: str) -> None:
         """Fechamento: anota no cliente os cascos que ele levou sem trazer. Cancelamento do cupom: desfaz a anotação."""

@@ -194,10 +194,11 @@ class QuartosController:
         """Cada meia hora contratada gera um show, na mesma transação do tempo."""
         quantidade = depois * minutos_bloco // 30 - antes * minutos_bloco // 30
         if profissional and quantidade:
-            self.banco.inserir("shows_quartos", {
+            return self.banco.inserir("shows_quartos", {
                 "uso_id": uso_id, "garota": int(profissional), "blocos_total": depois,
                 "quantidade": quantidade, "criado_em": fmt.agora(),
             })
+        return None
 
     def liberar(self, quarto: int) -> dict:
         """Encerra o uso; guarda quanto passou do tempo (0 se saiu dentro do tempo)."""
@@ -214,6 +215,170 @@ class QuartosController:
         self.banco.log("quarto_liberado", f"quarto {quarto}" + (f", passou {fmt_relogio(excedeu)}" if excedeu else ""),
                        self.operador_id)
         return {"quarto": quarto, "excedeu_seg": excedeu}
+
+    # ------------------------------------------------ quarto pela comanda do cliente
+    def produto_quarto(self) -> dict:
+        """O produto do show/quarto (um bloco de tempo, preço = valor do bloco). Criado na primeira vez, se não existir."""
+        from src.controllers.cadastro_controller import CadastroController
+        from src.controllers.produto_controller import ProdutoController
+        produtos = ProdutoController(self.banco)
+        atual = self.banco.cfg_int("quartos_produto", 0)
+        p = produtos.por_id(atual) if atual else None
+        if p is not None and p["ativo"]:
+            return p
+        c = self.config()
+        with self.banco.transacao():
+            pid = CadastroController(self.banco).salvar("produtos", {
+                "codigo": produtos.proximo_codigo(), "nome": f"QUARTO {fmt_duracao(c['minutos_bloco'])}",
+                "subgrupo_id": self.banco.valor("SELECT id FROM subgrupos ORDER BY id LIMIT 1"),
+                "unidade_id": self.banco.valor("SELECT id FROM unidades WHERE abreviatura = 'UN'")
+                or self.banco.valor("SELECT id FROM unidades ORDER BY id LIMIT 1"),
+                "preco_cent": fmt.fmt_num(c["valor_bloco_cent"] or 1), "cobrar_servico": "N",
+                "mostrar_no_cardapio": "N"})
+            self.banco.cfg_set("quartos_produto", pid)
+        return produtos.por_id(pid)
+
+    def eh_produto_quarto(self, produto_id) -> bool:
+        return bool(produto_id) and self.banco.cfg_int("quartos_produto", 0) == produto_id
+
+    def garota_cadastrada(self, numero) -> dict | None:
+        try:
+            numero = int(numero)
+        except (TypeError, ValueError):
+            return None
+        r = self.banco.um("SELECT numero, nome FROM garotas WHERE numero = ?", (numero,))
+        return dict(r) if r else None
+
+    def quarto_sugerido(self, excluir: set[int] | None = None) -> int | None:
+        """Quarto livre há mais tempo (nunca usado conta como o mais antigo): reveza os quartos e dá tempo de arrumar."""
+        excluir = excluir or set()
+        ocupados = {r["quarto"] for r in self.banco.todos("SELECT quarto FROM quartos_uso WHERE liberado_em IS NULL")}
+        livres = [n for n in range(1, self.config()["quartos"] + 1) if n not in ocupados and n not in excluir]
+        if not livres:
+            return None
+        ultimos = {r["quarto"]: r["fim"] for r in self.banco.todos(
+            "SELECT quarto, MAX(liberado_em) AS fim FROM quartos_uso GROUP BY quarto")}
+        return min(livres, key=lambda n: (ultimos.get(n) or "", n))
+
+    def _shows_do_uso(self, uso_id: int, blocos_total: int) -> list[int]:
+        return [r["id"] for r in self.banco.todos(
+            "SELECT id FROM shows_quartos WHERE uso_id = ? AND blocos_total = ?", (uso_id, blocos_total))]
+
+    def registrar_venda(self, venda: dict) -> list[dict]:
+        """Chamado no fechamento (pago), dentro da transação da venda: cada garota com quarto lançado vira um início no
+        quarto pedido ou sugerido, uma soma no quarto em que ela já está, ou uma espera na fila sem quarto livre."""
+        linhas = self.banco.todos(
+            """SELECT garota_quarto AS garota, SUM(quantidade) AS blocos, MAX(quarto_pedido) AS quarto
+               FROM itens_venda WHERE venda_id = ? AND cancelado = 0 AND garota_quarto IS NOT NULL
+               GROUP BY garota_quarto ORDER BY MIN(id)""", (venda["id"],))
+        if not linhas:
+            return []
+        self._exigir_ligado()
+        comanda = str(venda.get("posicao") or "") if venda.get("modalidade") == "mesa" else None
+        resultados, reservados = [], set()
+        for linha in linhas:
+            garota, blocos = int(linha["garota"]), int(round(linha["blocos"]))
+            if blocos <= 0:
+                continue
+            nome = (self.garota_cadastrada(garota) or {}).get("nome", "")
+            registro = {"venda_id": venda["id"], "garota": garota, "blocos": blocos, "comanda": comanda,
+                        "criado_em": fmt.agora()}
+            em_uso = self.banco.um("SELECT * FROM quartos_uso WHERE codigo_profissional = ? AND liberado_em IS NULL",
+                                   (str(garota),))
+            if em_uso:
+                self.adicionar_tempo(em_uso["quarto"], blocos)
+                total = em_uso["blocos"] + blocos
+                registro.update(quarto=em_uso["quarto"], uso_id=em_uso["id"], situacao="somado",
+                                show_ids=",".join(map(str, self._shows_do_uso(em_uso["id"], total))))
+            else:
+                quarto = linha["quarto"]
+                if quarto and (self._ativo(quarto) or quarto in reservados):
+                    quarto = None                      # o pedido foi ocupado nesse meio tempo: vale o sugerido
+                quarto = quarto or self.quarto_sugerido(reservados)
+                if quarto is None:
+                    registro.update(situacao="aguardando")
+                else:
+                    uso_id = self.iniciar(quarto, blocos, comanda, str(garota))
+                    reservados.add(quarto)
+                    registro.update(quarto=quarto, uso_id=uso_id, situacao="iniciado", resolvido_em=fmt.agora(),
+                                    show_ids=",".join(map(str, self._shows_do_uso(uso_id, blocos))))
+            registro["id"] = self.banco.inserir("quartos_vendas", registro)
+            resultados.append({**registro, "nome": nome,
+                               "duracao": fmt_duracao(blocos * self.config()["minutos_bloco"])})
+        return resultados
+
+    def resultados_da_venda(self, venda_id: int) -> list[dict]:
+        """O que o pagamento da venda fez nos quartos (iniciado, somado ou aguardando), para a tela avisar."""
+        saida = []
+        for r in self.banco.todos("SELECT * FROM quartos_vendas WHERE venda_id = ? AND situacao <> 'cancelado' "
+                                  "ORDER BY id", (venda_id,)):
+            item = dict(r)
+            item["nome"] = (self.garota_cadastrada(item["garota"]) or {}).get("nome", "")
+            item["duracao"] = fmt_duracao(item["blocos"] * self.config()["minutos_bloco"])
+            saida.append(item)
+        return saida
+
+    def fila(self) -> list[dict]:
+        saida = []
+        for r in self.banco.todos("SELECT * FROM quartos_vendas WHERE situacao = 'aguardando' ORDER BY id"):
+            item = dict(r)
+            item["nome"] = (self.garota_cadastrada(item["garota"]) or {}).get("nome", "")
+            item["duracao"] = fmt_duracao(item["blocos"] * self.config()["minutos_bloco"])
+            saida.append(item)
+        return saida
+
+    def iniciar_da_fila(self, fila_id: int, quarto: int | None = None) -> dict:
+        """Começa o tempo de quem estava esperando quarto (no quarto indicado ou no sugerido)."""
+        self._exigir_ligado()
+        with self.banco.transacao():
+            r = self.banco.um("SELECT * FROM quartos_vendas WHERE id = ? AND situacao = 'aguardando'", (fila_id,))
+            if r is None:
+                raise ErroNegocio("Essa espera já foi atendida ou cancelada.")
+            quarto = quarto or self.quarto_sugerido()
+            if quarto is None:
+                raise ErroNegocio("Nenhum quarto livre ainda.")
+            em_uso = self.banco.um("SELECT * FROM quartos_uso WHERE codigo_profissional = ? AND liberado_em IS NULL",
+                                   (str(r["garota"]),))
+            if em_uso:
+                self.adicionar_tempo(em_uso["quarto"], r["blocos"])
+                quarto, uso_id, situacao = em_uso["quarto"], em_uso["id"], "somado"
+                shows = self._shows_do_uso(uso_id, em_uso["blocos"] + r["blocos"])
+            else:
+                uso_id = self.iniciar(quarto, r["blocos"], r["comanda"], str(r["garota"]))
+                situacao, shows = "iniciado", self._shows_do_uso(uso_id, r["blocos"])
+            self.banco.executar(
+                "UPDATE quartos_vendas SET situacao = ?, quarto = ?, uso_id = ?, show_ids = ?, resolvido_em = ? "
+                "WHERE id = ?", (situacao, quarto, uso_id, ",".join(map(str, shows)), fmt.agora(), fila_id))
+        return {"quarto": quarto, "garota": r["garota"], "situacao": situacao}
+
+    def desfazer_venda(self, venda_id: int) -> None:
+        """Cupom cancelado: tira o tempo e os shows que a venda gerou. Recusa se algum show já foi pago no acerto."""
+        registros = self.banco.todos(
+            "SELECT * FROM quartos_vendas WHERE venda_id = ? AND situacao <> 'cancelado'", (venda_id,))
+        for r in registros:
+            ids = [int(i) for i in (r["show_ids"] or "").split(",") if i]
+            if ids and self.banco.valor(
+                    f"SELECT COUNT(*) FROM shows_quartos WHERE acerto_id IS NOT NULL AND id IN ({','.join('?' * len(ids))})",
+                    tuple(ids)):
+                raise ErroNegocio("O show deste quarto já foi pago no acerto da garota. Cancele o acerto antes.")
+        for r in registros:
+            ids = [int(i) for i in (r["show_ids"] or "").split(",") if i]
+            if ids:
+                self.banco.executar(f"DELETE FROM shows_quartos WHERE id IN ({','.join('?' * len(ids))})", tuple(ids))
+            if r["uso_id"] and r["situacao"] in ("iniciado", "somado"):
+                uso = self.banco.um("SELECT * FROM quartos_uso WHERE id = ?", (r["uso_id"],))
+                if uso and uso["liberado_em"] is None:
+                    restante = uso["blocos"] - r["blocos"]
+                    if restante > 0:
+                        self.banco.executar("UPDATE quartos_uso SET blocos = ? WHERE id = ?", (restante, uso["id"]))
+                    else:
+                        self.banco.executar("UPDATE quartos_uso SET liberado_em = ?, liberado_por = ? WHERE id = ?",
+                                            (fmt.agora(), self.operador_id, uso["id"]))
+            self.banco.executar("UPDATE quartos_vendas SET situacao = 'cancelado', resolvido_em = ? WHERE id = ?",
+                                (fmt.agora(), r["id"]))
+        if registros:
+            self.banco.log("quarto_venda_cancelada", f"venda {venda_id}: {len(registros)} quarto(s) desfeito(s)",
+                           self.operador_id)
 
     # ------------------------------------------------------------------ painel
     def situacao(self) -> list[dict]:

@@ -3,6 +3,29 @@
 Conta o tempo de cada quarto. O cliente **paga antes, no caixa** (venda normal). O painel registra os shows a pagar
 na comanda da profissional identificada, separados do consumo do cliente.
 
+## Jeito mais rápido: o quarto vai na comanda do cliente
+
+No campo do produto do caixa, na conta do cliente, digite só **o número da garota**: **`113`** + Enter. Pronto: o
+sistema escolhe o quarto na hora do pagamento. Para forçar um quarto, **`113Q3`** (garota 113 no quarto 3). Vale a
+regra **a partir de 100** (`quartos_garota_minimo`): número de garota cadastrada de 100 em diante é sempre a garota, mesmo
+que algum produto tenha o mesmo código (lance esse produto pelo leitor ou pelo nome); abaixo de 100 é sempre produto.
+Dentro da própria comanda da garota, o número dela não vira quarto. Para abrir a comanda 113, use o campo **Número** (não o do produto). Entra o item **QUARTO 30 min** (o show, no
+valor do bloco, por exemplo R$ 90) já ligado à garota. A **quantidade** são os blocos: `2*113Q3` (ou 2 na quantidade)
+= 1h. (`G113` / `G113Q3` também funcionam.) Lançar o produto do quarto pelo código ou
+pelo nome também funciona: o caixa pergunta o número da garota (obrigatório). Bebidas e o resto vão na mesma conta.
+
+**Ao pagar a conta**, o sistema faz sozinho:
+- **Garota já num quarto** (cliente pagou mais tempo): soma no quarto dela e conta mais show.
+- **Senão**: inicia no quarto pedido (`Q3`) ou no **livre há mais tempo** (reveza os quartos e dá tempo de arrumar), e
+  os shows vão para a comanda dela (acerto), como no início manual.
+- **Nenhum quarto livre**: ela fica **na fila** com o tempo já pago; quando um quarto for liberado, o caixa pergunta se
+  começa ali.
+- Uma janela mostra **qual chave entregar** ("QUARTO 2 → ANA (25) · 1h. Entregue a chave do 2.").
+
+Nada começa antes do pagamento. **Cancelar o cupom** tira o tempo e os shows que ele gerou (recusa se o show já foi
+pago no acerto dela). O produto do quarto é criado sozinho na primeira vez (preço = `quartos_valor_bloco`); dá para
+mudar nome e preço no cadastro. O início manual pelos cartões (Q3 no campo Número) continua igual.
+
 ## Shows e acerto da profissional
 
 Ao iniciar com **Q3 + Enter**, informe o código cadastrado da profissional, escolha o tempo e confirme.
