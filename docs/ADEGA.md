@@ -31,6 +31,9 @@ Diagnóstico, melhorias entregues, plano em fases e próxima evolução:
    - *Casco*: cadastre antes o produto "CASCO 600ML" (com preço) e vincule-o à bebida retornável.
    - *Fardo / caixa*: botão no cadastro do produto unitário; o fardo nasce com preço e código de barras próprios e baixa
      as unidades. Compra de fardo entra como unidades no estoque.
+   - *Combo* (balde, kit churrasco): botão **Criar combo** em Cadastros > Produtos: nome, preço, código de barras e os
+     produtos com as quantidades. A tela mostra quanto sairiam separados e a economia. O combo tem preço fixo: os itens
+     dentro dele não ganham atacado nem promoção e não contam para o atacado dos avulsos. Vender 1 baixa cada item.
    - O que não tiver cadastro aparece no caixa como "Cadastrar o produto agora?" no primeiro bipe (nome, preço, categoria,
      estoque e preço gelada opcionais). Operador sem permissão pede senha de supervisor.
 4. **Operadores:** além do ADM, um usuário por atendente (Cadastros > Operadores), com o nível certo (quem pode cancelar,

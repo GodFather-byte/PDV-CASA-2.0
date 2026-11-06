@@ -399,6 +399,68 @@ class ProdutoController:
             self.banco.log("produto_embalagem", f"{nome}: {int(quantidade)} x {u['nome']}", operador_id)
         return pid
 
+    def preco_avulso(self, itens: list[tuple[int, float]]) -> int:
+        """Quanto os itens do combo custariam comprados separados, no preço de agora (sem atacado)."""
+        total = 0
+        for produto_id, quantidade in itens:
+            p = self.por_id(produto_id)
+            if p is not None:
+                total += fmt.mult_cent(self.preco_vigente(p), quantidade)
+        return total
+
+    def criar_combo(self, nome: str, preco_cent: int, itens: list[tuple[int, float]], cbarra: str | None = None,
+                    operador_id: int | None = None) -> int:
+        """Combo com preço fixo (balde com 6 cervejas, kit churrasco): um produto novo cuja venda baixa cada item pela
+        composição. Os itens do combo não ganham atacado nem promoção e não contam para atingir o atacado dos avulsos,
+        porque a linha vendida é a do combo. Itens que ainda não controlam estoque passam a controlar."""
+        from src.controllers.cadastro_controller import CadastroController     # import tardio: evita ciclo de importação
+        nome = (nome or "").strip()
+        if not nome:
+            raise ErroNegocio("Informe o nome do combo.")
+        if type(preco_cent) is not int or preco_cent <= 0:
+            raise ErroNegocio("Informe o preço do combo.")
+        if not itens:
+            raise ErroNegocio("Inclua os produtos do combo.")
+        vistos, limpos = set(), []
+        for produto_id, quantidade in itens:
+            p = self.por_id(produto_id)
+            if p is None or not p["ativo"]:
+                raise ErroNegocio("Produto do combo não encontrado ou inativo.")
+            if produto_id in vistos:
+                raise ErroNegocio(f"'{p['nome']}' aparece duas vezes no combo: some as quantidades numa linha só.")
+            vistos.add(produto_id)
+            if p["casco_produto_id"]:
+                raise ErroNegocio(f"'{p['nome']}' tem casco vinculado e não pode entrar em combo.")
+            try:
+                quantidade = fmt.validar_qtd(quantidade)
+            except ValueError as exc:
+                raise ErroNegocio(str(exc).capitalize() + ".") from None
+            if quantidade <= 0 or (not p["aceita_decimal"] and quantidade != int(quantidade)):
+                raise ErroNegocio(f"Quantidade inválida para '{p['nome']}'.")
+            limpos.append((p, quantidade))
+        if len(limpos) == 1 and limpos[0][1] < 2:
+            raise ErroNegocio("Um combo precisa de pelo menos 2 unidades no total.")
+        cbarra = (cbarra or "").strip() or None
+        if cbarra:
+            self._codigo_de_barras_livre(cbarra)
+        primeiro = limpos[0][0]
+        unidade = self.banco.valor(
+            "SELECT id FROM unidades WHERE abreviatura IN ('CB', 'KIT', 'UN') "
+            "ORDER BY CASE abreviatura WHEN 'CB' THEN 0 WHEN 'KIT' THEN 1 ELSE 2 END LIMIT 1") or primeiro["unidade_id"]
+        with self.banco.transacao():
+            for p, _ in limpos:
+                if not p["controla_estoque"] and not self.composicao(p["id"]):
+                    self.banco.executar("UPDATE produtos SET controla_estoque = 1 WHERE id = ?", (p["id"],))
+                    self.banco.log("estoque_controle_ligado", p["nome"], operador_id)
+            pid = CadastroController(self.banco).salvar("produtos", {
+                "codigo": self.proximo_codigo(), "nome": nome, "subgrupo_id": primeiro["subgrupo_id"],
+                "unidade_id": unidade, "preco_cent": fmt.fmt_num(preco_cent), "cbarra": cbarra, "cobrar_servico": "N"})
+            for p, quantidade in limpos:
+                self.incluir_composicao(pid, p["id"], quantidade)
+            self.banco.log("produto_combo", f"{nome}: " + ", ".join(f"{fmt.fmt_qtd(q)} x {p['nome']}" for p, q in limpos),
+                           operador_id)
+        return pid
+
     def embalagem(self, produto_id: int) -> dict | None:
         """{"unitario_id", "unitario", "unidade", "quantidade"} quando o produto é um fardo/caixa fechada: não controla estoque e
         é feito de N (inteiro, 2 ou mais) unidades de um único produto que controla. O estoque de um fardo fica nas unidades."""
