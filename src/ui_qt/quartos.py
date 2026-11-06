@@ -299,8 +299,28 @@ def pedir_mais_tempo(pai, ctrl: QuartosController, item: dict):
 def pedir_liberar(pai, ctrl: QuartosController, quarto: int):
     resposta = QMessageBox.question(pai, "Liberar quarto", f"Liberar o quarto {quarto}?")
     if resposta == QMessageBox.StandardButton.Yes:
-        return lambda: ctrl.liberar(quarto)
+        def acao():
+            resultado = ctrl.liberar(quarto)
+            oferecer_fila(pai, ctrl, quarto)
+            return resultado
+        return acao
     return None
+
+
+def oferecer_fila(pai, ctrl: QuartosController, quarto: int) -> bool:
+    """Quarto liberado e alguém já pagou esperando quarto: oferece começar ali (o primeiro da fila)."""
+    fila = ctrl.fila()
+    if not fila:
+        return False
+    vez = fila[0]
+    resposta = QMessageBox.question(
+        pai, "Quarto livre",
+        f"O quarto {quarto} ficou livre. Iniciar agora para {vez['nome'] or 'a garota'} ({vez['garota']}) — "
+        f"{vez['duracao']} já pago?" + (f"\n(Mais {len(fila) - 1} na fila.)" if len(fila) > 1 else ""))
+    if resposta != QMessageBox.StandardButton.Yes:
+        return False
+    ctrl.iniciar_da_fila(vez["id"], quarto)
+    return True
 
 
 def _trazer_para_frente(janela: QWidget):

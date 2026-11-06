@@ -1,5 +1,15 @@
 # Handoff — 06/11/2026
 
+## Quarto automático pela comanda do cliente (branch nova, depois do merge do PR #56)
+
+- `113` (número de garota cadastrada a partir de `quartos_garota_minimo`=100 vence produto; abaixo é produto), `113Q3` (quarto 3) ou `113Q`, no código do caixa, lança (G113 também vale); o produto do quarto (criado sozinho, `cfg quartos_produto`, preço =
+  `quartos_valor_bloco`) ligado à garota; quantidade = blocos. Produto do quarto pelo código pergunta a garota.
+- Ao pagar (`CaixaController.fechar` → `QuartosController.registrar_venda`): soma no quarto em que ela já está, ou
+  inicia no pedido / livre há mais tempo, ou põe na fila (`quartos_vendas`, esquema v41). Shows pelo caminho de sempre
+  (`_registrar_shows`). Tela avisa qual chave entregar (`_avisar_quartos`, lê do banco: `ctx.caixa` é novo a cada
+  acesso). Liberar oferece a fila (`ui_qt/quartos.oferecer_fila`). Cancelar cupom desfaz (`desfazer_venda`).
+- Decisões do usuário: cliente sempre paga antes; código da garota obrigatório.
+
 ## Will Adega para venda (segunda, 09/11)
 
 Branch `claude/cloud-environment-setup-6auvo5` (PR #56), com a main `e364e2d` (central do fornecedor) incorporada:

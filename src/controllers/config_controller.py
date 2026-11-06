@@ -132,6 +132,8 @@ CAMPOS_CONFIG = [
     ("quartos_minutos_bloco", "Quartos: minutos de cada bloco de tempo", "int", "Módulos"),
     ("quartos_valor_bloco", "Quartos: valor de cada bloco (R$, só informativo na tela)", "texto", "Módulos"),
     ("quartos_alerta_min", "Quartos: avisar quantos minutos antes de acabar", "int", "Módulos"),
+    ("quartos_garota_minimo", "Quartos: número a partir do qual, digitado na conta do cliente, é a garota (lança o "
+     "quarto dela; abaixo disso é produto)", "int", "Módulos"),
     ("quartos_campainhas", "Quartos: campainhas (quarto=endereço do aparelho; ex.: 1=192.168.0.51; 2=192.168.0.52)",
      "texto", "Módulos"),
     ("programa_comunicacao", "Programa de comunicação (caminho do executável)", "texto", "Utilitários"),
@@ -399,6 +401,8 @@ class ConfigController:
                     raise ErroValidacao("A quantidade de quartos deve ficar entre 1 e 50.", {chave: "inválido"})
                 if chave == "quartos_minutos_bloco" and not 5 <= int(v) <= 240:
                     raise ErroValidacao("O bloco de tempo dos quartos vai de 5 a 240 minutos.", {chave: "inválido"})
+                if chave == "quartos_garota_minimo" and not 1 <= int(v) <= 99999:
+                    raise ErroValidacao("O número mínimo das garotas vai de 1 a 99999.", {chave: "inválido"})
                 if chave == "quartos_alerta_min" and not 0 <= int(v) <= 60:
                     raise ErroValidacao("O aviso dos quartos vai de 0 a 60 minutos antes.", {chave: "inválido"})
                 if chave == "quartos_valor_bloco":
