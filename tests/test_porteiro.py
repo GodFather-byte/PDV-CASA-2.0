@@ -464,7 +464,7 @@ class TesteJanela(BaseCaixa):
         self.addCleanup(app.finalizar)
         self.assertFalse(janela.botoes["porteiro"].isHidden())
         self.assertIn("desligado", janela.linha_porteiro.text())
-        with patch.dict(os.environ, {"PDV_EDICAO": "ea_superacoes"}):
+        with patch.dict(os.environ, {"PDV_EDICAO": "willadega"}):
             edicao.preparar(self.banco)
             janela.atualizar()
         self.assertTrue(janela.botoes["porteiro"].isHidden())

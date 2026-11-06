@@ -72,11 +72,12 @@ class JanelaLogin(QDialog):
         self.setMinimumSize(680, 470)
         layout = QHBoxLayout(self)
         marca = QVBoxLayout()
-        marca.addWidget(texto("WILLPDV", "marca"))
+        marca.addWidget(texto(ed.marca, "marca"))
         marca.addWidget(texto("Seu atendimento\ncomeça aqui.", "titulo"))
         marca.addWidget(texto(ctx.config.nome_loja(), "suave"))
         marca.addStretch()
-        marca.addWidget(texto("Piloto Qt • Interface em validação", "aviso"))
+        if ed.aviso_entrada:
+            marca.addWidget(texto(ed.aviso_entrada, "aviso"))
         layout.addLayout(marca, 1)
         formulario = QVBoxLayout()
         formulario.addWidget(texto("Bem-vindo de volta", "titulo"))
@@ -100,7 +101,8 @@ class JanelaLogin(QDialog):
         self.btn_entrar.setObjectName("primario")
         self.btn_entrar.clicked.connect(self.entrar)
         formulario.addWidget(self.btn_entrar)
-        self.btn_licenca = QPushButton("Ativar código de licença")
+        self.btn_licenca = QPushButton("Ativar licença ou instalar loja")
+        self.btn_licenca.setToolTip("Cole o código de licença ou o código de instalação (WILL1-...) da central")
         self.btn_licenca.clicked.connect(self.pedir_licenca)
         self.btn_licenca.setVisible(licenca.exigida(ctx.banco))
         formulario.addWidget(self.btn_licenca)
@@ -203,14 +205,48 @@ class JanelaLogin(QDialog):
         if self._ocupada or self._fechada:
             return
         codigo, aceito = QInputDialog.getMultiLineText(
-            self, "Código de licença", "Cole o código fornecido para esta loja:")
+            self, "Ativar licença ou instalar loja",
+            "Cole o código de licença ou o código de instalação (começa com WILL1-) que veio da central:")
         if not aceito or not codigo.strip():
             return
+        from src.core import codigo_instalacao
+        if codigo_instalacao.parece_codigo(codigo):
+            return self.instalar_loja(codigo)
         try:
             licenca.ativar(self.ctx.banco, codigo)
             self.mensagem.setText(licenca.estado(self.ctx.banco).mensagem)
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
+
+    def instalar_loja(self, codigo, http=None):
+        """Código de instalação: configura a nuvem do caixa e já busca a licença."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QApplication, QMessageBox
+        from src.sync import instalacao_nuvem
+        trocar = False
+        while True:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                resultado = instalacao_nuvem.instalar(self.ctx.banco, codigo, http, trocar_loja=trocar)
+            except instalacao_nuvem.OutraLoja as erro:
+                QApplication.restoreOverrideCursor()
+                resposta = QMessageBox.question(
+                    self, "Trocar a loja deste caixa?",
+                    f"{erro}\n\nTrocar faz este caixa passar a enviar vendas e buscar licença como {erro.nova}. "
+                    "Continuar?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No)
+                if resposta != QMessageBox.StandardButton.Yes:
+                    self.mensagem.setText("Instalação cancelada: o caixa continua com a loja atual.")
+                    return False
+                trocar = True
+                continue
+            except ErroNegocio as erro:
+                QApplication.restoreOverrideCursor()
+                self.mensagem.setText(str(erro))
+                return False
+            QApplication.restoreOverrideCursor()
+            self.mensagem.setText(resultado["mensagem"])
+            return resultado["licenca_ativa"]
 
     def cancelar_consulta(self):
         self._fechada = True

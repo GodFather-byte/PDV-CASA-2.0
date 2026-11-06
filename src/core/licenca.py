@@ -13,7 +13,7 @@ Para uma falha de licença nunca parar a loja no meio do serviço:
     SALTO_MAXIMO_DIAS por uso, para uma data errada no futuro não travar a loja de vez.
 
 Cada edição do programa (src/core/edicao.py) tem a sua licença: a edição vai dentro do código assinado (campo `edicao`,
-ausente nas licenças do WillPDV, que continuam com o mesmo formato de antes). Licença do WillPDV não abre o E&A Superações
+ausente nas licenças do WillPDV, que continuam com o mesmo formato de antes). Licença do WillPDV não abre o Will Adega
 e vice-versa.
 
 A exigência só vale no executável (PyInstaller) ou com `licenca_exigir = S` nas configurações;
@@ -130,7 +130,7 @@ def nome_da_edicao(chave: str) -> str:
 
 
 def desta_edicao(lic: dict) -> bool:
-    """A licença é do programa que está rodando (WillPDV ou E&A Superações)."""
+    """A licença é do programa que está rodando (WillPDV ou Will Adega)."""
     return lic["edicao"] == edicao.atual().chave
 
 

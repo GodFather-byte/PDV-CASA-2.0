@@ -269,7 +269,7 @@ class JanelaVerificarBackup(QDialog):
             return False
         arquivo, _ = QFileDialog.getOpenFileName(
             self, "Escolha o backup criptografado", self.ctx.banco.cfg("backup_externo_pasta"),
-            "Backup seguro WillPDV (*.pdvbkp)")
+            "Backup seguro do caixa (*.pdvbkp)")
         if not arquivo:
             return False
         senha, aceito = QInputDialog.getText(

@@ -1123,7 +1123,7 @@ def preparar_inicio(parent=None):
 
 
 def aplicar_icone(aplicacao) -> bool:
-    """Ícone da edição (WillPDV ou E&A Superações) em todas as janelas (barra de título e de tarefas). Ícone é enfeite: nunca
+    """Ícone da edição (WillPDV ou Will Adega) em todas as janelas (barra de título e de tarefas). Ícone é enfeite: nunca
     impede o caixa de abrir."""
     try:
         arquivo = edicao.pasta_recursos() / edicao.atual().icone

@@ -78,6 +78,12 @@ class FormularioCadastro(QDialog):
             editor.setEnabled(not campo.somente_leitura)
             self.campos[campo.nome] = editor
             secoes[campo.secao].addRow(campo.rotulo + (" *" if campo.obrigatorio else ""), editor)
+        self.editor_foto = None
+        if chave == "produtos":
+            from src.ui_qt.foto_produto import EditorFoto
+            self.editor_foto = EditorFoto(ctx, id_, lambda: self.campos["cbarra"].text())
+            abas.addTab(self.editor_foto, "Foto")
+        self.abas = abas
         layout.addWidget(abas)
         self.mensagem = texto("", "aviso")
         layout.addWidget(self.mensagem)
@@ -114,6 +120,12 @@ class FormularioCadastro(QDialog):
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
             return
+        if self.editor_foto is not None:
+            try:
+                self.editor_foto.aplicar(self.id_)
+            except ErroNegocio as erro:          # o produto já foi salvo: avisa e deixa a pessoa tentar de novo
+                self.mensagem.setText(f"Produto salvo, mas a foto não: {erro}")
+                return
         for campo in self.entidade.campos:
             if campo.tipo == "senha":
                 self.campos[campo.nome].clear()
@@ -174,6 +186,127 @@ class FormularioEmbalagem(QDialog):
         self.accept()
 
 
+class FormularioCombo(QDialog):
+    """Combo com preço fixo: escolhe os produtos e quantidades; vender o combo baixa cada item do estoque."""
+
+    def __init__(self, ctx, parent=None):
+        super().__init__(parent)
+        exigir_acesso(ctx, "produtos")
+        self.ctx, self.id_, self.itens = ctx, None, []
+        self.setWindowTitle("Criar combo")
+        self.resize(640, 560)
+        layout = QVBoxLayout(self)
+        layout.addWidget(texto("Combo com preço fixo", "titulo"))
+        layout.addWidget(texto("Ex.: balde com 6 cervejas. O combo tem preço próprio: os itens dentro dele não ganham "
+                               "atacado nem promoção e não contam para o atacado dos avulsos. Vender 1 combo baixa cada "
+                               "item do estoque.", "suave"))
+        formulario = QFormLayout()
+        self.nome = QLineEdit()
+        self.nome.setMaxLength(50)
+        self.preco = QLineEdit()
+        self.preco.setPlaceholderText("0,00")
+        self.preco.textEdited.connect(lambda _t: self._resumo())
+        self.cbarra = QLineEdit()
+        self.cbarra.setMaxLength(14)
+        for rotulo, editor in (("Nome do combo *", self.nome), ("Preço do combo (R$) *", self.preco),
+                               ("Código de barras do combo", self.cbarra)):
+            formulario.addRow(rotulo, editor)
+        layout.addLayout(formulario)
+        linha = QHBoxLayout()
+        self.produto = QComboBox()
+        for pid, nome in ctx.cadastros.opcoes("produtos"):
+            self.produto.addItem(str(nome), pid)
+        self.quantidade = QLineEdit("1")
+        self.quantidade.setMaximumWidth(80)
+        incluir = QPushButton("Incluir")
+        incluir.clicked.connect(lambda: self.incluir())
+        linha.addWidget(self.produto, 1)
+        linha.addWidget(self.quantidade)
+        linha.addWidget(incluir)
+        layout.addLayout(linha)
+        self.grade = QTableWidget(0, 2)
+        self.grade.setHorizontalHeaderLabels(["Produto", "Qtd."])
+        self.grade.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.grade, 1)
+        remover = QPushButton("Tirar o item selecionado")
+        remover.clicked.connect(self.remover)
+        layout.addWidget(remover)
+        self.resumo = texto("", "suave")
+        layout.addWidget(self.resumo)
+        self.mensagem = texto("", "aviso")
+        layout.addWidget(self.mensagem)
+        botoes = QDialogButtonBox()
+        botoes.addButton("Criar combo", QDialogButtonBox.ButtonRole.AcceptRole)
+        botoes.addButton("Cancelar", QDialogButtonBox.ButtonRole.RejectRole)
+        botoes.accepted.connect(self.salvar)
+        botoes.rejected.connect(self.reject)
+        layout.addWidget(botoes)
+
+    def incluir(self, produto_id=None, quantidade=None) -> bool:
+        pid = produto_id if produto_id is not None else self.produto.currentData()
+        try:
+            qtd = fmt.validar_qtd(fmt.para_qtd(quantidade if quantidade is not None else self.quantidade.text()))
+            if qtd <= 0:
+                raise ValueError
+        except ValueError:
+            self.mensagem.setText("Quantidade inválida.")
+            return False
+        if pid is None:
+            return False
+        for i, (atual, q) in enumerate(self.itens):
+            if atual == pid:
+                self.itens[i] = (pid, fmt.arred_qtd(q + qtd))
+                break
+        else:
+            self.itens.append((pid, qtd))
+        self._preencher()
+        return True
+
+    def remover(self):
+        linha = self.grade.currentRow()
+        if 0 <= linha < len(self.itens):
+            self.itens.pop(linha)
+            self._preencher()
+
+    def _preencher(self):
+        self.grade.setRowCount(0)
+        for pid, qtd in self.itens:
+            linha = self.grade.rowCount()
+            self.grade.insertRow(linha)
+            produto = self.ctx.produtos.por_id(pid)
+            self.grade.setItem(linha, 0, QTableWidgetItem(produto["nome"] if produto else str(pid)))
+            self.grade.setItem(linha, 1, QTableWidgetItem(fmt.fmt_qtd(qtd).rstrip("0").rstrip(",")))
+        self.mensagem.setText("")
+        self._resumo()
+
+    def _resumo(self):
+        avulso = self.ctx.produtos.preco_avulso(self.itens) if self.itens else 0
+        try:
+            combo = fmt.para_centavos(self.preco.text()) if self.preco.text().strip() else 0
+        except ValueError:
+            combo = 0
+        texto_resumo = f"Separados: {fmt.fmt_brl(avulso)}"
+        if combo:
+            texto_resumo += f" · Combo: {fmt.fmt_brl(combo)}"
+            texto_resumo += (f" · Economia do cliente: {fmt.fmt_brl(avulso - combo)}" if combo < avulso
+                             else " · Atenção: o combo não sai mais barato que os itens separados")
+        self.resumo.setText(texto_resumo)
+
+    def salvar(self):
+        try:
+            exigir_acesso(self.ctx, "produtos")
+            preco = fmt.para_centavos(self.preco.text())
+            self.id_ = self.ctx.produtos.criar_combo(self.nome.text(), preco, self.itens, self.cbarra.text(),
+                                                      self.ctx.operador_id)
+        except ValueError:
+            self.mensagem.setText("Preço inválido.")
+            return
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return
+        self.accept()
+
+
 class JanelaCadastro(QDialog):
     def __init__(self, ctx, chave, parent=None):
         super().__init__(parent)
@@ -201,6 +334,9 @@ class JanelaCadastro(QDialog):
             botao = QPushButton("Criar fardo")
             botao.clicked.connect(self.criar_embalagem)
             barra.addWidget(botao)
+            botao = QPushButton("Criar combo")
+            botao.clicked.connect(self.criar_combo)
+            barra.addWidget(botao)
         layout.addLayout(barra)
         extras = QHBoxLayout()
         for rotulo, acao in (("Filtrar", self.filtrar), ("Ordenar", self.ordenar),
@@ -213,6 +349,7 @@ class JanelaCadastro(QDialog):
             for rotulo, acao in (
                 ("Tabela de preços", self.tabela_precos),
                 ("Observações", lambda: self.abrir_cadastro_relacionado("observacoes")),
+                ("Buscar fotos", self.buscar_fotos),
             ):
                 botao = QPushButton(rotulo)
                 botao.clicked.connect(acao)
@@ -452,6 +589,18 @@ class JanelaCadastro(QDialog):
         if id_ is not None:
             self._formulario(id_)
 
+    def buscar_fotos(self):
+        """Fotos de todos os produtos sem foto, pelo código de barras, com aprovação uma a uma."""
+        from src.ui_qt.foto_produto import JanelaFotosEmLote
+        try:
+            self.exigir_acesso()
+        except ErroNegocio as erro:
+            QMessageBox.warning(self, "Buscar fotos", str(erro))
+            return None
+        janela = JanelaFotosEmLote(self.ctx, self)
+        janela.exec()
+        return janela
+
     def criar_embalagem(self):
         try:
             self.exigir_acesso()
@@ -464,6 +613,19 @@ class JanelaCadastro(QDialog):
                 if dialogo.exec() == QDialog.DialogCode.Accepted:
                     self.atualizar()
                     self.mensagem.setText("Fardo/caixa criado: vender 1 baixa as unidades do produto no estoque.")
+            finally:
+                dialogo.deleteLater()
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+
+    def criar_combo(self):
+        try:
+            self.exigir_acesso()
+            dialogo = FormularioCombo(self.ctx, self)
+            try:
+                if dialogo.exec() == QDialog.DialogCode.Accepted:
+                    self.atualizar()
+                    self.mensagem.setText("Combo criado: vender 1 baixa cada item do estoque, sem atacado nos itens.")
             finally:
                 dialogo.deleteLater()
         except ErroNegocio as erro:

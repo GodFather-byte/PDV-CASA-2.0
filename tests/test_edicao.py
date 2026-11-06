@@ -1,4 +1,4 @@
-"""Edição do programa: WillPDV (completo) e E&A Superações (só adega) a partir do mesmo código."""
+"""Edição do programa: WillPDV (completo) e Will Adega (só adega) a partir do mesmo código."""
 import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -13,7 +13,7 @@ from src.controllers.config_controller import ConfigController
 from src.database import conexao
 from src.database.conexao import BancoDados
 
-ADEGA = {edicao.VARIAVEL: "ea_superacoes"}
+ADEGA = {edicao.VARIAVEL: "willadega"}
 
 
 def sem_variavel():
@@ -31,7 +31,7 @@ class TesteEscolhaDaEdicao(unittest.TestCase):
     def test_variavel_escolhe_a_adega(self):
         with patch.dict(os.environ, ADEGA):
             ed = edicao.atual()
-        self.assertEqual((ed.nome, ed.perfil, ed.pasta_dados), ("E&A Superações", "adega", "EA-SUPERACOES"))
+        self.assertEqual((ed.nome, ed.perfil, ed.pasta_dados), ("Will Adega", "adega", "WILL-ADEGA"))
         self.assertIn("usar_garotas", ed.fora_das_configuracoes())
         self.assertIn("num_mesas", ed.fora_das_configuracoes())
 
@@ -41,16 +41,16 @@ class TesteEscolhaDaEdicao(unittest.TestCase):
 
     def test_executavel_le_o_arquivo_gravado_pelo_build(self):
         with tempfile.TemporaryDirectory() as pasta, sem_variavel():
-            (Path(pasta) / edicao.ARQUIVO).write_text("ea_superacoes\n", encoding="utf-8")
+            (Path(pasta) / edicao.ARQUIVO).write_text("willadega\n", encoding="utf-8")
             with patch.object(edicao.sys, "frozen", True, create=True), \
                     patch.object(edicao.sys, "executable", str(Path(pasta) / "programa.exe")):
-                self.assertEqual(edicao.atual().chave, "ea_superacoes")
+                self.assertEqual(edicao.atual().chave, "willadega")
 
     def test_cada_edicao_tem_a_sua_pasta_de_dados_no_executavel(self):
         with tempfile.TemporaryDirectory() as pasta, patch.object(conexao.sys, "frozen", True, create=True), \
                 patch.dict(os.environ, {"LOCALAPPDATA": pasta}):
             with patch.dict(os.environ, ADEGA):
-                self.assertEqual(conexao._raiz_dados(), Path(pasta) / "EA-SUPERACOES")
+                self.assertEqual(conexao._raiz_dados(), Path(pasta) / "WILL-ADEGA")
             with patch.dict(os.environ, {edicao.VARIAVEL: "willpdv"}):
                 self.assertEqual(conexao._raiz_dados(), Path(pasta) / "WILL-PDV")
 
@@ -64,9 +64,9 @@ class TesteEscolhaDaEdicao(unittest.TestCase):
     def test_linha_de_comando_tira_a_edicao_dos_argumentos(self):
         from src.app import _tirar_edicao
         with sem_variavel():
-            self.assertEqual(_tirar_edicao(["--edicao", "ea_superacoes", "--autoteste", "saida.txt"]),
+            self.assertEqual(_tirar_edicao(["--edicao", "willadega", "--autoteste", "saida.txt"]),
                              ["--autoteste", "saida.txt"])
-            self.assertEqual(os.environ[edicao.VARIAVEL], "ea_superacoes")
+            self.assertEqual(os.environ[edicao.VARIAVEL], "willadega")
             self.assertEqual(_tirar_edicao(["--edicao=willpdv"]), [])
             self.assertEqual(os.environ[edicao.VARIAVEL], "willpdv")
 
@@ -87,7 +87,7 @@ class TestePrepararBanco(unittest.TestCase):
         with patch.dict(os.environ, ADEGA):
             mudancas = edicao.preparar(self.banco)
         self.assertTrue(mudancas)
-        self.assertEqual((self.banco.cfg("perfil_operacao"), self.banco.cfg("edicao")), ("adega", "ea_superacoes"))
+        self.assertEqual((self.banco.cfg("perfil_operacao"), self.banco.cfg("edicao")), ("adega", "willadega"))
         for chave in ("usar_mesas", "usar_garotas", "usar_portaria", "usar_rodizio", "usar_prepago"):
             self.assertFalse(self.banco.cfg_bool(chave), chave)
         self.assertTrue(self.banco.cfg_bool("usar_caderneta"))
@@ -138,7 +138,7 @@ class TesteLicencaPorEdicao(unittest.TestCase):
         dados = json.loads(base64.urlsafe_b64decode(carga + "=" * (-len(carga) % 4)))
         self.assertNotIn("edicao", dados)                          # o mesmo formato das licenças já entregues
         self.assertEqual(licenca.ler_licenca(self.codigo(), self.publica)["edicao"], "willpdv")
-        self.assertEqual(licenca.ler_licenca(self.codigo("ea_superacoes"), self.publica)["edicao"], "ea_superacoes")
+        self.assertEqual(licenca.ler_licenca(self.codigo("willadega"), self.publica)["edicao"], "willadega")
         with self.assertRaises(ValueError):
             licenca.gerar_licenca(self.SEMENTE, "ADEGA-1", 30, self.hoje, "adega")
 
@@ -148,20 +148,20 @@ class TesteLicencaPorEdicao(unittest.TestCase):
             with self.assertRaises(licenca.LicencaInvalida) as erro:
                 licenca.ativar(self.banco, self.codigo(), self.hoje, self.publica)
             self.assertIn("WillPDV", str(erro.exception))
-            lic = licenca.ativar(self.banco, self.codigo("ea_superacoes"), self.hoje, self.publica)
-            self.assertEqual(lic["edicao"], "ea_superacoes")
+            lic = licenca.ativar(self.banco, self.codigo("willadega"), self.hoje, self.publica)
+            self.assertEqual(lic["edicao"], "willadega")
             self.assertEqual(licenca.estado(self.banco, self.hoje, self.publica).situacao, "ok")
 
     def test_willpdv_nao_aceita_a_licenca_da_adega(self):
         from src.core import licenca
         with sem_variavel():
             with self.assertRaises(licenca.LicencaInvalida) as erro:
-                licenca.ativar(self.banco, self.codigo("ea_superacoes"), self.hoje, self.publica)
-            self.assertIn("E&A Superações", str(erro.exception))
-            self.banco.cfg_set("licenca_token", self.codigo("ea_superacoes"))     # gravada por fora: não vale
+                licenca.ativar(self.banco, self.codigo("willadega"), self.hoje, self.publica)
+            self.assertIn("Will Adega", str(erro.exception))
+            self.banco.cfg_set("licenca_token", self.codigo("willadega"))     # gravada por fora: não vale
             estado = licenca.estado(self.banco, self.hoje, self.publica)
         self.assertEqual(estado.situacao, "sem_licenca")
-        self.assertIn("E&A Superações", estado.mensagem)
+        self.assertIn("Will Adega", estado.mensagem)
 
 
 try:
@@ -183,7 +183,7 @@ if BaseQt is not None:
             with patch.dict(os.environ, ADEGA):
                 edicao.preparar(self.banco)
                 janela = self.principal()
-            self.assertTrue(janela.windowTitle().startswith("E&A Superações • "))
+            self.assertTrue(janela.windowTitle().startswith("Will Adega • "))
             self.assertNotIn("Qt piloto", janela.windowTitle())
             self.assertFalse(janela.logo_edicao.pixmap().isNull())
             janela.show()
@@ -191,6 +191,21 @@ if BaseQt is not None:
             self.assertFalse(janela.botoes["cozinha"].isVisible())
             self.assertTrue(janela.botoes["caixa"].isVisible())
             self.assertFalse(janela.faixa_noite.isVisible())                 # sem mesas: sem a "noite ao vivo"
+
+        def test_entrada_da_adega_com_a_marca_will_adega_e_sem_aviso_de_piloto(self):
+            from PySide6.QtWidgets import QLabel
+            with patch.dict(os.environ, ADEGA):
+                login = self.janela(JanelaLogin(self.ctx))
+            textos = [r.text() for r in login.findChildren(QLabel)]
+            self.assertEqual(login.windowTitle(), "Will Adega • Entrada")
+            self.assertIn("WILL ADEGA", textos)
+            self.assertNotIn("WILLPDV", textos)
+            self.assertFalse(any("Piloto" in t or "Superações" in t for t in textos))
+            with sem_variavel():
+                login = self.janela(JanelaLogin(self.ctx))
+            textos = [r.text() for r in login.findChildren(QLabel)]
+            self.assertIn("WILLPDV", textos)
+            self.assertIn("Piloto Qt • Interface em validação", textos)
 
         def test_willpdv_continua_igual(self):
             with sem_variavel():

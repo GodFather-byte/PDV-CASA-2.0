@@ -146,6 +146,23 @@ def _validar_promocoes(banco, dados, id_):
         if valor > 0 and (not produto.get(inicio) or not produto.get(fim)):
             raise ErroValidacao("Promoção: informe início e fim, ou preço zero para desligar.",
                                 {inicio: "obrigatório", fim: "obrigatório"})
+    for preco, inicio, fim in (
+        ("promo_gelada_cent", "promo_de", "promo_ate"),
+        ("sem_gelada_cent", "sem_inicial", "sem_final"),
+        ("hora_gelada_cent", "hora_ini", "hora_fim"),
+    ):
+        valor = produto.get(preco, 0) or 0
+        if type(valor) is not int or valor < 0:
+            raise ErroValidacao("Promoção da gelada: preço deve ser não negativo.", {preco: "inválido"})
+        if valor == 0:
+            continue
+        if not produto.get("preco_gelada_cent"):
+            raise ErroValidacao("Promoção da gelada: cadastre antes o preço gelada (aba Adega).", {preco: "inválido"})
+        if valor > produto["preco_gelada_cent"]:
+            raise ErroValidacao("Promoção da gelada: o preço não pode superar o preço gelada normal.", {preco: "inválido"})
+        if not produto.get(inicio) or not produto.get(fim):
+            raise ErroValidacao("Promoção da gelada: informe início e fim da promoção, ou preço zero para desligar.",
+                                {inicio: "obrigatório", fim: "obrigatório"})
 
 
 def _validar_adega(banco, dados, id_):
@@ -375,12 +392,15 @@ _ENTIDADES = [
         Campo("promo_de", "Promoção de", "data", secao="Promoções", na_grade=False),
         Campo("promo_ate", "Promoção até", "data", secao="Promoções", na_grade=False),
         Campo("promo_preco_cent", "Preço (período)", "dinheiro", padrao=0, secao="Promoções", na_grade=False),
+        Campo("promo_gelada_cent", "Preço gelada (período; 0 = sem)", "dinheiro", padrao=0, secao="Promoções", na_grade=False),
         Campo("sem_inicial", "Dia inicial", "escolha", opcoes=DIAS, secao="Promoções", na_grade=False),
         Campo("sem_final", "Dia final", "escolha", opcoes=DIAS, secao="Promoções", na_grade=False),
         Campo("sem_preco_cent", "Preço (dias)", "dinheiro", padrao=0, secao="Promoções", na_grade=False),
+        Campo("sem_gelada_cent", "Preço gelada (dias; 0 = sem)", "dinheiro", padrao=0, secao="Promoções", na_grade=False),
         Campo("hora_ini", "Hora inicial", "hora", secao="Promoções", na_grade=False),
         Campo("hora_fim", "Hora final", "hora", secao="Promoções", na_grade=False),
         Campo("hora_preco_cent", "Preço (horário)", "dinheiro", padrao=0, secao="Promoções", na_grade=False),
+        Campo("hora_gelada_cent", "Preço gelada (horário; 0 = sem)", "dinheiro", padrao=0, secao="Promoções", na_grade=False),
         Campo("ncm", "Código NCM", tamanho=8, secao="Fiscal", na_grade=False),
         Campo("desc_aliq_icms", "Desc. Aliq. ICMS", tamanho=10, secao="Fiscal", na_grade=False),
         Campo("situacao_tributaria", "Situação tributária", tamanho=4, secao="Fiscal", na_grade=False),
@@ -428,6 +448,8 @@ _ENTIDADES = [
         Campo("uf", "Estado", tamanho=2, na_grade=False),
         Campo("cep", "CEP", tamanho=9, na_grade=False),
         Campo("email", "E-mail", tamanho=60, na_grade=False),
+        Campo("prazo_entrega_dias", "Prazo de entrega (dias, para a reposição)", "int", padrao=0, minimo=0, maximo=60,
+              largura=8),
         Campo("obs", "Observações", tamanho=120, na_grade=False),
         _sn("ativo", "Ativo", 1, na_grade=True),
     ], ordem="nome", busca=("nome", "contato", "cnpj"), tem_ativo=True),

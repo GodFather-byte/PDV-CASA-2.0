@@ -1,8 +1,9 @@
-"""Gera os logotipos do WillPDV e do WillPDV Licenças (ícone .ico, logo .png e as imagens do assistente do instalador).
+"""Gera os logotipos do WillPDV, do Will Adega e do WillPDV Licenças (ícone .ico, logo .png e as imagens do assistente do instalador).
 
 Ferramenta do fornecedor (não vai no instalador). Precisa do Pillow só para rodar isto:  pip install pillow
 
     python -m tools.gerar_logos
+    python -c "from tools.gerar_logos import gravar_adega; gravar_adega()"   # só a Will Adega
 
 Grava em `instalador/`. Os arquivos gerados ficam no repositório, então o build não depende do Pillow. Para usar uma
 marca própria, basta trocar `willpdv.ico` (e os .bmp) por arquivos seus com os mesmos nomes.
@@ -20,6 +21,7 @@ TAM = 1024          # desenha grande e reduz: bordas lisas em qualquer tamanho
 
 MARINHO, AZUL, AZUL_CLARO, BRANCO = (20, 35, 77), (79, 140, 255), (159, 179, 232), (255, 255, 255)
 ESCURO, AMBAR = (10, 16, 34), (255, 197, 71)
+VINHO, VINHO_ESCURO, ROSE = (128, 22, 52), (34, 8, 20), (240, 180, 196)
 
 
 def fonte(tamanho: int) -> ImageFont.FreeTypeFont:
@@ -61,6 +63,18 @@ def logo_pdv() -> Image.Image:
     return img
 
 
+def logo_adega() -> Image.Image:
+    """Will Adega: o mesmo 'W' da família, sobre vinho, com a etiqueta ADEGA em dourado."""
+    img = _quadrado(VINHO, VINHO_ESCURO)
+    d = ImageDraw.Draw(img)
+    d.text((TAM / 2, TAM * 0.43), "W", font=fonte(int(TAM * 0.62)), fill=BRANCO, anchor="mm")
+    caixa = (int(TAM * 0.20), int(TAM * 0.70), int(TAM * 0.80), int(TAM * 0.86))
+    d.rounded_rectangle(caixa, radius=int(TAM * 0.08), fill=AMBAR)
+    d.text(((caixa[0] + caixa[2]) / 2, (caixa[1] + caixa[3]) / 2 + 4), "ADEGA", font=fonte(int(TAM * 0.115)),
+           fill=VINHO_ESCURO, anchor="mm")
+    return img
+
+
 def logo_licencas() -> Image.Image:
     """Uma chave (a licença) em âmbar sobre o mesmo fundo, para não confundir com o PDV do cliente."""
     img = _quadrado((60, 48, 110), ESCURO)
@@ -84,7 +98,8 @@ def _em_fundo(logo: Image.Image, lado: int, fundo: tuple) -> Image.Image:
     return img
 
 
-def imagem_grande(logo: Image.Image, nome: str, subtitulo: str, de: tuple, ate: tuple) -> Image.Image:
+def imagem_grande(logo: Image.Image, nome: str, subtitulo: str, de: tuple, ate: tuple,
+                  destaque: tuple | None = None, cor_subtitulo: tuple = AZUL_CLARO) -> Image.Image:
     """Painel da esquerda do assistente do instalador: 164 x 314 (desenhado em dobro e reduzido)."""
     w, h = 164 * 4, 314 * 4
     img = Image.new("RGB", (w, h))
@@ -98,12 +113,14 @@ def imagem_grande(logo: Image.Image, nome: str, subtitulo: str, de: tuple, ate: 
     img.paste(miniatura, ((w - miniatura.width) // 2, int(h * 0.09)), miniatura)
     d = ImageDraw.Draw(img)
     d.text((w / 2, h * 0.505), nome, font=fonte(int(w * 0.17)), fill=BRANCO, anchor="mm")
-    d.text((w / 2, h * 0.595), subtitulo, font=fonte(int(w * 0.082)), fill=AZUL_CLARO, anchor="mm")
-    d.rectangle((int(w * 0.18), int(h * 0.64), int(w * 0.82), int(h * 0.64) + 8), fill=AZUL if de != (60, 48, 110) else AMBAR)
+    d.text((w / 2, h * 0.595), subtitulo, font=fonte(int(w * 0.082)), fill=cor_subtitulo, anchor="mm")
+    if destaque is None:
+        destaque = AZUL if de != (60, 48, 110) else AMBAR
+    d.rectangle((int(w * 0.18), int(h * 0.64), int(w * 0.82), int(h * 0.64) + 8), fill=destaque)
     return img.resize((164, 314), Image.LANCZOS)
 
 
-def gravar(logo: Image.Image, prefixo: str, nome: str, subtitulo: str, de: tuple, ate: tuple) -> list[Path]:
+def gravar(logo: Image.Image, prefixo: str, nome: str, subtitulo: str, de: tuple, ate: tuple, **cores) -> list[Path]:
     SAIDA.mkdir(parents=True, exist_ok=True)
     escritos = []
     ico = SAIDA / f"{prefixo}.ico"
@@ -111,14 +128,20 @@ def gravar(logo: Image.Image, prefixo: str, nome: str, subtitulo: str, de: tuple
     png = SAIDA / f"{prefixo}-logo.png"
     logo.resize((512, 512), Image.LANCZOS).save(png)
     grande = SAIDA / f"{prefixo}-assistente.bmp"
-    imagem_grande(logo, nome, subtitulo, de, ate).save(grande, "BMP")
+    imagem_grande(logo, nome, subtitulo, de, ate, **cores).save(grande, "BMP")
     pequena = SAIDA / f"{prefixo}-assistente-pequena.bmp"
     _em_fundo(logo, 55, BRANCO).save(pequena, "BMP")
     return escritos + [ico, png, grande, pequena]
 
 
+def gravar_adega() -> list[Path]:
+    return gravar(logo_adega(), "willadega", "Will Adega", "Adega e bebidas", VINHO, VINHO_ESCURO,
+                  destaque=AMBAR, cor_subtitulo=ROSE)
+
+
 def main() -> None:
     arquivos = gravar(logo_pdv(), "willpdv", "WillPDV", "Ponto de venda", (31, 58, 138), ESCURO)
+    arquivos += gravar_adega()
     arquivos += gravar(logo_licencas(), "willlicencas", "Licenças", "WillPDV", (60, 48, 110), ESCURO)
     for a in arquivos:
         print(f"{a.relative_to(SAIDA.parent)}  ({a.stat().st_size // 1024 or 1} KB)")

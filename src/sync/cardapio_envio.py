@@ -19,6 +19,8 @@ MAX_PRODUTOS = 2000
 CHAVE_HASH = "cardapio_ultimo_hash"
 CHAVE_PUBLICADO = "cardapio_publicado"
 _FOTO_MAX = 300
+FOTO_EMBUTIDA_MAX = 12000         # miniatura do produto (data:image/jpeg;base64,...) por item
+FOTOS_EMBUTIDAS_TOTAL = 1_500_000  # soma das miniaturas num envio; o que passar segue sem foto (ou com a da categoria)
 
 
 def ligado(banco) -> bool:
@@ -41,6 +43,22 @@ def _foto(valor: str | None) -> str:
     texto = (valor or "").strip()
     if len(texto) > _FOTO_MAX or not texto.lower().startswith(("https://", "http://")):
         return ""
+    return texto
+
+
+def _foto_produto(origem: str | None, miniatura, orcamento: list[int]) -> str:
+    """Foto do produto para o cardápio: o endereço https de onde ela veio (internet) ou a miniatura embutida (arquivo),
+    dentro do orçamento total do envio. Vazio quando não há foto ou o orçamento acabou."""
+    url = _foto(origem)
+    if url.lower().startswith("https://"):
+        return url
+    if not miniatura:
+        return ""
+    import base64
+    texto = "data:image/jpeg;base64," + base64.b64encode(bytes(miniatura)).decode("ascii")
+    if len(texto) > FOTO_EMBUTIDA_MAX or len(texto) > orcamento[0]:
+        return ""
+    orcamento[0] -= len(texto)
     return texto
 
 
@@ -71,15 +89,18 @@ def coletar(banco) -> dict:
     """O catálogo visível, já sem custo e sem estoque."""
     config = ConfigController(banco)
     produtos = []
+    orcamento = [FOTOS_EMBUTIDAS_TOTAL]
     for r in banco.todos(
             """SELECT p.nome, p.preco_cent, p.texto_sugestao,
                       p.promo_de, p.promo_ate, p.promo_preco_cent,
                       p.sem_inicial, p.sem_final, p.sem_preco_cent,
                       p.hora_ini, p.hora_fim, p.hora_preco_cent,
-                      g.nome AS grupo, s.nome AS subgrupo, s.figura AS foto
+                      g.nome AS grupo, s.nome AS subgrupo, s.figura AS foto,
+                      f.origem AS foto_origem, f.miniatura AS foto_miniatura
                FROM produtos p
                JOIN subgrupos s ON s.id = p.subgrupo_id
                JOIN grupos g ON g.id = s.grupo_id
+               LEFT JOIN produto_fotos f ON f.produto_id = p.id
                WHERE p.ativo = 1 AND p.venda = 1 AND p.mostrar_no_cardapio = 1
                ORDER BY g.nome, s.nome, p.nome
                LIMIT ?""", (MAX_PRODUTOS,)):
@@ -98,7 +119,7 @@ def coletar(banco) -> dict:
         descricao = " ".join((r["texto_sugestao"] or "").split())
         if descricao:
             item["descricao"] = descricao[:240]
-        foto = _foto(r["foto"])
+        foto = _foto_produto(r["foto_origem"], r["foto_miniatura"], orcamento) or _foto(r["foto"])
         if foto:
             item["foto"] = foto
         if item["nome"]:

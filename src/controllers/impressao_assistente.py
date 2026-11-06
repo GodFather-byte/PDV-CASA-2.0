@@ -13,7 +13,7 @@ import sys
 from dataclasses import dataclass
 
 from src.controllers.config_controller import ConfigController
-from src.core import formatacao as fmt
+from src.core import edicao, formatacao as fmt
 from src.hardware import impressoras_so
 from src.hardware.impressora_termica import ErroImpressao
 from src.hardware.impressoras_so import ImpressoraWindows
@@ -130,7 +130,7 @@ def relatorio(banco, impressoras: list[ImpressoraWindows] | None = None, spooler
         spooler = impressoras_so.servico_spooler_rodando()
     if portas_usb is None:
         portas_usb = impressoras_so.listar_portas_usb()
-    linhas = [f"DIAGNÓSTICO DE IMPRESSÃO — WillPDV {versao}".strip(), f"{fmt.fmt_datahora(fmt.agora())}  ·  sistema: {sys.platform}", "",
+    linhas = [f"DIAGNÓSTICO DE IMPRESSÃO — {edicao.atual().nome} {versao}".strip(), f"{fmt.fmt_datahora(fmt.agora())}  ·  sistema: {sys.platform}", "",
               "Configuração desta máquina:",
               f"  modo: {m['modo_impressao']}   conexão: {m['impressora_termica_conexao']}   endereço: {m['impressora_termica_endereco'] or '-'}",
               f"  colunas: {m['colunas_fita']}   página de código: {m['impressora_termica_codepage']}   cortar: {'sim' if m['impressora_termica_cortar'] else 'não'}"

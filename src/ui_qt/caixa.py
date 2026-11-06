@@ -41,6 +41,7 @@ from src.hardware.dispositivos import DispositivoIndisponivel
 from src.controllers.caixa_controller import LIMITE_PARTES_DIVISAO
 from src.core.valor_pagamento import LIMITE_TROCO_CENT, ler_valor_pagamento
 from src.ui_qt import comissao
+from src.ui_qt.foto_produto import QuadroFoto
 from src.ui_qt.painel_mesas import CORES as CORES_MESAS, PainelMesas
 from src.ui_qt.relogio import RelogioCaixa
 
@@ -374,6 +375,7 @@ class JanelaCaixa(QMainWindow):
         esc = QShortcut(QKeySequence(Qt.Key_Escape), self)
         esc.activated.connect(self.esc_caixa)
         QShortcut(QKeySequence("Ctrl+F"), self).activated.connect(self.alternar_tela_cheia)
+        QShortcut(QKeySequence("Ctrl+Q"), self).activated.connect(self.alterar_quantidade)
         for tecla, acao in (("F4", self.foco_posicao), ("F5", self.caderneta), ("F6", self.entrega),
                             ("F8", self.pre_conta), ("F9", self.repique),
                             ("F10", self.transferir_mesa), ("F2", self.balanca), ("F11", self.gaveta),
@@ -598,6 +600,7 @@ class JanelaCaixa(QMainWindow):
         for chave, titulo, acao in (
                 ("desconto", "Desconto", self.desconto), ("servico", "Serviço manual / automático", self.servico),
                 ("observacao", "Observação do item", self.observacao_item),
+                ("quantidade", "Alterar quantidade do item (Ctrl+Q)", self.alterar_quantidade),
                 ("transferir_mesa", "Transferir mesa / comanda (F10)", self.transferir_mesa),
                 ("transferir_varias", "Transferir várias mesas / comandas", self.transferir_varias),
                 ("transferir_item", "Transferir item", self.transferir_item),
@@ -693,6 +696,16 @@ class JanelaCaixa(QMainWindow):
         self.lbl_msg_pag = _rotulo("", "mudo")
         c_dir.addWidget(self.lbl_msg_pag)
         c_dir.addStretch(1)
+        # Foto do último produto lançado, no espaço que sobra (não aumenta a altura mínima do caixa).
+        self.foto_item = QuadroFoto(200)
+        self.foto_item.setObjectName("foto_item")
+        self.foto_item.hide()
+        c_dir.addWidget(self.foto_item, 3)
+        self.lbl_foto_item = _rotulo("", "mudo")
+        self.lbl_foto_item.setAlignment(Qt.AlignCenter)
+        self.lbl_foto_item.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.lbl_foto_item.hide()
+        c_dir.addWidget(self.lbl_foto_item)
         self.btn_fechar_venda = QPushButton("Fechar venda (F12)")
         self.btn_fechar_venda.setObjectName("primario")
         self.btn_fechar_venda.clicked.connect(self.fechar_venda)
@@ -835,6 +848,18 @@ class JanelaCaixa(QMainWindow):
         i = self.cmb_forma.findData(atual) if atual is not None else -1
         self.cmb_forma.setCurrentIndex(i if i >= 0 else 0)
         self.cmb_forma.blockSignals(False)
+    def _mostrar_foto(self, produto: dict | None) -> None:
+        """Foto do produto que acabou de ser lançado, para o operador conferir. Sem foto, o espaço fica livre."""
+        from src.controllers.foto_produto_controller import FotoProdutoController
+        dados = FotoProdutoController(self.ctx.banco).imagem(produto["id"]) if produto else None
+        if self.foto_item.definir(dados):
+            self.lbl_foto_item.setText(produto["nome"])
+            self.foto_item.show()
+            self.lbl_foto_item.show()
+        else:
+            self.foto_item.hide()
+            self.lbl_foto_item.hide()
+
     def recarregar(self) -> None:
         """Atualiza a venda da tela (itens, total, pagamentos) e a lista de mesas e comandas abertas."""
         v = self.venda()
@@ -846,6 +871,8 @@ class JanelaCaixa(QMainWindow):
         caixa = self.ctx.caixa
         self.tabela.setRowCount(0)
         itens = caixa.itens(v["id"]) if v else []
+        if not itens:
+            self._mostrar_foto(None)                  # venda nova ou fechada: a foto do último item sai junto
         for it in itens:
             linha = self.tabela.rowCount()
             self.tabela.insertRow(linha)
@@ -2021,7 +2048,7 @@ class JanelaCaixa(QMainWindow):
                 "Temperatura da bebida", f"{p['nome']}: como o cliente vai levar? "
                 "(preço unitário de tabela; atacado automático no balcão)",
                 [("natural", f"Natural · {fmt.fmt_brl(self.ctx.produtos.preco_vigente(p))}"),
-                 ("gelada", f"Gelada · {fmt.fmt_brl(p['preco_gelada_cent'])}")])
+                 ("gelada", f"Gelada · {fmt.fmt_brl(self.ctx.produtos.preco_gelada_vigente(p))}")])
             if temperatura is None:
                 return
             opcoes["temperatura"] = temperatura
@@ -2044,6 +2071,23 @@ class JanelaCaixa(QMainWindow):
             if quantidade_cascos is None:
                 return
             opcoes["quantidade_cascos"] = quantidade_cascos
+            venda = self.ctx.caixa.obter(self.venda_id) if self.venda_id else None
+            sem_cobrar = maximo - quantidade_cascos
+            if venda and venda.get("cliente_id") and sem_cobrar > 0:
+                cliente = self.ctx.banco.valor("SELECT nome FROM clientes WHERE id = ?", (venda["cliente_id"],), "")
+                def emprestados(texto):
+                    s = texto.strip()
+                    if not s.isascii() or not s.isdecimal() or not 0 <= int(s) <= sem_cobrar:
+                        raise ValueError(f"Informe um número inteiro de 0 a {sem_cobrar}.")
+                    return int(s)
+                levados = self._pedir_convertido(
+                    "Cascos emprestados", f"Das {sem_cobrar} garrafa(s) sem casco cobrado, quantas {cliente} levou SEM "
+                    f"trazer o casco?\nFica anotado no nome dele como empréstimo (0 = trouxe todos os cascos).",
+                    emprestados, "0")
+                if levados is None:
+                    return
+                if levados:
+                    opcoes["cascos_emprestados"] = levados
         eh_ficha = ficha_sangria.eh_ficha(self.ctx.banco, p)
         if eh_ficha:
             preco_ficha = fmt.mult_cent(self.ctx.produtos.preco_vigente(p), qtd)
@@ -2058,6 +2102,7 @@ class JanelaCaixa(QMainWindow):
         ok, item_id = self._executar(self._lancar, p["id"], qtd, partes, **opcoes)
         if ok:
             self._ultimo_item_id = item_id
+            self._mostrar_foto(p)
         if not ok:
             self.recarregar()
             self.ent_qtd.setFocus()
@@ -2169,6 +2214,51 @@ class JanelaCaixa(QMainWindow):
         self.recarregar()
         if ok:
             self.avisar(f"Cancelado {_fmt_qtd(qtd)} de '{nome}'." if parcial else "Item cancelado.", AMBAR)
+
+    def alterar_quantidade(self) -> None:
+        """Muda a quantidade do item selecionado. Diminuir exige a mesma autorização e motivo do cancelamento."""
+        if not self._pronto() or self._ocupado:
+            return
+        if self._comissao_selecionada() is not None:
+            self.dialogos.aviso("Alterar quantidade", "Comissão não tem quantidade: use o botão Comissões.")
+            return
+        sel = self._item_selecionado()
+        if sel is None:
+            self.dialogos.aviso("Alterar quantidade", "Selecione na lista o item cuja quantidade vai mudar.")
+            return
+        item_id, nome = sel
+        ok, info = self._executar(self.ctx.caixa.info_cancelamento, item_id)
+        if not ok:
+            self.recarregar()
+            return
+        atual = info["quantidade"]
+
+        def converter(texto: str) -> float:
+            q = fmt.validar_qtd(fmt.para_qtd(texto))
+            if q <= 0:
+                raise ValueError("Informe uma quantidade maior que zero (para tirar tudo, use Cancelar item).")
+            if not info["aceita_decimal"] and q != int(q):
+                raise ValueError("Este produto não aceita quantidade fracionada.")
+            return q
+        nova = self._pedir_convertido("Alterar quantidade", f"Nova quantidade de '{nome}' (hoje: {_fmt_qtd(atual)}):",
+                                      converter, _fmt_qtd(atual))
+        if nova is None or nova == atual:
+            return
+        motivo = ""
+        if nova < atual:
+            if not self._em_cancelamento() and not self._autorizar(
+                    "caixa_cancelamento", "exigir_senha_cancelamento", "Diminuir a quantidade exige autorização:"):
+                return
+            motivo = self._pedir_motivo_obrigatorio(
+                "Alterar quantidade", f"Motivo para tirar {_fmt_qtd(fmt.arred_qtd(atual - nova))} de '{nome}' (obrigatório):")
+            if motivo is None:
+                return
+        ok, _ = self._executar(self.ctx.caixa.alterar_quantidade, item_id, nova, motivo)
+        if ok:
+            self._ultimo_item_id = item_id
+        self.recarregar()
+        if ok:
+            self.avisar(f"'{nome}': quantidade {_fmt_qtd(atual)} → {_fmt_qtd(nova)}.", AMBAR if nova < atual else VERDE)
 
     def _pedir_qtd_cancelar(self, nome: str, info: dict) -> float | None:
         """Quanto cancelar: só pergunta com mais de uma unidade ou produto fracionado; sugere a parte ainda não paga."""

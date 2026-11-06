@@ -1,41 +1,65 @@
-﻿# Handoff — Central do fornecedor publicada — 06/11/2026
+# Handoff — 06/11/2026
 
-## Entrega
+## Will Adega para venda (segunda, 09/11)
 
-- PR #55 integrado: https://github.com/GodFather-byte/PDV-CASA-2.0/pull/55.
-- Código publicado no Render: `78bd596c5d1f6d85a17fa33d3db7db2682704ccc`.
-- Painel: https://willpdv-nuvem-6sp0.onrender.com/central/.
-- Render: GodFather's workspace (`tea-d3ekasbuibrs73caqdog`), serviço `willpdv-nuvem` (`srv-dbf5untg1s2s73ejihdg`), deploy `dep-dbmt945ckfvc739177p0` confirmado live. Nenhuma variável, segredo ou plano de infraestrutura foi alterado.
-- Worktree: `C:\Users\ITAUTEC\source\willpdv-central`. A cópia antiga do OneDrive está 107 commits atrás da base desta entrega e contém um rascunho Asaas não publicado; não reaproveitá-lo.
+Branch `claude/cloud-environment-setup-6auvo5` (PR #56), com a main `e364e2d` (central do fornecedor) incorporada:
 
-## O que está implementado
+- `14ab336` **E&A Superações virou Will Adega.** Chave da edição `willadega` (não há mais `ea_superacoes`: o
+  usuário confirmou que não existe loja instalada com a edição antiga). Nome "Will Adega", marca "WILL ADEGA",
+  `WillAdega.exe`, dados em `%LOCALAPPDATA%\WILL-ADEGA`, `instalador/WillAdega.iss` com AppId novo, atalho
+  `iniciar_will_adega.bat`, logo/ícone/assistente em vinho (`tools/gerar_logos.py`, função `gravar_adega`).
+  Tela de entrada usa a marca da edição; o aviso "Piloto Qt" ficou só no WillPDV (`Edicao.aviso_entrada`).
+  Licença emitida para `willadega` no licenciador (lista vem de `EDICOES`). Release fixa continua `ultima-versao-adega`.
+- `1f78aca` **Reposição pelo giro evoluída** (`EstoqueController.reposicao_giro`): janela 7/14/30, prazo de entrega
+  + cobertura, desconta pedidos não entregues dos últimos 30 dias, unidade inteira se o produto não aceita fração,
+  equivalência em fardos, fallback dobro do mínimo sem venda, `explicacao` por produto. Parâmetros em `config`
+  (`giro_janela_dias`, `giro_prazo_dias`, `giro_cobertura_dias`), sem migração. Tela `DialogoGiro`.
+- **Foto real do produto** (pedido do usuário): tabela `produto_fotos` (esquema v37, foto no banco, entra no backup),
+  `FotoProdutoController` (normaliza JPEG 480/160 px, limites 8 MB/40 Mpx; busca no Open Food Facts só em
+  `*.openfoodfacts.org` via https, sem redirecionamento), aba Foto no cadastro, foto do último item no caixa (coluna do
+  pagamento, some com a venda vazia) e cardápio (endereço https ou miniatura embutida com orçamento de 1,5 MB).
+- **Cadastro sem terminal:** a central gera o código de instalação `WILL1-` (endereço + loja + token) ao cadastrar e em
+  "Gerar novo código de instalação"; "Gerar senha do painel do dono" substitui `backend.lojas painel`. No caixa, o
+  botão da tela de entrada aceita o código: grava `api_url`, `chave_loja`, `api_token`, liga `painel_dono` e busca a
+  licença (pergunta antes de trocar de loja).
+- **Pacote de melhorias pedido pelo usuário (todas menos NFC-e):**
+  - Aviso diário de licenças vencendo (`backend/avisos_fornecedor.py`, tabela `fornecedor_avisos`, e-mail para
+    `PDV_AVISOS_EMAIL` ou `EMAIL_FROM`; gatilhos: varredura MP, abertura da central, consulta de licença do caixa).
+  - Buscar fotos em lote (Cadastros > Produtos > Buscar fotos; thread + aprovação uma a uma).
+  - Alterar quantidade da linha (`CaixaController.alterar_quantidade`, Ctrl+Q; diminuir = cancelamento parcial).
+  - Promoção da gelada (esquema v38: `promo_gelada_cent`, `sem_gelada_cent`, `hora_gelada_cent`).
+  - Kit de implantação e QR na central (`/lojas/{chave}/kit`; `segno` entrou no backend/requirements).
+  - Prazo por fornecedor na reposição (esquema v39: `fornecedores.prazo_entrega_dias`; fornecedor habitual = última compra).
+  - Cascos levados sem trazer viram empréstimo no cliente ao fechar (esquema v40: `itens_venda.cascos_emprestados`;
+    regra decidida pelo usuário: anotar empréstimo, sem caução).
+  - Combos com preço fixo (`ProdutoController.criar_combo`, botão Criar combo; regra do usuário: preço do combo fixo).
+- Suíte completa local: 2474 testes OK (6 pulados), sem falha no encerramento do Qt; Node 9/9.
 
-- Central exclusiva em `/central/`; rotas `/v1/fornecedor/*`. As rotas antigas `/v1/central/*` da ponte foram preservadas.
-- Login com o `PDV_API_TOKEN` já configurado no servidor, sessão HttpOnly/SameSite Strict/Secure em HTTPS, oito horas, hash persistido e revogação por logout/rotação do token. CSRF, limite de tentativas por processo e respostas sem cache. Segredos não ficam em localStorage nem na URL.
-- Lojas existentes, cadastro com token exibido uma vez, mensalidades, cobranças paginadas, conciliação no Mercado Pago, ativação/desativação, plano mensal, validade manual para lojas sem plano e emissão assinada com a chave existente. Ações auditadas.
-- Transferência explícita da emissão por loja: confere a chave da nuvem, preserva maior prazo e validade anterior do plano, mantém tokens/ponte e renova nas consultas normais ou de caixas individuais. Sem transferência, o comportamento antigo é preservado.
-- Suporte: último envio dos caixas, versões quando informadas, erros, chamados e diagnóstico em texto para uso externo no Codex/Claude Code. Aprovação/revogação de caixas individuais e confirmação da licença aplicada.
-- Atualizações por manifesto assinado, HTTPS, confirmação de edição/canal; distribuição pela infraestrutura já existente. Versão/edição acrescentadas ao retrato dos caixas atualizados.
-- Apenas tabelas novas na nuvem. Esquema SQLite local e dados de vendas não foram alterados. Guia: `docs/CENTRAL_FORNECEDOR.md`.
+## Pendências
 
-## Validação concluída
+- **Antigravity (backend):** `backend/cardapio.py` ganhou edição pontual em `_url` para aceitar
+  `data:image/jpeg;base64` até 12000 caracteres (miniatura da foto de arquivo). Publicar a nuvem para o cardápio mostrar
+  essas fotos; sem isso, só as fotos vindas da internet aparecem.
 
-- CI do PR: https://github.com/GodFather-byte/PDV-CASA-2.0/actions/runs/42222160715. Cinco jobs aprovados: PostgreSQL 16 e suítes completas Windows/Linux com Python 3.10/3.12. Head validado `626cba5`.
-- Rodadas locais: 90 testes (1 ignorado), 109 testes e 13 testes centrais aprovados; teste específico de manifesto inválido também passou. Há sobreposição; não somar como casos distintos.
-- Node `--check`, compilação Python e `git diff --check` passaram. Página local respondeu HTTP 200; os testes usaram bancos temporários e sementes fictícias.
-- Produção: `/v1/versao` confirmou o commit esperado; `/central/`, JS e CSS retornaram 200 com no-store; `/v1/fornecedor/lojas` anônimo retornou 401; login com credencial fictícia por HTTPS retornou 401, comprovando que a verificação de HTTPS não bloqueia o proxy atual. Não foi feito login com segredo real.
-- CUA e Node REPL expiraram; revisão visual em celular/desktop permanece pendente. A prévia temporária na porta 8765 foi encerrada.
+- Conferir o CI do PR (build Windows gera `WillAdega-Setup-*.exe` e roda o autoteste procurando "Will Adega").
+- Antes de vender: gerar o instalador pelo CI, instalar num Windows limpo, emitir licença `willadega` e fazer uma venda
+  completa com leitor, impressora e gaveta (checklist em `docs/ADEGA.md`).
+- Reposição: prazo por fornecedor e unidade de compra por produto ficaram de fora (exigem migração); decidir no piloto.
+- **Central do fornecedor:** os achados da revisão do Claude foram corrigidos nesta branch: coluna `lojas.edicao` na
+  nuvem (criada por `_acrescentar_colunas`), licença da nuvem sempre com o programa da loja (`assinar_ate` em
+  `backend/licencas_fornecedor.py`), migração herda o programa do último código local, validade manual não reduz nem
+  passa de 100 anos, consulta do caixa nunca cai por falta de chave ou corrida, login sem bloqueio geral. Publicar a
+  nuvem depois do merge e marcar o programa das lojas Will Adega na central.
+- Publicada no Render (`/central/`, rotas `/v1/fornecedor/*`); guia em `docs/CENTRAL_FORNECEDOR.md`. Login com
+  `PDV_API_TOKEN`, sessão HttpOnly com CSRF; lojas, cobranças, transferência explícita da emissão para a nuvem,
+  suporte (erros, chamados, diagnóstico) e atualização por manifesto assinado. Só tabelas novas na nuvem.
+- Nenhuma loja real foi transferida nem pacote publicado. Antes de retirar o Will Licenças: backup da chave, transferir
+  e testar uma loja real com a central local fechada. Revisão visual em celular/desktop pendente.
+- Worktree do Codex: `C:\Users\ITAUTEC\source\willpdv-central` (a cópia antiga do OneDrive não deve ser reaproveitada).
 
-## Próximos passos com o usuário
+## Continuidade (anterior)
 
-- Entrar no painel com a credencial administrativa já existente no Render. Não solicitar segredos pelo chat.
-- Nenhuma loja real foi transferida, nenhum pagamento foi gerado/conferido em produção, nenhum pacote de atualização foi publicado e nenhum programa foi desinstalado por esta entrega.
-- Antes de retirar Will Licenças: backup externo da chave/históricos, transferir e testar uma loja real com a central local fechada; confirmar renovação no caixa e só então repetir nas demais.
-- Usuário ofereceu revisão externa do Claude; nenhum relatório foi recebido antes da publicação. Incorporar eventuais achados numa nova alteração, sem desfazer as entregas anteriores.
-- Diagnóstico/chamados/atualização são o suporte desta versão. Não há shell, controle de tela, execução automática de IA ou reparo arbitrário do banco. Controle integral do Windows depende de solução instalada/autorizada na loja.
-- Pacotes são por edição/canal; não há rollout por loja nesta entrega. Caixas sem o atualizador precisam de instalador inicial. Publicação não prova instalação concluída.
-- Este commit de documentação usa skip ci/skip render: o código executável já foi aprovado/publicado e não mudou; `/v1/versao` permanece no commit de código acima.
-
-## Continuidade anterior
-
-Preservados ajustes de estoque/quartos/shows, migração antiga de itens e formulário Linux da base `59f1715`. Não desfazer `7700458`, `2103b7a` ou `fb13f93`. Ajuste de impressora `9324c64` é trabalho separado. Homologar periféricos e escala no Windows real.
+- Contas Qt com rótulos acima dos campos para caber em 1280×680 (commit `59f1715`); estoque permite venda sem saldo
+  por padrão, quartos 0 a 4 operadores; documentação em `docs/OPERACAO_CAIXA_E_TELAS.md`.
+- `9324c64` na branch work é ajuste local de impressora separado; Codex no PC ajusta impressora, evitar sobreposição.
+- Ambiente: Python 3.12 (venv `/opt/pdv-venv` na nuvem), Qt offscreen, Tk requer Xvfb. Ficha código 31 pendente.

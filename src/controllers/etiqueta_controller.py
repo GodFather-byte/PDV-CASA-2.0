@@ -61,7 +61,7 @@ class EtiquetaController:
             fardo = self._fardo(p)
             for t in temps:
                 gelada = t == "gelada"
-                preco = p["preco_gelada_cent"] if gelada else self.produtos.preco_vigente(p)
+                preco = self.produtos.preco_gelada_vigente(p) if gelada else self.produtos.preco_vigente(p)
                 qtd_at = p["atacado_gelada_qtd"] if gelada else p["atacado_qtd"]
                 preco_at = p["preco_atacado_gelada_cent"] if gelada else p["preco_atacado_cent"]
                 tem_atacado = qtd_at > 0 and 0 < preco_at < preco

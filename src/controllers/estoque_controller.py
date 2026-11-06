@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+import math
 import re
 
 from src.core.erros import ErroEstoqueInsuficiente, ErroPermissao
@@ -434,11 +435,15 @@ class EstoqueController:
         return None
 
     def _consumo_30_dias(self, terminal: int | None = None) -> dict[int, float]:
-        """Saídas líquidas no intervalo local [agora - 30 dias, agora], já em unidades.
+        """Saídas líquidas no intervalo local [agora - 30 dias, agora], já em unidades (ver `_consumo`)."""
+        return self._consumo(30, terminal)
+
+    def _consumo(self, dias: int, terminal: int | None = None) -> dict[int, float]:
+        """Saídas líquidas no intervalo local [agora - `dias`, agora], já em unidades.
 
         Com `terminal`, conta só as vendas (e os estornos) daquele caixa."""
         agora = fmt.agora()
-        inicio = (datetime.fromisoformat(agora) - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+        inicio = (datetime.fromisoformat(agora) - timedelta(days=dias)).strftime("%Y-%m-%d %H:%M:%S")
         junta = "JOIN vendas v ON v.id = m.ref_id" if terminal is not None else ""
         filtro = "AND v.terminal = ?" if terminal is not None else ""
         params = (inicio, agora) + ((terminal,) if terminal is not None else ())
@@ -450,6 +455,10 @@ class EstoqueController:
 
     # ---------------------------------------------------- reposição pelo giro
     COBERTURA_DIAS = 7
+    JANELAS_GIRO = (7, 14, 30)          # dias de vendas que formam a média diária
+    JANELA_GIRO = 30
+    PRAZO_MAXIMO = 60                   # dias de entrega do fornecedor
+    PEDIDO_ABERTO_DIAS = 30             # pedidos não entregues mais antigos que isso não contam como "a caminho"
 
     def terminal_atual(self) -> int:
         return self.banco.cfg_int("terminal", 1)
@@ -461,32 +470,146 @@ class EstoqueController:
         achados.add(self.terminal_atual())
         return sorted(achados)
 
-    def reposicao_giro(self, terminal: int | None = None, *, cobertura_dias: int = COBERTURA_DIAS,
-                       adega: bool = False, situacao: str | None = None, texto: str = "",
-                       grupo: str | None = None) -> list[dict]:
-        """SUGESTÃO de compra pelo giro: vendas líquidas de 30 dias ÷ 30 × dias de cobertura − saldo.
+    def parametros_giro(self) -> dict:
+        """Últimos parâmetros usados na reposição pelo giro desta loja (ou os padrões)."""
+        janela = self.banco.cfg_int("giro_janela_dias", self.JANELA_GIRO)
+        prazo = self.banco.cfg_int("giro_prazo_dias", 0)
+        cobertura = self.banco.cfg_int("giro_cobertura_dias", self.COBERTURA_DIAS)
+        return {"janela_dias": janela if janela in self.JANELAS_GIRO else self.JANELA_GIRO,
+                "prazo_dias": prazo if 0 <= prazo <= self.PRAZO_MAXIMO else 0,
+                "cobertura_dias": cobertura if 1 <= cobertura <= 365 else self.COBERTURA_DIAS}
 
-        `terminal` recorta o consumo de um caixa (None = todos); o saldo é sempre o do estoque.
-        Só entram produtos que controlam estoque e tiveram consumo. Nunca cria pedido sozinha."""
+    def salvar_parametros_giro(self, janela_dias: int, prazo_dias: int, cobertura_dias: int) -> None:
+        self._validar_giro(janela_dias, prazo_dias, cobertura_dias)
+        self.banco.cfg_set("giro_janela_dias", janela_dias)
+        self.banco.cfg_set("giro_prazo_dias", prazo_dias)
+        self.banco.cfg_set("giro_cobertura_dias", cobertura_dias)
+
+    def _validar_giro(self, janela_dias, prazo_dias, cobertura_dias) -> None:
         if type(cobertura_dias) is not int or not 1 <= cobertura_dias <= 365:
             raise ErroNegocio("Informe a cobertura em dias inteiros, de 1 a 365.")
+        if type(janela_dias) is not int or janela_dias not in self.JANELAS_GIRO:
+            raise ErroNegocio("Use as vendas dos últimos 7, 14 ou 30 dias.")
+        if type(prazo_dias) is not int or not 0 <= prazo_dias <= self.PRAZO_MAXIMO:
+            raise ErroNegocio(f"Informe o prazo de entrega em dias inteiros, de 0 a {self.PRAZO_MAXIMO}.")
+
+    def _pedidos_a_caminho(self) -> dict[int, float]:
+        """Unidades em pedidos ainda não entregues, feitos nos últimos `PEDIDO_ABERTO_DIAS` dias.
+        Os itens de pedido já ficam nas unidades (fardo vira latas em `adicionar_item`)."""
+        desde = (datetime.fromisoformat(fmt.agora()) - timedelta(days=self.PEDIDO_ABERTO_DIAS)).strftime("%Y-%m-%d")
+        return {r["produto_id"]: fmt.arred_qtd(r["qtd"]) for r in self.banco.todos(
+            """SELECT i.produto_id, SUM(i.quantidade) AS qtd FROM itens_estoque i
+               JOIN lancamentos_estoque l ON l.id = i.lancamento_id
+               WHERE l.tipo = 'pedido' AND l.data >= ? GROUP BY i.produto_id""", (desde,))}
+
+    def fornecedores_giro(self) -> list[dict]:
+        """Fornecedores ativos com o prazo de entrega cadastrado (0 = não informado), para escolher na reposição."""
+        return [dict(r) for r in self.banco.todos(
+            "SELECT id, nome, prazo_entrega_dias FROM fornecedores WHERE ativo = 1 ORDER BY nome")]
+
+    def _fornecedor_habitual(self) -> dict[int, int]:
+        """Fornecedor da compra mais recente de cada produto (data, depois id). Pedido não entregue não conta."""
+        habitual: dict[int, int] = {}
+        for r in self.banco.todos(
+                """SELECT i.produto_id, l.fornecedor_id FROM itens_estoque i
+                   JOIN lancamentos_estoque l ON l.id = i.lancamento_id
+                   WHERE l.tipo = 'compra' AND l.fornecedor_id IS NOT NULL
+                   ORDER BY l.data, l.id"""):
+            habitual[r["produto_id"]] = r["fornecedor_id"]
+        return habitual
+
+    def _fardos_por_unitario(self) -> dict[int, dict]:
+        """Maior fardo/caixa fechada ativo de cada produto unitário: {unitario_id: {"nome", "quantidade"}}."""
+        fardos: dict[int, dict] = {}
+        for r in self.banco.todos(
+                """SELECT c.insumo_id, c.quantidade, f.nome FROM composicoes c
+                   JOIN produtos f ON f.id = c.produto_id JOIN produtos u ON u.id = c.insumo_id
+                   WHERE f.controla_estoque = 0 AND f.ativo = 1 AND u.controla_estoque = 1 AND c.quantidade >= 2
+                     AND (SELECT COUNT(*) FROM composicoes c2 WHERE c2.produto_id = c.produto_id) = 1"""):
+            if r["quantidade"] != int(r["quantidade"]):
+                continue
+            atual = fardos.get(r["insumo_id"])
+            if atual is None or r["quantidade"] > atual["quantidade"]:
+                fardos[r["insumo_id"]] = {"nome": r["nome"], "quantidade": int(r["quantidade"])}
+        return fardos
+
+    def reposicao_giro(self, terminal: int | None = None, *, cobertura_dias: int = COBERTURA_DIAS,
+                       janela_dias: int = JANELA_GIRO, prazo_dias: int = 0,
+                       adega: bool = False, situacao: str | None = None, texto: str = "",
+                       grupo: str | None = None, do_fornecedor: int | None = None) -> list[dict]:
+        """SUGESTÃO de compra pelo giro, com a conta explicada em `explicacao`:
+
+            média diária = vendas líquidas da janela (7, 14 ou 30 dias) ÷ dias da janela
+            necessidade  = média × (prazo de entrega + dias de cobertura)
+            comprar      = necessidade − saldo − pedidos a caminho, arredondado para cima em unidade inteira
+                           (produto que não aceita fração)
+
+        Sem venda na janela, o produto abaixo do mínimo cai na regra antiga (dobro do mínimo), avisando.
+        `do_fornecedor` recorta os produtos cuja compra mais recente foi desse fornecedor (o prazo vem da tela).
+        `terminal` recorta o consumo de um caixa (None = todos); saldo e pedidos são sempre os da loja.
+        Nunca cria pedido sozinha."""
+        self._validar_giro(janela_dias, prazo_dias, cobertura_dias)
         if terminal is not None and (type(terminal) is not int or terminal < 1):
             raise ErroNegocio("Terminal inválido.")
-        consumos = self._consumo_30_dias(terminal)
+        if do_fornecedor is not None and (type(do_fornecedor) is not int or self.banco.um(
+                "SELECT 1 FROM fornecedores WHERE id = ?", (do_fornecedor,)) is None):
+            raise ErroNegocio("Fornecedor não encontrado.")
+        consumos = self._consumo(janela_dias, terminal)
+        a_caminho = self._pedidos_a_caminho()
+        habitual = self._fornecedor_habitual()
+        nomes_fornecedor = {f["id"]: f["nome"] for f in self.banco.todos("SELECT id, nome FROM fornecedores")}
+        fardos = self._fardos_por_unitario()
+        dias_alvo = prazo_dias + cobertura_dias
         sugestoes = []
         for p in self._painel(situacao, texto, grupo, adega=adega):
-            consumo = consumos.get(p["id"], 0)
-            if not p["controla_estoque"] or consumo <= 0:
+            if not p["controla_estoque"]:
                 continue
-            media = consumo / 30
-            alvo = fmt.arred_qtd(media * cobertura_dias)
-            sugerido = fmt.arred_qtd(max(alvo - max(p["qt_atual"], 0), 0))
+            if do_fornecedor is not None and habitual.get(p["id"]) != do_fornecedor:
+                continue
+            consumo = consumos.get(p["id"], 0)
+            saldo = max(p["qt_atual"], 0)
+            pedido = a_caminho.get(p["id"], 0)
+            if consumo > 0:
+                media = consumo / janela_dias
+                alvo = fmt.arred_qtd(media * dias_alvo)
+                base = "giro"
+            elif p["repor"] > 0:                 # sem venda na janela, mas abaixo do mínimo: regra antiga
+                media, alvo, base = 0.0, fmt.arred_qtd(p["estoque_minimo"] * 2), "minimo"
+            else:
+                continue
+            falta = fmt.arred_qtd(max(alvo - saldo - pedido, 0))
+            sugerido = falta if self._aceita_fracao(p["id"]) else float(math.ceil(falta - 1e-9))
             if sugerido <= 0:
                 continue
-            sugestoes.append({**p, "terminal": terminal, "consumo_30_dias": consumo, "media_diaria": media,
-                              "cobertura_dias": max(p["qt_atual"], 0) / media, "alvo_qtd": alvo,
-                              "sugerido": sugerido})
-        return sorted(sugestoes, key=lambda p: (p["cobertura_dias"], p["nome"]))
+            fardo = fardos.get(p["id"])
+            sug = {**p, "terminal": terminal, "janela_dias": janela_dias, "prazo_dias": prazo_dias,
+                   "dias_alvo": dias_alvo, "consumo_janela": consumo, "media_diaria": media,
+                   "cobertura_dias": saldo / media if media else None, "alvo_qtd": alvo,
+                   "a_caminho": pedido, "sugerido": sugerido, "base": base,
+                   "fardo": fardo, "fardos": math.ceil(sugerido / fardo["quantidade"]) if fardo else None,
+                   "fornecedor_id": habitual.get(p["id"]), "fornecedor": nomes_fornecedor.get(habitual.get(p["id"]), "")}
+            sug["explicacao"] = self._explicar_giro(sug)
+            sugestoes.append(sug)
+        return sorted(sugestoes, key=lambda p: (p["base"] != "giro", p["cobertura_dias"] or 0, p["nome"]))
+
+    def _aceita_fracao(self, produto_id: int) -> bool:
+        return bool(self.banco.valor("SELECT aceita_decimal FROM produtos WHERE id = ?", (produto_id,), 0))
+
+    def _explicar_giro(self, s: dict) -> str:
+        q = self._q
+        if s["base"] == "minimo":
+            conta = (f"sem venda em {s['janela_dias']} dias: dobro do mínimo {q(s['alvo_qtd'])}"
+                     f" − tem {q(max(s['qt_atual'], 0))}")
+        else:
+            media = f"{s['media_diaria']:.2f}".replace(".", ",")
+            conta = (f"{media}/dia × {s['dias_alvo']} dias (prazo {s['prazo_dias']} + cobertura "
+                     f"{s['dias_alvo'] - s['prazo_dias']}) = {q(s['alvo_qtd'])} − tem {q(max(s['qt_atual'], 0))}")
+        if s["a_caminho"]:
+            conta += f" − a caminho {q(s['a_caminho'])}"
+        conta += f" → comprar {q(s['sugerido'])}"
+        if s["fardo"]:
+            conta += f" ({s['fardos']} × {s['fardo']['nome']} de {s['fardo']['quantidade']})"
+        return conta
 
     def pedido_por_giro(self, fornecedor_id: int, produtos: list[tuple[int, float]] | None = None,
                         terminal: int | None = None, **recorte) -> int:
@@ -509,16 +632,28 @@ class EstoqueController:
         return lanc
 
     def texto_reposicao_giro(self, sugestoes: list[dict], terminal: int | None = None,
-                             cobertura_dias: int = COBERTURA_DIAS) -> str:
-        """Texto para visualizar/imprimir a sugestão do giro."""
+                             cobertura_dias: int | None = None) -> str:
+        """Texto para visualizar/imprimir a sugestão do giro, com a conta de cada produto."""
         escopo = f"CAIXA {terminal}" if terminal else "TODOS OS CAIXAS"
+        ref = sugestoes[0] if sugestoes else {}
+        fornecedores = sorted({s["fornecedor"] for s in sugestoes if s.get("fornecedor")})
+        if len(fornecedores) == 1 and all(s.get("fornecedor") for s in sugestoes):
+            escopo += f" | FORNECEDOR {fornecedores[0]}"
+        janela = ref.get("janela_dias", self.JANELA_GIRO)
+        prazo = ref.get("prazo_dias", 0)
+        cobertura = cobertura_dias if cobertura_dias is not None else ref.get("dias_alvo", self.COBERTURA_DIAS) - prazo
         linhas = [f"REPOSIÇÃO PELO GIRO - {fmt.fmt_data(fmt.hoje())}",
-                  f"{escopo} | vendas líquidas de 30 dias | cobertura de {cobertura_dias} dias",
-                  "SUGESTÃO: revise antes de comprar.", "-" * 78,
-                  f"{'Produto':<30}{'Tem':>9}{'Giro 30d':>10}{'Cobre':>9}{'Comprar':>10}", "-" * 78]
+                  f"{escopo} | vendas líquidas de {janela} dias | prazo de entrega {prazo} + cobertura {cobertura} dias",
+                  f"Desconta o saldo e os pedidos não entregues dos últimos {self.PEDIDO_ABERTO_DIAS} dias.",
+                  "SUGESTÃO: revise antes de comprar. Não prevê feriado, promoção nem falta de estoque no período.",
+                  "-" * 78,
+                  f"{'Produto':<30}{'Tem':>8}{f'Venda {janela}d':>11}{'Cobre':>8}{'A caminho':>11}{'Comprar':>10}",
+                  "-" * 78]
         for p in sugestoes:
-            linhas.append(f"{p['nome'][:29]:<30}{self._q(p['qt_atual']):>9}{self._q(p['consumo_30_dias']):>10}"
-                          f"{p['cobertura_dias']:>8.1f}d{self._q(p['sugerido']):>10}")
+            cobre = f"{p['cobertura_dias']:.1f}d" if p["cobertura_dias"] is not None else "—"
+            linhas.append(f"{p['nome'][:29]:<30}{self._q(p['qt_atual']):>8}{self._q(p['consumo_janela']):>11}"
+                          f"{cobre:>8}{self._q(p['a_caminho']):>11}{self._q(p['sugerido']):>10}")
+            linhas.append(f"   {p['explicacao']}")
         return "\n".join(linhas)
 
     @staticmethod

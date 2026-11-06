@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 36
+VERSAO_ESQUEMA = 40
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -268,6 +268,8 @@ TABELAS = [
         promo_de TEXT, promo_ate TEXT, promo_preco_cent INTEGER NOT NULL DEFAULT 0,
         sem_inicial INTEGER, sem_final INTEGER, sem_preco_cent INTEGER NOT NULL DEFAULT 0,
         hora_ini TEXT, hora_fim TEXT, hora_preco_cent INTEGER NOT NULL DEFAULT 0,
+        promo_gelada_cent INTEGER NOT NULL DEFAULT 0, sem_gelada_cent INTEGER NOT NULL DEFAULT 0,
+        hora_gelada_cent INTEGER NOT NULL DEFAULT 0,
         validade_dias INTEGER NOT NULL DEFAULT 0,
         balanca INTEGER NOT NULL DEFAULT 0,
         automatico INTEGER NOT NULL DEFAULT 0,
@@ -314,6 +316,7 @@ TABELAS = [
         contato TEXT, ddd TEXT, telefone TEXT, celular TEXT, cnpj TEXT, ie TEXT,
         endereco TEXT, complemento TEXT, bairro TEXT, cidade TEXT, uf TEXT, cep TEXT,
         email TEXT, obs TEXT,
+        prazo_entrega_dias INTEGER NOT NULL DEFAULT 0,
         ativo INTEGER NOT NULL DEFAULT 1
     )""",
     """CREATE TABLE IF NOT EXISTS bairros (
@@ -522,6 +525,7 @@ TABELAS = [
         preco_base_cent INTEGER,
         regra_preco_json TEXT,
         temperatura TEXT NOT NULL DEFAULT 'natural' CHECK (temperatura IN ('natural', 'gelada')),
+        cascos_emprestados INTEGER NOT NULL DEFAULT 0 CHECK (cascos_emprestados >= 0),
         total_cent INTEGER NOT NULL,
         cobra_servico INTEGER NOT NULL DEFAULT 1,
         observacao TEXT,
@@ -647,6 +651,17 @@ TABELAS = [
         enviado INTEGER NOT NULL DEFAULT 0
     )""",
     "CREATE INDEX IF NOT EXISTS ix_erros_caixa_enviado ON erros_caixa(enviado, id)",
+    # Foto do produto (v37): fica no banco (entra no backup e muda de computador junto). `imagem` é a cópia
+    # normalizada (JPEG, até 480 px) e `miniatura` a do cardápio (JPEG, até 160 px). `origem` guarda o endereço https
+    # quando a foto veio da internet (o cardápio usa o endereço em vez da miniatura). Apagar o produto apaga a foto.
+    """CREATE TABLE IF NOT EXISTS produto_fotos (
+        produto_id INTEGER PRIMARY KEY REFERENCES produtos(id) ON DELETE CASCADE,
+        imagem BLOB NOT NULL,
+        miniatura BLOB NOT NULL,
+        origem TEXT NOT NULL DEFAULT '',
+        sha256 TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+    )""",
     # Comissão das garotas (v7): o código 50 do caixa marca a comissão no número da garota (o mesmo da comanda dela).
     # Não é venda: não entra em faturamento nem estoque. Fica 'pendente' até ser paga (sai dinheiro do caixa) ou cancelada.
     """CREATE TABLE IF NOT EXISTS garotas (
@@ -861,7 +876,8 @@ _AUDITORIA_CAMPOS = {
                  "sem_inicial sem_final sem_preco_cent hora_ini hora_fim hora_preco_cent "
                  "cobrar_servico venda aceita_decimal partes maior montagem composto comissao_pct "
                  "preco_gelada_cent atacado_qtd preco_atacado_cent atacado_gelada_qtd "
-                 "preco_atacado_gelada_cent casco_produto_id").split(),
+                 "preco_atacado_gelada_cent casco_produto_id promo_gelada_cent sem_gelada_cent "
+                 "hora_gelada_cent").split(),
     "produtos_historico": "id qt_atual custo_cent ativo excluido_em".split(),
     "unidades": "id nome abreviatura".split(),
     "grupos": "id nome".split(),
@@ -1007,6 +1023,22 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v40: cascos que o cliente identificado levou sem trazer (anotados como empréstimo no fechamento); vendas antigas
+    # ficam com 0: troca ou casco não cobrado do passado não prova empréstimo.
+    40: [
+        ("coluna", "itens_venda", "cascos_emprestados", "INTEGER NOT NULL DEFAULT 0"),
+    ],
+    # v39: prazo de entrega do fornecedor (dias) para a reposição pelo giro; 0 = não informado.
+    39: [
+        ("coluna", "fornecedores", "prazo_entrega_dias", "INTEGER NOT NULL DEFAULT 0"),
+    ],
+    # v38: promoção também no preço da gelada (mesmas janelas da natural); 0 = sem promoção da gelada.
+    38: [
+        ("coluna", "produtos", "promo_gelada_cent", "INTEGER NOT NULL DEFAULT 0"),
+        ("coluna", "produtos", "sem_gelada_cent", "INTEGER NOT NULL DEFAULT 0"),
+        ("coluna", "produtos", "hora_gelada_cent", "INTEGER NOT NULL DEFAULT 0"),
+    ],
+    37: [],  # tabela aditiva produto_fotos (nasce em TABELAS); nenhum produto antigo ganha foto
     36: [],  # tabela aditiva shows_quartos; sem gerar pagamentos retroativos
     35: [
         ("coluna", "quartos_uso", "comanda_cliente", "TEXT"),

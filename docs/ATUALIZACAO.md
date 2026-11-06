@@ -10,7 +10,7 @@ O PDV e o `--sync` são iniciados outra vez.
 
 **Os caixas que ainda não têm esta versão precisam de um instalador manual, uma última vez.**
 
-Edições: `willpdv`, `ea_superacoes`, `bar` (a edição bar usa o mesmo mecanismo quando existir).
+Edições: `willpdv`, `willadega`, `bar` (a edição bar usa o mesmo mecanismo quando existir).
 
 ## Onde fica o arquivo
 
@@ -62,7 +62,7 @@ $env:PDV_ATUALIZACAO_CHAVE = "<64 hex>"
 $env:PDV_NUVEM_URL = "https://seu-app.onrender.com"
 $env:PDV_API_TOKEN = "<token>"
 python -m tools.publicar_atualizacao WillPDV-Setup-1.10.1.exe --edicao willpdv --notas "Corrige o troco." --url https://atualizacoes.exemplo/willpdv/1.10.1/WillPDV-Setup-1.10.1.exe
-python -m tools.publicar_atualizacao EASuperacoes-Setup-1.10.1.exe --edicao ea_superacoes --notas "Corrige o troco." --url https://atualizacoes.exemplo/ea_superacoes/1.10.1/EASuperacoes-Setup-1.10.1.exe
+python -m tools.publicar_atualizacao WillAdega-Setup-1.10.1.exe --edicao willadega --notas "Corrige o troco." --url https://atualizacoes.exemplo/willadega/1.10.1/WillAdega-Setup-1.10.1.exe
 ```
 
 Obrigatória (não dá para adiar) e versão mínima:

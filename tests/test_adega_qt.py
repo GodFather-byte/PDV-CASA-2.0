@@ -362,3 +362,23 @@ class TestAdegaQt(BaseCaixaQt):
         self.j.dialogos.confirmacoes = [True]
         self.j.fechar_venda()
         self.assertEqual(self.ctx.caderneta.obter(cliente)["saldo_cent"], -800)
+
+    def test_venda_do_cliente_pergunta_cascos_levados_sem_trazer(self):
+        casco = self.bebida_retornavel()
+        cliente = self.ctx.cadastros.salvar("clientes", {"numero_consulta": "7", "nome": "MARIA", "limite_cent": "500,00"})
+        self.j.venda_id = self.ctx.caixa.abrir_caderneta(cliente)
+        self.j.recarregar()
+        self.j.dialogos.escolhas = ["natural"]
+        self.j.dialogos.textos = ["1", "3"]                         # cobra 1 casco; das 5 restantes, 3 sem trazer
+        self.lancar(self.j, "6*10")
+        bebida = next(i for i in self.itens() if i["produto_id"] == self.produto)
+        self.assertEqual(self.banco.valor("SELECT cascos_emprestados FROM itens_venda WHERE id = ?", (bebida["id"],)), 3)
+        self.assertIn("MARIA levou SEM trazer o casco", self.j.dialogos.perguntas[-1])
+        self.assertIn("Das 5 garrafa(s)", self.j.dialogos.perguntas[-1])
+
+    def test_balcao_sem_cliente_nao_pergunta_emprestimo(self):
+        self.bebida_retornavel()
+        self.j.dialogos.escolhas = ["natural"]
+        self.j.dialogos.textos = ["0"]
+        self.lancar(self.j, "2*10")
+        self.assertEqual(len(self.j.dialogos.perguntas), 1)

@@ -3,3 +3,4 @@ uvicorn>=0.23
 sqlalchemy>=2.0
 pydantic>=2.3
 psycopg[binary]>=3.1   # PostgreSQL (Neon, Render, Supabase); o SQLite local não precisa
+segno>=1.6,<2          # QR do código de instalação na central do fornecedor (sem rede)

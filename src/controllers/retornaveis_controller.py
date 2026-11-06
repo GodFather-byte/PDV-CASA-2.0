@@ -83,6 +83,34 @@ class RetornaveisController:
             "JOIN operadores o ON o.id = m.operador_id "
             f"WHERE m.cliente_id = ?{filtro} ORDER BY m.id DESC", parametros)]
 
+    def registrar_pelo_caixa(self, cliente_id: int, produto_id: int, tipo: str, quantidade: int, motivo: str) -> int | None:
+        """Empréstimo/devolução de cascos anotado pelo caixa ao fechar ou cancelar a venda do cliente. Usa a autorização
+        da própria venda (não exige o módulo de estoque). Devolução maior que o saldo fica no saldo (nunca negativo).
+        Precisa estar dentro da transação de quem chamou."""
+        if tipo not in TIPOS or type(quantidade) is not int or quantidade <= 0:
+            return None
+        anterior = self._saldo(cliente_id, produto_id)
+        if tipo == "devolucao":
+            quantidade = min(quantidade, int(anterior))
+            if quantidade <= 0:
+                return None
+        operador = self.operador_id if type(self.operador_id) is int else self.banco._operador_auditoria
+        saldo = fmt.arred_qtd(anterior + quantidade if tipo == "emprestimo" else anterior - quantidade)
+        return self.banco.inserir("retornaveis_movimentos", {
+            "cliente_id": cliente_id, "produto_id": produto_id, "tipo": tipo, "quantidade": float(quantidade),
+            "saldo_apos": saldo, "motivo": motivo.strip()[:200], "operador_id": operador, "criado_em": fmt.agora()})
+
+    def devedores(self) -> list[dict]:
+        """Quem está com casco (ou outro retornável) emprestado: saldo atual maior que zero, maior saldo primeiro."""
+        self.exigir_acesso()
+        return [dict(linha) for linha in self.banco.todos(
+            "SELECT c.id AS cliente_id, c.nome AS cliente, c.telefone, p.nome AS produto, m.saldo_apos AS saldo, "
+            "m.criado_em AS ultimo_movimento FROM retornaveis_movimentos m "
+            "JOIN clientes c ON c.id = m.cliente_id JOIN produtos_historico p ON p.id = m.produto_id "
+            "WHERE m.saldo_apos > 0 AND m.id = (SELECT MAX(u.id) FROM retornaveis_movimentos u "
+            "WHERE u.cliente_id = m.cliente_id AND u.produto_id = m.produto_id) "
+            "ORDER BY m.saldo_apos DESC, c.nome")]
+
     def registrar(self, cliente_id: int, produto_id: int, tipo: str,
                   quantidade, motivo: str) -> int:
         """Registra um movimento imutável e retorna seu id; saldo e auditoria são atômicos."""

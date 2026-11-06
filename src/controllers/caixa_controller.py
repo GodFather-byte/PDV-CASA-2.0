@@ -255,7 +255,8 @@ class CaixaController(DivisaoContaMixin):
     # ============================================================== itens
     def adicionar_item(self, venda_id: int, produto_id: int, quantidade: float, observacao: str | None = None,
                        partes: list[int] | None = None, *, temperatura: str = "natural",
-                       quantidade_cascos: int = 0, confirmar_entrega_ficha: bool = False) -> int:
+                       quantidade_cascos: int = 0, confirmar_entrega_ficha: bool = False,
+                       cascos_emprestados: int = 0) -> int:
         v = self._aberta(venda_id)
         p = self.produtos.por_id(produto_id)
         if p is None or not p["ativo"]:
@@ -295,6 +296,15 @@ class CaixaController(DivisaoContaMixin):
                 raise ErroNegocio("Cadastre um casco válido e disponível para venda neste produto.")
         if v["modalidade"] == "caderneta" and v["cliente_id"] is None:
             raise ErroNegocio("Selecione o cliente da caderneta antes de lançar itens.")
+        if isinstance(cascos_emprestados, bool) or not isinstance(cascos_emprestados, int) or cascos_emprestados < 0:
+            raise ErroNegocio("Informe uma quantidade inteira de cascos levados sem devolver.")
+        if cascos_emprestados:
+            if not p["casco_produto_id"] or partes:
+                raise ErroNegocio("Só bebida retornável (com casco cadastrado) anota casco emprestado.")
+            if not v["cliente_id"]:
+                raise ErroNegocio("Para anotar casco emprestado, a venda precisa ter o cliente (caderneta ou entrega).")
+            if cascos_emprestados > int(quantidade) - quantidade_cascos:
+                raise ErroNegocio("Os cascos emprestados não podem passar das garrafas sem casco cobrado.")
         self._conferir_limite_comanda(v)
 
         quando = fmt.agora_dt()
@@ -316,9 +326,12 @@ class CaixaController(DivisaoContaMixin):
                     "criterio": "composto" if p["composto"] else "maior" if p["maior"] else "média"}
         else:
             componentes = []
-            preco = p["preco_gelada_cent"] if temperatura == "gelada" else self.produtos.preco_vigente(p, quando)
-            base = ({"tipo": "gelada", "preco_cent": preco, "avaliado_em": agora}
-                    if temperatura == "gelada" else self.produtos.regra_preco_vigente(p, quando))
+            if temperatura == "gelada":                # promoção da gelada nas mesmas janelas da natural
+                base = self.produtos.regra_preco_gelada(p, quando)
+                preco = base["preco_cent"]
+            else:
+                preco = self.produtos.preco_vigente(p, quando)
+                base = self.produtos.regra_preco_vigente(p, quando)
         if preco <= 0:
             raise ErroNegocio(f"'{p['nome']}' está sem preço de venda. Defina o preço no cadastro antes de vender.")
 
@@ -351,7 +364,8 @@ class CaixaController(DivisaoContaMixin):
             if existente:
                 item_id = existente["id"]
                 nova_qtd = fmt.arred_qtd(existente["quantidade"] + quantidade)
-                self.banco.executar("UPDATE itens_venda SET quantidade = ? WHERE id = ?", (nova_qtd, item_id))
+                self.banco.executar("UPDATE itens_venda SET quantidade = ?, cascos_emprestados = cascos_emprestados + ? "
+                                    "WHERE id = ?", (nova_qtd, cascos_emprestados, item_id))
                 anterior = self.produtos.ler_regra_preco(dict(existente))
                 if anterior is None:
                     base_legada = {"tipo": "legado", "preco_cent": existente["preco_base_cent"]}
@@ -368,7 +382,8 @@ class CaixaController(DivisaoContaMixin):
                     "regra_preco_json": json.dumps(retrato, ensure_ascii=False),
                     "temperatura": temperatura, "total_cent": total, "cobra_servico": 0 if ficha_credito else p["cobrar_servico"],
                     "observacao": observacao, "comissao_cent": 0 if ficha_credito else fmt.pct_de(total, p["comissao_pct"]),
-                    "partes": max(len(componentes), 1), "operador_id": self.operador_id, "criado_em": agora})
+                    "partes": max(len(componentes), 1), "operador_id": self.operador_id, "criado_em": agora,
+                    "cascos_emprestados": cascos_emprestados})
             for c in componentes:
                 self.banco.inserir("itens_venda_partes", {
                     "item_id": item_id, "produto_id": c["id"], "fracao": 1 / len(componentes)})
@@ -606,6 +621,73 @@ class CaixaController(DivisaoContaMixin):
                     operador_id=self.operador_id)
         notificacoes.avisar(self.banco, "item", "item_cancelado", cancelado_id, motivo, self.operador_id)
         return cancelado_id
+
+    def alterar_quantidade(self, item_id: int, nova: float, motivo: str = "") -> int:
+        """Muda a quantidade de uma linha da conta aberta, recalculando preço e atacado. Devolve o id da linha.
+
+        Diminuir é um cancelamento parcial (motivo obrigatório, auditoria e as mesmas travas de pagamento). Aumentar soma
+        na mesma linha, como uma leitura repetida: só em linha simples (sem montagem, casco, ficha, cozinha ou pagamento
+        por item), senão a pessoa lança o produto de novo e responde o que o lançamento pergunta. O estoque só baixa no
+        fechamento da venda, então nada muda nele aqui."""
+        item = self.banco.um("SELECT * FROM itens_venda WHERE id = ?", (item_id,))
+        if item is None or item["cancelado"]:
+            raise ErroNegocio("Item não encontrado ou já cancelado.")
+        try:
+            nova = fmt.validar_qtd(nova)
+        except ValueError as exc:
+            raise ErroNegocio(str(exc).capitalize() + ".") from None
+        if nova <= 0:
+            raise ErroNegocio("Para tirar o item inteiro, use Cancelar item.")
+        p = self.produtos.por_id(item["produto_id"])
+        if p is None:
+            raise ErroNegocio("Produto não encontrado.")
+        if not p["aceita_decimal"] and nova != int(nova):
+            raise ErroNegocio(f"'{p['nome']}' não aceita quantidade fracionada.")
+        atual = item["quantidade"]
+        if nova == atual:
+            return item_id
+        if nova < atual:
+            if not (motivo or "").strip():
+                raise ErroNegocio("Informe o motivo para diminuir a quantidade.")
+            self.cancelar_item(item_id, motivo, fmt.arred_qtd(atual - nova))
+            return item_id
+        v = self._aberta(item["venda_id"])
+        maximo = self.banco.cfg_int("qtd_maxima_item", QTD_MAXIMA_ITEM)
+        if 0 < maximo < nova:
+            raise ErroNegocio(f"Quantidade acima do limite de {maximo} por item.")
+        if (item["partes"] != 1 or self.banco.um("SELECT 1 FROM itens_venda_partes WHERE item_id = ?", (item_id,))
+                or p["casco_produto_id"] or ficha_sangria.eh_ficha(self.banco, p)
+                or item["status_preparo"] != "pendente"
+                or self.banco.valor("SELECT impressora_remota FROM subgrupos WHERE id = ?", (p["subgrupo_id"],))):
+            raise ErroNegocio("Para aumentar este item, lance o produto de novo (ele pergunta cascos, montagem ou "
+                              "manda para a cozinha).")
+        if self._qtd_paga(item_id) > 0:
+            raise ErroNegocio("Este item já tem parte paga na divisão por item. Lance o produto de novo para somar.")
+        self._conferir_limite_comanda(v)
+        diferenca = fmt.arred_qtd(nova - atual)
+        agora = fmt.agora()
+        with self.banco.transacao():
+            total = fmt.mult_cent(item["preco_unit_cent"], nova)
+            self.banco.executar(
+                "UPDATE itens_venda SET quantidade = ?, total_cent = ?, comissao_cent = ? WHERE id = ?",
+                (nova, total, fmt.pct_de(total, p["comissao_pct"]), item_id))
+            retrato = self.produtos.ler_regra_preco(dict(item))
+            if retrato is not None:
+                base = retrato.get("base") or {"tipo": "legado", "preco_cent": item["preco_base_cent"]}
+                retrato.setdefault("leituras", []).append({"quantidade": diferenca, "base": base, "ajuste": "quantidade"})
+                retrato["aplicado_em"] = agora
+                self.banco.atualizar("itens_venda", item_id, {"regra_preco_json": json.dumps(retrato, ensure_ascii=False)})
+            self.banco.executar("UPDATE vendas SET ultimo_lancamento_em = ? WHERE id = ?", (agora, v["id"]))
+            self._reprecificar_balcao(v["id"])
+            self.recalcular(v["id"])
+            self._conferir_vinculos(v["id"])
+            if v["prepago"]:
+                self._conferir_credito(v["id"], v["total_cent"] - v["taxa_cent"])
+            self.banco.registrar_auditoria(
+                "itens_venda", item_id, "quantidade_aumentada",
+                antes={"quantidade": atual, "total_cent": item["total_cent"]},
+                depois={"quantidade": nova, "venda_id": v["id"]}, operador_id=self.operador_id)
+        return item_id
 
     def info_cancelamento(self, item_id: int) -> dict:
         """O que as telas precisam para perguntar a quantidade a cancelar: lançada, já paga por item, livre e se o
@@ -922,6 +1004,7 @@ class CaixaController(DivisaoContaMixin):
                     from src.controllers.custos_venda import registrar as registrar_custos
                     registrar_custos(self.banco, venda_id, self.produtos, self.estoque)
                     self.estoque.baixar_venda(venda_id)
+                    self._cascos_emprestados(v, "emprestimo")
                 if eh_debito:
                     self.banco.inserir("caderneta", {
                         "cliente_id": v["cliente_id"], "venda_id": venda_id, "tipo": "debito", "valor_cent": total,
@@ -1023,6 +1106,7 @@ class CaixaController(DivisaoContaMixin):
                 self._devolver_adiantamentos(venda_id, turno)
                 self.estoque.estornar_venda(venda_id)
                 self._estornar_caderneta(v)
+                self._cascos_emprestados(v, "devolucao")
                 self.banco.atualizar("vendas", venda_id, {
                     "status": "cancelada", "cancelada_por": self.operador_id, "motivo_cancelamento": motivo,
                     "sincronizado": 0})
@@ -1030,6 +1114,28 @@ class CaixaController(DivisaoContaMixin):
                 raise ErroNegocio("Este cupom já está cancelado.")
             self.banco.log("venda_cancelada", f"venda {venda_id} cupom {v['cupom']} {motivo}".strip(), self.operador_id)
         notificacoes.avisar(self.banco, "cancelamento", "venda_cancelada", venda_id)
+
+    def _cascos_emprestados(self, v: dict, tipo: str) -> None:
+        """Fechamento: anota no cliente os cascos que ele levou sem trazer. Cancelamento do cupom: desfaz a anotação."""
+        if not v.get("cliente_id"):
+            return
+        por_casco: dict[int, int] = {}
+        for r in self.banco.todos(
+                """SELECT p.casco_produto_id, i.cascos_emprestados, i.quantidade FROM itens_venda i
+                   JOIN produtos p ON p.id = i.produto_id
+                   WHERE i.venda_id = ? AND i.cancelado = 0 AND i.cascos_emprestados > 0
+                     AND p.casco_produto_id IS NOT NULL""", (v["id"],)):
+            por_casco[r["casco_produto_id"]] = por_casco.get(r["casco_produto_id"], 0) + min(
+                r["cascos_emprestados"], int(r["quantidade"]))
+        if not por_casco:
+            return
+        from src.controllers.retornaveis_controller import RetornaveisController
+        retornaveis = RetornaveisController(self.banco, self.operador_id)
+        rotulo = self.obter(v["id"])["cupom"] or v["id"]
+        for casco_id, quantidade in por_casco.items():
+            motivo = (f"Venda {rotulo}: levou sem trazer o casco" if tipo == "emprestimo"
+                      else f"Cancelamento da venda {rotulo}: casco não foi emprestado")
+            retornaveis.registrar_pelo_caixa(v["cliente_id"], casco_id, tipo, quantidade, motivo)
 
     def _devolver_adiantamentos(self, venda_id: int, turno: dict) -> int:
         """Cancelamento de conta que recebeu dinheiro em um turno já fechado: aquele turno continua com o valor (ele

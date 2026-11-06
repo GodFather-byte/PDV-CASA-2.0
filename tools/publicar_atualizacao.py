@@ -35,7 +35,7 @@ def sha256_arquivo(caminho: str) -> tuple[str, int]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m tools.publicar_atualizacao")
     parser.add_argument("arquivo")
-    parser.add_argument("--edicao", required=True, choices=("willpdv", "ea_superacoes", "bar"))
+    parser.add_argument("--edicao", required=True, choices=("willpdv", "willadega", "bar"))
     parser.add_argument("--canal", default="estavel")
     parser.add_argument("--versao", default=VERSAO)
     parser.add_argument("--notas", required=True)

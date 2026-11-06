@@ -5,7 +5,7 @@ python -m src.app --sync   ou   WillPDV.exe --sync
 
 Com `--autoteste [arquivo] [--rede]` confere se o programa instalado está inteiro (ver src/autoteste.py) e encerra.
 Com `--homologacao [arquivo.json]` exercita retomada e fechamento em banco descartável, sem hardware.
-Com `--edicao ea_superacoes` abre a edição E&A Superações (adega) em vez do WillPDV (ver src/core/edicao.py).
+Com `--edicao willadega` abre a edição Will Adega (adega) em vez do WillPDV (ver src/core/edicao.py).
 A interface é Qt (PySide6).
 """
 import os

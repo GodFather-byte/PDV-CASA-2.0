@@ -45,6 +45,9 @@ class JanelaRetornaveis(QDialog):
         atualizar = QPushButton("Atualizar")
         atualizar.clicked.connect(self.atualizar)
         acoes.addWidget(atualizar)
+        self.btn_devedores = QPushButton("Quem deve cascos")
+        self.btn_devedores.clicked.connect(lambda: self.mostrar_devedores())
+        acoes.addWidget(self.btn_devedores)
         acoes.addStretch()
         fechar = QPushButton("Fechar")
         fechar.clicked.connect(self.close)
@@ -153,3 +156,27 @@ class JanelaRetornaveis(QDialog):
             return True
         except ErroNegocio as erro:
             return self._erro(erro)
+
+    def texto_devedores(self) -> str:
+        linhas = self._controller().devedores()
+        if not linhas:
+            return "Nenhum cliente com casco (ou outro retornável) em posse."
+        saida = [f"QUEM DEVE CASCOS - {fmt.fmt_data(fmt.hoje())}", "-" * 72,
+                 f"{'Cliente':<26}{'Telefone':<16}{'Produto':<20}{'Saldo':>10}", "-" * 72]
+        for d in linhas:
+            saldo = fmt.fmt_qtd(d["saldo"], 4).rstrip("0").rstrip(",")
+            saida.append(f"{(d['cliente'] or '')[:25]:<26}{(d['telefone'] or '')[:15]:<16}"
+                         f"{(d['produto'] or '')[:19]:<20}{saldo:>10}")
+        return "\n".join(saida)
+
+    def mostrar_devedores(self):
+        from src.ui_qt.visualizador import JanelaVisualizador
+        try:
+            conteudo = self.texto_devedores()
+        except (ErroNegocio, ErroPermissao) as erro:
+            self.mensagem.setText(str(erro))
+            return None
+        janela = JanelaVisualizador(self.ctx, "Quem deve cascos", conteudo, parent=self,
+                                    modulo="lanc_estoque", nome="quem_deve_cascos", tipo="lista_de_compras")
+        janela.exec()
+        return conteudo

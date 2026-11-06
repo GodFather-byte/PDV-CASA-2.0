@@ -2,8 +2,8 @@
 
     python build_pdv.py                  -> dist/WillPDV/WillPDV.exe  e  instalador/saida/WillPDV-Setup-<versão>.exe
     python build_pdv.py --sem-instalador -> só o executável
-    python build_pdv.py --edicao ea_superacoes
-                                         -> dist/EASuperacoes/EASuperacoes.exe  e  instalador/saida/EASuperacoes-Setup-<versão>.exe
+    python build_pdv.py --edicao willadega
+                                         -> dist/WillAdega/WillAdega.exe  e  instalador/saida/WillAdega-Setup-<versão>.exe
                                             (edição só de adega; ver src/core/edicao.py)
 
 Requisitos (uma vez, na máquina que gera a versão): pip install pyinstaller  e  o Inno Setup 6 (jrsoftware.org).

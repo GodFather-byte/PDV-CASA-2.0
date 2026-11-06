@@ -54,8 +54,8 @@ computador**, em `C:\Users\SEU_USUARIO\.pdv-casa\`. Abra a aba **Chave de segura
 ## Emitir uma licença
 
 1. Aba **Emitir licença**. Digite a **loja** (a mesma chave de loja do PDV; as já usadas aparecem na lista).
-2. Escolha o **programa**: **WillPDV** ou **E&A Superações** (a edição só de adega). A licença só abre o programa escolhido:
-   a do WillPDV não ativa o E&A Superações e vice-versa. As licenças emitidas antes desta opção valem como WillPDV.
+2. Escolha o **programa**: **WillPDV** ou **Will Adega** (a edição só de adega). A licença só abre o programa escolhido:
+   a do WillPDV não ativa o Will Adega e vice-versa. As licenças emitidas antes desta opção valem como WillPDV.
 3. Escolha **Mensal** (e quantos meses), **Permanente** ou **Teste** (e quantos dias). A tela mostra até quando vale.
 4. **Gerar licença**. Aparece o código (`PDVL1....`).
 5. **Copiar mensagem pronta para o cliente** (já traz o código e o passo a passo) ou **Copiar código** ou **Salvar em arquivo**.
