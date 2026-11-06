@@ -124,7 +124,7 @@ da categoria). A nuvem precisa estar atualizada para aceitar as miniaturas.
 | Natural ou gelada | Aparece a pergunta só em produto com preço gelada: N / G ou clique. |
 | Atacado | Automático ao atingir o mínimo do produto (por temperatura). A linha mostra `[Atacado]` e o total da economia. |
 | Casco | Produto retornável pergunta quantos cascos cobrar: 0 quando trouxe tudo. O casco entra como linha separada. |
-| Desistiu de parte | `Delete` cancela a linha inteira; bipar de novo com a quantidade certa (`4*`). Bebida e casco se cancelam separados. |
+| Mudou a quantidade | Selecione a linha e **Ctrl+Q** (ou Operações > Alterar quantidade do item). Aumentar soma na mesma linha e recalcula o atacado; diminuir pede a mesma autorização e o motivo do cancelamento. Produto com casco só diminui por aqui; para aumentar, bipe de novo (ele pergunta os cascos). |
 | Fechar | F12, forma de pagamento, valor recebido (troco calculado), Enter. Cupom imprime se estiver ligado. |
 | Fiado | F5 escolhe o cliente (limite por cliente); recebimento na mesma tela sem itens. |
 | Entrega | F6: cliente, taxa por bairro, troco para; F8 imprime o pedido. |
@@ -152,6 +152,5 @@ da categoria). A nuvem precisa estar atualizada para aceitar as miniaturas.
   histórica. Vendas antigas sem retrato são identificadas como legadas, sem inventar faixa ou promoção.
 - Conferir no fim do primeiro dia: fechamento do turno bate com a gaveta; estoque dos 5 produtos que mais saem; cupom
   legível; gaveta abre.
-- Pendências conhecidas (não impedem a operação): cancelamento parcial de uma linha agrupada (hoje: cancela e relança),
-  promoção por período vale só no preço natural, sem controle de empréstimo/saldo de cascos por cliente, sem etiqueta de
+- Pendências conhecidas (não impedem a operação): promoção por período vale só no preço natural, sem controle de empréstimo/saldo de cascos por cliente, sem etiqueta de
   gôndola (a Tabela de preços impressa traz natural, gelada e atacado), sem NFC-e.

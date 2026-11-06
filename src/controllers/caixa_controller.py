@@ -607,6 +607,73 @@ class CaixaController(DivisaoContaMixin):
         notificacoes.avisar(self.banco, "item", "item_cancelado", cancelado_id, motivo, self.operador_id)
         return cancelado_id
 
+    def alterar_quantidade(self, item_id: int, nova: float, motivo: str = "") -> int:
+        """Muda a quantidade de uma linha da conta aberta, recalculando preço e atacado. Devolve o id da linha.
+
+        Diminuir é um cancelamento parcial (motivo obrigatório, auditoria e as mesmas travas de pagamento). Aumentar soma
+        na mesma linha, como uma leitura repetida: só em linha simples (sem montagem, casco, ficha, cozinha ou pagamento
+        por item), senão a pessoa lança o produto de novo e responde o que o lançamento pergunta. O estoque só baixa no
+        fechamento da venda, então nada muda nele aqui."""
+        item = self.banco.um("SELECT * FROM itens_venda WHERE id = ?", (item_id,))
+        if item is None or item["cancelado"]:
+            raise ErroNegocio("Item não encontrado ou já cancelado.")
+        try:
+            nova = fmt.validar_qtd(nova)
+        except ValueError as exc:
+            raise ErroNegocio(str(exc).capitalize() + ".") from None
+        if nova <= 0:
+            raise ErroNegocio("Para tirar o item inteiro, use Cancelar item.")
+        p = self.produtos.por_id(item["produto_id"])
+        if p is None:
+            raise ErroNegocio("Produto não encontrado.")
+        if not p["aceita_decimal"] and nova != int(nova):
+            raise ErroNegocio(f"'{p['nome']}' não aceita quantidade fracionada.")
+        atual = item["quantidade"]
+        if nova == atual:
+            return item_id
+        if nova < atual:
+            if not (motivo or "").strip():
+                raise ErroNegocio("Informe o motivo para diminuir a quantidade.")
+            self.cancelar_item(item_id, motivo, fmt.arred_qtd(atual - nova))
+            return item_id
+        v = self._aberta(item["venda_id"])
+        maximo = self.banco.cfg_int("qtd_maxima_item", QTD_MAXIMA_ITEM)
+        if 0 < maximo < nova:
+            raise ErroNegocio(f"Quantidade acima do limite de {maximo} por item.")
+        if (item["partes"] != 1 or self.banco.um("SELECT 1 FROM itens_venda_partes WHERE item_id = ?", (item_id,))
+                or p["casco_produto_id"] or ficha_sangria.eh_ficha(self.banco, p)
+                or item["status_preparo"] != "pendente"
+                or self.banco.valor("SELECT impressora_remota FROM subgrupos WHERE id = ?", (p["subgrupo_id"],))):
+            raise ErroNegocio("Para aumentar este item, lance o produto de novo (ele pergunta cascos, montagem ou "
+                              "manda para a cozinha).")
+        if self._qtd_paga(item_id) > 0:
+            raise ErroNegocio("Este item já tem parte paga na divisão por item. Lance o produto de novo para somar.")
+        self._conferir_limite_comanda(v)
+        diferenca = fmt.arred_qtd(nova - atual)
+        agora = fmt.agora()
+        with self.banco.transacao():
+            total = fmt.mult_cent(item["preco_unit_cent"], nova)
+            self.banco.executar(
+                "UPDATE itens_venda SET quantidade = ?, total_cent = ?, comissao_cent = ? WHERE id = ?",
+                (nova, total, fmt.pct_de(total, p["comissao_pct"]), item_id))
+            retrato = self.produtos.ler_regra_preco(dict(item))
+            if retrato is not None:
+                base = retrato.get("base") or {"tipo": "legado", "preco_cent": item["preco_base_cent"]}
+                retrato.setdefault("leituras", []).append({"quantidade": diferenca, "base": base, "ajuste": "quantidade"})
+                retrato["aplicado_em"] = agora
+                self.banco.atualizar("itens_venda", item_id, {"regra_preco_json": json.dumps(retrato, ensure_ascii=False)})
+            self.banco.executar("UPDATE vendas SET ultimo_lancamento_em = ? WHERE id = ?", (agora, v["id"]))
+            self._reprecificar_balcao(v["id"])
+            self.recalcular(v["id"])
+            self._conferir_vinculos(v["id"])
+            if v["prepago"]:
+                self._conferir_credito(v["id"], v["total_cent"] - v["taxa_cent"])
+            self.banco.registrar_auditoria(
+                "itens_venda", item_id, "quantidade_aumentada",
+                antes={"quantidade": atual, "total_cent": item["total_cent"]},
+                depois={"quantidade": nova, "venda_id": v["id"]}, operador_id=self.operador_id)
+        return item_id
+
     def info_cancelamento(self, item_id: int) -> dict:
         """O que as telas precisam para perguntar a quantidade a cancelar: lançada, já paga por item, livre e se o
         produto aceita fração. `pergunta_qtd` diz se vale perguntar (mais de uma

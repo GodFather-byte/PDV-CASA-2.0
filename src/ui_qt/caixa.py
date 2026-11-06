@@ -375,6 +375,7 @@ class JanelaCaixa(QMainWindow):
         esc = QShortcut(QKeySequence(Qt.Key_Escape), self)
         esc.activated.connect(self.esc_caixa)
         QShortcut(QKeySequence("Ctrl+F"), self).activated.connect(self.alternar_tela_cheia)
+        QShortcut(QKeySequence("Ctrl+Q"), self).activated.connect(self.alterar_quantidade)
         for tecla, acao in (("F4", self.foco_posicao), ("F5", self.caderneta), ("F6", self.entrega),
                             ("F8", self.pre_conta), ("F9", self.repique),
                             ("F10", self.transferir_mesa), ("F2", self.balanca), ("F11", self.gaveta),
@@ -599,6 +600,7 @@ class JanelaCaixa(QMainWindow):
         for chave, titulo, acao in (
                 ("desconto", "Desconto", self.desconto), ("servico", "Serviço manual / automático", self.servico),
                 ("observacao", "Observação do item", self.observacao_item),
+                ("quantidade", "Alterar quantidade do item (Ctrl+Q)", self.alterar_quantidade),
                 ("transferir_mesa", "Transferir mesa / comanda (F10)", self.transferir_mesa),
                 ("transferir_varias", "Transferir várias mesas / comandas", self.transferir_varias),
                 ("transferir_item", "Transferir item", self.transferir_item),
@@ -2195,6 +2197,51 @@ class JanelaCaixa(QMainWindow):
         self.recarregar()
         if ok:
             self.avisar(f"Cancelado {_fmt_qtd(qtd)} de '{nome}'." if parcial else "Item cancelado.", AMBAR)
+
+    def alterar_quantidade(self) -> None:
+        """Muda a quantidade do item selecionado. Diminuir exige a mesma autorização e motivo do cancelamento."""
+        if not self._pronto() or self._ocupado:
+            return
+        if self._comissao_selecionada() is not None:
+            self.dialogos.aviso("Alterar quantidade", "Comissão não tem quantidade: use o botão Comissões.")
+            return
+        sel = self._item_selecionado()
+        if sel is None:
+            self.dialogos.aviso("Alterar quantidade", "Selecione na lista o item cuja quantidade vai mudar.")
+            return
+        item_id, nome = sel
+        ok, info = self._executar(self.ctx.caixa.info_cancelamento, item_id)
+        if not ok:
+            self.recarregar()
+            return
+        atual = info["quantidade"]
+
+        def converter(texto: str) -> float:
+            q = fmt.validar_qtd(fmt.para_qtd(texto))
+            if q <= 0:
+                raise ValueError("Informe uma quantidade maior que zero (para tirar tudo, use Cancelar item).")
+            if not info["aceita_decimal"] and q != int(q):
+                raise ValueError("Este produto não aceita quantidade fracionada.")
+            return q
+        nova = self._pedir_convertido("Alterar quantidade", f"Nova quantidade de '{nome}' (hoje: {_fmt_qtd(atual)}):",
+                                      converter, _fmt_qtd(atual))
+        if nova is None or nova == atual:
+            return
+        motivo = ""
+        if nova < atual:
+            if not self._em_cancelamento() and not self._autorizar(
+                    "caixa_cancelamento", "exigir_senha_cancelamento", "Diminuir a quantidade exige autorização:"):
+                return
+            motivo = self._pedir_motivo_obrigatorio(
+                "Alterar quantidade", f"Motivo para tirar {_fmt_qtd(fmt.arred_qtd(atual - nova))} de '{nome}' (obrigatório):")
+            if motivo is None:
+                return
+        ok, _ = self._executar(self.ctx.caixa.alterar_quantidade, item_id, nova, motivo)
+        if ok:
+            self._ultimo_item_id = item_id
+        self.recarregar()
+        if ok:
+            self.avisar(f"'{nome}': quantidade {_fmt_qtd(atual)} → {_fmt_qtd(nova)}.", AMBAR if nova < atual else VERDE)
 
     def _pedir_qtd_cancelar(self, nome: str, info: dict) -> float | None:
         """Quanto cancelar: só pergunta com mais de uma unidade ou produto fracionado; sugere a parte ainda não paga."""
