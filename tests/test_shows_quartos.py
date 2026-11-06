@@ -124,6 +124,7 @@ class TestShowsQuartos(BaseShows):
 
     def test_duas_conexoes_nao_pagam_os_mesmos_shows(self):
         from concurrent.futures import ThreadPoolExecutor
+        from contextlib import ExitStack
         from threading import Barrier
         import sqlite3
         self.iniciar()
@@ -134,8 +135,7 @@ class TestShowsQuartos(BaseShows):
             self.banco.conexao.backup(destino)
             destino.close()
             barreira = Barrier(2)
-            def pagar():
-                b = BancoDados(caminho)
+            def pagar(b):
                 try:
                     barreira.wait(timeout=10)
                     ComissaoController(b).pagar(180, self.turno, self.adm, shows=1, valor_show_cent=5000,
@@ -143,10 +143,17 @@ class TestShowsQuartos(BaseShows):
                     return "pago"
                 except ErroNegocio:
                     return "recusado"
-                finally:
-                    b.fechar()
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                resultados = list(executor.map(lambda _: pagar(), range(2)))
+            with ExitStack() as recursos:
+                # Preparar o esquema/sementes não faz parte da corrida pelo pagamento.
+                # Cada conexão nasce, é usada e fecha na mesma thread, como exige o SQLite.
+                executores = [recursos.enter_context(ThreadPoolExecutor(max_workers=1)) for _ in range(2)]
+                bancos = []
+                for executor in executores:
+                    b = executor.submit(BancoDados, caminho).result(timeout=60)
+                    bancos.append(b)
+                    recursos.callback(lambda e=executor, banco=b: e.submit(banco.fechar).result(timeout=30))
+                futuros = [executor.submit(pagar, b) for executor, b in zip(executores, bancos)]
+                resultados = [futuro.result(timeout=30) for futuro in futuros]
             self.assertEqual(sorted(resultados), ["pago", "recusado"])
             b = BancoDados(caminho)
             try:

@@ -1,12 +1,13 @@
-# Handoff — 05/11/2026
+# Handoff — 06/11/2026
 
-## Identificação nos comprovantes de comissão/acerto
+## Correção do teste de concorrência no GitHub
 
-- Pedido: comprovante das profissionais sem a palavra "Garota", apenas número e nome.
-- `impressao_controller.py`: via de comissão e recibo de acerto identificam `180 MARIA`, sem rótulo; removido "VIA DA GAROTA" e assinatura passa a "Assinatura". Estilo térmico mantém identificação em letra alta pelo prefixo numérico.
-- `ui_qt/comissao.py`: comprovante de saída financeira também imprime só número/nome como motivo. Descrição contábil gravada, valores, shows, comissões e demais cálculos permanecem como antes.
-- Atualizadas as verificações existentes dos textos e do tamanho de letra. Teste do pagamento real pela UI confere que recibo e comprovante de saída contêm número/nome e não contêm "garota".
-- Validação: 212 testes de comissões, shows, fechamento, acerto Qt e comanda vazia aprovados; após fortalecer a asserção dos dois documentos, teste específico passou. `git diff --check` limpo.
+- Workflow `Testes`, execução 42150592006, job Windows/Python 3.10: único erro em `test_duas_conexoes_nao_pagam_os_mesmos_shows`, `BrokenBarrierError` ao esperar 10s pela segunda conexão. Linux 3.10/3.12, Windows 3.12 e PostgreSQL passaram; instalador e publicação da nuvem passaram.
+- Teste agora abre as duas conexões sequencialmente antes de disparar os pagamentos simultâneos. Cada conexão continua criada, usada e fechada em sua própria thread. A barreira sincroniza apenas a operação financeira, mantendo a disputa real e todas as asserções: um acerto pago, outro recusado e uma única saída de R$ 50.
+- `ExitStack` garante fechamento das conexões antes de encerrar seus executores, inclusive se a preparação ou pagamento falhar. Nenhuma mudança no código financeiro ou nos timeouts do banco.
+- Validação nesta branch isolada: 122 testes de shows/comissões/acerto Qt aprovados; teste de concorrência repetido 25 vezes com sucesso; `git diff --check` limpo. Logs `/tmp/pdv-ci-isolado.log` e `/tmp/pdv-ci-concorrencia-repetida.log`. Validação Windows depende do CI do PR.
+- Esta branch parte de `2fc841e` e não inclui o commit local `389458a` de estoque/telas/quartos, que permanece em `fix/migracao-banco-antigo` aguardando publicação específica.
+- Publicação planejada como PR para revisão e execução do CI, sem merge direto na main.
 
 ## Continuidade
 
