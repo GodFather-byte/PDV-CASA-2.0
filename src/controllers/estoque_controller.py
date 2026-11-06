@@ -56,7 +56,7 @@ class EstoqueController:
 
     # ---------------------------------------------------------- primitivas
     def _mover(self, produto_id: int, delta: float, tipo: str, ref_tipo: str | None = None,
-               ref_id: int | None = None, observacao: str | None = None) -> float:
+               ref_id: int | None = None, observacao: str | None = None, *, permitir_negativo: bool = False) -> float:
         agora = fmt.agora()
         tabela = "produtos" if self.produtos.por_id(produto_id) is not None else "produtos_historico"
         if not self.banco.valor(f"SELECT 1 FROM {tabela} WHERE id = ?", (produto_id,)):
@@ -65,13 +65,13 @@ class EstoqueController:
             if tabela == "produtos":
                 cur = self.banco.executar(
                     "UPDATE produtos SET qt_atual = ROUND(qt_atual + ?, 4), ult_atualizacao = ? "
-                    "WHERE id = ? AND (? >= 0 OR ROUND(qt_atual + ?, 4) >= 0)",
-                    (delta, agora, produto_id, delta, delta))
+                    "WHERE id = ? AND (? OR ? >= 0 OR ROUND(qt_atual + ?, 4) >= 0)",
+                    (delta, agora, produto_id, permitir_negativo, delta, delta))
             else:
                 cur = self.banco.executar(
                     "UPDATE produtos_historico SET qt_atual = ROUND(qt_atual + ?, 4) "
-                    "WHERE id = ? AND (? >= 0 OR ROUND(qt_atual + ?, 4) >= 0)",
-                    (delta, produto_id, delta, delta))
+                    "WHERE id = ? AND (? OR ? >= 0 OR ROUND(qt_atual + ?, 4) >= 0)",
+                    (delta, produto_id, permitir_negativo, delta, delta))
             if cur.rowcount == 0:
                 p = self.produtos.por_id(produto_id)
                 nome = p["nome"] if p else self.banco.valor(
@@ -108,12 +108,17 @@ class EstoqueController:
                 return
             consumos = self._consumos_venda(venda_id)
             faltas = self._faltas_estoque(consumos)
-            if faltas:
+            permitir = self.banco.cfg_bool("permitir_venda_sem_estoque", True)
+            if faltas and not permitir:
                 raise ErroEstoqueInsuficiente(faltas)
+            if faltas:
+                self.banco.registrar_auditoria(
+                    "vendas", self.banco.valor("SELECT uuid FROM vendas WHERE id=?", (venda_id,)), "venda_sem_estoque",
+                    depois={"resultado": "permitida", "faltas": faltas}, operador_id=self.operador_id)
             antes: dict[int, float] = {}
             for produto_id, quantidade in consumos.items():
                 antes[produto_id] = self.banco.valor("SELECT qt_atual FROM produtos WHERE id = ?", (produto_id,), 0)
-                self._mover(produto_id, -quantidade, "venda", "venda", venda_id)
+                self._mover(produto_id, -quantidade, "venda", "venda", venda_id, permitir_negativo=permitir)
         self._avisar_cruzamentos(antes)
 
     def _consumos_venda(self, venda_id: int) -> dict[int, float]:

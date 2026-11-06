@@ -11,7 +11,7 @@ from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
     QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget,
-    QScrollArea,
+    QScrollArea, QToolBox, QTabWidget,
 )
 
 from src.controllers.config_controller import modulos_desligados
@@ -216,6 +216,23 @@ class JanelaPrincipal(QMainWindow):
         self.busca_modulos.setClearButtonEnabled(True)
         self.busca_modulos.setAccessibleName("Buscar módulo do PDV")
         lateral.addWidget(self.busca_modulos)
+        self.menu_grupos = QToolBox()
+        lateral.addWidget(self.menu_grupos, 1)
+        grupos = {}
+        for nome in ("Operação", "Produtos e estoque", "Gestão", "Cadastros", "Configuração", "Manutenção"):
+            pagina = QWidget()
+            grade = QVBoxLayout(pagina)
+            grade.setContentsMargins(2, 2, 2, 2)
+            grade.setSpacing(3)
+            grupos[nome] = grade
+            self.menu_grupos.addItem(pagina, nome)
+        categorias = {
+            "Operação": {"inicio", "caixa", "porteiro", "quartos", "cozinha", "alertas"},
+            "Produtos e estoque": {"produtos", "estoque", "contagem", "retornaveis", "promocoes", "importar_produtos", "composicao"},
+            "Gestão": {"relatorio_vendas", "relatorios", "contas", "devolucoes", "whatsapp", "auditoria"},
+            "Cadastros": {"operadores", "mais_cadastros"},
+            "Configuração": {"configuracoes", "maquinas", "acessos", "atualizacoes", "diagnostico", "impressora"},
+        }
         self.botoes = {}
         for chave, titulo, acao in (
             ("inicio", "Visão geral", self.atualizar),
@@ -257,9 +274,11 @@ class JanelaPrincipal(QMainWindow):
             self.botoes[chave] = botao
             if chave in self.edicao.menu_oculto:          # não existe nesta edição: nem aparece
                 continue
-            lateral.addWidget(botao)
+            categoria = next((nome for nome, chaves in categorias.items() if chave in chaves), "Manutenção")
+            grupos[categoria].addWidget(botao)
+        for grade in grupos.values():
+            grade.addStretch(1)
         self.busca_modulos.textChanged.connect(self.filtrar_modulos)
-        lateral.addStretch()
         self.sessao = tema.texto("", "suave")
         lateral.addWidget(self.sessao)
         sair = QPushButton("Encerrar sessão")
@@ -300,6 +319,8 @@ class JanelaPrincipal(QMainWindow):
         self.linha_porteiro.setObjectName("linha_porteiro")
         self.linha_porteiro.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         conteudo.addWidget(self.linha_porteiro)
+        self.abas_status = QTabWidget()
+        conteudo.addWidget(self.abas_status, 1)
         for chave, titulo in (("turno", "CAIXA"), ("licenca", "LICENÇA"),
                               ("backup", "PROTEÇÃO DOS DADOS"), ("impressao", "RECUPERAÇÃO DA IMPRESSÃO"),
                               ("sync", "NUVEM E SERVIÇOS")):
@@ -310,11 +331,10 @@ class JanelaPrincipal(QMainWindow):
             caixa.addWidget(tema.texto(titulo, "suave"))
             rotulo = tema.texto("")
             caixa.addWidget(rotulo)
+            caixa.addStretch(1)
             self.indicadores[chave] = rotulo
-            conteudo.addWidget(cartao)
-        conteudo.addWidget(tema.texto(
-            "Valide os fluxos em cópia dos dados e com periféricos reais antes de operar. "
-            "Não abra duas instâncias sobre o mesmo banco.", "aviso"))
+            self.abas_status.addTab(cartao, {"turno": "Caixa", "licenca": "Licença", "backup": "Backup",
+                                            "impressao": "Impressão", "sync": "Nuvem"}[chave])
         self.mensagem = tema.texto("", "aviso")
         conteudo.addWidget(self.mensagem)
         self.aviso_atualizacao = tema.texto("", "aviso")
@@ -519,6 +539,11 @@ class JanelaPrincipal(QMainWindow):
             if chave == "porteiro" and not usa_mesas:
                 visivel = False
             botao.setVisible(visivel)
+        if busca:
+            for i in range(self.menu_grupos.count()):
+                if any(not b.isHidden() for b in self.menu_grupos.widget(i).findChildren(QPushButton)):
+                    self.menu_grupos.setCurrentIndex(i)
+                    break
 
     def abrir_porteiro(self):
         from src.ui_qt.porteiro import JanelaPorteiro
@@ -543,6 +568,7 @@ class JanelaPrincipal(QMainWindow):
         janela = self.janelas.get(chave)
         if janela is None:
             janela = criar()
+            tema.ajustar_janela(janela)
             # Fechar libera formulários e seus segredos; não manter objetos Qt já destruídos.
             from PySide6.QtCore import Qt
             janela.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
@@ -990,6 +1016,7 @@ class App:
         self.login.deleteLater()
         self.login = None
         self.principal = JanelaPrincipal(self)
+        tema.ajustar_janela(self.principal)
         self.principal.show()
         if not self.ctx.config.loja_cadastrada() and self.ctx.pode("cfg_loja"):
             self.principal._primeiro_uso_timer.start(150)

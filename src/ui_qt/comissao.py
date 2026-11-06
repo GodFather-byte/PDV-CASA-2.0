@@ -258,13 +258,9 @@ class DialogoAcerto(QDialog):
         self._zerado_confirmado = False                     # o primeiro Pagar sem nada avisa; o segundo fecha a conta zerada
         self.setWindowTitle("Acerto da garota — comissões e shows")
         externo = QVBoxLayout(self)
-        rolagem = QScrollArea()
-        rolagem.setWidgetResizable(True)
-        conteudo = QWidget()
-        caixa = QVBoxLayout(conteudo)
-        rolagem.setWidget(conteudo)
-        externo.addWidget(rolagem)
-        self.resize(720, 650)
+        caixa = QVBoxLayout()
+        externo.addLayout(caixa)
+        self.resize(1120, 650)
         titulo = QLabel(f"Garota {numero}")
         titulo.setFont(QFont("Segoe UI", 12, QFont.Bold))
         caixa.addWidget(titulo)
@@ -282,6 +278,11 @@ class DialogoAcerto(QDialog):
         lbl_com.setFont(QFont("Georgia", 14, QFont.Bold))
         caixa.addWidget(lbl_com)
 
+        colunas = QHBoxLayout()
+        externo.addLayout(colunas, 1)
+        esquerda, direita = QVBoxLayout(), QVBoxLayout()
+        colunas.addLayout(esquerda, 1)
+        colunas.addLayout(direita, 1)
         self.ent_qtd: QLineEdit | None = None
         self.ent_shows_manuais: QLineEdit | None = None
         self.lbl_total_shows: QLabel | None = None
@@ -327,7 +328,9 @@ class DialogoAcerto(QDialog):
             valores.addStretch(1)
             q.addLayout(valores)
             self.grupo_show.idClicked.connect(lambda _id: self.calcular())
-            caixa.addWidget(quadro)
+            esquerda.addWidget(quadro)
+        esquerda.addStretch(1)
+        caixa = direita
 
         linha_vale = QHBoxLayout()
         linha_vale.addWidget(QLabel("A garota pegou vale? Valor do vale (R$):"))
@@ -363,7 +366,7 @@ class DialogoAcerto(QDialog):
         caixa.addWidget(quadro_pix)
 
         # Nem sempre sobra dinheiro no caixa: por padrão o pagamento só fica registrado (comissao_paga_do_caixa = N).
-        self.chk_do_caixa = QCheckBox("O dinheiro sai da gaveta do caixa (registra uma sangria e abre a gaveta)")
+        self.chk_do_caixa = QCheckBox("Registrar saída em dinheiro na gaveta do caixa")
         self.chk_do_caixa.setChecked(bool(do_caixa_padrao))
         caixa.addWidget(self.chk_do_caixa)
         caixa.addWidget(_mudo("Desmarcado: o acerto fica registrado como pago, sem mexer no dinheiro do caixa. "

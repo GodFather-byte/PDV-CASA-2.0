@@ -17,9 +17,9 @@ class TesteValorETroco(BaseCaixaQt):
         self.abrir_turno()
         j = self.janela()
         self.assertEqual(j.cmb_forma.currentText().strip().casefold(), "dinheiro")
-        self.assertGreaterEqual(j.ent_valor.sizeHint().height(), 44)
-        self.assertIn("16pt", j.styleSheet().split("QLineEdit#valor")[1].split("}")[0])
-        self.assertIn("22pt", j.styleSheet().split("QLabel#troco")[1].split("}")[0])
+        self.assertGreaterEqual(j.ent_valor.sizeHint().height(), 32)
+        self.assertGreater(j.ent_valor.font().pointSizeF(), j.ent_qtd.font().pointSizeF())
+        self.assertGreater(j.lbl_troco.font().pointSizeF(), j.ent_valor.font().pointSizeF())
 
 
 class TesteTelaCheia(BaseCaixaQt):

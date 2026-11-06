@@ -18,7 +18,7 @@ import sqlite3
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
-    QHBoxLayout, QHeaderView, QLineEdit, QPushButton, QScrollArea, QTableWidget,
+    QHBoxLayout, QGridLayout, QHeaderView, QLineEdit, QPushButton, QScrollArea, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -119,8 +119,8 @@ class PainelFiltros(QWidget):
         super().__init__(parent)
         self.spec = spec
         self.campos = {}
-        formulario = QFormLayout(self)
-        for chave in spec.filtros + spec.mais:
+        formulario = QGridLayout(self)
+        for i, chave in enumerate(spec.filtros + spec.mais):
             rotulo, tipo = FILTROS[chave]
             if tipo == "sn":
                 campo = QCheckBox()
@@ -141,7 +141,11 @@ class PainelFiltros(QWidget):
                     campo.setPlaceholderText("HH:MM")
             campo.setObjectName(chave)
             self.campos[chave] = campo
-            formulario.addRow(rotulo, campo)
+            celula = QVBoxLayout()
+            celula.setSpacing(2)
+            celula.addWidget(texto(rotulo))
+            celula.addWidget(campo)
+            formulario.addLayout(celula, i // 4, i % 4)
         self.limpar()
 
     def limpar(self):
@@ -286,6 +290,7 @@ class JanelaRelatorios(QDialog):
             self._falhar(erro)
             return
         self.area_filtros.setWidget(self.painel)
+        self.area_filtros.setMinimumHeight(self.painel.sizeHint().height() + 6)
         for campo in self.painel.campos.values():
             if isinstance(campo, QCheckBox):
                 campo.toggled.connect(self._alterado)

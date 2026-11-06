@@ -21,11 +21,11 @@ import re
 import math
 import sys
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtGui import QColor, QFont, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
-                               QMenu, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QStackedWidget,
+                               QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy, QSpinBox, QStackedWidget,
                                QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
@@ -271,7 +271,8 @@ def _cartao() -> tuple[QFrame, QVBoxLayout]:
     quadro = QFrame()
     quadro.setObjectName("cartao")
     caixa = QVBoxLayout(quadro)
-    caixa.setContentsMargins(12, 10, 12, 10)
+    caixa.setContentsMargins(8, 6, 8, 6)
+    caixa.setSpacing(4)
     return quadro, caixa
 
 
@@ -450,16 +451,12 @@ class JanelaCaixa(QMainWindow):
         # Produtos e pagamento lado a lado; embaixo dos dois, a linha dos quartos (quando o módulo está ligado).
         lado = QVBoxLayout()
         lado.setSpacing(8)
-        # A busca e os pagamentos podem crescer sem empurrar os quartos para fora da tela.
-        # A rolagem absorve a altura mínima dos formulários em monitores menores.
+        # Controles compactos cabem junto dos quartos; apenas as listas rolam.
         operacao = QWidget()
         colunas = QHBoxLayout(operacao)
         colunas.setContentsMargins(0, 0, 0, 0)
-        self.rolagem_operacao = QScrollArea()
-        self.rolagem_operacao.setFrameShape(QFrame.Shape.NoFrame)
-        self.rolagem_operacao.setWidgetResizable(True)
-        self.rolagem_operacao.setWidget(operacao)
-        lado.addWidget(self.rolagem_operacao, 1)
+        self.painel_operacao = operacao
+        lado.addWidget(operacao, 1)
         centro, c_cen = _cartao()
         self.lbl_etq_venda = QLabel("BALCÃO")         # o tipo da venda em destaque (rosa na comanda da garota)
         self.lbl_etq_venda.setAlignment(Qt.AlignCenter)
@@ -530,11 +527,11 @@ class JanelaCaixa(QMainWindow):
         self.lbl_achado = _rotulo("", "achado")
         self.lbl_achado.hide()
         c_cen.addWidget(self.lbl_achado)
-        self.lista_produtos = QListWidget()
-        self.lista_produtos.setMaximumHeight(150)
+        # Sugestões sobre a lista de itens: não empurram pagamento nem quartos.
+        self.lista_produtos = QListWidget(self)
+        self.lista_produtos.setWindowFlags(Qt.Popup)
         self.lista_produtos.itemActivated.connect(lambda _item: self.lancar_item())
         self.lista_produtos.hide()
-        c_cen.addWidget(self.lista_produtos)
         self.tabela = QTableWidget(0, 6)
         self.tabela.setObjectName("itens")
         self.tabela.setHorizontalHeaderLabels(["Código", "Produto", "Un.", "Preço", "Qtd.", "Total"])
@@ -669,17 +666,21 @@ class JanelaCaixa(QMainWindow):
         self.ent_valor.setObjectName("valor")
         self.ent_valor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.ent_valor.returnPressed.connect(self.receber)
-        c_dir.addWidget(self.ent_valor)
         self.btn_receber = QPushButton("Receber")
         self.btn_receber.clicked.connect(self.receber)
-        c_dir.addWidget(self.btn_receber)
+        recebido = QHBoxLayout()
+        recebido.addWidget(self.ent_valor, 1)
+        recebido.addWidget(self.btn_receber)
+        c_dir.addLayout(recebido)
         self.lista_pagamentos = QListWidget()
-        self.lista_pagamentos.setMaximumHeight(130)
+        self.lista_pagamentos.setMinimumHeight(28)
+        self.lista_pagamentos.setMaximumHeight(72)
+        self.lista_pagamentos.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         c_dir.addWidget(self.lista_pagamentos)
         self.btn_remover_pag = QPushButton("Remover pagamento")
         self.btn_remover_pag.clicked.connect(self.remover_pagamento)
-        c_dir.addWidget(self.btn_remover_pag)
         divisao = QHBoxLayout()
+        divisao.addWidget(self.btn_remover_pag)
         self.btn_dividir = QPushButton("Dividir conta")
         self.btn_dividir.setToolTip("Divide o que falta em partes iguais (centavos exatos)")
         self.btn_dividir.clicked.connect(self.dividir_conta)
@@ -696,10 +697,12 @@ class JanelaCaixa(QMainWindow):
         self.btn_fechar_venda.setObjectName("primario")
         self.btn_fechar_venda.clicked.connect(self.fechar_venda)
         self.btn_fechar_venda.installEventFilter(self)
-        c_dir.addWidget(self.btn_fechar_venda)
         self.btn_trocar_turno = QPushButton("Trocar turno")
         self.btn_trocar_turno.clicked.connect(self.ir_para_fechamento)
-        c_dir.addWidget(self.btn_trocar_turno)
+        fechamento = QHBoxLayout()
+        fechamento.addWidget(self.btn_fechar_venda, 1)
+        fechamento.addWidget(self.btn_trocar_turno)
+        c_dir.addLayout(fechamento)
         colunas.addWidget(dir_)
         # Quartos (módulo usar_quartos): cartões no desenho das comandas, numa linha embaixo dos produtos e do pagamento;
         # somem com o módulo desligado e a tela volta ao tamanho de sempre.
@@ -1031,7 +1034,17 @@ class JanelaCaixa(QMainWindow):
         modo = self._modo_visual()
         if modo != getattr(self, "_estilo_modo", None):
             self._estilo_modo = modo
-            self.setStyleSheet(ESTILO_NOITE if modo == "escuro" else ESTILO)
+            self.setStyleSheet((ESTILO_NOITE if modo == "escuro" else ESTILO) + """
+                QPushButton { padding: 3px 7px; min-height: 18px; font-size: 10pt; }
+                QPushButton#primario, QPushButton#perigo { padding: 4px 8px; }
+                QLineEdit#codigo, QLineEdit#quantidade { font-size: 12pt; min-height: 24px; padding: 2px 6px; }
+                QComboBox#forma { font-size: 11pt; min-height: 22px; }
+                QLineEdit#valor { font-size: 13pt; min-height: 24px; padding: 3px; }
+                QLabel#total { font-size: 24pt; } QLabel#troco { font-size: 18pt; }
+                QLabel#titulo { font-size: 13pt; }
+                QLabel#relogio_hora { font-size: 19pt; }
+                QPushButton#passo { min-height: 24px; }
+            """)
 
     def _estilo_painel_cartoes(self) -> None:
         """O painel dos cartões é escuro (o visual da boate) no modo escuro e claro no modo claro, dentro do caixa claro."""
@@ -1805,6 +1818,13 @@ class JanelaCaixa(QMainWindow):
             item = QListWidgetItem(f"{p['codigo']}  ·  {p['nome']}  ·  {fmt.fmt_brl(self.ctx.produtos.preco_vigente(p))}")
             item.setData(Qt.UserRole, int(p["id"]))
             self.lista_produtos.addItem(item)
+        ponto = self.ent_codigo.mapToGlobal(QPoint(0, self.ent_codigo.height()))
+        tela = self.screen().availableGeometry()
+        largura = min(600, tela.width())
+        altura = min(150, max(60, len(produtos) * 28 + 8))
+        self.lista_produtos.resize(largura, altura)
+        self.lista_produtos.move(min(ponto.x(), tela.right() - largura + 1),
+                                 min(ponto.y(), tela.bottom() - altura + 1))
         self.lista_produtos.show()
         self.lista_produtos.setCurrentRow(0)
         self.lista_produtos.setFocus()
@@ -2262,7 +2282,7 @@ class JanelaCaixa(QMainWindow):
     def resizeEvent(self, ev) -> None:
         super().resizeEvent(ev)
         if getattr(self, "cartoes", None) is not None:
-            self.cartoes.definir_colunas(3 if self.width() >= 1560 else 2 if self.width() >= 1100 else 1)
+            self.cartoes.definir_colunas(3 if self.width() >= 1560 else 2 if self.width() >= 1300 else 1)
 
     def ir_para_balcao(self) -> None:
         self.ent_pos.setText("0")

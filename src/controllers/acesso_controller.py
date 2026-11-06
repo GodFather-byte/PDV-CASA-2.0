@@ -115,6 +115,10 @@ class AcessoController:
         return n
 
     def pode(self, operador: Operador, modulo: str) -> bool:
+        if modulo == "util_quartos":
+            # Operação dos quartos pertence também ao caixa nível 0, em qualquer turno.
+            ativo = self.banco.valor("SELECT ativo FROM operadores WHERE id=?", (operador.id,), 0)
+            return bool(ativo and 0 <= operador.nivel <= 4 and self.banco.cfg_bool("usar_quartos", False))
         return operador.nivel >= self.nivel_modulo(modulo) and operador.nivel > 0
 
     def exigir(self, operador: Operador, modulo: str) -> None:

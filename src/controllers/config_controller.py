@@ -48,6 +48,7 @@ CAMPOS_MAQUINA = [
 ]
 
 CAMPOS_CONFIG = [
+    ("permitir_venda_sem_estoque", "Permitir vender sem saldo (registra estoque negativo para conferência)", "sn", "Estoque"),
     ("tema_visual", "Aparência do programa", "escolha", "Aparência",
      [("escuro", "Modo escuro (fundo escuro, o padrão)"), ("claro", "Modo claro (fundo claro)")]),
     ("caixa_tela_cheia", "Abrir o caixa em tela cheia (Ctrl+F alterna)", "sn", "Aparência"),

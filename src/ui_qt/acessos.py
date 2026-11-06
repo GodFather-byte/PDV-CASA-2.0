@@ -22,6 +22,9 @@ class JanelaAcessos(QDialog):
             "Cada módulo exige um nível mínimo de 1 a 4. Níveis maiores herdam "
             "os menores. O nível 0 é exclusivo do caixa. Esta tela não altera "
             "operadores, senhas ou níveis individuais.", "suave"))
+        layout.addWidget(texto(
+            "Com o módulo Quartos ligado, a operação dos quartos fica disponível nos níveis 0 a 4 em qualquer turno. "
+            "A alteração das configurações continua restrita.", "suave"))
         self.grade = QTableWidget(0, 3)
         self.grade.setHorizontalHeaderLabels(("Grupo", "Módulo", "Nível mínimo"))
         self.grade.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)

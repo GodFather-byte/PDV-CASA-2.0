@@ -63,6 +63,7 @@ ACESSOS = [
 ]
 
 CONFIG_PADRAO = {
+    "permitir_venda_sem_estoque": "S",
     "num_mesas": "50", "cobra_servico_mesa": "S", "servico_pct": "10",
     "num_comandas": "10000", "cobra_servico_comanda": "S", "painel_mesas_fixo": "S", "posicao_padrao": "comanda", "tema_visual": "escuro", "caixa_tela_cheia": "S",
     "controle_garcom": "N", "comissao_garcom_pct": "0",

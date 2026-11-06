@@ -110,6 +110,7 @@ class TesteVenda(BaseCaixa):
             self.caixa.fechar(vid)                                         # já fechada
 
     def test_venda_sem_saldo_suficiente_nao_fecha_e_audita_tentativa(self):
+        self.banco.cfg_set("permitir_venda_sem_estoque", "N")
         self.banco.executar("UPDATE produtos SET qt_atual = 1, aceita_decimal = 1 WHERE id = ?", (self.skol,))
         vid = self.vender((self.skol, 0.75), (self.skol, 0.75))
         self.pagar(vid, "Dinheiro", 1200)

@@ -26,7 +26,7 @@ from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.hardware import campainha
 from src.ui_qt.painel_mesas import CORES as CORES_MESAS, ESTADOS as ESTADOS_MESAS, _fonte
-from src.ui_qt.tema import texto
+from src.ui_qt.tema import texto, ajustar_janela
 
 REPETIR_TOQUE_SEG = 60      # tempo esgotado: toca de novo a cada minuto até liberar
 VERIFICAR_CAMPAINHAS_SEG = 30
@@ -450,6 +450,8 @@ class JanelaQuartos(QDialog):
         self.aviso_tela = AvisoNaTela(self, self.avisos)
         self.setWindowTitle("Controle de Quartos • Qt")
         self.resize(1050, 620)
+        self._pagina = 0
+        self._pagina_mostrada = None
         self.cartoes: dict[int, CartaoQuarto] = {}
         layout = QVBoxLayout(self)
         layout.addWidget(texto("Controle de Quartos", "titulo"))
@@ -467,6 +469,12 @@ class JanelaQuartos(QDialog):
         self.mensagem = texto("", "aviso")
         layout.addWidget(self.mensagem)
         barra = QHBoxLayout()
+        self.anterior = QPushButton("◀ Quartos anteriores")
+        self.proxima = QPushButton("Próximos quartos ▶")
+        self.anterior.clicked.connect(lambda: self.mudar_pagina(-1))
+        self.proxima.clicked.connect(lambda: self.mudar_pagina(1))
+        barra.addWidget(self.anterior)
+        barra.addWidget(self.proxima)
         historico = QPushButton("Histórico de quartos")
         historico.clicked.connect(self.abrir_historico)
         barra.addWidget(historico)
@@ -539,15 +547,38 @@ class JanelaQuartos(QDialog):
 
     def _montar(self, numeros: list[int]):
         if list(self.cartoes) == numeros:
+            self._dispor_cartoes()
             return
         for cartao in self.cartoes.values():
             cartao.setParent(None)
             cartao.deleteLater()
         self.cartoes = {}
+        self._pagina_mostrada = None
         for i, n in enumerate(numeros):
             cartao = CartaoQuarto(n, self)
+            cartao.setParent(self.grade_widget)
             self.cartoes[n] = cartao
-            self.grade.addWidget(cartao, i // COLUNAS, i % COLUNAS)
+        self._dispor_cartoes()
+
+    def mudar_pagina(self, passo):
+        self._pagina = max(0, min(self._pagina + passo, (len(self.cartoes) - 1) // 8))
+        self._dispor_cartoes()
+
+    def _dispor_cartoes(self):
+        self._pagina = min(self._pagina, max(0, (len(self.cartoes) - 1) // 8))
+        if self._pagina_mostrada == self._pagina:
+            return
+        self._pagina_mostrada = self._pagina
+        for i, cartao in enumerate(self.cartoes.values()):
+            self.grade.removeWidget(cartao)
+            visivel = self._pagina * 8 <= i < (self._pagina + 1) * 8
+            cartao.setVisible(visivel)
+            if visivel:
+                self.grade.addWidget(cartao, (i % 8) // COLUNAS, i % COLUNAS)
+        self.anterior.setVisible(len(self.cartoes) > 8)
+        self.proxima.setVisible(len(self.cartoes) > 8)
+        self.anterior.setEnabled(self._pagina > 0)
+        self.proxima.setEnabled((self._pagina + 1) * 8 < len(self.cartoes))
 
     def atualizar(self):
         try:
@@ -587,13 +618,15 @@ _PILULA = {"livre": "Livre", "uso": "Em uso", "alerta": "Acabando", "estourou": 
 class GradeQuartos(QWidget):
     """Grade de cartões compactos dos quartos; o clique devolve o número do quarto."""
     clicado = Signal(int)
-    ALTURA = 108
+    ALTURA = 90
+    POR_PAGINA = 8
     MIN_COLUNAS, MAX_COLUNAS = 2, 4          # cartões maiores em até quatro colunas
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.itens: list[dict] = []
         self.colunas = self.MIN_COLUNAS
+        self.pagina = 0
         self.modo = "escuro"
         self.piscar = False
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)       # o teclado continua no caixa
@@ -605,16 +638,18 @@ class GradeQuartos(QWidget):
         self.modo = modo
         self.piscar = not self.piscar
         self.colunas = max(self.MIN_COLUNAS, min(self.MAX_COLUNAS, len(itens)))
-        linhas = max(1, math.ceil(len(itens) / self.colunas))
+        self.pagina = min(self.pagina, max(0, (len(itens) - 1) // self.POR_PAGINA))
+        linhas = max(1, math.ceil(min(len(itens), self.POR_PAGINA) / self.colunas))
         self.setFixedHeight(linhas * self.ALTURA)
         self.update()
 
     def celula(self, i: int) -> tuple[float, float, float, float]:
+        i %= self.POR_PAGINA
         largura = self.width() / self.colunas
         return (i % self.colunas) * largura, (i // self.colunas) * self.ALTURA, largura, self.ALTURA
 
     def indice_em(self, pos) -> int | None:
-        for i in range(len(self.itens)):
+        for i in range(self.pagina * self.POR_PAGINA, min((self.pagina + 1) * self.POR_PAGINA, len(self.itens))):
             x, y, w, h = self.celula(i)
             if x <= pos.x() < x + w and y <= pos.y() < y + h:
                 return i
@@ -629,7 +664,8 @@ class GradeQuartos(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         cores = CORES_MESAS[self.modo]
-        for i, item in enumerate(self.itens):
+        for i in range(self.pagina * self.POR_PAGINA, min((self.pagina + 1) * self.POR_PAGINA, len(self.itens))):
+            item = self.itens[i]
             x, y, w, h = self.celula(i)
             x1, y1, x2, y2 = x + 3, y + 3, x + w - 3, y + h - 3
             estado = item["estado"]
@@ -713,6 +749,15 @@ class PainelQuartosCaixa(QFrame):
         self.btn_painel.setStyleSheet("padding: 1px 8px; font-size: 11px;")
         self.btn_painel.clicked.connect(self.abrir_painel)
         lateral.addWidget(self.btn_painel)
+        navegacao = QHBoxLayout()
+        self.anterior = QPushButton("◀")
+        self.proxima = QPushButton("▶")
+        for botao, passo in ((self.anterior, -1), (self.proxima, 1)):
+            botao.setFocusPolicy(Qt.NoFocus)
+            botao.setStyleSheet("padding: 2px;")
+            botao.clicked.connect(lambda _=False, p=passo: self.mudar_pagina(p))
+            navegacao.addWidget(botao)
+        lateral.addLayout(navegacao)
         caixa_lateral = QWidget()
         caixa_lateral.setObjectName("quartos_lateral")
         caixa_lateral.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -753,6 +798,10 @@ class PainelQuartosCaixa(QFrame):
             return f"{numero} · livre"
         return f"{numero} · " + ("+" if item["estado"] == "estourou" else "") + fmt_relogio(item["restante_seg"])
 
+    def mudar_pagina(self, passo):
+        self.grade.pagina = max(0, min(self.grade.pagina + passo, (len(self.grade.itens) - 1) // self.grade.POR_PAGINA))
+        self.atualizar()
+
     def atualizar(self):
         try:
             if not modulo_disponivel(self.ctx):
@@ -766,6 +815,10 @@ class PainelQuartosCaixa(QFrame):
         self.setVisible(True)
         self.itens = {i["quarto"]: i for i in situacao}
         self.grade.definir(situacao, self.modo)
+        self.anterior.setVisible(len(situacao) > self.grade.POR_PAGINA)
+        self.proxima.setVisible(len(situacao) > self.grade.POR_PAGINA)
+        self.anterior.setEnabled(self.grade.pagina > 0)
+        self.proxima.setEnabled((self.grade.pagina + 1) * self.grade.POR_PAGINA < len(situacao))
         livres = sum(i["estado"] == "livre" for i in situacao)
         esgotados = sum(i["estado"] == "estourou" for i in situacao)
         self.resumo.setText(f"{livres} livre{'s' if livres != 1 else ''}")   # o esgotado já pisca em vermelho no cartão
@@ -830,6 +883,7 @@ class PainelQuartosCaixa(QFrame):
             self._avisar_erro(str(erro))
             return
         janela.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        ajustar_janela(janela)
         janela.show()
         self._painel = janela
 

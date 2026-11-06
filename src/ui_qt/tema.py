@@ -8,33 +8,33 @@ from PySide6.QtWidgets import QApplication, QLabel
 
 
 ESTILO = """
-QWidget { background: #101827; color: #e6edf7; font-family: 'Segoe UI'; font-size: 14px; }
+QWidget { background: #101827; color: #e6edf7; font-family: 'Segoe UI'; font-size: 13px; }
 QMainWindow, QDialog { background: #101827; }
 QFrame#cartao { background: #1b2739; border: 1px solid #324158; border-radius: 12px; }
 QLabel { background: transparent; }
-QLabel#titulo { font-size: 28px; font-weight: 700; }
+QLabel#titulo { font-size: 22px; font-weight: 700; }
 QLabel#marca { color: #5ee2bb; font-size: 24px; font-weight: 800; }
 QLabel#suave { color: #afbdd1; }
 QLabel#aviso { color: #ffd28a; }
 QPushButton { background: #24364d; border: 1px solid #405570; border-radius: 7px;
-              padding: 11px 18px; text-align: left; }
+              padding: 5px 10px; text-align: left; }
 QPushButton:hover { background: #304864; }
 QPushButton:focus, QLineEdit:focus, QComboBox:focus { border: 2px solid #5ee2bb; }
 QPushButton#primario { background: #187e65; border-color: #32b38e; font-weight: 700; }
 QPushButton:disabled { color: #8190a6; background: #1b2534; }
 QLineEdit, QComboBox { background: #182437; border: 1px solid #405570;
-                       border-radius: 6px; padding: 9px; min-height: 20px; }
+                       border-radius: 6px; padding: 5px; min-height: 20px; }
 QComboBox QAbstractItemView { background: #182437; selection-background-color: #187e65; }
 QTableWidget { background: #182437; alternate-background-color: #1d2d43;
                gridline-color: #324158; selection-background-color: #187e65; }
-QHeaderView::section { background: #24364d; color: #e6edf7; padding: 9px; border: 0; }
+QHeaderView::section { background: #24364d; color: #e6edf7; padding: 5px; border: 0; }
 QTabWidget::pane { border: 1px solid #324158; }
-QTabBar::tab { background: #24364d; padding: 10px; }
+QTabBar::tab { background: #24364d; padding: 6px; }
 QTabBar::tab:selected { background: #187e65; }
 QScrollArea { border: 0; }
 QFrame#kpi { background: #1b2739; border: 1px solid #32b38e; border-radius: 12px; }
-QLabel#kpi_valor { font-size: 30px; font-weight: 800; color: #5ee2bb; }
-QLabel#kpi_alerta { font-size: 30px; font-weight: 800; color: #ffd28a; }
+QLabel#kpi_valor { font-size: 24px; font-weight: 800; color: #5ee2bb; }
+QLabel#kpi_alerta { font-size: 24px; font-weight: 800; color: #ffd28a; }
 """
 
 
@@ -72,3 +72,12 @@ def texto(conteudo: str, nome: str = "", quebra: bool = True) -> QLabel:
     rotulo.setObjectName(nome)
     rotulo.setWordWrap(quebra)
     return rotulo
+
+
+def ajustar_janela(janela) -> None:
+    """Abertura dentro da área útil, reservando moldura e barra de tarefas."""
+    tela = janela.screen()
+    if tela is not None and not janela.isMaximized() and not janela.isFullScreen():
+        area = tela.availableGeometry()
+        janela.resize(min(janela.width(), max(320, area.width() - 24)),
+                      min(janela.height(), max(240, area.height() - 48)))
