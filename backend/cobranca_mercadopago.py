@@ -1286,6 +1286,12 @@ def varrer(db: Session) -> int:
         except Exception:
             db.rollback()
             log.error("Varredura da loja %s falhou (erro interno).", chave)
+    try:
+        from backend.avisos_fornecedor import enviar_se_preciso
+        enviar_se_preciso(db)
+    except Exception:
+        db.rollback()
+        log.error("Resumo de vencimentos falhou (erro interno).")
     return total
 
 

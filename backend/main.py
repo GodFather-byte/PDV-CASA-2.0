@@ -380,6 +380,8 @@ def licenca(acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db))
         raise HTTPException(status_code=403, detail="Use o token da loja.")
     loja = db.query(Loja).filter(Loja.chave_loja == acesso.loja).first()
     from backend.licencas_fornecedor import renovar_ponte
+    from backend.avisos_fornecedor import disparar_em_segundo_plano
+    disparar_em_segundo_plano()                   # resumo diário ao fornecedor; não atrasa a resposta
     renovar_ponte(db, loja.chave_loja)
     publicada = _ponte.licenca_legado(db, loja.chave_loja)
     if publicada is not None:       # ponte local ou emissão na nuvem explicitamente habilitada pelo fornecedor

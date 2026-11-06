@@ -19,6 +19,7 @@ from sqlalchemy import Column, Integer, String, Text
 from backend import cobranca_mercadopago as cobranca
 from backend import ponte
 from backend import licencas_fornecedor as emissao
+from backend import avisos_fornecedor as avisos
 from backend.database import Base, engine, get_db
 from src.core.edicao import EDICOES
 
@@ -195,8 +196,17 @@ def instalar(app, Loja):
                 "mensalidade_cent": plano.valor_cent if plano else None,
                 "plano": cobranca.resumo_assinatura(plano) if plano else None}
 
+    @app.post("/v1/fornecedor/avisos/enviar")
+    def enviar_avisos(_=Depends(sessao), db=Depends(get_db)):
+        """Envia agora o resumo de vencimentos (mesmo que o de hoje já tenha saído): serve para testar o e-mail."""
+        resultado = avisos.enviar_se_preciso(db, forcar=True)
+        auditar(db, "enviar_resumo_vencimentos", None, resultado["motivo"][:500])
+        db.commit()
+        return resultado
+
     @app.get("/v1/fornecedor/lojas")
     def listar(_=Depends(sessao), db=Depends(get_db)):
+        avisos.disparar_em_segundo_plano()
         planos = {p.chave_loja: p for p in db.query(cobranca.Plano).all()}
         modos = {p.chave_loja for p in db.query(ponte.PonteLoja).filter_by(modo_ponte=True).all()}
         ultimas = {}
@@ -210,6 +220,8 @@ def instalar(app, Loja):
                 "mensalidades_cent": sum(l["mensalidade_cent"] or 0 for l in lojas if l["ativa"]),
                 "central_local": sum(l["emissao"] == "central_local" for l in lojas)},
                 "chave_emissao_pronta": emissao.chave_pronta(),
+                "vencimentos": avisos.vencimentos(db),
+                "avisos_email": bool(avisos.destino()),
                 "edicoes": [{"chave": c, "nome": e.nome} for c, e in EDICOES.items()],
                 "consultado_em": agora()}
 
