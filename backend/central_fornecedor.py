@@ -20,6 +20,7 @@ from backend import cobranca_mercadopago as cobranca
 from backend import ponte
 from backend import licencas_fornecedor as emissao
 from backend.database import Base, engine, get_db
+from src.core.edicao import EDICOES
 
 COOKIE = "will_central"
 DURACAO_HORAS = 8
@@ -69,6 +70,14 @@ def csrf(token):
 
 def auditar(db, acao, loja, motivo):
     db.add(AuditoriaFornecedor(acao=acao, loja=loja, motivo=motivo[:500], criada_em=agora()))
+
+
+def programa(dados, atual=None):
+    """Programa escolhido para a loja (willpdv, willadega). Sem o campo, mantém o atual (ou WillPDV)."""
+    valor = dados.get("edicao", atual or "willpdv")
+    if valor not in EDICOES:
+        raise HTTPException(422, "Escolha o programa da loja: " + ", ".join(e.nome for e in EDICOES.values()) + ".")
+    return valor
 
 
 def texto(dados, campo, limite, obrigatorio=True):
@@ -139,10 +148,12 @@ def instalar(app, Loja):
             for chave in list(_tentativas):
                 if not _tentativas[chave] or _tentativas[chave][-1] < instante - 900:
                     del _tentativas[chave]
+            while len(_tentativas) >= 2000:          # memória limitada sem bloquear quem não errou
+                del _tentativas[min(_tentativas, key=lambda k: _tentativas[k][-1])]
             fila = _tentativas[ip]
             while fila and fila[0] < instante - 900:
                 fila.popleft()
-            if len(fila) >= 8 or len(_tentativas) > 2000:
+            if len(fila) >= 8:
                 raise HTTPException(429, "Muitas tentativas. Aguarde 15 minutos.")
             fila.append(instante)
         segredo = os.environ.get("PDV_API_TOKEN", "")
@@ -180,6 +191,7 @@ def instalar(app, Loja):
                 "validade": validade, "paga_ate": loja.licenca_ate, "dias": dias,
                 "situacao": "sem_licenca" if dias is None else "vencida" if dias <= 0 else "a_vencer" if dias <= 7 else "vigente",
                 "emissao": "central_local" if modo_ponte and not emissao.habilitada(db, loja.chave_loja) else "nuvem",
+                "edicao": emissao.edicao_da_loja(loja),
                 "mensalidade_cent": plano.valor_cent if plano else None,
                 "plano": cobranca.resumo_assinatura(plano) if plano else None}
 
@@ -198,6 +210,7 @@ def instalar(app, Loja):
                 "mensalidades_cent": sum(l["mensalidade_cent"] or 0 for l in lojas if l["ativa"]),
                 "central_local": sum(l["emissao"] == "central_local" for l in lojas)},
                 "chave_emissao_pronta": emissao.chave_pronta(),
+                "edicoes": [{"chave": c, "nome": e.nome} for c, e in EDICOES.items()],
                 "consultado_em": agora()}
 
     @app.post("/v1/fornecedor/lojas")
@@ -205,11 +218,13 @@ def instalar(app, Loja):
         from backend.lojas import criar as criar_loja, ErroLoja
         chave, nome = texto(dados, "chave", 64), texto(dados, "nome", 160)
         motivo = texto(dados, "motivo", 500)
+        edicao_loja = programa(dados)
         try:
-            auditar(db, "criar_loja", chave, motivo)
+            auditar(db, "criar_loja", chave, f"{EDICOES[edicao_loja].nome}: {motivo}")
             token = criar_loja(db, chave, nome)
         except ErroLoja as erro:
             raise HTTPException(422, str(erro)) from None
+        db.query(Loja).filter_by(chave_loja=chave).update({"edicao": edicao_loja})
         db.commit()
         return {"chave": chave, "token": token}
 
@@ -293,7 +308,10 @@ def instalar(app, Loja):
         nome = texto(dados, "nome", 160)
         if type(dados.get("ativa")) is not bool:
             raise HTTPException(422, "Informe se a loja está ativa.")
-        loja.nome, loja.ativa = nome, dados["ativa"]
+        edicao_loja = programa(dados, emissao.edicao_da_loja(loja))
+        if edicao_loja != emissao.edicao_da_loja(loja):
+            auditar(db, "alterar_programa", chave, f"{EDICOES[edicao_loja].nome}: {motivo}")
+        loja.nome, loja.ativa, loja.edicao = nome, dados["ativa"], edicao_loja
         auditar(db, "alterar_loja", chave, motivo)
         db.commit()
         return {"ok": True}
@@ -301,9 +319,19 @@ def instalar(app, Loja):
     @app.post("/v1/fornecedor/lojas/{chave}/assinatura-manual")
     def assinatura_manual(chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
         from backend.lojas import definir_assinatura, ErroLoja
-        obter(db, chave)
+        loja = obter(db, chave)
         motivo = texto(dados, "motivo", 500)
         valor = texto(dados, "validade", 10)
+        try:
+            pedida = date.fromisoformat(valor)
+        except ValueError:
+            raise HTTPException(422, "Informe uma validade futura no formato AAAA-MM-DD.") from None
+        from src.core.licenca import MAX_DIAS
+        if pedida > date.today() + timedelta(days=MAX_DIAS):
+            raise HTTPException(422, "A validade máxima é de 100 anos a partir de hoje.")
+        if loja.licenca_ate and pedida.isoformat() < loja.licenca_ate:
+            raise HTTPException(409, f"A loja já tem validade até {loja.licenca_ate}. A liberação manual não reduz o "
+                                     "prazo já concedido.")
         if ponte.em_modo_ponte(db, chave) and not emissao.habilitada(db, chave):
             raise HTTPException(409, "Esta loja ainda depende da central local; migre antes de alterar a validade online.")
         try:
@@ -333,6 +361,14 @@ def instalar(app, Loja):
         if not emissao.chave_pronta():
             raise HTTPException(409, "Configure na nuvem a mesma chave privada aceita pelos caixas antes de migrar.")
         ultima = ponte._ultima(db, chave)
+        if ultima:
+            programa_codigo = emissao.edicao_do_codigo(ultima.codigo)
+            if programa_codigo is None:
+                raise HTTPException(409, "O último código publicado não confere com a chave dos caixas. Confira a loja antes de migrar.")
+            if loja.edicao and loja.edicao != programa_codigo:
+                raise HTTPException(409, f"A loja está cadastrada como {EDICOES[emissao.edicao_da_loja(loja)].nome}, mas o "
+                                         f"último código publicado é do {EDICOES[programa_codigo].nome}. Corrija o programa da loja.")
+            loja.edicao = programa_codigo
         # Preserva o prazo já concedido. Cobranças futuras seguem a validade recalculada pelo Mercado Pago.
         if ultima and (not loja.licenca_ate or ultima.expira_em > loja.licenca_ate):
             loja.licenca_ate = ultima.expira_em
@@ -349,7 +385,6 @@ def instalar(app, Loja):
     @app.post("/v1/fornecedor/lojas/{chave}/emitir-licenca")
     def emitir_licenca(chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
         from backend.main import semente_licenca
-        from src.core import licenca
         loja = obter(db, chave)
         motivo = texto(dados, "motivo", 500)
         if not loja.ativa:
@@ -361,11 +396,11 @@ def instalar(app, Loja):
         if not loja.licenca_ate or loja.licenca_ate <= date.today().isoformat():
             raise HTTPException(409, "Não há validade futura registrada. Confira o pagamento ou registre uma liberação manual.")
         emissao.renovar_ponte(db, chave)
-        codigo = licenca.gerar_licenca(semente_licenca(), chave,
-                                     (date.fromisoformat(loja.licenca_ate) - date.today()).days, date.today())
-        auditar(db, "emitir_licenca", chave, f"Até {loja.licenca_ate}: {motivo}")
+        codigo, expira = emissao.assinar_ate(semente_licenca(), chave, date.fromisoformat(loja.licenca_ate),
+                                             emissao.edicao_da_loja(loja))
+        auditar(db, "emitir_licenca", chave, f"{EDICOES[emissao.edicao_da_loja(loja)].nome} até {expira}: {motivo}")
         db.commit()
-        return {"codigo": codigo, "validade": loja.licenca_ate}
+        return {"codigo": codigo, "validade": expira, "programa": EDICOES[emissao.edicao_da_loja(loja)].nome}
 
     @app.post("/v1/fornecedor/lojas/{chave}/conciliar")
     def conciliar(chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):

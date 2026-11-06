@@ -193,3 +193,132 @@ class TesteCentralFornecedor(unittest.TestCase):
             self.assertEqual(r.json()["expira_em"], (date.today()+timedelta(days=60)).isoformat())
         self.assertEqual(self.post(f"/lojas/LOJA-1/caixas/{ident}/revogar", {"motivo": "Troca de PC"}).status_code, 200)
         self.assertEqual(self.http.get("/v1/ponte/licenca", headers={"Authorization": "Bearer " + token}).status_code, 403)
+
+
+@unittest.skipIf(TestClient is None, "Dependências da nuvem ausentes")
+class TesteProgramaDaLojaECorrecoes(TesteCentralFornecedor):
+    """Correções da revisão: programa da loja na licença da nuvem, limites da validade e login sem bloqueio geral."""
+
+    def chave(self):
+        return patch.object(nuvem, "semente_licenca", return_value=SEMENTE), patch.object(licenca, "CHAVE_PUBLICA_HEX", PUBLICA)
+
+    def ponte_da_edicao(self, edicao, dias=20):
+        codigo = licenca.gerar_licenca(SEMENTE, "LOJA-1", dias, date.today(), edicao)
+        with nuvem.SessionLocal() as db:
+            db.add(ponte.PonteLoja(chave_loja="LOJA-1", modo_ponte=True, ativado_em=central.agora()))
+            db.add(ponte.PonteLicenca(id=str(uuid4()), chave_loja="LOJA-1", codigo=codigo,
+                                     emitida_em=date.today().isoformat(),
+                                     expira_em=(date.today() + timedelta(days=dias)).isoformat(),
+                                     publicada_em=central.agora()))
+            db.commit()
+        return codigo
+
+    def validade(self, dias):
+        with nuvem.SessionLocal() as db:
+            db.query(nuvem.Loja).filter_by(chave_loja="LOJA-1").update(
+                {"licenca_ate": (date.today() + timedelta(days=dias)).isoformat()})
+            db.commit()
+
+    def edicao(self, codigo):
+        return licenca.ler_licenca(codigo, bytes.fromhex(PUBLICA))["edicao"]
+
+    def test_loja_will_adega_recebe_licenca_da_will_adega_pelo_caminho_antigo(self):
+        r = self.post("/lojas/LOJA-1/alterar", {"motivo": "Vendida a Will Adega", "nome": "Loja 1", "ativa": True,
+                                                "edicao": "willadega"})
+        self.assertEqual(r.status_code, 200, r.text)
+        loja = next(l for l in self.http.get("/v1/fornecedor/lojas").json()["lojas"] if l["chave"] == "LOJA-1")
+        self.assertEqual(loja["edicao"], "willadega")
+        self.validade(30)
+        a, b = self.chave()
+        with a, b:
+            codigo = self.http.get("/v1/licenca", headers=cabecalho()).json()["codigo"]
+            emitido = self.post("/lojas/LOJA-1/emitir-licenca", {"motivo": "Instalação"}).json()
+        self.assertEqual(self.edicao(codigo), "willadega")
+        self.assertEqual((self.edicao(emitido["codigo"]), emitido["programa"]), ("willadega", "Will Adega"))
+        self.assertEqual(self.post("/lojas/LOJA-1/alterar", {"motivo": "x", "nome": "Loja 1", "ativa": True,
+                                                              "edicao": "boate"}).status_code, 422)
+
+    def test_cadastro_escolhe_o_programa_e_sem_escolha_e_willpdv(self):
+        self.assertEqual(self.post("/lojas", {"chave": "ADEGA-9", "nome": "Adega", "motivo": "Venda",
+                                              "edicao": "willadega"}).status_code, 200)
+        self.assertEqual(self.post("/lojas", {"chave": "BOATE-9", "nome": "Boate", "motivo": "Venda"}).status_code, 200)
+        r = self.http.get("/v1/fornecedor/lojas").json()
+        programas = {l["chave"]: l["edicao"] for l in r["lojas"]}
+        self.assertEqual((programas["ADEGA-9"], programas["BOATE-9"]), ("willadega", "willpdv"))
+        self.assertIn({"chave": "willadega", "nome": "Will Adega"}, r["edicoes"])
+        with nuvem.SessionLocal() as db:
+            db.query(nuvem.Loja).filter(nuvem.Loja.chave_loja.in_(["ADEGA-9", "BOATE-9"])).delete(synchronize_session=False)
+            db.commit()
+
+    def test_migracao_herda_o_programa_do_codigo_local_e_renova_com_ele(self):
+        self.ponte_da_edicao("willadega")
+        a, b = self.chave()
+        with a, b:
+            r = self.post("/lojas/LOJA-1/migrar-emissao", {"confirmacao": "LOJA-1", "motivo": "Transferência"})
+            self.assertEqual(r.status_code, 200, r.text)
+            self.validade(50)                                  # pagamento confirmado estende
+            novo = self.http.get("/v1/licenca", headers=cabecalho()).json()
+        self.assertEqual(novo["expira_em"], (date.today() + timedelta(days=50)).isoformat())
+        self.assertEqual(self.edicao(novo["codigo"]), "willadega")
+
+    def test_migracao_recusa_programa_divergente(self):
+        self.ponte_da_edicao("willadega")
+        with nuvem.SessionLocal() as db:
+            db.query(nuvem.Loja).filter_by(chave_loja="LOJA-1").update({"edicao": "willpdv"})
+            db.commit()
+        a, b = self.chave()
+        with a, b:
+            r = self.post("/lojas/LOJA-1/migrar-emissao", {"confirmacao": "LOJA-1", "motivo": "Transferência"})
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("Will Adega", r.json()["detail"])
+        with nuvem.SessionLocal() as db:
+            self.assertIsNone(db.get(emissao.EmissaoNuvem, "LOJA-1"))
+
+    def test_validade_manual_nao_reduz_nem_passa_de_cem_anos(self):
+        self.validade(60)
+        curta = (date.today() + timedelta(days=1)).isoformat()
+        r = self.post("/lojas/LOJA-1/assinatura-manual", {"validade": curta, "motivo": "erro de digitação"})
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("não reduz", r.json()["detail"])
+        r = self.post("/lojas/LOJA-1/assinatura-manual", {"validade": "2200-01-01", "motivo": "permanente"})
+        self.assertEqual(r.status_code, 422)
+        with nuvem.SessionLocal() as db:
+            self.assertEqual(db.query(nuvem.Loja).filter_by(chave_loja="LOJA-1").one().licenca_ate,
+                             (date.today() + timedelta(days=60)).isoformat())
+
+    def test_validade_alem_do_limite_ja_gravada_nao_derruba_a_consulta(self):
+        self.validade(40000)                                   # gravada por versão anterior ou à mão no banco
+        a, b = self.chave()
+        with a, b:
+            r = self.http.get("/v1/licenca", headers=cabecalho())
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["expira_em"], (date.today() + timedelta(days=licenca.MAX_DIAS)).isoformat())
+
+    def test_sem_chave_na_nuvem_o_caixa_continua_com_o_codigo_atual(self):
+        antigo = self.preparar_ponte()
+        a, b = self.chave()
+        with a, b:
+            self.assertEqual(self.post("/lojas/LOJA-1/migrar-emissao",
+                                       {"confirmacao": "LOJA-1", "motivo": "x"}).status_code, 200)
+        self.validade(90)
+        r = self.http.get("/v1/licenca", headers=cabecalho())    # chave sumiu da nuvem (semente None no setUp)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["codigo"], antigo)
+
+    def test_login_nao_bloqueia_todo_mundo_quando_a_memoria_enche(self):
+        with central._trava:
+            for i in range(2500):
+                central._tentativas[f"10.0.{i // 250}.{i % 250}"].append(central.time.monotonic())
+        self.http.cookies.clear()
+        self.login()
+        self.assertLessEqual(len(central._tentativas), 2000)
+
+    def test_assinar_ate_limita_a_cem_anos(self):
+        codigo, expira = emissao.assinar_ate(SEMENTE, "LOJA-1", date(2400, 1, 1), "willadega", date(2026, 11, 6))
+        self.assertEqual(expira, (date(2026, 11, 6) + timedelta(days=licenca.MAX_DIAS)).isoformat())
+        self.assertEqual(self.edicao(codigo), "willadega")
+
+
+for _nome in [n for n in dir(TesteCentralFornecedor) if n.startswith("test_")]:
+    if _nome not in TesteProgramaDaLojaECorrecoes.__dict__:
+        setattr(TesteProgramaDaLojaECorrecoes, _nome, None)      # os testes da base já rodam na classe deles

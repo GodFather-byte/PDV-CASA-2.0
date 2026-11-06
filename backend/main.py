@@ -48,6 +48,7 @@ class Loja(Base):
     ativa = Column(Boolean, nullable=False, default=True)
     criada_em = Column(String)
     licenca_ate = Column(String, nullable=True)     # AAAA-MM-DD: até quando a assinatura está paga (backend.lojas assinatura)
+    edicao = Column(String, nullable=True)          # programa da loja (willpdv, willadega); vazio = WillPDV
 
 
 class Versao(Base):
@@ -87,7 +88,7 @@ Base.metadata.create_all(bind=engine)
 def _acrescentar_colunas() -> None:
     """create_all não altera tabela existente: colunas novas de tabelas que já existiam entram aqui."""
     from sqlalchemy import inspect, text
-    novas = {"lojas": {"licenca_ate": "VARCHAR"}}
+    novas = {"lojas": {"licenca_ate": "VARCHAR", "edicao": "VARCHAR"}}
     with engine.begin() as con:
         for tabela, colunas in novas.items():
             existentes = {c["name"] for c in inspect(con).get_columns(tabela)}
@@ -393,8 +394,9 @@ def licenca(acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db))
     if semente is None or ed25519.chave_publica(semente).hex() != licenca_pdv.CHAVE_PUBLICA_HEX:
         log.error("Licença pedida pela loja %s, mas a nuvem não tem a chave privada do fornecedor certa.", loja.chave_loja)
         raise HTTPException(status_code=503, detail="A nuvem não está configurada para emitir licenças.")
-    return {"codigo": licenca_pdv.gerar_licenca(semente, loja.chave_loja, (ate - hoje).days, hoje),
-            "expira_em": ate.isoformat()}
+    from backend.licencas_fornecedor import assinar_ate, edicao_da_loja
+    codigo, expira = assinar_ate(semente, loja.chave_loja, ate, edicao_da_loja(loja), hoje)
+    return {"codigo": codigo, "expira_em": expira}
 
 
 # ------------------------------------------------------- painel do dono

@@ -11,7 +11,8 @@ Entre com `PDV_API_TOKEN`, disponível na configuração do servidor. Não é o 
 uma loja. A credencial só é enviada no login; o navegador recebe um cookie HttpOnly,
 SameSite Strict, Secure em HTTPS, válido por oito horas. Só o hash da sessão fica no
 banco. Sair revoga a sessão; trocar `PDV_API_TOKEN` revoga todas. A central não guarda
-a credencial em localStorage nem a inclui no endereço. O login tem limite de tentativas
+a credencial em localStorage nem a inclui no endereço. O login tem limite de tentativas (8 erros por endereço em 15 minutos; quem não errou nunca é
+bloqueado pelos erros dos outros)
 por processo; para instalações com múltiplas réplicas, aplicar também limitação na borda.
 
 As novas tabelas `fornecedor_sessoes`, `fornecedor_auditoria`, `fornecedor_chamados`
@@ -30,11 +31,20 @@ dos caixas. A chave privada fica no arquivo secreto do servidor, nunca no navega
 - Na aba de suporte, caixas individuais da ponte podem ser aprovados pelo UUID e
   revogados. O token aparece uma única vez. A lista mostra contato, versão e licença
   aplicada, quando essas informações foram enviadas pelo caixa.
+- **Programa da loja:** cada loja tem o programa que usa (WillPDV ou Will Adega), escolhido no
+  cadastro e alterável em "Programa da loja" (com motivo, auditado). Toda licença assinada pela
+  nuvem (renovação automática, "Obter código da licença" e a consulta antiga do caixa) sai para
+  esse programa: licença do WillPDV não abre a Will Adega e vice-versa. Lojas antigas sem programa
+  contam como WillPDV.
 - Para lojas sem plano, uma validade futura pode ser registrada manualmente. O código
   assinado pode ser obtido no painel. O prazo definido é explícito, inclusive para
-  demonstração ou licença de longa duração. Não troca a chave pública dos caixas.
+  demonstração ou licença de longa duração (no máximo 100 anos). A liberação manual **nunca
+  reduz** a validade já concedida. Não troca a chave pública dos caixas.
 - Desativar bloqueia acesso à nuvem; não revoga instantaneamente o código já recebido
   pelo caixa nem interrompe uma venda em andamento.
+
+Se a chave de emissão faltar na nuvem ou dois pedidos chegarem juntos, a consulta do caixa
+continua devolvendo o último código publicado; a renovação pendente fica registrada no log.
 
 ## Transferir lojas da central local
 
@@ -42,7 +52,9 @@ dos caixas. A chave privada fica no arquivo secreto do servidor, nunca no navega
 2. Configurar no servidor `PDV_LICENCA_CHAVE` com o arquivo secreto da **mesma** chave.
 3. Abrir uma loja identificada como emissão local e selecionar **Transferir emissão
    para nuvem**. A operação exige confirmação e motivo e só funciona com chave conferida.
-4. A nuvem preserva o maior prazo já concedido e registra a transferência por loja.
+4. A nuvem preserva o maior prazo já concedido e registra a transferência por loja. O programa
+   da loja vem do último código publicado pela central local; se o cadastro disser outro
+   programa, a transferência é recusada até corrigir.
    A ponte e os tokens dos caixas continuam funcionando. Após pagamento confirmado,
    o próximo pedido de licença publica um código assinado pela nuvem automaticamente.
 5. Testar uma renovação real com a central local fechada, inclusive no caixa com token

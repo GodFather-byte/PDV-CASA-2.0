@@ -30,15 +30,11 @@ Branch `claude/cloud-environment-setup-6auvo5` (PR #56), com a main `e364e2d` (c
 - Antes de vender: gerar o instalador pelo CI, instalar num Windows limpo, emitir licença `willadega` e fazer uma venda
   completa com leitor, impressora e gaveta (checklist em `docs/ADEGA.md`).
 - Reposição: prazo por fornecedor e unidade de compra por produto ficaram de fora (exigem migração); decidir no piloto.
-- **Central do fornecedor (já na main, PR #55):** a revisão do Claude achou 5 problemas, ainda não corrigidos. O mais
-  grave para a Will Adega: a nuvem assina licença sempre como WillPDV (`backend/licencas_fornecedor.py` em
-  `renovar_ponte`, `backend/central_fornecedor.py` em `emitir_licenca` e o `GET /v1/licenca` antigo), então loja Will Adega
-  que renove pela nuvem recebe código que o caixa recusa. Decidir com o usuário onde guardar a edição da loja na nuvem.
-  Os outros: limite de login por IP do proxy (bloqueio global), validade manual que reduz prazo e validade acima de
-  36500 dias que derruba a consulta de licença.
-
-## Central do fornecedor (Codex, main `78bd596`)
-
+- **Central do fornecedor:** os achados da revisão do Claude foram corrigidos nesta branch: coluna `lojas.edicao` na
+  nuvem (criada por `_acrescentar_colunas`), licença da nuvem sempre com o programa da loja (`assinar_ate` em
+  `backend/licencas_fornecedor.py`), migração herda o programa do último código local, validade manual não reduz nem
+  passa de 100 anos, consulta do caixa nunca cai por falta de chave ou corrida, login sem bloqueio geral. Publicar a
+  nuvem depois do merge e marcar o programa das lojas Will Adega na central.
 - Publicada no Render (`/central/`, rotas `/v1/fornecedor/*`); guia em `docs/CENTRAL_FORNECEDOR.md`. Login com
   `PDV_API_TOKEN`, sessão HttpOnly com CSRF; lojas, cobranças, transferência explícita da emissão para a nuvem,
   suporte (erros, chamados, diagnóstico) e atualização por manifesto assinado. Só tabelas novas na nuvem.
