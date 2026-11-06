@@ -73,6 +73,48 @@ def auditar(db, acao, loja, motivo):
     db.add(AuditoriaFornecedor(acao=acao, loja=loja, motivo=motivo[:500], criada_em=agora()))
 
 
+INSTALADORES = {   # link fixo das Releases publicadas pelo CI; PDV_INSTALADOR_<PROGRAMA> no servidor troca o endereço
+    "willpdv": "https://github.com/GodFather-byte/PDV-CASA-2.0/releases/download/ultima-versao/WillPDV-Instalador.exe",
+    "willadega": "https://github.com/GodFather-byte/PDV-CASA-2.0/releases/download/ultima-versao-adega/"
+                 "WillAdega-Instalador.exe",
+}
+
+
+def link_instalador(edicao_loja: str) -> str:
+    return (os.environ.get(f"PDV_INSTALADOR_{edicao_loja.upper()}") or INSTALADORES.get(edicao_loja, "")).strip()
+
+
+def qr_svg(texto_qr: str) -> str:
+    """QR do código de instalação em SVG (gerado aqui, sem rede); vazio se a biblioteca faltar."""
+    if not texto_qr:
+        return ""
+    try:
+        import segno
+    except ImportError:
+        return ""
+    return segno.make_qr(texto_qr, error="m").svg_inline(scale=4, border=2, dark="#111111", light="#ffffff")
+
+
+def texto_kit(loja, edicao_loja: str, codigo: str, base: str, senha: str) -> str:
+    nome = EDICOES[edicao_loja].nome
+    linhas = [f"KIT DE IMPLANTAÇÃO — {nome}", f"Loja: {loja.nome} ({loja.chave_loja})", "",
+              "1. Instale o programa no computador do caixa:",
+              f"   {link_instalador(edicao_loja) or '(peça o instalador ao fornecedor)'}",
+              f"2. Abra o {nome}. Na tela de entrada, clique em \"Ativar licença ou instalar loja\" e cole o código",
+              "   abaixo (ou leia o QR com o leitor 2D). A nuvem, o painel do dono e a licença ficam configurados.",
+              f"   {codigo}",
+              "3. Painel do dono no celular:",
+              f"   Endereço: {base}/painel/",
+              f"   Loja: {loja.chave_loja}",
+              f"   Senha: {senha}",
+              "4. Importante: o sistema emite cupom NÃO FISCAL. A emissão de NFC-e e as obrigações fiscais são",
+              "   responsabilidade da loja, com o contador dela.",
+              "",
+              "Guarde este kit como senha da loja: o código e a senha não aparecem de novo. Se vazar, peça ao",
+              "fornecedor um kit novo (o anterior deixa de valer)."]
+    return "\n".join(linhas)
+
+
 def programa(dados, atual=None):
     """Programa escolhido para a loja (willpdv, willadega). Sem o campo, mantém o atual (ou WillPDV)."""
     valor = dados.get("edicao", atual or "willpdv")
@@ -118,7 +160,7 @@ def instalar(app, Loja):
             resposta.headers["X-Content-Type-Options"] = "nosniff"
             resposta.headers["X-Frame-Options"] = "DENY"
             resposta.headers["Referrer-Policy"] = "no-referrer"
-            resposta.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+            resposta.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
         return resposta
 
     @app.get("/central", include_in_schema=False)
@@ -255,7 +297,27 @@ def instalar(app, Loja):
             raise HTTPException(422, str(erro)) from None
         db.query(Loja).filter_by(chave_loja=chave).update({"edicao": edicao_loja})
         db.commit()
-        return {"chave": chave, "token": token, "codigo_instalacao": instalacao(request, chave, token)}
+        codigo = instalacao(request, chave, token)
+        return {"chave": chave, "token": token, "codigo_instalacao": codigo, "qr_instalacao": qr_svg(codigo)}
+
+    @app.post("/v1/fornecedor/lojas/{chave}/kit")
+    def kit(request: Request, chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
+        """Kit de implantação: token e senha do painel novos (os anteriores caem) num texto para imprimir ou enviar."""
+        from backend import painel
+        from backend.lojas import novo_token
+        loja = obter(db, chave)
+        motivo = texto(dados, "motivo", 500)
+        if dados.get("confirmacao") != chave:
+            raise HTTPException(422, "Confirme a identificação exata da loja.")
+        auditar(db, "kit_implantacao", chave, motivo)
+        token = novo_token(db, chave)
+        senha = painel.gerar_senha()
+        painel.definir_senha(db, chave, senha)
+        codigo = instalacao(request, chave, token)
+        edicao_loja = emissao.edicao_da_loja(loja)
+        return {"codigo_instalacao": codigo, "qr_instalacao": qr_svg(codigo), "senha_painel": senha,
+                "instalador": link_instalador(edicao_loja),
+                "kit": texto_kit(loja, edicao_loja, codigo or f"(token: {token})", endereco_nuvem(request), senha)}
 
     @app.post("/v1/fornecedor/lojas/{chave}/novo-token")
     def trocar_token(request: Request, chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
@@ -267,7 +329,8 @@ def instalar(app, Loja):
             raise HTTPException(422, "Confirme a identificação exata da loja.")
         auditar(db, "novo_token", chave, motivo)
         token = novo_token(db, chave)              # grava junto a auditoria
-        return {"token": token, "codigo_instalacao": instalacao(request, chave, token)}
+        codigo = instalacao(request, chave, token)
+        return {"token": token, "codigo_instalacao": codigo, "qr_instalacao": qr_svg(codigo)}
 
     @app.post("/v1/fornecedor/lojas/{chave}/senha-painel")
     def senha_painel(chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):

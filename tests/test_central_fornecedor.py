@@ -350,6 +350,43 @@ class TesteProgramaDaLojaECorrecoes(TesteCentralFornecedor):
         self.assertNotIn(senha, json.dumps(self.http.get("/v1/fornecedor/auditoria").json()))
         self.assertEqual(self.post("/lojas/NAO-EXISTE/senha-painel", {"motivo": "x"}).status_code, 404)
 
+    def test_kit_de_implantacao_com_instalador_codigo_qr_e_senha(self):
+        from backend import painel
+        from src.core import codigo_instalacao
+        self.post("/lojas/LOJA-1/alterar", {"motivo": "Adega", "nome": "Adega do Zé", "ativa": True, "edicao": "willadega"})
+        self.assertEqual(self.post("/lojas/LOJA-1/kit", {"motivo": "x", "confirmacao": "LOJA-2"}).status_code, 422)
+        r = self.post("/lojas/LOJA-1/kit", {"motivo": "Implantação", "confirmacao": "LOJA-1"})
+        self.assertEqual(r.status_code, 200, r.text)
+        kit = r.json()
+        self.assertTrue(kit["qr_instalacao"].startswith("<svg"))
+        self.assertIn("ultima-versao-adega/WillAdega-Instalador.exe", kit["kit"])
+        self.assertIn("KIT DE IMPLANTAÇÃO — Will Adega", kit["kit"])
+        self.assertIn(kit["codigo_instalacao"], kit["kit"])
+        self.assertIn(f"Senha: {kit['senha_painel']}", kit["kit"])
+        self.assertIn("NÃO FISCAL", kit["kit"])
+        self.assertIn("https://testserver/painel/", kit["kit"])
+        novo = codigo_instalacao.ler(kit["codigo_instalacao"])["token"]
+        self.assertEqual(self.http.get("/v1/licenca", headers=cabecalho()).status_code, 401)         # token antigo caiu
+        self.assertNotEqual(self.http.get("/v1/licenca", headers={"Authorization": "Bearer " + novo}).status_code, 401)
+        with nuvem.SessionLocal() as db:
+            guardado = db.query(painel.PainelAcesso).filter_by(chave_loja="LOJA-1").one().senha_hash
+        self.assertTrue(painel.conferir_senha(kit["senha_painel"], guardado))
+        auditoria = json.dumps(self.http.get("/v1/fornecedor/auditoria").json())
+        self.assertIn("kit_implantacao", auditoria)
+        self.assertNotIn(kit["senha_painel"], auditoria)
+        self.assertNotIn(novo, auditoria)
+        with patch.dict(os.environ, {"PDV_INSTALADOR_WILLADEGA": "https://downloads.exemplo/adega.exe"}):
+            r = self.post("/lojas/LOJA-1/kit", {"motivo": "Outro PC", "confirmacao": "LOJA-1"}).json()
+        self.assertEqual(r["instalador"], "https://downloads.exemplo/adega.exe")
+
+    def test_qr_no_cadastro_e_politica_de_imagem(self):
+        r = self.post("/lojas", {"chave": "ADEGA-8", "nome": "Adega 8", "motivo": "Venda", "edicao": "willadega"})
+        self.assertTrue(r.json()["qr_instalacao"].startswith("<svg"))
+        self.assertIn("img-src 'self' data:", self.http.get("/central/").headers["content-security-policy"])
+        with nuvem.SessionLocal() as db:
+            db.query(nuvem.Loja).filter_by(chave_loja="ADEGA-8").delete()
+            db.commit()
+
     def test_assinar_ate_limita_a_cem_anos(self):
         codigo, expira = emissao.assinar_ate(SEMENTE, "LOJA-1", date(2400, 1, 1), "willadega", date(2026, 11, 6))
         self.assertEqual(expira, (date(2026, 11, 6) + timedelta(days=licenca.MAX_DIAS)).isoformat())

@@ -31,7 +31,18 @@ dos caixas. A chave privada fica no arquivo secreto do servidor, nunca no navega
    - **Gerar novo código de instalação**: troca o token (por exemplo, se vazou). Os caixas instalados precisam
      receber o código novo pelo mesmo botão.
 
+5. **Gerar kit de implantação** (mesma seção): junta num texto, para imprimir ou copiar, o link do instalador do
+   programa da loja, o código de instalação com QR, o endereço e a senha do painel do dono e o aviso de cupom não
+   fiscal. Gera código e senha novos (os anteriores caem). O QR pode ser lido no caixa por leitor 2D em vez de colar.
+
 Os comandos `python -m backend.lojas ...` continuam funcionando, mas não são mais necessários para o dia a dia.
+
+**Alertas de vencimento:** o topo da lista mostra as lojas ativas vencendo em até 7 dias ou vencidas há até 30. Um
+resumo sai por e-mail uma vez por dia (Brevo ou SMTP já configurados) para `PDV_AVISOS_EMAIL`, ou para `EMAIL_FROM`.
+O botão **Enviar resumo por e-mail agora** serve também para testar o e-mail.
+
+**Variáveis opcionais no servidor:** `PDV_AVISOS_EMAIL` (destino do resumo) e `PDV_INSTALADOR_WILLPDV` /
+`PDV_INSTALADOR_WILLADEGA` (link do instalador no kit; sem elas, vale o link fixo das Releases do GitHub).
 
 ## Lojas, pagamentos e licenças
 
