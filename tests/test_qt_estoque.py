@@ -596,7 +596,8 @@ class TestEstoqueQt(BaseTeste):
         self.ctx.estoque._mover(pid, -30, "venda", "venda", 1)                    # vendeu 30 em 30 dias; sobrou 2
         janela = self.janela()
         dialogo = DialogoGiro([1, 2], self.ctx.estoque.parametros_giro(), parent=janela)
-        self.assertEqual(dialogo.valores(), {"terminal": None, "janela_dias": 30, "prazo_dias": 0, "cobertura_dias": 7})
+        self.assertEqual(dialogo.valores(), {"terminal": None, "do_fornecedor": None, "janela_dias": 30, "prazo_dias": 0,
+                                             "cobertura_dias": 7})
         dialogo.caixa.setCurrentIndex(2)
         dialogo.janela.setCurrentIndex(dialogo.janela.findData(14))
         self.assertEqual((dialogo.valores()["terminal"], dialogo.valores()["janela_dias"]), (2, 14))
@@ -616,3 +617,31 @@ class TestEstoqueQt(BaseTeste):
             self.assertFalse(janela.reposicao_giro())
         visualizador.assert_not_called()
         self.assertEqual(self.ctx.estoque.lancamentos("pedido"), [])
+
+    def test_fornecedor_preenche_o_prazo_e_o_pedido_sai_para_ele(self):
+        from src.ui_qt.estoque import DialogoGiro
+        ambev = self.banco.inserir("fornecedores", {"nome": "AMBEV", "prazo_entrega_dias": 3})
+        outro = self.banco.inserir("fornecedores", {"nome": "OUTRO"})
+        skol = self.novo_produto("SKOL LATA", estoque=True, qt=32)
+        agua = self.novo_produto("AGUA", estoque=True, qt=32)
+        for pid, fornecedor in ((skol, ambev), (agua, outro)):
+            lanc = self.ctx.estoque.criar_lancamento("compra", fornecedor_id=fornecedor)
+            self.ctx.estoque.adicionar_item(lanc, pid, 1)
+            self.ctx.estoque._mover(pid, -31, "venda", "venda", 1)
+        janela = self.janela()
+        dialogo = DialogoGiro([1], self.ctx.estoque.parametros_giro(), parent=janela,
+                              fornecedores=self.ctx.estoque.fornecedores_giro())
+        dialogo.fornecedor.setCurrentIndex(dialogo.fornecedor.findData(ambev))
+        self.assertEqual(dialogo.prazo.value(), 3)
+        self.assertIn("entrega em 3", dialogo.fornecedor.currentText())
+        escolha = dialogo.valores()
+        with patch.object(janela, "_parametros_giro", return_value=escolha), \
+                patch("src.ui_qt.visualizador.JanelaVisualizador") as visualizador, \
+                patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes), \
+                patch.object(QInputDialog, "getItem") as perguntar, patch.object(janela, "abrir_lancamentos"):
+            self.assertTrue(janela.reposicao_giro())
+        perguntar.assert_not_called()                                # o fornecedor já veio da escolha
+        self.assertIn("FORNECEDOR AMBEV", visualizador.call_args.args[2])
+        pedido = self.ctx.estoque.lancamentos("pedido")[0]
+        self.assertEqual(pedido["fornecedor_id"], ambev)
+        self.assertEqual([i["produto_id"] for i in self.ctx.estoque.itens(pedido["id"])], [skol])

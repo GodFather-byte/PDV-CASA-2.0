@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 38
+VERSAO_ESQUEMA = 39
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -316,6 +316,7 @@ TABELAS = [
         contato TEXT, ddd TEXT, telefone TEXT, celular TEXT, cnpj TEXT, ie TEXT,
         endereco TEXT, complemento TEXT, bairro TEXT, cidade TEXT, uf TEXT, cep TEXT,
         email TEXT, obs TEXT,
+        prazo_entrega_dias INTEGER NOT NULL DEFAULT 0,
         ativo INTEGER NOT NULL DEFAULT 1
     )""",
     """CREATE TABLE IF NOT EXISTS bairros (
@@ -1021,6 +1022,10 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v39: prazo de entrega do fornecedor (dias) para a reposição pelo giro; 0 = não informado.
+    39: [
+        ("coluna", "fornecedores", "prazo_entrega_dias", "INTEGER NOT NULL DEFAULT 0"),
+    ],
     # v38: promoção também no preço da gelada (mesmas janelas da natural); 0 = sem promoção da gelada.
     38: [
         ("coluna", "produtos", "promo_gelada_cent", "INTEGER NOT NULL DEFAULT 0"),

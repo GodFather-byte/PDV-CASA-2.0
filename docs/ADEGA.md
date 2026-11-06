@@ -141,6 +141,8 @@ da categoria). A nuvem precisa estar atualizada para aceitar as miniaturas.
   abaixo do mínimo usa o dobro do mínimo, com aviso. A escolha fica lembrada. O pedido só nasce se a pessoa confirmar e
   escolher o fornecedor; o saldo só muda na entrega. Use 7 dias para captar fim de semana forte e 30 para um giro
   mais estável; feriado, promoção e período em que faltou o produto não entram na conta.
+  **Por fornecedor:** cadastre o prazo de entrega em Cadastros > Fornecedores. Na reposição, escolha o fornecedor: a
+  lista fica só com os produtos cuja última compra foi dele, o prazo já vem preenchido e o pedido sai para ele.
 
 - Em **Estoque > Visão: Adega**, confira a cobertura estimada em dias e use **Lista de compras** ou
   **Gerar pedido do que falta**, escolhendo Geral/Adega. O recorte Adega combina a classificação com os

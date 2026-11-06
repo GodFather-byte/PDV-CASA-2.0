@@ -159,6 +159,44 @@ class TesteGiroComPrazoPedidosEFardos(BaseGiro):
         self.assertEqual(self.est.parametros_giro()["janela_dias"], 30)
 
 
+class TesteGiroPorFornecedor(BaseGiro):
+    def compra(self, pid, fornecedor, data):
+        lanc = self.est.criar_lancamento("compra", fornecedor_id=fornecedor, data=data)
+        self.est.adicionar_item(lanc, pid, 1)
+
+    def test_fornecedor_habitual_e_a_ultima_compra_e_filtra_a_sugestao(self):
+        ambev = self.banco.inserir("fornecedores", {"nome": "AMBEV", "prazo_entrega_dias": 2})
+        heineken = self.banco.inserir("fornecedores", {"nome": "HEINEKEN"})
+        skol = self.produto("SKOL", qt=0)
+        amstel = self.produto("AMSTEL", qt=0)
+        self.compra(skol, heineken, "01/09/2026")
+        self.compra(skol, ambev, "01/10/2026")                         # a mais recente vale
+        self.compra(amstel, heineken, "02/10/2026")
+        self.banco.executar("UPDATE produtos SET qt_atual = 0")
+        for pid in (skol, amstel):
+            self.venda(pid, 30)
+        todos = {s["nome"]: s["fornecedor"] for s in self.est.reposicao_giro()}
+        self.assertEqual(todos, {"AMSTEL": "HEINEKEN", "SKOL": "AMBEV"})
+        so_ambev = self.est.reposicao_giro(do_fornecedor=ambev, prazo_dias=2)
+        self.assertEqual([s["nome"] for s in so_ambev], ["SKOL"])
+        self.assertEqual(so_ambev[0]["dias_alvo"], 9)
+        self.assertIn("FORNECEDOR AMBEV", self.est.texto_reposicao_giro(so_ambev))
+        self.assertEqual({f["nome"]: f["prazo_entrega_dias"] for f in self.est.fornecedores_giro()},
+                         {"AMBEV": 2, "DISTRIBUIDORA": 0, "HEINEKEN": 0})
+        with self.assertRaises(ErroNegocio):
+            self.est.reposicao_giro(do_fornecedor=9999)
+        lanc = self.est.pedido_por_giro(ambev, None, None, do_fornecedor=ambev)
+        self.assertEqual([i["produto_id"] for i in self.est.itens(lanc)], [skol])
+
+    def test_cadastro_do_fornecedor_guarda_o_prazo(self):
+        from src.controllers.cadastro_controller import CadastroController
+        cad = CadastroController(self.banco)
+        fid = cad.salvar("fornecedores", {"nome": "DISTRIB X", "prazo_entrega_dias": "4"})
+        self.assertEqual(self.banco.valor("SELECT prazo_entrega_dias FROM fornecedores WHERE id = ?", (fid,)), 4)
+        with self.assertRaises(ErroNegocio):
+            cad.salvar("fornecedores", {"nome": "DISTRIB Y", "prazo_entrega_dias": "90"})
+
+
 class TesteEtiquetas(BaseGiro):
     def setUp(self):
         super().setUp()

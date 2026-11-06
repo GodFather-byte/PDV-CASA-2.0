@@ -448,6 +448,8 @@ _ENTIDADES = [
         Campo("uf", "Estado", tamanho=2, na_grade=False),
         Campo("cep", "CEP", tamanho=9, na_grade=False),
         Campo("email", "E-mail", tamanho=60, na_grade=False),
+        Campo("prazo_entrega_dias", "Prazo de entrega (dias, para a reposição)", "int", padrao=0, minimo=0, maximo=60,
+              largura=8),
         Campo("obs", "Observações", tamanho=120, na_grade=False),
         _sn("ativo", "Ativo", 1, na_grade=True),
     ], ordem="nome", busca=("nome", "contato", "cnpj"), tem_ativo=True),
