@@ -42,7 +42,7 @@ São hipóteses operacionais, não incidentes medidos. Devem ser confirmadas na 
 | Compatibilidade de preços | Alta | Implementada | Entrega/caderneta não exibem economia como atacado; item antigo sem preço-base não inventa economia; cancelamento e agrupamento mantêm os cálculos existentes. |
 | Recorte operacional | Alta | Implementada | Estoque > Visão > Adega combina Sem estoque/Repor, grupo e busca; destaca categoria e prioridade; voltar a Geral restaura o recorte anterior do estoque geral. |
 | Reposição visível | Alta | Implementada | Ruptura = Alta, ponto de pedido = Média, normal = Baixa; sem controle = Definir controle. Sem mínimo continua sem quantidade sugerida, mesmo em ruptura. |
-| Reposição por giro e prazo | Média | Próxima recomendada | Comparar sugestão com consumo diário e prazo, explicar cálculo e exigir revisão antes de gerar pedido. Ver Top 1. |
+| Reposição por giro e prazo | Média | Implementada (prazo e cobertura da loja, não por fornecedor) | Comparar sugestão com consumo diário e prazo, explicar cálculo e exigir revisão antes de gerar pedido. Ver Top 1. |
 | Cancelamento parcial guiado | Média | Planejada | Alterar quantidade recalcula atacado e permite conferir casco sem apagar histórico; exige decisão de produto sobre vínculo bebida/casco. |
 | Importação de atacado gelada e etiquetas | Média | Planejada | Prévia da planilha valida faixa/preço; etiqueta distingue temperaturas e unidade/fardo, com testes de importação. |
 | Saldo de cascos por cliente | Baixa | Planejada | Somente após definir empréstimo, caução, devolução e auditoria com o dono; nunca inferir dívida de trocas antigas. |
@@ -137,6 +137,11 @@ Tempo e motivo de correção ainda exigem observação/amostragem operacional; n
 Ruptura e perdas podem ser conferidas pelos saldos e movimentos existentes. Não prometer redução só com mudança de tela.
 
 ## Próxima melhoria recomendada (Top 1)
+
+**Entregue em novembro/2026** com prazo e cobertura únicos da loja (lembrados em `config`, sem migração): janela
+7/14/30, pedidos a caminho, unidade inteira, fardos e fallback pelo mínimo, com a conta por produto
+(`EstoqueController.reposicao_giro`). Falta, se o piloto pedir: prazo por fornecedor e unidade de compra
+persistidos por produto (exigem migração). Texto original da proposta abaixo.
 
 **Problema:** o dobro do mínimo não acompanha giro e prazo de entrega, aumentando ruptura em picos e capital parado.
 

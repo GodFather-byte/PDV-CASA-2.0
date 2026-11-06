@@ -43,7 +43,7 @@ class TesteReposicaoGiro(BaseGiro):
         self.venda(pid, 30, terminal=1)
         self.venda(pid, 60, terminal=2)
         c1 = self.est.reposicao_giro(1)[0]
-        self.assertEqual((c1["consumo_30_dias"], c1["alvo_qtd"], c1["sugerido"], c1["terminal"]), (30, 7, 5, 1))
+        self.assertEqual((c1["consumo_janela"], c1["alvo_qtd"], c1["sugerido"], c1["terminal"]), (30, 7, 5, 1))
         self.assertEqual(self.est.reposicao_giro(2)[0]["sugerido"], 12)
         self.assertEqual(self.est.reposicao_giro()[0]["sugerido"], 19)
         self.assertEqual(self.est.reposicao_giro(3), [])
@@ -53,15 +53,16 @@ class TesteReposicaoGiro(BaseGiro):
         pid = self.produto("A", qt=0)
         self.venda(pid, 30)
         self.venda(pid, 30, dias=-31)
-        self.assertEqual(self.est.reposicao_giro(1)[0]["consumo_30_dias"], 30)
+        self.assertEqual(self.est.reposicao_giro(1)[0]["consumo_janela"], 30)
         self.venda(pid, 15, tipo="estorno_venda")
-        self.assertEqual(self.est.reposicao_giro(1)[0]["sugerido"], 3.5)
+        self.assertEqual(self.est.reposicao_giro(1)[0]["alvo_qtd"], 3.5)
+        self.assertEqual(self.est.reposicao_giro(1)[0]["sugerido"], 4)          # lata não se compra pela metade
         cheio = self.produto("B", qt=100)
         self.venda(cheio, 30)
         livre = self.novo_produto("C")
         self.venda(livre, 30)
         self.assertEqual([p["id"] for p in self.est.reposicao_giro(1)], [pid])
-        raro = self.produto("D", qt=0)
+        raro = self.produto("D", qt=0, aceita_decimal="S")
         self.venda(raro, 0.1234)
         self.assertEqual(next(p for p in self.est.reposicao_giro(1) if p["id"] == raro)["sugerido"], 0.0288)
 
@@ -83,7 +84,10 @@ class TesteReposicaoGiro(BaseGiro):
         lanc = self.est.pedido_por_giro(self.fornecedor, None, 1)
         self.assertEqual([(i["produto_id"], i["quantidade"]) for i in self.est.itens(lanc)], [(pid, 5)])
         self.assertEqual(self.banco.valor("SELECT qt_atual FROM produtos WHERE id = ?", (pid,)), 2)
-        manual = self.est.pedido_por_giro(self.fornecedor, [(pid, 3)], 1)
+        with self.assertRaises(ErroNegocio):                                    # já está a caminho: não pede de novo
+            self.est.pedido_por_giro(self.fornecedor, [(pid, 3)], 1)
+        self.venda(outro, 60)
+        manual = self.est.pedido_por_giro(self.fornecedor, [(outro, 3)], 1)
         self.assertEqual(self.est.itens(manual)[0]["quantidade"], 3)
         with self.assertRaises(ErroNegocio):
             self.est.pedido_por_giro(self.fornecedor, None, 2)
@@ -93,6 +97,66 @@ class TesteReposicaoGiro(BaseGiro):
         texto = self.est.texto_reposicao_giro(self.est.reposicao_giro(2), 2)
         self.assertIn("CAIXA 2", texto)
         self.assertIn("SUGESTÃO", texto)
+
+
+class TesteGiroComPrazoPedidosEFardos(BaseGiro):
+    def test_janela_prazo_e_cobertura_entram_na_conta_e_na_explicacao(self):
+        pid = self.produto("SKOL LATA", qt=10)
+        self.venda(pid, 14, dias=-3)                       # dentro de 7 dias
+        self.venda(pid, 28, dias=-10)                      # só na janela de 14 e de 30
+        s7 = self.est.reposicao_giro(janela_dias=7, prazo_dias=3, cobertura_dias=7)[0]
+        self.assertEqual((s7["consumo_janela"], s7["media_diaria"], s7["alvo_qtd"], s7["sugerido"]), (14, 2, 20, 10))
+        self.assertIn("2,00/dia × 10 dias (prazo 3 + cobertura 7) = 20 − tem 10 → comprar 10", s7["explicacao"])
+        s14 = self.est.reposicao_giro(janela_dias=14, prazo_dias=0, cobertura_dias=7)[0]
+        self.assertEqual((s14["consumo_janela"], s14["alvo_qtd"], s14["sugerido"]), (42, 21, 11))
+
+    def test_pedido_a_caminho_desconta_e_pedido_velho_nao(self):
+        pid = self.produto("BRAHMA", qt=0)
+        self.venda(pid, 30)                                # 1/dia x 7 = 7
+        lanc = self.est.criar_lancamento("pedido", fornecedor_id=self.fornecedor)
+        self.est.adicionar_item(lanc, pid, 4)
+        s = self.est.reposicao_giro()[0]
+        self.assertEqual((s["a_caminho"], s["sugerido"]), (4, 3))
+        self.assertIn("− a caminho 4", s["explicacao"])
+        self.banco.executar("UPDATE lancamentos_estoque SET data = ? WHERE id = ?",
+                            ((self._hora["t"] - timedelta(days=45)).strftime("%Y-%m-%d"), lanc))
+        self.assertEqual(self.est.reposicao_giro()[0]["sugerido"], 7)     # pedido esquecido não segura a compra
+        self.est.confirmar_pedido(lanc)                                   # entregue: entra no saldo
+        self.assertEqual(self.est.reposicao_giro()[0]["sugerido"], 3)
+
+    def test_fardo_mostra_quantos_fardos_e_pedido_fica_em_unidades(self):
+        pid = self.produto("HEINEKEN LONG NECK", qt=1)
+        fardo = self.novo_produto("FARDO HEINEKEN", preco=6000)
+        ProdutoController(self.banco).incluir_composicao(fardo, pid, 12)
+        self.venda(pid, 60)                                # 2/dia x 7 = 14 - 1 = 13
+        s = self.est.reposicao_giro()[0]
+        self.assertEqual((s["sugerido"], s["fardos"], s["fardo"]["quantidade"]), (13, 2, 12))
+        self.assertIn("(2 × FARDO HEINEKEN de 12)", s["explicacao"])
+        lanc = self.est.pedido_por_giro(self.fornecedor)
+        self.assertEqual([(i["produto_id"], i["quantidade"]) for i in self.est.itens(lanc)], [(pid, 13)])
+
+    def test_sem_venda_na_janela_usa_o_minimo_e_avisa(self):
+        pid = self.produto("VINHO", qt=1)
+        self.banco.executar("UPDATE produtos SET estoque_minimo = 3 WHERE id = ?", (pid,))
+        s = self.est.reposicao_giro()[0]
+        self.assertEqual((s["base"], s["sugerido"], s["cobertura_dias"]), ("minimo", 5, None))
+        self.assertIn("sem venda em 30 dias: dobro do mínimo 6", s["explicacao"])
+        texto = self.est.texto_reposicao_giro([s])
+        self.assertIn("—", texto)
+        self.assertIn("pedidos não entregues", texto)
+
+    def test_parametros_validados_e_lembrados(self):
+        for kw in ({"janela_dias": 10}, {"janela_dias": "7"}, {"prazo_dias": -1}, {"prazo_dias": 61},
+                   {"prazo_dias": 2.5}):
+            with self.assertRaises(ErroNegocio):
+                self.est.reposicao_giro(**kw)
+        self.assertEqual(self.est.parametros_giro(), {"janela_dias": 30, "prazo_dias": 0, "cobertura_dias": 7})
+        self.est.salvar_parametros_giro(14, 3, 10)
+        self.assertEqual(self.est.parametros_giro(), {"janela_dias": 14, "prazo_dias": 3, "cobertura_dias": 10})
+        with self.assertRaises(ErroNegocio):
+            self.est.salvar_parametros_giro(15, 3, 10)
+        self.banco.cfg_set("giro_janela_dias", "99")                     # valor estragado volta ao padrão
+        self.assertEqual(self.est.parametros_giro()["janela_dias"], 30)
 
 
 class TesteEtiquetas(BaseGiro):

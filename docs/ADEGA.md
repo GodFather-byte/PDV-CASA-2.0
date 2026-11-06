@@ -64,7 +64,7 @@ de `requirements.txt` (Pillow); o instalador gerado com elas inclui esse suporte
 
 O PDV aplica a orientação da foto, reduz para até **384 × 192 pixels**, sem ampliar nem
 distorcer, e compõe transparências sobre branco. Uma cópia BMP normalizada fica na pasta
-`identidade/` ao lado do banco (no executável, normalmente `%LOCALAPPDATA%\WILL-PDV`).
+`identidade/` ao lado do banco (no executável, normalmente `%LOCALAPPDATA%\WILL-ADEGA` no Will Adega e `%LOCALAPPDATA%\WILL-PDV` no WillPDV).
 Pode mover ou excluir o original depois de salvar. A referência usa o campo existente da loja,
 sem migração. Versões anteriores das cópias ficam preservadas; remover o logo desativa a referência,
 não apaga originais ou cópias de segurança.
@@ -90,8 +90,7 @@ referência antiga, depois selecione e salve novamente o arquivo original.
 - [ ] Remover, descartar a remoção e depois remover/salvar; conferir o fallback no caixa.
 - [ ] Imprimir cupom em térmica compatível, ligar/desligar a opção de imagem e conferir o texto.
 
-Próxima melhoria sugerida: sugestão de reposição por giro dos últimos 7/14/30 dias,
-mantendo o foco operacional de estoque separado da identidade visual.
+Reposição pelo giro: ver "Depois da instalação" abaixo.
 
 ### Operação no balcão
 
@@ -109,6 +108,15 @@ mantendo o foco operacional de estoque separado da identidade visual.
 | Turno | Abrir com o fundo de troco; sangria (F7) quando a gaveta encher; fechar conferindo o esperado. |
 
 ## Depois da instalação
+
+- **Reposição pelo giro** (Estoque > Reposição pelo giro): escolha o caixa, o período de vendas (7, 14 ou 30 dias),
+  o prazo de entrega do fornecedor e quantos dias o estoque deve durar depois da entrega. A conta aparece em cada
+  produto: `média/dia × (prazo + cobertura) − tem − a caminho → comprar`. Desconta pedidos não entregues dos últimos
+  30 dias (pedido esquecido mais velho que isso não segura a compra), arredonda para unidade inteira quando o produto não
+  aceita fração e mostra quantos fardos dá, quando o produto tem fardo cadastrado. Sem venda no período, o produto
+  abaixo do mínimo usa o dobro do mínimo, com aviso. A escolha fica lembrada. O pedido só nasce se a pessoa confirmar e
+  escolher o fornecedor; o saldo só muda na entrega. Use 7 dias para captar fim de semana forte e 30 para um giro
+  mais estável; feriado, promoção e período em que faltou o produto não entram na conta.
 
 - Em **Estoque > Visão: Adega**, confira a cobertura estimada em dias e use **Lista de compras** ou
   **Gerar pedido do que falta**, escolhendo Geral/Adega. O recorte Adega combina a classificação com os

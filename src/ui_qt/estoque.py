@@ -3,7 +3,7 @@ from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
     QHBoxLayout, QHeaderView, QInputDialog, QLineEdit, QMessageBox,
-    QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
+    QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
 
 from src.core import formatacao as fmt
@@ -102,6 +102,50 @@ class _DialogoQuantidade(QDialog):
 
     def executar(self):
         return self.quantidade if self.exec() == QDialog.DialogCode.Accepted else None
+
+
+class DialogoGiro(QDialog):
+    """Parâmetros da reposição pelo giro: caixa, período de vendas, prazo de entrega e cobertura desejada."""
+
+    def __init__(self, terminais, parametros, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Reposição pelo giro")
+        self.terminais = list(terminais)
+        layout = QVBoxLayout(self)
+        layout.addWidget(texto(
+            "A sugestão usa a venda média do período, o prazo de entrega do fornecedor e quantos dias o estoque deve "
+            "durar depois que a mercadoria chegar. Desconta o que já tem e os pedidos ainda não entregues.", "suave"))
+        form = QFormLayout()
+        self.caixa = QComboBox()
+        self.caixa.addItems(["Todos os caixas"] + [f"Caixa {t}" for t in self.terminais])
+        form.addRow("Vendas de", self.caixa)
+        self.janela = QComboBox()
+        for dias in (7, 14, 30):
+            self.janela.addItem(f"Últimos {dias} dias", dias)
+        self.janela.setCurrentIndex(self.janela.findData(parametros["janela_dias"]))
+        form.addRow("Período", self.janela)
+        self.prazo = QSpinBox()
+        self.prazo.setRange(0, 60)
+        self.prazo.setSuffix(" dia(s)")
+        self.prazo.setValue(parametros["prazo_dias"])
+        form.addRow("Prazo de entrega", self.prazo)
+        self.cobertura = QSpinBox()
+        self.cobertura.setRange(1, 365)
+        self.cobertura.setSuffix(" dia(s)")
+        self.cobertura.setValue(parametros["cobertura_dias"])
+        form.addRow("Estoque para durar", self.cobertura)
+        layout.addLayout(form)
+        botoes = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        botoes.button(QDialogButtonBox.StandardButton.Ok).setText("Calcular sugestão")
+        botoes.accepted.connect(self.accept)
+        botoes.rejected.connect(self.reject)
+        layout.addWidget(botoes)
+
+    def valores(self) -> dict:
+        indice = self.caixa.currentIndex()
+        return {"terminal": self.terminais[indice - 1] if indice > 0 else None,
+                "janela_dias": self.janela.currentData(), "prazo_dias": self.prazo.value(),
+                "cobertura_dias": self.cobertura.value()}
 
 
 class JanelaEstoque(QDialog):
@@ -561,22 +605,18 @@ class JanelaEstoque(QDialog):
         return True
 
     def reposicao_giro(self):
-        """Sugestão pelo giro (30 dias, cobertura de 7) por caixa; o pedido só sai com confirmação."""
+        """Sugestão pelo giro (período, prazo e cobertura escolhidos) por caixa; o pedido só sai com confirmação."""
         from src.ui_qt.visualizador import JanelaVisualizador
         try:
             self._exigir_acesso()
             estoque = self.ctx.estoque
-            terminais = estoque.terminais()
-            caixas = ["Todos os caixas"] + [f"Caixa {t}" for t in terminais]
-            escolha, aceitou = QInputDialog.getItem(
-                self, "Reposição pelo giro", "Qual caixa? (vendas dos últimos 30 dias, cobertura de 7 dias)",
-                caixas, 0, False)
+            parametros = self._parametros_giro(estoque)
             self._exigir_acesso()
-            if not aceitou:
+            if parametros is None:
                 return False
-            indice = caixas.index(escolha)
-            terminal = terminais[indice - 1] if indice else None
-            recorte = self._recorte_compras()
+            terminal = parametros.pop("terminal")
+            estoque.salvar_parametros_giro(**parametros)
+            recorte = {**self._recorte_compras(), **parametros}
             itens = estoque.reposicao_giro(terminal, **recorte)
             if not itens:
                 self.mensagem.setText(
@@ -614,6 +654,11 @@ class JanelaEstoque(QDialog):
             f"Pedido {lancamento_id} criado pelo giro. O estoque só muda quando a entrega for confirmada.")
         self.abrir_lancamentos(lancamento_id)
         return True
+
+    def _parametros_giro(self, estoque):
+        """Abre a janela de parâmetros; None quando a pessoa desiste."""
+        dialogo = DialogoGiro(estoque.terminais(), estoque.parametros_giro(), parent=self)
+        return dialogo.valores() if dialogo.exec() == QDialog.DialogCode.Accepted else None
 
     def etiquetas(self):
         try:

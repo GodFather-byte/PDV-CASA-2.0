@@ -589,3 +589,30 @@ class TestEstoqueQt(BaseTeste):
             if janela.grade.rowCount():
                 janela.grade.selectRow(0)
         self.assertEqual("\n".join(self.banco.conexao.iterdump()), antes)
+
+    def test_reposicao_giro_pede_parametros_lembra_e_mostra_a_conta(self):
+        from src.ui_qt.estoque import DialogoGiro
+        pid = self.novo_produto("SKOL LATA", estoque=True, qt=32)
+        self.ctx.estoque._mover(pid, -30, "venda", "venda", 1)                    # vendeu 30 em 30 dias; sobrou 2
+        janela = self.janela()
+        dialogo = DialogoGiro([1, 2], self.ctx.estoque.parametros_giro(), parent=janela)
+        self.assertEqual(dialogo.valores(), {"terminal": None, "janela_dias": 30, "prazo_dias": 0, "cobertura_dias": 7})
+        dialogo.caixa.setCurrentIndex(2)
+        dialogo.janela.setCurrentIndex(dialogo.janela.findData(14))
+        self.assertEqual((dialogo.valores()["terminal"], dialogo.valores()["janela_dias"]), (2, 14))
+        escolha = {"terminal": None, "janela_dias": 30, "prazo_dias": 3, "cobertura_dias": 7}
+        with patch.object(janela, "_parametros_giro", return_value=dict(escolha)), \
+                patch("src.ui_qt.visualizador.JanelaVisualizador") as visualizador, \
+                patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
+            self.assertTrue(janela.reposicao_giro())
+        conta = visualizador.call_args.args[2]
+        self.assertIn("prazo de entrega 3 + cobertura 7 dias", conta)
+        self.assertIn("1,00/dia × 10 dias (prazo 3 + cobertura 7) = 10 − tem 2 → comprar 8", conta)
+        self.assertEqual(self.ctx.estoque.parametros_giro(), {"janela_dias": 30, "prazo_dias": 3, "cobertura_dias": 7})
+        reaberto = DialogoGiro([1], self.ctx.estoque.parametros_giro(), parent=janela)
+        self.assertEqual(reaberto.prazo.value(), 3)
+        with patch.object(janela, "_parametros_giro", return_value=None), \
+                patch("src.ui_qt.visualizador.JanelaVisualizador") as visualizador:
+            self.assertFalse(janela.reposicao_giro())
+        visualizador.assert_not_called()
+        self.assertEqual(self.ctx.estoque.lancamentos("pedido"), [])
