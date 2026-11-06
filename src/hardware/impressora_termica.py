@@ -181,7 +181,7 @@ class _DocInfo1(ctypes.Structure):
 
 # O que fazer, em palavras de quem toca a casa, para os erros do spooler que mais aparecem com impressora de cupom (USB).
 DICAS_WINDOWS = {
-    5: "O Windows negou o acesso: feche outros programas que usam a impressora ou rode o WillPDV como administrador.",
+    5: "O Windows negou o acesso: feche outros programas que usam a impressora ou rode o programa do caixa como administrador.",
     1722: "O serviço 'Spooler de Impressão' do Windows está parado: abra Serviços (services.msc), inicie 'Spooler de Impressão' e tente de novo.",
     1801: "O nome da impressora no PDV não é o que o Windows mostra: use 'Assistente de impressora' para escolher da lista.",
     1796: "A porta da impressora não existe mais: reinstale o driver da impressora (cabo USB conectado e impressora ligada).",

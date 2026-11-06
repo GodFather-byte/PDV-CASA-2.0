@@ -9,7 +9,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Comando | O que abre |
 |---|---|
 | `python -m src.app` | PDV (`--sync`: segundo plano com a nuvem; `--autoteste`: autoteste). Configurações > Nuvem > `sync_quase_tempo_real` olha a fila na própria aplicação; o lote sobe a cada `sync_lote_seg` (padrão 900 s) (`ServicoSincronizacao`, `src/sync/sincronizador.py`, `src/sync/ociosidade.py`). Fechamento de turno e o botão do celular enviam na hora. Com o porteiro ligado, a página do celular sobe na rede do caixa e o retrato das comandas abertas vai no mesmo lote |
-| `python -m src.app --edicao ea_superacoes` | Edição E&A Superações (adega); `iniciar_ea_superacoes.bat` no Windows |
+| `python -m src.app --edicao willadega` | Edição Will Adega (adega); `iniciar_will_adega.bat` no Windows |
 | `python -m src.app --autoteste-qt [arquivo]` | Mesmo autoteste Qt (alias de `--autoteste`) |
 | `python -m src.app --homologacao [arquivo.json]` | Cinco cenários de recuperação em banco fictício descartável; sem rede ou hardware |
 | `python -m licenciador.app` | Gerador de licenças |
@@ -23,7 +23,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `python -m backend.lojas painel LOJA [senha]` | Senha do painel do dono no celular (app em `/painel/` da nuvem); o dono também a troca no PDV (Configurações > Nuvem) |
 | `python -m backend.lojas limpar-painel` | Apaga já o que passou da retenção do painel (vendas > 120 dias, sessões vencidas, caixas parados); a nuvem também faz sozinha |
 | `python -m tools.gerar_icones_painel` | Ícones PNG da PWA do painel (só biblioteca padrão) |
-| `python build_pdv.py` / `build_licenciador.py` | Executável (PyInstaller) e instalador (Inno Setup); `build_pdv.py --edicao ea_superacoes` gera o E&A Superações |
+| `python build_pdv.py` / `build_licenciador.py` | Executável (PyInstaller) e instalador (Inno Setup); `build_pdv.py --edicao willadega` gera o Will Adega |
 
 ## Pastas
 
@@ -41,7 +41,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `licenciador/` | `nucleo.py` (regras), `tela.py` (janela), `app.py`, `autoteste.py`; central própria em `central.py` (SQLite/emissão/ponte), `central_bot.py`, `central_cli.py`, `central_tela.py` |
 | `backend/` | FastAPI: `main.py` (rotas), `ponte.py` (central técnica, caixas aprovados e entrega de licenças assinadas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobranca_mercadopago.py` (Pix, Checkout Pro, webhook e varredura no próprio processo), `painel.py` e `painel_web/` (painel do dono em `/painel/`), `cardapio.py` e `cardapio_web/` (cardápio só consulta em `/cardapio/`) |
 | `tools/` | `gerar_licenca.py`, `gerar_logos.py`, `esp32_campainha/main.py` (MicroPython da campainha dos quartos; nada disso vai no instalador do PDV) |
-| `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`, `EASuperacoes.iss`) e imagens (`ea-superacoes-*`: marca da edição adega) |
+| `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`, `WillAdega.iss`) e imagens (`willadega-*`: marca da edição adega) |
 | `tests/` | Um `test_*.py` por assunto; `base.py` (banco em memória, relógio controlável); `ui_robo.py` (robô das janelas modais) |
 | `docs/` | Guias por assunto (lista abaixo) |
 | `.github/workflows/` | `testes.yml` (suíte), `build-windows.yml` (instaladores) e `nuvem-deploy.yml` (testa a nuvem e aciona o deploy no Render) |
@@ -58,7 +58,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Verificação do commit publicado | `tools/verificar_nuvem.py`, rota pública `/v1/versao`; guia `docs/ENTREGA_1_10.md` |
 | Cartões de mesas, comandas, garotas e balcão no caixa (visual da boate) | modelo `mesas_modelo.py` (`montar_tiles`); desenho e teclado em `ui_qt/painel_mesas.py`; ligação em `ui_qt/caixa.py` (`carregar_mesas`) |
 | Turno, numeração de cupom, fechamento | `turno_controller.py`, `conferencia_turno.py` |
-| Edição do programa (WillPDV ou E&A Superações/adega): marca, pasta de dados, perfil fixo, opções escondidas | `src/core/edicao.py`; usada em `ui_qt/app.py`, `ui_qt/configuracoes.py`, `config_controller.salvar_config`, `database/conexao.py` |
+| Edição do programa (WillPDV ou Will Adega/adega): marca, pasta de dados, perfil fixo, opções escondidas | `src/core/edicao.py`; usada em `ui_qt/app.py`, `ui_qt/configuracoes.py`, `config_controller.salvar_config`, `database/conexao.py` |
 | Tela cheia do caixa (Ctrl+F, config `caixa_tela_cheia`) | `ui_qt/caixa.py` (`aplicar_tela_cheia`), `ui_qt/app.py` (`abrir_caixa`) |
 | Relógio no topo do caixa (hora, segundos, dia e data) | `ui_qt/relogio.py` (`RelogioCaixa`); estilos `relogio_*` em `ui_qt/caixa.py` |
 | Troca de turno no modelo clássico (maquininha, gaveta, confirmação, resumo sobra/falta) | `ui_qt/caixa.py` (`ir_para_fechamento`), `ui_qt/fechamento_turno.py` (`DialogoMaquininha`, `PainelFechamento`) |

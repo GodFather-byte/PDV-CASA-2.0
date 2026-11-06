@@ -1,12 +1,12 @@
-"""Edição do programa: o mesmo código gera o WillPDV (completo, nasceu boate) e o E&A Superações (só adega).
+"""Edição do programa: o mesmo código gera o WillPDV (completo, nasceu boate) e o Will Adega (só adega).
 
 A edição define a marca (nome, ícone, logotipo), a pasta dos dados no Windows e, na adega, o perfil de operação aplicado na
 primeira entrada, as configurações que ficam sempre com o mesmo valor (sem mesas, garotas, portaria, rodízio nem pré-pago) e
 o que some das Configurações e do menu por não fazer sentido numa adega.
 
 Qual edição roda: a variável PDV_EDICAO; no executável, o arquivo `edicao.txt` ao lado dele (gravado pelo build); senão o
-WillPDV. No código-fonte: `python -m src.app --edicao ea_superacoes` (ou `iniciar_ea_superacoes.bat`).
-Executável e instalador de cada edição: `python build_pdv.py --edicao ea_superacoes` (WillPDV sem a opção).
+WillPDV. No código-fonte: `python -m src.app --edicao willadega` (ou `iniciar_will_adega.bat`).
+Executável e instalador de cada edição: `python build_pdv.py --edicao willadega` (WillPDV sem a opção).
 """
 from __future__ import annotations
 
@@ -45,6 +45,7 @@ class Edicao:
     menu_oculto: frozenset = frozenset()               # botões do menu principal que não aparecem
     sufixo_titulo: str = ""            # complemento do título da janela principal
     titulo_entrada: str = "Entrada"    # título da tela de entrada (depois do nome)
+    aviso_entrada: str = ""            # faixa de aviso na tela de entrada (vazio: sem aviso)
     executavel: str = "WillPDV"        # nome do .exe e da pasta em dist/ (sem acento nem &: o instalador usa no cmd)
     script_instalador: str = "WillPDV.iss"     # em instalador/ (Inno Setup)
 
@@ -54,14 +55,15 @@ class Edicao:
 
 EDICOES = {
     "willpdv": Edicao("willpdv", "WillPDV", "WILLPDV", "willpdv.ico", None, "WILL-PDV",
-                      sufixo_titulo=" • Qt piloto", titulo_entrada="Entrada Qt"),
-    "ea_superacoes": Edicao(
-        "ea_superacoes", "E&A Superações", "E&A SUPERAÇÕES", "ea-superacoes.ico", "ea-superacoes-logo.png",
-        "EA-SUPERACOES", perfil="adega",
+                      sufixo_titulo=" • Qt piloto", titulo_entrada="Entrada Qt",
+                      aviso_entrada="Piloto Qt • Interface em validação"),
+    "willadega": Edicao(
+        "willadega", "Will Adega", "WILL ADEGA", "willadega.ico", "willadega-logo.png",
+        "WILL-ADEGA", perfil="adega",
         fixas={"usar_mesas": "N", "usar_garotas": "N", "usar_portaria": "N", "usar_rodizio": "N", "usar_prepago": "N",
                "usar_quartos": "N"},
         ocultas=CHAVES_CASA_NOTURNA, menu_oculto=frozenset({"cozinha", "quartos"}),
-        executavel="EASuperacoes", script_instalador="EASuperacoes.iss"),
+        executavel="WillAdega", script_instalador="WillAdega.iss"),
 }
 
 

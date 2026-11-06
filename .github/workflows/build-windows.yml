@@ -287,11 +287,11 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # A edição só de adega (E&A Superações): o mesmo código com outra marca, outra pasta de dados e licença própria
+  # A edição só de adega (Will Adega): o mesmo código com outra marca, outra pasta de dados e licença própria
   # (src/core/edicao.py). Mesma disciplina do WillPDV: autoteste no .exe e no instalado, instalação silenciosa de verdade e
   # atualização por cima com o programa aberto.
   adega:
-    name: Programa e instalador (E&A Superações)
+    name: Programa e instalador (Will Adega)
     runs-on: windows-latest
     timeout-minutes: 30
     defaults:
@@ -329,26 +329,26 @@ jobs:
           }
           if (-not (Test-Path $iscc)) { throw "Inno Setup não foi encontrado depois da instalação." }
 
-      - name: Gerar o programa e o instalador (python build_pdv.py --edicao ea_superacoes)
-        run: python build_pdv.py --edicao ea_superacoes
+      - name: Gerar o programa e o instalador (python build_pdv.py --edicao willadega)
+        run: python build_pdv.py --edicao willadega
 
       - name: Conferir os arquivos e a edição gravada
         run: |
-          if (-not (Test-Path dist\EASuperacoes\EASuperacoes.exe)) { throw "Faltou dist\EASuperacoes\EASuperacoes.exe" }
-          if ((Get-Content dist\EASuperacoes\edicao.txt).Trim() -ne "ea_superacoes") { throw "edicao.txt não diz ea_superacoes" }
-          $inst = Get-ChildItem instalador\saida\EASuperacoes-Setup-*.exe
+          if (-not (Test-Path dist\WillAdega\WillAdega.exe)) { throw "Faltou dist\WillAdega\WillAdega.exe" }
+          if ((Get-Content dist\WillAdega\edicao.txt).Trim() -ne "willadega") { throw "edicao.txt não diz willadega" }
+          $inst = Get-ChildItem instalador\saida\WillAdega-Setup-*.exe
           if (-not $inst) { throw "Faltou o instalador em instalador\saida" }
           $inst | Format-Table Name, Length
 
       - name: Autoteste do programa empacotado
         run: |
           $saida = Join-Path $env:RUNNER_TEMP "autoteste-adega-exe.txt"
-          $exe = (Resolve-Path "dist\EASuperacoes\EASuperacoes.exe").Path
+          $exe = (Resolve-Path "dist\WillAdega\WillAdega.exe").Path
           $p = Start-Process -FilePath $exe -ArgumentList "--autoteste", "`"$saida`"" -PassThru
           if (-not $p.WaitForExit(240000)) { $p.Kill(); throw "O autoteste travou (mais de 4 minutos)." }
           if (Test-Path $saida) { Get-Content $saida } else { Write-Host "O programa não escreveu o relatório do autoteste." }
           if ($p.ExitCode -ne 0) { throw "Autoteste do programa falhou (código $($p.ExitCode))." }
-          if (-not (Select-String -Path $saida -Pattern "E&A Superações" -SimpleMatch -Quiet)) { throw "O programa não abriu como E&A Superações." }
+          if (-not (Select-String -Path $saida -Pattern "Will Adega" -SimpleMatch -Quiet)) { throw "O programa não abriu como Will Adega." }
           $saidaQt = Join-Path $env:RUNNER_TEMP "autoteste-adega-qt-exe.txt"
           $qt = Start-Process -FilePath $exe -ArgumentList "--autoteste-qt", "`"$saidaQt`"" -PassThru
           if (-not $qt.WaitForExit(240000)) { $qt.Kill(); throw "O autoteste Qt travou." }
@@ -357,62 +357,62 @@ jobs:
 
       - name: Instalar de verdade, rodar o autoteste do instalado e atualizar por cima com o programa aberto
         run: |
-          $inst = (Get-ChildItem instalador\saida\EASuperacoes-Setup-*.exe | Select-Object -First 1).FullName
-          $destino = Join-Path $env:RUNNER_TEMP "EASuperacoes-instalado"
+          $inst = (Get-ChildItem instalador\saida\WillAdega-Setup-*.exe | Select-Object -First 1).FullName
+          $destino = Join-Path $env:RUNNER_TEMP "WillAdega-instalado"
           $log = Join-Path $env:RUNNER_TEMP "instalador-adega.log"
           $args1 = "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=`"$destino`"", "/LOG=`"$log`""
           $p = Start-Process -FilePath $inst -ArgumentList $args1 -PassThru
           if (-not $p.WaitForExit(300000)) { $p.Kill(); throw "O instalador travou (mais de 5 minutos)." }
           if ($p.ExitCode -ne 0) { if (Test-Path $log) { Get-Content $log -Tail 40 }; throw "O instalador terminou com erro (código $($p.ExitCode))." }
-          if (-not (Test-Path "$destino\EASuperacoes.exe")) { throw "O instalador não colocou o EASuperacoes.exe em $destino." }
+          if (-not (Test-Path "$destino\WillAdega.exe")) { throw "O instalador não colocou o WillAdega.exe em $destino." }
           if (-not (Test-Path "$destino\edicao.txt")) { throw "O instalador não levou o edicao.txt." }
           $saida = Join-Path $env:RUNNER_TEMP "autoteste-adega-instalado.txt"
-          $t = Start-Process -FilePath "$destino\EASuperacoes.exe" -ArgumentList "--autoteste", "`"$saida`"" -PassThru
+          $t = Start-Process -FilePath "$destino\WillAdega.exe" -ArgumentList "--autoteste", "`"$saida`"" -PassThru
           if (-not $t.WaitForExit(240000)) { $t.Kill(); throw "O autoteste do programa instalado travou." }
           if (Test-Path $saida) { Get-Content $saida }
           if ($t.ExitCode -ne 0) { throw "Autoteste do programa instalado falhou (código $($t.ExitCode))." }
-          $gui = Start-Process -FilePath "$destino\EASuperacoes.exe" -PassThru
-          $bg = Start-Process -FilePath "$destino\EASuperacoes.exe" -ArgumentList "--sync" -PassThru
+          $gui = Start-Process -FilePath "$destino\WillAdega.exe" -PassThru
+          $bg = Start-Process -FilePath "$destino\WillAdega.exe" -ArgumentList "--sync" -PassThru
           Start-Sleep -Seconds 8
           $p2 = Start-Process -FilePath $inst -ArgumentList $args1 -PassThru
           if (-not $p2.WaitForExit(300000)) { $p2.Kill(); throw "O instalador travou com o programa aberto (mais de 5 minutos)." }
           if ($p2.ExitCode -ne 0) { throw "O instalador falhou com o programa aberto (código $($p2.ExitCode))." }
-          Get-Process -Name EASuperacoes -ErrorAction SilentlyContinue | Stop-Process -Force
+          Get-Process -Name WillAdega -ErrorAction SilentlyContinue | Stop-Process -Force
           $u = Start-Process -FilePath "$destino\unins000.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -PassThru
           $u.WaitForExit(120000) | Out-Null
 
       - name: Empacotar a versão portátil
         run: |
-          Compress-Archive -Path dist\EASuperacoes -DestinationPath "EASuperacoes-Portatil.zip" -CompressionLevel Optimal
+          Compress-Archive -Path dist\WillAdega -DestinationPath "WillAdega-Portatil.zip" -CompressionLevel Optimal
 
       - name: Resumo (versão, tamanho e SHA-256)
         run: |
-          $inst = Get-ChildItem instalador\saida\EASuperacoes-Setup-*.exe | Select-Object -First 1
+          $inst = Get-ChildItem instalador\saida\WillAdega-Setup-*.exe | Select-Object -First 1
           $hash = (Get-FileHash $inst.FullName -Algorithm SHA256).Hash
           $mb = [math]::Round($inst.Length / 1MB, 1)
           @"
-          ## E&A Superações (adega) ${{ steps.info.outputs.versao }} — commit ${{ steps.info.outputs.curto }}
+          ## Will Adega (adega) ${{ steps.info.outputs.versao }} — commit ${{ steps.info.outputs.curto }}
 
           | Arquivo | Tamanho | SHA-256 |
           | --- | --- | --- |
           | ``$($inst.Name)`` | $mb MB | ``$hash`` |
 
-          A licença é própria: emita no WillPDV Licenças escolhendo o programa E&A Superações.
+          A licença é própria: emita no WillPDV Licenças escolhendo o programa Will Adega.
           "@ >> $env:GITHUB_STEP_SUMMARY
 
       - name: Guardar o instalador
         uses: actions/upload-artifact@v4
         with:
-          name: EASuperacoes-Instalador-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
-          path: instalador/saida/EASuperacoes-Setup-*.exe
+          name: WillAdega-Instalador-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
+          path: instalador/saida/WillAdega-Setup-*.exe
           if-no-files-found: error
           retention-days: 30
 
       - name: Guardar a versão portátil
         uses: actions/upload-artifact@v4
         with:
-          name: EASuperacoes-Portatil-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
-          path: EASuperacoes-Portatil.zip
+          name: WillAdega-Portatil-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
+          path: WillAdega-Portatil.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
@@ -485,9 +485,9 @@ jobs:
             --title "WillPDV - última versão ($VERSAO, commit $curto)" --notes "$notas" \
             publicar/WillPDV-Instalador.exe publicar/WillPDV-Portatil.zip
 
-  # O mesmo para a adega: o instalador do E&A Superações numa Release própria, "ultima-versao-adega", com link fixo.
+  # O mesmo para a adega: o instalador do Will Adega numa Release própria, "ultima-versao-adega", com link fixo.
   ultima_versao_adega:
-    name: Publicar "última versão" do E&A Superações na aba Releases
+    name: Publicar "última versão" do Will Adega na aba Releases
     needs: adega
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -499,13 +499,13 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: EASuperacoes-*
+          pattern: WillAdega-*
           merge-multiple: true
           path: publicar
 
       - name: Nomes fixos (o link não muda a cada versão)
         run: |
-          cp publicar/EASuperacoes-Setup-*.exe publicar/EASuperacoes-Instalador.exe
+          cp publicar/WillAdega-Setup-*.exe publicar/WillAdega-Instalador.exe
           ls -l publicar
 
       - name: Recriar a Release "ultima-versao-adega" apontando para este commit
@@ -515,10 +515,10 @@ jobs:
         run: |
           gh release delete ultima-versao-adega --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
           curto="${GITHUB_SHA:0:7}"
-          notas="Instalador e versão portátil do E&A Superações (edição só de adega do WillPDV), gerados a partir da main (versão $VERSAO, commit $curto). Passaram no autoteste, na instalação silenciosa e na atualização por cima com o programa aberto. A licença é própria: emita no WillPDV Licenças escolhendo o programa E&A Superações."
+          notas="Instalador e versão portátil do Will Adega (edição só de adega do WillPDV), gerados a partir da main (versão $VERSAO, commit $curto). Passaram no autoteste, na instalação silenciosa e na atualização por cima com o programa aberto. A licença é própria: emita no WillPDV Licenças escolhendo o programa Will Adega."
           gh release create ultima-versao-adega --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "E&A Superações - última versão ($VERSAO, commit $curto)" --notes "$notas" \
-            publicar/EASuperacoes-Instalador.exe publicar/EASuperacoes-Portatil.zip
+            --title "Will Adega - última versão ($VERSAO, commit $curto)" --notes "$notas" \
+            publicar/WillAdega-Instalador.exe publicar/WillAdega-Portatil.zip
 
   # O repositório é privado: o caixa não baixa o Release do GitHub. Este job só registra o manifesto assinado
   # na nuvem quando os segredos existem. O arquivo em si fica num HTTPS público (docs/ATUALIZACAO.md).
@@ -549,7 +549,7 @@ jobs:
           import glob, os, subprocess, sys
           base = os.environ.get("PDV_ATUALIZACAO_BASE", "").rstrip("/")
           versao = os.environ["VERSAO"]
-          pares = (("willpdv", "WillPDV-Setup-*.exe"), ("ea_superacoes", "EASuperacoes-Setup-*.exe"))
+          pares = (("willpdv", "WillPDV-Setup-*.exe"), ("willadega", "WillAdega-Setup-*.exe"))
           for edicao, mascara in pares:
               achados = glob.glob("instaladores/" + mascara)
               if not achados:

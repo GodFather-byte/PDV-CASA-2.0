@@ -100,7 +100,7 @@ class TesteNuvem(unittest.TestCase):
         try:
             publicar(db, pacote(versao="9.1.0", notas="antiga"))
             publicar(db, pacote())
-            publicar(db, pacote(edicao="ea_superacoes", versao="9.9.9", url="https://arquivos.exemplo/adega.exe"))
+            publicar(db, pacote(edicao="willadega", versao="9.9.9", url="https://arquivos.exemplo/adega.exe"))
         finally:
             db.close()
         r = self.http.get("/v1/atualizacao/ultima", params={"edicao": "willpdv", "canal": "estavel", "versao": "1.0.0"})
@@ -109,7 +109,7 @@ class TesteNuvem(unittest.TestCase):
         self.assertTrue(corpo["disponivel"])
         self.assertEqual(corpo["pacote"]["versao"], "9.9.9")
         self.assertTrue(conferir(corpo["pacote"], PUBLICA))
-        adega = self.http.get("/v1/atualizacao/ultima", params={"edicao": "ea_superacoes"}).json()
+        adega = self.http.get("/v1/atualizacao/ultima", params={"edicao": "willadega"}).json()
         self.assertEqual(adega["pacote"]["url"], "https://arquivos.exemplo/adega.exe")
         self.assertEqual(self.http.get("/v1/atualizacao/ultima", params={"edicao": "bar"}).json()["disponivel"], False)
 

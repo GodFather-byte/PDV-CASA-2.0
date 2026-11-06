@@ -1,28 +1,28 @@
-﻿; Instalador do E&A Superações, a edição só de adega do WillPDV (Inno Setup 6.3 ou mais novo). Mesmo código, outra marca.
+﻿; Instalador do Will Adega, a edição só de adega do WillPDV (Inno Setup 6.3 ou mais novo). Mesmo código, outra marca.
 ;
-; Antes, gere o executável:  python build_pdv.py --edicao ea_superacoes --sem-instalador   (cria dist\EASuperacoes\)
-; Depois abra este arquivo no Inno Setup e clique em Build > Compile, ou rode só  python build_pdv.py --edicao ea_superacoes.
-; O instalador sai em instalador\saida\EASuperacoes-Setup-<versão>.exe
+; Antes, gere o executável:  python build_pdv.py --edicao willadega --sem-instalador   (cria dist\WillAdega\)
+; Depois abra este arquivo no Inno Setup e clique em Build > Compile, ou rode só  python build_pdv.py --edicao willadega.
+; O instalador sai em instalador\saida\WillAdega-Setup-<versão>.exe
 ;
-; Os dados do caixa (banco, backups, licença, logs) NÃO ficam na pasta do programa: ficam em %LOCALAPPDATA%\EA-SUPERACOES
+; Os dados do caixa (banco, backups, licença, logs) NÃO ficam na pasta do programa: ficam em %LOCALAPPDATA%\WILL-ADEGA
 ; do usuário do Windows (separados dos do WillPDV). Por isso atualizar ou desinstalar o programa não apaga as vendas.
 
 #ifndef Versao
   #define Versao "1.9.0"          ; o build_pdv.py passa a versão de src\versao.py (/DVersao=...)
 #endif
-#define Nome "E&A Superações"
-#define Pasta "EASuperacoes"
-#define Exe "EASuperacoes.exe"
+#define Nome "Will Adega"
+#define Pasta "WillAdega"
+#define Exe "WillAdega.exe"
 
 ; Sem o executável o Inno só diria "No files found": explica o que fazer antes.
 #if !FileExists(SourcePath + "..\dist\" + Pasta + "\" + Exe)
-  #error Falta gerar o programa: abra o Prompt de Comando na pasta do projeto e rode  python build_pdv.py --edicao ea_superacoes --sem-instalador  (cria a pasta dist\EASuperacoes). Depois compile este arquivo de novo.
+  #error Falta gerar o programa: abra o Prompt de Comando na pasta do projeto e rode  python build_pdv.py --edicao willadega --sem-instalador  (cria a pasta dist\WillAdega). Depois compile este arquivo de novo.
 #endif
 
 [Setup]
 ; O AppId identifica o programa no Windows: NUNCA troque, senão a atualização vira uma segunda instalação. É diferente do
 ; WillPDV: os dois instalam lado a lado no mesmo computador.
-AppId={{7BA88FFD-C963-408E-9216-F229FFB3D39B}
+AppId={{8C1996B9-05EC-40F0-99DA-CC6FE7F485A6}
 AppName={#Nome}
 AppVersion={#Versao}
 AppVerName={#Nome} {#Versao}
@@ -32,7 +32,7 @@ DefaultGroupName={#Nome}
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\{#Exe}
 OutputDir=saida
-OutputBaseFilename=EASuperacoes-Setup-{#Versao}
+OutputBaseFilename=WillAdega-Setup-{#Versao}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -47,9 +47,9 @@ RestartApplications=no
 SetupIconFile={#Icone}
 #endif
 ; Logotipo no assistente (painel da esquerda 164x314 e imagem pequena 55x55). Para usar a sua marca, troque esses .bmp pelos seus.
-#if FileExists(SourcePath + "ea-superacoes-assistente.bmp")
-WizardImageFile=ea-superacoes-assistente.bmp
-WizardSmallImageFile=ea-superacoes-assistente-pequena.bmp
+#if FileExists(SourcePath + "willadega-assistente.bmp")
+WizardImageFile=willadega-assistente.bmp
+WizardSmallImageFile=willadega-assistente-pequena.bmp
 #endif
 
 [Languages]
@@ -75,7 +75,7 @@ Name: "{autostartup}\{#Nome} - envio para a nuvem"; Filename: "{app}\{#Exe}"; Pa
 Filename: "{app}\{#Exe}"; Description: "Abrir o {#Nome} agora"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [Code]
-// EASuperacoes.exe esquecido rodando (a tela de entrada aberta atrás de outras janelas, ou o processo de segundo plano --sync, que nem
+// WillAdega.exe esquecido rodando (a tela de entrada aberta atrás de outras janelas, ou o processo de segundo plano --sync, que nem
 // janela tem) trava a instalação em "os aplicativos a seguir estão usando arquivos que precisam ser atualizados": o Restart Manager
 // só consegue fechar quem tem janela. Por isso, antes de copiar os arquivos, o instalador avisa e encerra o que sobrou.
 // Os dados não correm risco: o banco grava cada venda na hora (SQLite), e ele fica fora da pasta do programa.

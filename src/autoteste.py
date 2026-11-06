@@ -96,7 +96,7 @@ def _bibliotecas() -> list[str]:
 
 
 def _edicao() -> list[str]:
-    """Qual edição o programa abre (WillPDV ou E&A Superações) e se a marca dela veio no pacote."""
+    """Qual edição o programa abre (WillPDV ou Will Adega) e se a marca dela veio no pacote."""
     from src.core import edicao
     ed = edicao.atual()
     pasta = edicao.pasta_recursos()

@@ -35,7 +35,7 @@ Configurações > Módulos:
 | `quartos_alerta_min` | 5 | Minutos antes do fim para o aviso amarelo |
 | `quartos_campainhas` | vazio | `quarto=endereço` separados por `;` (ex.: `1=192.168.0.51; 2=192.168.0.52`) |
 
-Acesso: módulo `util_quartos` (nível 1, o caixa já abre). Na edição E&A Superações (adega) o módulo não existe.
+Acesso: módulo `util_quartos` (nível 1, o caixa já abre). Na edição Will Adega (adega) o módulo não existe.
 
 ## Na tela do caixa
 

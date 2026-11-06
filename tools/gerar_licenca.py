@@ -6,7 +6,7 @@ Não faz parte do instalador. A chave privada fica FORA do repositório (padrão
   python -m tools.gerar_licenca novo-par                           # uma única vez
   python -m tools.gerar_licenca emitir --loja CASAVERDE-01 --dias 30
   python -m tools.gerar_licenca emitir --loja CASAVERDE-01 --permanente     # sem vencimento na prática (100 anos)
-  python -m tools.gerar_licenca emitir --loja ADEGA-01 --dias 30 --edicao ea_superacoes   # licença do E&A Superações
+  python -m tools.gerar_licenca emitir --loja ADEGA-01 --dias 30 --edicao willadega   # licença do Will Adega
   python -m tools.gerar_licenca ver CODIGO
 """
 from __future__ import annotations
@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dias", type=int, default=30)
     p.add_argument("--permanente", action="store_true", help=f"sem vencimento na prática: {DIAS_PERMANENTE} dias (100 anos)")
     p.add_argument("--edicao", choices=sorted(edicao.EDICOES), default=edicao.PADRAO,
-                   help="para qual programa (willpdv ou ea_superacoes); a licença só abre esse")
+                   help="para qual programa (willpdv ou willadega); a licença só abre esse")
     p.add_argument("--arquivo", type=Path, default=None)
     p = sub.add_parser("ver", help="confere a assinatura de um código")
     p.add_argument("codigo")
