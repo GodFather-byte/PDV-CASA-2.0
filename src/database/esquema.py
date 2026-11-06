@@ -781,7 +781,7 @@ TABELAS += [
 ]
 
 
-def _migracao_historico_produtos() -> list[str]:
+def _migracao_historico_produtos() -> list[str | tuple[str, str, str]]:
     comandos = [
         f"INSERT OR IGNORE INTO produtos_historico ({_COLUNAS_HISTORICO}) SELECT {_COLUNAS_HISTORICO} FROM produtos",
         "UPDATE produtos_historico SET custo_cent = ult_preco_cent",
@@ -796,13 +796,13 @@ def _migracao_historico_produtos() -> list[str]:
         nova = f"_{tabela}_v17"
         comandos += [
             ddl.replace(f"IF NOT EXISTS {tabela} (", f"{nova} (", 1),
-            f"INSERT INTO {nova} SELECT * FROM {tabela}",
+            ("copiar_colunas", tabela, nova),
             f"DROP TABLE {tabela}",
             f"ALTER TABLE {nova} RENAME TO {tabela}",
         ]
     comandos += [
         next(sql for sql in TABELAS if sql.startswith("CREATE TABLE IF NOT EXISTS itens_venda_partes (")),
-        "INSERT INTO itens_venda_partes SELECT * FROM _partes_v17",
+        ("copiar_colunas", "_partes_v17", "itens_venda_partes"),
         "DROP TABLE _partes_v17",
         "UPDATE sqlite_sequence SET seq = MAX(seq, COALESCE((SELECT seq FROM _sequencias_v17 s "
         "WHERE s.name = sqlite_sequence.name), seq))",
@@ -1005,6 +1005,7 @@ AUDITORIA = [
 # Migrações por versão de destino, aplicadas em ordem quando o banco está atrasado
 # (ver BancoDados._migrar). Bancos novos já nascem na VERSAO_ESQUEMA e não as executam. Cada passo é um
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
+# ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
     36: [],  # tabela aditiva shows_quartos; sem gerar pagamentos retroativos
     35: [

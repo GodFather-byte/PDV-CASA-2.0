@@ -174,6 +174,9 @@ class BancoDados:
             try:
                 for passo in comandos or ():
                     if isinstance(passo, tuple):
+                        if passo[0] == "copiar_colunas":
+                            self._copiar_colunas_migracao(passo[1], passo[2])
+                            continue
                         # ("coluna", tabela, nome, definição): só adiciona se faltar (a tabela pode ter acabado
                         # de ser criada já na forma atual, em um banco antigo que não a tinha).
                         _, tabela, coluna, definicao = passo
@@ -186,6 +189,23 @@ class BancoDados:
                 self.conexao.execute("ROLLBACK")
                 raise
             self.conexao.execute("COMMIT")
+
+    def _copiar_colunas_migracao(self, origem: str, destino: str) -> None:
+        """Copia pelo nome dos campos reais; colunas novas recebem os defaults do DDL.
+
+        O DDL da v17 acompanha TABELAS, mas o banco da loja pode ter menos colunas.
+        Nunca descarte silenciosamente um campo da origem que não exista no destino.
+        A cópia participa da transação da migração, antes de remover a tabela antiga.
+        """
+        def citar(nome):
+            return '"' + nome.replace('"', '""') + '"'
+
+        colunas = [r[1] for r in self.conexao.execute(f"PRAGMA table_info({citar(origem)})")]
+        novas = {r[1] for r in self.conexao.execute(f"PRAGMA table_info({citar(destino)})")}
+        if not colunas or not set(colunas) <= novas:
+            raise ValueError(f"Migração de {origem}: existem colunas sem destino; os dados foram preservados.")
+        campos = ", ".join(citar(c) for c in colunas)
+        self.conexao.execute(f"INSERT INTO {citar(destino)} ({campos}) SELECT {campos} FROM {citar(origem)}")
 
     # ------------------------------------------------------------ transações
     @contextmanager
