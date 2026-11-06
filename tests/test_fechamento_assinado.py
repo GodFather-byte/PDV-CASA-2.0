@@ -196,8 +196,9 @@ class TesteViaDaGarotaNoTexto(BaseFechamento):
         self.lancar(180, 30)
         segunda = self.lancar(180, 5)
         texto = self.via(segunda)
-        for trecho in ("COMISSÃO LANÇADA", "VIA DA GAROTA", "Garota: 180 MARIA", "Lançamento nº 2", "Operador: ADM"):
+        for trecho in ("COMISSÃO LANÇADA", "180 MARIA", "Lançamento nº 2", "Operador: ADM"):
             self.assertIn(trecho, texto)
+        self.assertNotIn("garota", texto.lower())
         self.assertRegex(texto, r"Valor desta comissão +5,00")
         # o que já estava marcado (30,00) não entra nem é somado: a via é só do lançamento que acabou de ser marcado
         self.assertNotIn("30,00", texto)
@@ -211,7 +212,7 @@ class TesteViaDaGarotaNoTexto(BaseFechamento):
 
     def test_garota_sem_cadastro_sai_so_com_o_numero(self):
         texto = self.via(self.lancar(180, 25), nome="")
-        self.assertIn("Garota: 180", texto.splitlines())
+        self.assertIn("180", texto.splitlines())
 
     def test_cabe_na_coluna(self):
         for colunas in (40, 48):
@@ -242,7 +243,7 @@ class TesteImpressaoDaVia(BaseFechamento):
         cid = self.com.lancar(180, 2500, self.turno, self.adm)
         caminho = self.imp.imprimir_via_comissao(cid, "ADM")
         self.assertTrue(Path(caminho).name.endswith(f"via_comissao_180_{cid}.txt"))
-        self.assertIn("VIA DA GAROTA", Path(caminho).read_text(encoding="utf-8"))
+        self.assertIn("COMISSÃO LANÇADA", Path(caminho).read_text(encoding="utf-8"))
 
     def test_desligada_nao_grava_nem_imprime(self):
         self.banco.cfg_set("imprimir_via_comissao", "N")

@@ -166,7 +166,7 @@ class TesteComandaDaGarotaVazia(BaseCaixaQt):
             self.j.fechar_venda()
         titulo, texto, _nome = emitir.call_args[0][:3]
         self.assertEqual(emitir.call_args.kwargs["tipo"], "recibo_garota")    # o estilo com as linhas em letra alta
-        self.assertIn("Garota: 12 Bia Souza", texto)
+        self.assertIn("12 Bia Souza", texto)
         self.assertEqual(self.j.ctx.comissoes.nome(12), "BIA")                  # o cadastro não muda
         self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
 
@@ -207,7 +207,7 @@ class TesteComandaDaGarotaVazia(BaseCaixaQt):
             self._enter()
         a = self.banco.um("SELECT garota, shows_qtd, nome FROM acertos_garotas")
         self.assertEqual(tuple(a), (45, 2, "Bia"))
-        self.assertIn("Garota: 45 Bia", emitir.call_args[0][1])
+        self.assertIn("45 Bia", emitir.call_args[0][1])
         self.assertIsNone(self.banco.um("SELECT id FROM vendas WHERE id = ?", (vid,)))
         self.assertIsNone(self.j.venda_id)
 

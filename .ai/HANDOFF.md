@@ -1,18 +1,17 @@
 # Handoff — 05/11/2026
 
-## Correção da atualização sobre banco antigo
+## Identificação nos comprovantes de comissão/acerto
 
-- Log da loja: PDV 1.10.0 falha ao abrir banco usado no 1.2.0, na migração v17: `_itens_venda_v17 has 20 columns but 14 values were supplied`. Erro Tk de outubro era outra ocorrência antiga.
-- Reproduzido em banco descartável com 14 colunas reais dos itens. Causa: `_migracao_historico_produtos` usa o DDL atual de 20 colunas e fazia `INSERT ... SELECT *` sem nomear destino.
-- Correção em esquema/conexao: passo `copiar_colunas` consulta campos reais por PRAGMA e copia todos por nome, mantendo defaults dos campos novos. Aplicado a itens de venda, estoque, movimentos e partes. Campo de origem sem destino interrompe sem descartar dados. Migração participa da transação existente.
-- Sem aumento de versão: corrige a etapa 17 que falhou e será retomada. Backup anterior automático preservado; não editar ou apagar o banco da loja, nem usar versão antiga sobre banco já migrado.
-- `tests/test_migracao_itens_antigos.py`: versões de origem 12/16 com 14 campos, preservação exata de linhas, valores, IDs/sequência, estoque/partes e vínculos, defaults, backup prévio, reabertura, rollback e recusa a campo sem destino.
-- Validação: 85 testes de migração, histórico, SQLite, auditoria, exclusão de produtos, esquemas 19/21 e retornáveis aprovados; `git diff --check` limpo. Banco real da loja não foi acessado. Precisa gerar/instalar um executável Windows contendo a correção para resolver o computador da loja.
-- Usuário autorizou publicar esta correção na main. Conferir remoto e preservar trabalho do Codex local; não incluir automaticamente mudanças locais de impressora que não façam parte da correção.
+- Pedido: comprovante das profissionais sem a palavra "Garota", apenas número e nome.
+- `impressao_controller.py`: via de comissão e recibo de acerto identificam `180 MARIA`, sem rótulo; removido "VIA DA GAROTA" e assinatura passa a "Assinatura". Estilo térmico mantém identificação em letra alta pelo prefixo numérico.
+- `ui_qt/comissao.py`: comprovante de saída financeira também imprime só número/nome como motivo. Descrição contábil gravada, valores, shows, comissões e demais cálculos permanecem como antes.
+- Atualizadas as verificações existentes dos textos e do tamanho de letra. Teste do pagamento real pela UI confere que recibo e comprovante de saída contêm número/nome e não contêm "garota".
+- Validação: 212 testes de comissões, shows, fechamento, acerto Qt e comanda vazia aprovados; após fortalecer a asserção dos dois documentos, teste específico passou. `git diff --check` limpo.
 
-## Continuidade anterior
+## Continuidade
 
-- `9324c64`: ajustes do assistente de impressora (largura/acentos/corte); estava local, não publicado nesta conversa. Usuário disse que Codex do PC já está ajustando a impressora: evitar sobrepor esses arquivos.
-- `fb13f93` foi publicado: shows automáticos de quartos + campo de shows manuais/anteriores no acerto, tarifa 50/60. Esquema 36, sem backfill. Seleção de tempo/profissional e correção de corte de telas também publicadas.
-- Tabela entregue fora do checkout em /workspace/entregas/bar_adega: 160 sugestões de produtos/doses, CSV/XLSX com preços zerados a preencher; ambos validados no importador descartável. Usuário preferiu tabela; consulta online por GTIN não foi implementada.
-- Ambiente: Python 3.12, .venv e dependências fixadas. Homologar Windows/periféricos/central. Ficha código 31 pendente; não hardcodar globalmente. Credenciais fora do chat.
+- Main anterior `2103b7a`: corrige migração v17 do banco antigo (14 campos dos itens para DDL atual de 20) copiando campos pelo nome, sem perder os defaults novos. Backup e rollback preservados. 85 testes aprovados. Não apagar banco da loja; instalar executável com correção.
+- `9324c64` continua na branch work como ajuste local de impressora; não foi incluído na publicação da migração. Codex no PC do usuário está ajustando impressora; evitar sobrepor arquivos.
+- `fb13f93`: shows automáticos dos quartos + manuais/anteriores no acerto (50/60); esquema 36, sem backfill, IDs vinculados ao acerto evitam repetição. Seleção de tempo/profissional e correção de corte das telas já publicadas.
+- Tabela de 160 sugestões em /workspace/entregas/bar_adega (fora do checkout), CSV/XLSX validados; preencher preços zerados antes de importar. Usuário preferiu tabela; consulta online GTIN não implementada.
+- Ambiente Python 3.12/.venv. Gerar/homologar instalador Windows e periféricos. Ficha código 31 pendente; credenciais fora do chat. Demais detalhes no histórico deste arquivo.

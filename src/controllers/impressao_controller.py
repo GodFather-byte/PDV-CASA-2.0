@@ -39,7 +39,8 @@ _ESTILOS = {
     "saida": {"negrito_linhas": 6, "grande_prefixos": ("FAVOR ENTREGAR", "TICKET NA SAIDA", "DATA:", "CARTAO:", "MESA:")},
     "via_comissao": {"negrito_linhas": 1, "grande_prefixos": ("Valor desta", "Pontos desta")},
     # Pagamento da garota: o recibo e o comprovante de saída da gaveta saem com as linhas que ela confere em letra mais alta.
-    "recibo_garota": {"negrito_linhas": 1, "grande_prefixos": ("RECIBO", "Garota:", "Pago em:", "COMISSÃO", "SHOWS", "TOTAL PAGO",
+    # A identificação começa pelo número, sem rótulo, e continua em letra alta.
+    "recibo_garota": {"negrito_linhas": 1, "grande_prefixos": (*tuple("0123456789"), "RECIBO", "Pago em:", "COMISSÃO", "SHOWS", "TOTAL PAGO",
                                                               "Dinheiro", "Vale", "Pix", "Saiu do dinheiro", "Pago fora",
                                                               "Conta fechada")},
     "saida_garota": {"negrito_linhas": 1, "grande_prefixos": ("Valor", "Motivo:", "Operador:")},
@@ -408,7 +409,7 @@ class ImpressaoController:
         w = self.largura()
         quem = f"{lancamento['garota']} {nome}".strip()
         rotulo = "Pontos desta comissão" if comissoes.em_pontos() else "Valor desta comissão"
-        linhas = self.cabecalho(w) + _titulo("COMISSÃO LANÇADA", w) + ["VIA DA GAROTA".center(w), f"Garota: {quem}"[:w],
+        linhas = self.cabecalho(w) + _titulo("COMISSÃO LANÇADA", w) + [quem[:w],
             _lr(f"Lançamento nº {lancamento['id']}", fmt.fmt_datahora(lancamento["criado_em"])[:16], w),
             "-" * w, _lr(rotulo, comissoes.em_pontos_texto(lancamento["valor_cent"]) if comissoes.em_pontos()
                          else M(lancamento["valor_cent"]), w),
@@ -438,7 +439,7 @@ class ImpressaoController:
         comissao = pag.get("comissao_cent", pag["total_cent"] - pag.get("shows_cent", 0))
         so_comissao = bool(pag["quantidade"]) and not shows
         linhas = self.cabecalho(w) + _titulo("RECIBO DE COMISSÃO" if so_comissao else "RECIBO DE ACERTO", w) + [
-            f"Garota: {quem}"[:w], _lr("Pago em:", fmt.fmt_datahora(pag["pago_em"])[:16], w), "-" * w]
+            quem[:w], _lr("Pago em:", fmt.fmt_datahora(pag["pago_em"])[:16], w), "-" * w]
         if shows:
             linhas += [_lr(f"COMISSÃO ({pag['quantidade']})", M(comissao), w),
                        _lr(f"SHOWS: {shows} x {M(pag['valor_show_cent'])}", M(pag["shows_cent"]), w),
@@ -462,7 +463,7 @@ class ImpressaoController:
             linhas.append("Conta fechada, nada a pagar.")
         else:
             linhas.append("Saiu do dinheiro do caixa." if pag.get("tirou_do_caixa") else "Pago fora do caixa.")
-        linhas += [f"Operador: {operador}", "", "", "_" * w, "Assinatura da garota".center(w), "=" * w]
+        linhas += [f"Operador: {operador}", "", "", "_" * w, "Assinatura".center(w), "=" * w]
         return "\n".join(linhas)
 
     def leitura_x(self, turno_id: int) -> str:

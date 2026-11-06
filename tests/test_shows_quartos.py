@@ -362,9 +362,13 @@ class TestShowsQuartosQt(BaseShows):
         self.addCleanup(d.deleteLater)
         d.grupo_show.button(5000).click()
         d.confirmar()
-        with patch.object(j, "_autorizar", return_value=True), patch.object(j, "_emitir"), \
+        with patch.object(j, "_autorizar", return_value=True), patch.object(j, "_emitir") as emitir, \
              patch.object(j, "_dialogo_acerto", return_value=d.resultado):
             j.pagar_comissao(180)
+        self.assertEqual(emitir.call_count, 2)
+        for chamada in emitir.call_args_list:
+            self.assertIn("180 ANA", chamada.args[1])
+            self.assertNotIn("garota", chamada.args[1].lower())
         self.assertEqual(self.banco.valor("SELECT total_cent FROM acertos_garotas"), 12500)
         self.assertEqual(self.com.quantidade_shows_quartos(180), 0)
         novo = DialogoAcerto(j, ctx, 180, "ANA", 0, 0)

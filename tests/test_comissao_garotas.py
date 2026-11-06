@@ -221,8 +221,8 @@ class TestePagarComissao(BaseComissao):
         self.lancar(180, 25); self.lancar(180, 30)
         p = self.com.pagar(180, self.turno, self.adm)
         recibo = ImpressaoController(self.banco).recibo_comissao(p, "ADM")
-        for trecho in ("RECIBO DE COMISSÃO", "Garota: 180 MARIA", "55,00", "TOTAL PAGO (2)", "Saiu do dinheiro do caixa.",
-                       "Operador: ADM", "Assinatura da garota"):
+        for trecho in ("RECIBO DE COMISSÃO", "180 MARIA", "55,00", "TOTAL PAGO (2)", "Saiu do dinheiro do caixa.",
+                       "Operador: ADM", "Assinatura"):
             self.assertIn(trecho, recibo)
         self.assertTrue(all(len(l) <= 40 for l in recibo.splitlines()), recibo)
         fora = self.com.pagar(156, self.turno, self.adm, False) if self.lancar(156, 1) else None

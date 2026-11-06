@@ -31,9 +31,10 @@ class TesteAcertoComShows(BaseComissao):
         self.garota(180, "MARIA")
         self.lancar(180, 25)
         recibo = ImpressaoController(self.banco).recibo_comissao(self.acertar(10, 5000), "ADM")
-        for trecho in ("RECIBO DE ACERTO", "Garota: 180 MARIA", "COMISSÃO (1)", "25,00", "SHOWS: 10 x 50,00", "500,00",
-                       "TOTAL PAGO", "525,00", "Assinatura da garota"):
+        for trecho in ("RECIBO DE ACERTO", "180 MARIA", "COMISSÃO (1)", "25,00", "SHOWS: 10 x 50,00", "500,00",
+                       "TOTAL PAGO", "525,00", "Assinatura"):
             self.assertIn(trecho, recibo)
+        self.assertNotIn("garota", recibo.lower())
         self.assertTrue(all(len(l) <= 40 for l in recibo.splitlines()), recibo)
 
     def test_sem_shows_tudo_continua_igual(self):
@@ -89,7 +90,7 @@ class TesteAcertoComShows(BaseComissao):
     def test_recibo_do_fechamento_sem_valor(self):
         p = self.com.pagar(180, self.turno, self.adm, permitir_zerado=True)
         recibo = ImpressaoController(self.banco).recibo_comissao(p, "ADM")
-        for trecho in ("RECIBO DE ACERTO", "TOTAL PAGO (0)", "Conta fechada, nada a pagar.", "Assinatura da garota"):
+        for trecho in ("RECIBO DE ACERTO", "TOTAL PAGO (0)", "Conta fechada, nada a pagar.", "Assinatura"):
             self.assertIn(trecho, recibo)
         self.assertNotIn("Pago fora do caixa", recibo)
 
@@ -101,7 +102,7 @@ class TesteAcertoComShows(BaseComissao):
         imp = ImpressaoController(self.banco)
         recibo = imp.recibo_comissao(self.com.pagar(180, self.turno, self.adm), "ADM")
         dados = term.texto_para_escpos(recibo, **_ESTILOS["recibo_garota"])
-        for linha in ("Garota: 180 MARIA", "TOTAL PAGO (1)"):
+        for linha in ("180 MARIA", "TOTAL PAGO (1)"):
             posicao = dados.index(linha.encode("cp850"))
             self.assertIn(term.TAMANHO_ALTO, dados[max(0, posicao - 12):posicao], linha)      # o dobro de altura vem logo antes
         saida = imp.comprovante_movimento("saida", 2500, "Comissão garota 180 MARIA", "ADM")
@@ -330,7 +331,7 @@ class TesteNomeNoAcerto(BaseComissao):
         self.assertEqual(p["nome"], "Bia Souza")
         self.assertEqual(self.banco.valor("SELECT nome FROM acertos_garotas"), "Bia Souza")
         self.assertEqual(self.banco.valor("SELECT descricao FROM movimentos_caixa"), "Acerto garota 180 Bia Souza")
-        self.assertIn("Garota: 180 Bia Souza", ImpressaoController(self.banco).recibo_comissao(p, "ADM"))
+        self.assertIn("180 Bia Souza", ImpressaoController(self.banco).recibo_comissao(p, "ADM"))
         self.assertEqual(self.com.nome(180), "MARIA")
         self.assertEqual(self.com.shows_do_turno(self.turno)["por_garota"][0]["nome"], "Bia Souza")
 
@@ -347,7 +348,7 @@ class TesteNomeNoAcerto(BaseComissao):
         p = self.com.pagar(77, self.turno, self.adm, permitir_zerado=True, nome="Ana")
         recibo = ImpressaoController(self.banco).recibo_comissao(p, "ADM")
         dados = term.texto_para_escpos(recibo, **_ESTILOS["recibo_garota"])
-        for linha in ("Garota: 77 Ana", "Conta fechada", "RECIBO DE ACERTO"):
+        for linha in ("77 Ana", "Conta fechada", "RECIBO DE ACERTO"):
             posicao = dados.index(linha.encode("cp850"))
             self.assertIn(term.TAMANHO_ALTO, dados[max(0, posicao - 40):posicao], linha)
 

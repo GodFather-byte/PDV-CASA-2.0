@@ -115,7 +115,7 @@ def pagar_garota(caixa, numero: int) -> dict | None:
             # O dinheiro saiu da gaveta: sai também o comprovante da saída financeira (o mesmo da sangria), só com o que saiu
             # do caixa (o Pix não passa por ela). A gaveta já foi aberta pelo recibo.
             caixa._emitir("Comprovante de saída",
-                          ctx.impressao.comprovante_movimento("saida", pag["dinheiro_cent"], pag["movimento_descricao"],
+                          ctx.impressao.comprovante_movimento("saida", pag["dinheiro_cent"], f"{numero} {pag['nome']}".strip(),
                                                               ctx.operador.nome),
                           f"saida_comissao_{numero}", tipo="saida_garota")
     except Exception as e:  # noqa: BLE001 - o pagamento já está gravado: falha do papel nunca pode parecer falha do acerto
