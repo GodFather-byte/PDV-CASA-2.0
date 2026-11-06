@@ -9,7 +9,13 @@
 - Quartos paginados de oito em oito no caixa e painel completo; atalhos Q + número e avisos consideram todos os quartos.
 - Documentação: `docs/OPERACAO_CAIXA_E_TELAS.md`. Novos testes em `tests/test_operacao_responsiva.py` cobrem saldo, estorno, composição, opção estrita, níveis, inativo/módulo desligado, busca, pagamentos, comissão, 50 quartos e layout de área cliente 1280×680.
 - Validação: suíte completa executou 2363 testes em 328s, com 2 falhas/1 erro exclusivamente porque o Xvfb :98 encerrou (central/licenciador), mais 24 pulados. Após abrir :99, os 49 testes desses módulos passaram, incluindo os 18 gráficos antes pulados e os três casos afetados. Resultado consolidado: 2357 casos Python aprovados; 6 dependem de Windows/PostgreSQL externo. Node: 2 testes aprovados. Testes direcionados finais: 83 de painéis/acerto/relatórios/acessos e 51 de configuração/tela cheia/layout aprovados. `git diff --check` limpo. Logs em `/tmp/pdv-operacao-completo-final.log`, `/tmp/pdv-tk-verificacao.log` e `/tmp/pdv-operacao-node.log`.
-- Alterações locais ainda não publicadas na main. Não foi gerado instalador Windows nesta tarefa; conferir no caixa real, especialmente escala de tela do Windows.
+- Usuário autorizou publicar tudo na main em 06/11/2026. Entrega reúne estoque/telas/quartos (`389458a`) e a correção isolada do CI (`cad1e44`). Não foi gerado instalador local nesta tarefa; workflow Windows gera o instalador após o push. Conferir no caixa real, especialmente escala de tela do Windows.
+
+## Correção da falha no GitHub
+
+- Execução 42150592006, job Windows/Python 3.10: `test_duas_conexoes_nao_pagam_os_mesmos_shows` falhou com `BrokenBarrierError` durante a preparação das conexões. Os outros quatro jobs passaram.
+- Teste agora prepara as duas conexões antes da disputa pelo pagamento. Cada conexão nasce, é usada e fecha em sua própria thread. A barreira sincroniza apenas o pagamento; continuam as asserções de um pago, outro recusado, um único acerto e uma única saída de R$ 50. Código financeiro e timeouts do banco inalterados.
+- `ExitStack` fecha conexões antes de encerrar executores, inclusive em falhas. Validação isolada: 122 testes de shows/comissões/acerto Qt e 25 repetições do teste de concorrência aprovados. Conjunto com estoque/telas/quartos: 133 testes aprovados antes do push. Logs `/tmp/pdv-ci-isolado.log`, `/tmp/pdv-ci-concorrencia-repetida.log` e `/tmp/pdv-publicacao-conjunto.log`. Validar conjunto publicado no CI.
 
 ## Continuidade
 
