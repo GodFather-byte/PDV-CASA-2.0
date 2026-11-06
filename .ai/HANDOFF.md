@@ -2,7 +2,7 @@
 
 ## Show pelo código 33; número da garota só marca (pedido do usuário depois do PR #57)
 
-- `quartos_codigo_show` (ex.: 33) define o produto do show; o preço dele vira o valor do bloco (`QuartosController.config`).
+- `quartos_codigo_show` (padrão 33; v43 preenche o campo vazio de bancos antigos) define o produto do show; o preço dele vira o valor do bloco (`QuartosController.config`).
 - Número da garota na conta (`CaixaController.marcar_garota`, esquema v42: `vendas.garota_quarto/quarto_pedido`) não
   tem valor: liga a ela os shows já lançados e os próximos. Repetir o número não soma. `fechar` recusa show sem
   garota (`_conferir_shows_com_garota`). Sem código configurado, segue o produto QUARTO automático.

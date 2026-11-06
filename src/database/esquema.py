@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 42
+VERSAO_ESQUEMA = 43
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -1044,6 +1044,11 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v43: o show da casa é o código 33. Com o campo vazio o caixa usava o QUARTO automático e o 33 lançado na conta
+    # não ia para a garota nem contava o quarto. Sem produto 33 ativo, continua valendo o QUARTO automático.
+    43: [
+        "UPDATE config SET valor = '33' WHERE chave = 'quartos_codigo_show' AND TRIM(COALESCE(valor, '')) = ''",
+    ],
     # v42: a garota marcada na conta do cliente (número dela digitado, sem valor) e o quarto pedido; os shows lançados
     # na conta (produto do show, ex.: código 33) vão para ela ao pagar.
     42: [

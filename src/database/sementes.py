@@ -96,7 +96,7 @@ CONFIG_PADRAO = {
     # Controle de quartos: tempo em blocos (valor só informativo; o pagamento é venda normal) e campainha por quarto.
     "usar_quartos": "N", "quartos_qtd": "7", "quartos_minutos_bloco": "30", "quartos_valor_bloco": "90",
     "quartos_alerta_min": "5", "quartos_campainhas": "", "quartos_garota_minimo": "100",
-    "quartos_codigo_show": "",
+    "quartos_codigo_show": "33",
     # Recursos da casa noturna: nascem ligados porque o sistema nasceu boate; o perfil do estabelecimento os desliga nos
     # outros tipos de negócio (perfil_controller.py).
     "usar_garotas": "S", "usar_portaria": "S", "perfil_operacao": "boate",
