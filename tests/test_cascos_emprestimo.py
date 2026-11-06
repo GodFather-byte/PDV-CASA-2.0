@@ -77,6 +77,16 @@ class TesteCascosEmprestados(BaseCaixa):
         self.assertEqual(self.saldo(), 3)
 
 
+def _descartar(janela):
+    """Fecha e destrói a janela agora (sobra para o fim do Python derruba o processo no Qt)."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QApplication
+    janela.close()
+    janela.deleteLater()
+    QApplication.processEvents()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 try:
     import os
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -93,7 +103,7 @@ if JanelaRetornaveis is not None:
             ctx = Contexto(self.banco)
             ctx.operador = ctx.acesso.autenticar("ADM", "ADM")
             janela = JanelaRetornaveis(ctx)
-            self.addCleanup(janela.deleteLater)
+            self.addCleanup(_descartar, janela)
             self.assertIn("Nenhum cliente", janela.texto_devedores())
             vid, _ = self.venda_do_joao(emprestados=3)
             self.caixa.fechar(vid)

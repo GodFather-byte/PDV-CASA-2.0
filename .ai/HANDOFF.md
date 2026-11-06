@@ -22,7 +22,18 @@ Branch `claude/cloud-environment-setup-6auvo5` (PR #56), com a main `e364e2d` (c
   "Gerar novo código de instalação"; "Gerar senha do painel do dono" substitui `backend.lojas painel`. No caixa, o
   botão da tela de entrada aceita o código: grava `api_url`, `chave_loja`, `api_token`, liga `painel_dono` e busca a
   licença (pergunta antes de trocar de loja).
-- Suíte completa local: 2371 testes OK (6 pulados), Node 9/9.
+- **Pacote de melhorias pedido pelo usuário (todas menos NFC-e):**
+  - Aviso diário de licenças vencendo (`backend/avisos_fornecedor.py`, tabela `fornecedor_avisos`, e-mail para
+    `PDV_AVISOS_EMAIL` ou `EMAIL_FROM`; gatilhos: varredura MP, abertura da central, consulta de licença do caixa).
+  - Buscar fotos em lote (Cadastros > Produtos > Buscar fotos; thread + aprovação uma a uma).
+  - Alterar quantidade da linha (`CaixaController.alterar_quantidade`, Ctrl+Q; diminuir = cancelamento parcial).
+  - Promoção da gelada (esquema v38: `promo_gelada_cent`, `sem_gelada_cent`, `hora_gelada_cent`).
+  - Kit de implantação e QR na central (`/lojas/{chave}/kit`; `segno` entrou no backend/requirements).
+  - Prazo por fornecedor na reposição (esquema v39: `fornecedores.prazo_entrega_dias`; fornecedor habitual = última compra).
+  - Cascos levados sem trazer viram empréstimo no cliente ao fechar (esquema v40: `itens_venda.cascos_emprestados`;
+    regra decidida pelo usuário: anotar empréstimo, sem caução).
+  - Combos com preço fixo (`ProdutoController.criar_combo`, botão Criar combo; regra do usuário: preço do combo fixo).
+- Suíte completa local: 2474 testes OK (6 pulados), sem falha no encerramento do Qt; Node 9/9.
 
 ## Pendências
 

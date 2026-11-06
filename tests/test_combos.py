@@ -56,6 +56,16 @@ class TesteCombos(BaseCaixa):
         self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM produtos WHERE nome = 'X'"), 0)
 
 
+def _descartar(janela):
+    """Fecha e destrói a janela agora (sobra para o fim do Python derruba o processo no Qt)."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QApplication
+    janela.close()
+    janela.deleteLater()
+    QApplication.processEvents()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 try:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication, QDialog, QPushButton
@@ -71,10 +81,10 @@ if FormularioCombo is not None:
             ctx = Contexto(self.banco)
             ctx.operador = ctx.acesso.autenticar("ADM", "ADM")
             lista = JanelaCadastro(ctx, "produtos")
-            self.addCleanup(lista.deleteLater)
+            self.addCleanup(_descartar, lista)
             self.assertIn("Criar combo", [b.text() for b in lista.findChildren(QPushButton)])
             f = FormularioCombo(ctx)
-            self.addCleanup(f.deleteLater)
+            self.addCleanup(_descartar, f)
             f.nome.setText("BALDE")
             self.assertTrue(f.incluir(self.skol, "4"))
             self.assertTrue(f.incluir(self.skol, "2"))

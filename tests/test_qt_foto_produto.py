@@ -20,6 +20,16 @@ except ImportError:                                   # pragma: no cover - sem P
     QDialog = None
 
 
+def _descartar(janela):
+    """Fecha e destrói a janela agora (sobra para o fim do Python derruba o processo no Qt)."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QApplication
+    janela.close()
+    janela.deleteLater()
+    QApplication.processEvents()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 @unittest.skipIf(QDialog is None, "PySide6 não instalado")
 class TesteFotoNasTelas(BaseCaixaQt):
     def formulario(self, id_=None):
@@ -30,7 +40,7 @@ class TesteFotoNasTelas(BaseCaixaQt):
     def setUp(self):
         super().setUp()
         self.janelas_cadastro = []
-        self.addCleanup(lambda: [f.close() for f in self.janelas_cadastro])
+        self.addCleanup(lambda: [_descartar(f) for f in self.janelas_cadastro])
         self.fotos = FotoProdutoController(self.banco)
 
     def test_cadastro_tem_aba_foto_e_so_grava_ao_salvar(self):
