@@ -325,6 +325,53 @@ class Central:
             self._evento("publicacao_autorizada", f"{loja}; id={item['id']}")
         return item["id"]
 
+    def renovar_assinaturas_pagas(self) -> int:
+        """Assina localmente os vencimentos de pagamentos verificados na nuvem."""
+        if self.config("recuperacao_pendente") == "S":
+            raise ErroCentral("Reconcilie a central restaurada antes de renovar licenças.")
+        resposta = self._cliente().chamar("GET", "/v1/central/assinaturas")
+        itens = resposta.get("assinaturas")
+        if not isinstance(itens, list):
+            raise ErroCentral("A ponte não retornou a relação de assinaturas.")
+        hoje = date.fromisoformat(fmt.hoje())
+        pendentes = []
+        for item in itens:
+            if not isinstance(item, dict):
+                raise ErroCentral("Resposta de assinatura inválida.")
+            chave = chave_loja(item.get("chave_loja"))
+            try:
+                prazo = date.fromisoformat(item["paga_ate"])
+            except (KeyError, TypeError, ValueError):
+                raise ErroCentral("Prazo de assinatura inválido.") from None
+            loja = self.db.execute("SELECT chave FROM lojas WHERE chave=? AND ativa=1", (chave,)).fetchone()
+            if not loja or prazo <= hoje:
+                continue
+            atual = self.db.execute(
+                "SELECT MAX(expira_em) FROM licencas WHERE loja=?", (loja["chave"],)).fetchone()[0]
+            if atual is not None and atual >= prazo.isoformat():
+                continue
+            pendentes.append((loja["chave"], prazo))
+        if not pendentes:
+            return 0
+        estado = nucleo.estado_chave(self.arquivo_chave)
+        if not estado.pronta:
+            raise ErroCentral(estado.mensagem)
+        semente = nucleo._ler_semente(self.arquivo_chave or nucleo.arquivo_chave())
+        geradas = 0
+        for chave, prazo in pendentes:
+            codigo = licenca.gerar_licenca(semente, chave, (prazo - hoje).days, hoje)
+            licenca.ler_licenca(codigo)
+            identificador = str(uuid5(NAMESPACE_URL, f"willpdv-pagamento:{chave}:{prazo.isoformat()}"))
+            with self.db:
+                self.db.execute(
+                    "INSERT OR IGNORE INTO licencas VALUES(?,?,?,?,?,0,'central')",
+                    (identificador, chave, codigo, hoje.isoformat(), prazo.isoformat()))
+                nova = self.db.execute("SELECT changes()").fetchone()[0]
+                geradas += nova
+                if nova:
+                    self._evento("renovacao_automatica", f"{chave}; paga ate {prazo.isoformat()}")
+        return geradas
+
     def sincronizar(self) -> dict:
         cliente = self._cliente()
         if self.config("recuperacao_pendente") == "S":
@@ -346,6 +393,7 @@ class Central:
         for loja in self.lojas():
             cliente.chamar("PUT", "/v1/central/lojas/" + urllib.parse.quote(loja["chave"], safe=""),
                            {"nome": loja["nome"], "ativa": bool(loja["ativa"])})
+        self.renovar_assinaturas_pagas()
         # Reconcilia antes de publicar, inclusive depois de restaurar backup antigo.
         self._guardar_estado(cliente.chamar("GET", "/v1/central/estado"))
         # Só a licença mais recente é publicada; importar histórico não migra lojas sozinho.

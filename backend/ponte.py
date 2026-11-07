@@ -232,6 +232,33 @@ def instalar(app: FastAPI, Loja, hash_token) -> APIRouter:
         return {"chave_loja": loja.chave_loja, "nome": loja.nome, "ativa": bool(loja.ativa),
                 "licenca_ate": _licenca_ate(db, loja)}
 
+    @router.get("/v1/central/assinaturas", dependencies=[Depends(autenticar_central)])
+    def central_assinaturas(db: Session = Depends(get_db)):
+        """Vencimentos pagos verificados pelo Mercado Pago, só para o assinador local.
+
+        Não publica licença nem divulga tokens ou detalhes do pagador. A consulta não
+        equivale a um evento webhook: considera apenas pagamentos gravados após validação.
+        """
+        from backend.cobranca_mercadopago import Plano, Cobranca, Pagamento
+        resultados = []
+        for plano in db.query(Plano).all():
+            loja = db.query(Loja).filter(Loja.chave_loja == plano.chave_loja).first()
+            if loja is None or not loja.ativa:
+                continue
+            pagos = (db.query(Pagamento.licenca_ate)
+                     .join(Cobranca, Pagamento.cobranca == Cobranca.id)
+                     .filter(Cobranca.plano == plano.id, Pagamento.status == "approved",
+                             Pagamento.licenca_ate.isnot(None)).all())
+            datas = [x[0] for x in pagos if x[0]]
+            if not datas or not loja.licenca_ate:
+                continue
+            # O prazo vigente pode ter sido reduzido por estorno: nunca superar
+            # o estado atual da loja com o prazo de um pagamento antigo.
+            ate = min(max(datas), loja.licenca_ate)
+            if ate > date.today().isoformat():
+                resultados.append({"chave_loja": loja.chave_loja, "paga_ate": ate})
+        return {"assinaturas": resultados}
+
     # ---- central (PDV_CENTRAL_TOKEN)
     @router.get("/v1/central/lojas", dependencies=[Depends(autenticar_central)])
     def central_lojas(db: Session = Depends(get_db)):
