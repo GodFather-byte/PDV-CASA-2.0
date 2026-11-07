@@ -10,6 +10,7 @@ número do quarto ao endereço do aparelho.
 """
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta
 
 from src.core import formatacao as fmt
@@ -67,9 +68,14 @@ class QuartosController:
     def ligado(self) -> bool:
         return self.banco.cfg_bool("usar_quartos", False)
 
+    def pela_comanda(self) -> bool:
+        """Quarto lançado na comanda do cliente (113, 113Q3, show pelo código) e iniciado ao pagar. Desligado (padrão),
+        o tempo é marcado à mão no painel dos quartos, como sempre foi."""
+        return self.ligado() and self.banco.cfg_bool("quartos_pela_comanda", False)
+
     def config(self) -> dict:
         b = self.banco
-        show = self._produto_show_configurado()
+        show = self._produto_show_configurado() if self.pela_comanda() else None
         if show is not None:
             valor = show["preco_cent"]                  # o preço do show (ex.: código 33) é o valor de cada bloco
         else:
@@ -156,6 +162,8 @@ class QuartosController:
         self._validar(quarto, blocos)
         if self._ativo(quarto):
             raise ErroNegocio(f"O quarto {quarto} já está em uso. Libere antes de iniciar de novo.")
+        if int(quarto) in self.em_arrumacao():
+            raise ErroNegocio(f"O quarto {quarto} está em arrumação. Marque como pronto antes de iniciar.")
         c = self.config()
         comanda_cliente = self._codigo(comanda_cliente, "Comanda do cliente")
         codigo_profissional = self._codigo(codigo_profissional, "Código da profissional")
@@ -204,8 +212,9 @@ class QuartosController:
             })
         return None
 
-    def liberar(self, quarto: int) -> dict:
-        """Encerra o uso; guarda quanto passou do tempo (0 se saiu dentro do tempo)."""
+    def liberar(self, quarto: int, arrumar: bool = False) -> dict:
+        """Encerra o uso; guarda quanto passou do tempo (0 se saiu dentro do tempo). Devolve também quantos blocos o
+        tempo passado dá (para cobrar) e o nome dela. `arrumar`: o quarto fica em arrumação até marcar pronto."""
         self._exigir_ligado()
         uso = self._ativo(quarto)
         if uso is None:
@@ -218,7 +227,66 @@ class QuartosController:
             (fmt.agora(), self.operador_id, excedeu, uso["id"]))
         self.banco.log("quarto_liberado", f"quarto {quarto}" + (f", passou {fmt_relogio(excedeu)}" if excedeu else ""),
                        self.operador_id)
-        return {"quarto": quarto, "excedeu_seg": excedeu}
+        if arrumar:
+            self.marcar_arrumacao(quarto, True)
+        tolerancia = max(0, self.banco.cfg_int("quartos_tolerancia_min", 5)) * 60
+        bloco = uso["minutos_bloco"] * 60
+        blocos_a_mais = math.ceil((excedeu - tolerancia) / bloco) if excedeu > tolerancia else 0
+        return {"quarto": quarto, "excedeu_seg": excedeu, "blocos_a_mais": blocos_a_mais,
+                "codigo_profissional": uso["codigo_profissional"],
+                "nome_profissional": self.nome_profissional(uso["codigo_profissional"])}
+
+    # ------------------------------------------------------------- arrumação e troca
+    def em_arrumacao(self) -> set[int]:
+        """Quartos bloqueados para arrumação/manutenção (não iniciam até marcar pronto)."""
+        return {int(n) for n in (self.banco.cfg("quartos_arrumacao", "") or "").split(",") if n.strip().isdigit()}
+
+    def marcar_arrumacao(self, quarto: int, arrumando: bool) -> None:
+        self._exigir_ligado()
+        if not 1 <= int(quarto) <= self.config()["quartos"]:
+            raise ErroValidacao("Quarto inexistente.", {"quarto": "inválido"})
+        if arrumando and self._ativo(quarto):
+            raise ErroNegocio(f"O quarto {quarto} está em uso. Libere antes de pôr em arrumação.")
+        atuais = self.em_arrumacao()
+        atuais = atuais | {int(quarto)} if arrumando else atuais - {int(quarto)}
+        self.banco.cfg_set("quartos_arrumacao", ",".join(str(n) for n in sorted(atuais)))
+        self.banco.log("quarto_arrumacao" if arrumando else "quarto_pronto", f"quarto {quarto}", self.operador_id)
+
+    def trocar_quarto(self, origem: int, destino: int) -> None:
+        """Passa quem está no quarto `origem` para o `destino` livre, com o mesmo tempo, horário e shows."""
+        self._exigir_ligado()
+        if not 1 <= int(destino) <= self.config()["quartos"]:
+            raise ErroValidacao("Quarto de destino inexistente.", {"quarto": "inválido"})
+        if int(origem) == int(destino):
+            raise ErroNegocio("Escolha outro quarto.")
+        with self.banco.transacao():
+            uso = self._ativo(origem)
+            if uso is None:
+                raise ErroNegocio(f"O quarto {origem} está livre.")
+            if self._ativo(destino):
+                raise ErroNegocio(f"O quarto {destino} está em uso.")
+            if int(destino) in self.em_arrumacao():
+                raise ErroNegocio(f"O quarto {destino} está em arrumação.")
+            self.banco.executar("UPDATE quartos_uso SET quarto = ? WHERE id = ?", (int(destino), uso["id"]))
+        self.banco.log("quarto_trocado", f"quarto {origem} -> {destino}", self.operador_id)
+
+    def quartos_livres(self) -> list[int]:
+        ocupados = {r["quarto"] for r in self.banco.todos("SELECT quarto FROM quartos_uso WHERE liberado_em IS NULL")}
+        arrumando = self.em_arrumacao()
+        return [n for n in range(1, self.config()["quartos"] + 1) if n not in ocupados and n not in arrumando]
+
+    def garotas_da_noite(self) -> list[dict]:
+        """Por garota, na noite atual: entradas, tempo, shows e quanto passou do tempo (para conferir e cobrar)."""
+        virada = self.banco.cfg_int("virada_dia_hora", 6)
+        ini, fim = fmt.faixa_dia_operacional(fmt.dia_operacional(virada=virada), virada)
+        linhas = self.banco.todos(
+            "SELECT codigo_profissional AS codigo, COUNT(*) AS entradas, SUM(blocos * minutos_bloco) AS minutos, "
+            "SUM(blocos * minutos_bloco / 30) AS shows, COALESCE(SUM(excedeu_seg), 0) AS excedeu_seg, "
+            "SUM(CASE WHEN liberado_em IS NULL THEN 1 ELSE 0 END) AS no_quarto "
+            "FROM quartos_uso WHERE inicio >= ? AND inicio < ? AND codigo_profissional IS NOT NULL "
+            "GROUP BY codigo_profissional ORDER BY minutos DESC, codigo_profissional", (ini, fim))
+        return [{**dict(r), "nome": self.nome_profissional(r["codigo"]) or "",
+                 "tempo": fmt_duracao(r["minutos"] or 0)} for r in linhas]
 
     # ------------------------------------------------ quarto pela comanda do cliente
     def _produto_show_configurado(self) -> dict | None:
@@ -273,7 +341,7 @@ class QuartosController:
 
     def quarto_sugerido(self, excluir: set[int] | None = None) -> int | None:
         """Quarto livre há mais tempo (nunca usado conta como o mais antigo): reveza os quartos e dá tempo de arrumar."""
-        excluir = excluir or set()
+        excluir = (excluir or set()) | self.em_arrumacao()
         ocupados = {r["quarto"] for r in self.banco.todos("SELECT quarto FROM quartos_uso WHERE liberado_em IS NULL")}
         livres = [n for n in range(1, self.config()["quartos"] + 1) if n not in ocupados and n not in excluir]
         if not livres:
@@ -409,11 +477,12 @@ class QuartosController:
         agora = fmt.agora_dt()
         ativos = {r["quarto"]: r for r in self.banco.todos(
             "SELECT * FROM quartos_uso WHERE liberado_em IS NULL")}
+        arrumando = self.em_arrumacao()
         lista = []
         for n in range(1, c["quartos"] + 1):
             uso = ativos.get(n)
             if uso is None:
-                lista.append({"quarto": n, "estado": "livre", "uso_id": None})
+                lista.append({"quarto": n, "estado": "arrumacao" if n in arrumando else "livre", "uso_id": None})
                 continue
             inicio = _dt(uso["inicio"])
             minutos = uso["blocos"] * uso["minutos_bloco"]

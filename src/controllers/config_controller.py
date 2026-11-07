@@ -132,10 +132,13 @@ CAMPOS_CONFIG = [
     ("quartos_minutos_bloco", "Quartos: minutos de cada bloco de tempo", "int", "Módulos"),
     ("quartos_valor_bloco", "Quartos: valor de cada bloco (R$, só informativo na tela)", "texto", "Módulos"),
     ("quartos_alerta_min", "Quartos: avisar quantos minutos antes de acabar", "int", "Módulos"),
-    ("quartos_codigo_show", "Quartos: código do produto do show (ex.: 33; o preço dele é o valor de cada bloco de "
-     "tempo; padrão 33; vazio ou sem esse produto = QUARTO criado pelo sistema)", "texto", "Módulos"),
-    ("quartos_garota_minimo", "Quartos: número a partir do qual, digitado na conta do cliente, é a garota (lança o "
-     "quarto dela; abaixo disso é produto)", "int", "Módulos"),
+    ("quartos_tolerancia_min", "Quartos: tolerância antes de cobrar o tempo excedido (minutos)", "int", "Módulos"),
+    ("quartos_pela_comanda", "Quartos: lançar o quarto na comanda do cliente e iniciar ao pagar (desligado = marcar "
+     "o tempo à mão no painel dos quartos)", "sn", "Módulos"),
+    ("quartos_codigo_show", "Quartos pela comanda: código do produto do show (ex.: 33; o preço dele é o valor de cada "
+     "bloco de tempo)", "texto", "Módulos"),
+    ("quartos_garota_minimo", "Quartos pela comanda: número a partir do qual, digitado na conta do cliente, é a "
+     "garota (abaixo disso é produto)", "int", "Módulos"),
     ("quartos_campainhas", "Quartos: campainhas (quarto=endereço do aparelho; ex.: 1=192.168.0.51; 2=192.168.0.52)",
      "texto", "Módulos"),
     ("programa_comunicacao", "Programa de comunicação (caminho do executável)", "texto", "Utilitários"),
@@ -407,6 +410,8 @@ class ConfigController:
                     raise ErroValidacao("O número mínimo das garotas vai de 1 a 99999.", {chave: "inválido"})
                 if chave == "quartos_alerta_min" and not 0 <= int(v) <= 60:
                     raise ErroValidacao("O aviso dos quartos vai de 0 a 60 minutos antes.", {chave: "inválido"})
+                if chave == "quartos_tolerancia_min" and not 0 <= int(v) <= 60:
+                    raise ErroValidacao("A tolerância dos quartos vai de 0 a 60 minutos.", {chave: "inválido"})
                 if chave == "quartos_valor_bloco":
                     try:
                         if fmt.para_centavos(v) < 0:

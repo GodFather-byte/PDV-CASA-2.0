@@ -306,7 +306,8 @@ class CaixaController(DivisaoContaMixin):
                 raise ErroNegocio("Para anotar casco emprestado, a venda precisa ter o cliente (caderneta ou entrega).")
             if cascos_emprestados > int(quantidade) - quantidade_cascos:
                 raise ErroNegocio("Os cascos emprestados não podem passar das garrafas sem casco cobrado.")
-        if garota_quarto is None and v.get("garota_quarto") and self._quartos().eh_produto_quarto(produto_id):
+        if (garota_quarto is None and v.get("garota_quarto") and self._quartos().pela_comanda()
+                and self._quartos().eh_produto_quarto(produto_id)):
             garota_quarto = v["garota_quarto"]           # show lançado depois do número dela: já é dela
             quarto_pedido = quarto_pedido if quarto_pedido is not None else v.get("quarto_pedido")
         if garota_quarto is not None or quarto_pedido is not None:
@@ -1026,7 +1027,8 @@ class CaixaController(DivisaoContaMixin):
                     registrar_custos(self.banco, venda_id, self.produtos, self.estoque)
                     self.estoque.baixar_venda(venda_id)
                     self._cascos_emprestados(v, "emprestimo")
-                    self.ultimos_quartos = self._quartos().registrar_venda(self.obter(venda_id))
+                    if self._quartos().pela_comanda():
+                        self.ultimos_quartos = self._quartos().registrar_venda(self.obter(venda_id))
                 if eh_debito:
                     self.banco.inserir("caderneta", {
                         "cliente_id": v["cliente_id"], "venda_id": venda_id, "tipo": "debito", "valor_cent": total,
@@ -1150,8 +1152,8 @@ class CaixaController(DivisaoContaMixin):
         próximos. Devolve quantas linhas de show foram ligadas agora."""
         v = self._aberta(venda_id)
         quartos = self._quartos()
-        if not quartos.ligado():
-            raise ErroNegocio("O módulo Quartos está desligado (Configurações > Módulos).")
+        if not quartos.pela_comanda():
+            raise ErroNegocio("O quarto pela comanda está desligado: marque o quarto no painel dos quartos.")
         if isinstance(garota, bool) or not isinstance(garota, int) or not quartos.garota_cadastrada(garota):
             raise ErroNegocio(f"Garota {garota} não cadastrada. Cadastre em Comissões.")
         if quarto is not None and (isinstance(quarto, bool) or not isinstance(quarto, int)
@@ -1172,7 +1174,7 @@ class CaixaController(DivisaoContaMixin):
     def _conferir_shows_com_garota(self, v: dict) -> None:
         """Show na conta sem o número da garota: liga à garota marcada; sem nenhuma, não deixa fechar (o show é dela)."""
         quartos = self._quartos()
-        if not quartos.ligado():
+        if not quartos.pela_comanda():
             return
         show = quartos._produto_show_configurado() or self.produtos.por_id(self.banco.cfg_int("quartos_produto", 0))
         if show is None or not self.banco.um(
@@ -1192,6 +1194,8 @@ class CaixaController(DivisaoContaMixin):
         quartos = self._quartos()
         if not quartos.ligado():
             raise ErroNegocio("O módulo Quartos está desligado (Configurações > Módulos).")
+        if not quartos.pela_comanda():
+            raise ErroNegocio("O quarto pela comanda está desligado: marque o quarto no painel dos quartos.")
         if not quartos.eh_produto_quarto(p["id"]):
             raise ErroNegocio("Só o produto do quarto leva o número da garota.")
         if garota is None or isinstance(garota, bool) or not isinstance(garota, int) or not quartos.garota_cadastrada(garota):

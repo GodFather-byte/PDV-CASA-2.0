@@ -28,7 +28,7 @@ CHAVES_CASA_NOTURNA = frozenset({
     "imprimir_saida_ao_pagar", "codigo_saida", "comissao_na_linha", "imprimir_via_comissao", "comissao_pede_shows",
     "show_valores", "valor_rodizio_pessoa", "porteiro_ativo", "porteiro_porta",
     "quartos_qtd", "quartos_minutos_bloco", "quartos_valor_bloco", "quartos_alerta_min", "quartos_campainhas",
-    "quartos_garota_minimo", "quartos_codigo_show",
+    "quartos_garota_minimo", "quartos_codigo_show", "quartos_pela_comanda", "quartos_tolerancia_min",
 })
 
 
