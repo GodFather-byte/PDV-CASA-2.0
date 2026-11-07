@@ -166,3 +166,48 @@ class TesteShowDoCodigo33(BaseShows):
         self.banco.cfg_set("usar_quartos", "N")
         self.caixa.fechar(vid)                                          # Quartos desligado: 33 é produto comum
         self.assertEqual(self.caixa.obter(vid)["status"], "fechada")
+
+
+class TesteComandaDoClienteSemConfigurar(BaseShows):
+    """O caso da casa: comanda 23, show (33) duas vezes, depois o 113; pagou. Sem mexer em Configurações."""
+
+    def setUp(self):
+        super().setUp()
+        self.show = self.novo_produto("PG 30 MIN", 10000, codigo="33")
+
+    def test_33_e_o_show_por_padrao_e_pagar_leva_os_shows_e_o_quarto(self):
+        self.assertEqual(self.banco.cfg("quartos_codigo_show"), "33")
+        vid, _ = self.caixa.abrir_mesa(23, comanda=True)
+        self.caixa.adicionar_item(vid, self.show, 1)
+        self.caixa.adicionar_item(vid, self.show, 1)
+        self.assertEqual(self.caixa.marcar_garota(vid, 180), 2)              # os 2 shows já lançados ficam dela
+        self.caixa.adicionar_pagamento(vid, self.tipo("Dinheiro"), self.caixa.obter(vid)["total_cent"])
+        self.caixa.fechar(vid)
+        uso = self.banco.um("SELECT quarto, blocos FROM quartos_uso WHERE codigo_profissional = '180'")
+        self.assertEqual((uso["quarto"], uso["blocos"]), (1, 2))
+        self.assertEqual(self.com.quantidade_shows_quartos(180), 2)
+
+    def test_banco_antigo_com_o_campo_vazio_passa_a_usar_o_33(self):
+        import os
+        import sqlite3
+        import tempfile
+        from src.database.conexao import BancoDados
+        from src.database.esquema import VERSAO_ESQUEMA
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = os.path.join(pasta, "antigo.db")
+            BancoDados(caminho).fechar()
+            con = sqlite3.connect(caminho)
+            con.execute("UPDATE config SET valor = '' WHERE chave = 'quartos_codigo_show'")
+            con.execute("PRAGMA user_version = 42")
+            con.commit()
+            con.close()
+            migrado = BancoDados(caminho)
+            try:
+                self.assertEqual(migrado.cfg("quartos_codigo_show"), "33")
+                self.assertEqual(migrado.valor("PRAGMA user_version"), VERSAO_ESQUEMA)
+            finally:
+                migrado.fechar()
+
+    def test_sem_produto_33_continua_o_quarto_automatico(self):
+        self.banco.executar("UPDATE produtos SET ativo = 0 WHERE id = ?", (self.show,))
+        self.assertEqual(self.q.produto_quarto()["nome"], "QUARTO 30 min")

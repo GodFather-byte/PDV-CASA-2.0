@@ -5,8 +5,8 @@ na comanda da profissional identificada, separados do consumo do cliente.
 
 ## Jeito mais rápido: o quarto vai na comanda do cliente
 
-Configure uma vez, em Configurações > Módulos, **"Quartos: código do produto do show"** = o código do seu PG/show
-(ex.: **33**). O preço desse produto (ex.: R$ 100) é o valor de cada bloco de 30 min.
+Em Configurações > Módulos, **"Quartos: código do produto do show"** já vem **33** (o código do PG/show); troque
+só se o seu show tiver outro código. O preço desse produto (ex.: R$ 100) é o valor de cada bloco de 30 min.
 
 Na conta do cliente, no campo do produto:
 - **`33`** lança o show de 30 min, com o valor. `33` de novo (ou `2*33`) = 1h e 2 shows.
