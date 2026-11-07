@@ -16,8 +16,9 @@ import threading
 from PySide6.QtCore import QObject, QPoint, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFontMetrics, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QMenu,
-    QMessageBox, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget, QLineEdit, QTableWidget, QTableWidgetItem,
+    QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QInputDialog,
+    QLabel, QMenu, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget, QLineEdit,
+    QTableWidget, QTableWidgetItem,
 )
 
 from src.controllers.config_controller import modulos_desligados
@@ -39,6 +40,7 @@ CORES = {
     "alerta": ("#f9a825", "#000000"),
     "estourou": ("#c62828", "#ffffff"),
     "piscar": ("#ff8a80", "#000000"),
+    "arrumacao": ("#5e35b1", "#ffffff"),    # roxo: em arrumação, não inicia
 }
 
 
@@ -296,15 +298,117 @@ def pedir_mais_tempo(pai, ctrl: QuartosController, item: dict):
     return None
 
 
+ROTULO_ESTADO = {"livre": "LIVRE", "uso": "OCUPADO", "alerta": "ACABANDO", "estourou": "ESGOTADO",
+                 "arrumacao": "EM ARRUMAÇÃO"}
+
+
+def contagem_quartos(situacao: list[dict]) -> dict:
+    """Quantos quartos em cada situação e quais estão livres, para ver de longe o que tem para usar."""
+    c = {e: 0 for e in ROTULO_ESTADO}
+    for item in situacao:
+        c[item["estado"]] = c.get(item["estado"], 0) + 1
+    c["livres"] = [i["quarto"] for i in situacao if i["estado"] == "livre"]
+    c["ocupados"] = c["uso"] + c["alerta"] + c["estourou"]
+    return c
+
+
+def texto_contagem(c: dict) -> str:
+    """'LIVRES: 2, 5, 7  ·  OCUPADOS: 4 (1 acabando, 1 esgotado)  ·  ARRUMANDO: 1'."""
+    partes = ["LIVRES: " + (", ".join(map(str, c["livres"])) if c["livres"] else "nenhum")]
+    detalhe = [f"{c['alerta']} acabando"] * bool(c["alerta"]) + [f"{c['estourou']} esgotado(s)"] * bool(c["estourou"])
+    partes.append(f"OCUPADOS: {c['ocupados']}" + (f" ({', '.join(detalhe)})" if detalhe else ""))
+    if c["arrumacao"]:
+        partes.append(f"ARRUMANDO: {c['arrumacao']}")
+    return "  ·  ".join(partes)
+
+
+def fracao_usada(item: dict) -> float:
+    """Quanto do tempo pago já passou (0 a 1); esgotado = 1."""
+    total = (item.get("minutos") or 0) * 60
+    if not total:
+        return 0.0
+    return max(0.0, min(1.0, 1 - item.get("restante_seg", 0) / total))
+
+
+def escolher_liberacao(pai, quarto: int) -> str | None:
+    """'liberar', 'arrumar' (libera e deixa em arrumação) ou None (desistiu)."""
+    caixa = QMessageBox(QMessageBox.Icon.Question, "Liberar quarto", f"Liberar o quarto {quarto}?",
+                        QMessageBox.StandardButton.NoButton, pai)
+    liberar = caixa.addButton("Liberar", QMessageBox.ButtonRole.AcceptRole)
+    arrumar = caixa.addButton("Liberar e pôr em arrumação", QMessageBox.ButtonRole.AcceptRole)
+    cancelar = caixa.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+    caixa.setDefaultButton(liberar)
+    caixa.setEscapeButton(cancelar)
+    caixa.exec()
+    return {liberar: "liberar", arrumar: "arrumar"}.get(caixa.clickedButton())
+
+
+def texto_excedido(r: dict) -> str:
+    """Depois de liberar: quanto passou do tempo e quantos blocos cobrar ('' se saiu no tempo ou na tolerância)."""
+    if not r.get("blocos_a_mais"):
+        return ""
+    quem = f"{r['nome_profissional']} ({r['codigo_profissional']})" if r.get("nome_profissional") else "o cliente"
+    return (f"Quarto {r['quarto']}: passou {fmt_relogio(r['excedeu_seg'])} do tempo.\n"
+            f"Cobre {r['blocos_a_mais']} bloco(s) a mais de {quem}.")
+
+
 def pedir_liberar(pai, ctrl: QuartosController, quarto: int):
-    resposta = QMessageBox.question(pai, "Liberar quarto", f"Liberar o quarto {quarto}?")
-    if resposta == QMessageBox.StandardButton.Yes:
-        def acao():
-            resultado = ctrl.liberar(quarto)
+    escolha = escolher_liberacao(pai, quarto)
+    if escolha is None:
+        return None
+
+    def acao():
+        resultado = ctrl.liberar(quarto, arrumar=escolha == "arrumar")
+        aviso = texto_excedido(resultado)
+        if aviso:
+            QMessageBox.information(pai, "Tempo excedido", aviso)
+        if escolha != "arrumar":
             oferecer_fila(pai, ctrl, quarto)
-            return resultado
-        return acao
-    return None
+        return resultado
+    return acao
+
+
+def pedir_trocar(pai, ctrl: QuartosController, quarto: int):
+    """Passa quem está no quarto para outro livre (mesmo tempo, horário e shows)."""
+    livres = ctrl.quartos_livres()
+    if not livres:
+        raise ErroNegocio("Nenhum quarto livre para trocar.")
+    escolha, ok = QInputDialog.getItem(pai, f"Trocar o quarto {quarto}", "Passar para o quarto:",
+                                       [str(n) for n in livres], 0, False)
+    if not ok:
+        return None
+    return lambda: ctrl.trocar_quarto(quarto, int(escolha))
+
+
+def pedir_arrumacao(pai, ctrl: QuartosController, quarto: int, arrumando: bool):
+    return lambda: ctrl.marcar_arrumacao(quarto, arrumando)
+
+
+class DialogoGarotasNoite(QDialog):
+    """Garotas da noite: entradas, tempo, shows e tempo passado (para conferir o acerto e cobrar o excedido)."""
+
+    def __init__(self, ctrl: QuartosController, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Garotas da noite")
+        self.resize(720, 460)
+        lay = QVBoxLayout(self)
+        linhas = ctrl.garotas_da_noite()
+        self.tabela = QTableWidget(len(linhas), 6)
+        self.tabela.setHorizontalHeaderLabels(["Código", "Garota", "Entradas", "Tempo", "Shows", "Passou do tempo"])
+        self.tabela.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        for i, r in enumerate(linhas):
+            valores = [r["codigo"], r["nome"] + ("  (no quarto)" if r["no_quarto"] else ""), r["entradas"], r["tempo"],
+                       r["shows"], fmt_relogio(r["excedeu_seg"]) if r["excedeu_seg"] else "—"]
+            for j, v in enumerate(valores):
+                self.tabela.setItem(i, j, QTableWidgetItem(str(v)))
+        self.tabela.resizeColumnsToContents()
+        lay.addWidget(self.tabela)
+        total = sum(r["shows"] or 0 for r in linhas)
+        lay.addWidget(QLabel(f"{len(linhas)} garota(s) · {total} show(s) na noite" if linhas
+                             else "Nenhuma garota entrou no quarto nesta noite."))
+        fechar = QPushButton("Fechar")
+        fechar.clicked.connect(self.accept)
+        lay.addWidget(fechar)
 
 
 def oferecer_fila(pai, ctrl: QuartosController, quarto: int) -> bool:
@@ -350,6 +454,10 @@ class CartaoQuarto(QFrame):
         topo.addStretch()
         topo.addWidget(self.sino)
         lay.addLayout(topo)
+        self.etiqueta = QLabel("LIVRE")
+        self.etiqueta.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.etiqueta.setStyleSheet("font-size: 13px; font-weight: 900; letter-spacing: 2px;")
+        lay.addWidget(self.etiqueta)
         self.tempo = QLabel("LIVRE")
         self.tempo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.tempo.setStyleSheet("font-size: 34px; font-weight: bold;")
@@ -358,6 +466,12 @@ class CartaoQuarto(QFrame):
         self.info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.info.setWordWrap(True)
         lay.addWidget(self.info)
+        self.barra = QProgressBar()
+        self.barra.setRange(0, 100)
+        self.barra.setTextVisible(False)
+        self.barra.setFixedHeight(8)
+        self.barra.setToolTip("Quanto do tempo pago já passou")
+        lay.addWidget(self.barra)
         botoes = QHBoxLayout()
         self.b_iniciar = QPushButton("Iniciar")
         self.b_mais = QPushButton("+ Tempo")
@@ -370,6 +484,22 @@ class CartaoQuarto(QFrame):
             botao.clicked.connect(acao)
             botoes.addWidget(botao)
         lay.addLayout(botoes)
+        self.b_extra = QPushButton("Arrumação")
+        self.b_extra.setMinimumHeight(30)
+        self.b_extra.setStyleSheet("padding: 2px;")
+        self.b_extra.setAutoDefault(False)
+        self.b_extra.clicked.connect(self.extra)
+        lay.addWidget(self.b_extra)
+
+    def extra(self):
+        """Livre: pôr em arrumação · em arrumação: quarto pronto · ocupado: trocar de quarto."""
+        estado = self.item.get("estado", "livre")
+        if estado == "livre":
+            self.painel.pedir(lambda ctrl: pedir_arrumacao(self, ctrl, self.numero, True), self.numero)
+        elif estado == "arrumacao":
+            self.painel.pedir(lambda ctrl: pedir_arrumacao(self, ctrl, self.numero, False), self.numero)
+        else:
+            self.painel.pedir(lambda ctrl: pedir_trocar(self, ctrl, self.numero), self.numero)
 
     def iniciar(self):
         self.painel.pedir(lambda ctrl: pedir_iniciar(self, ctrl, self.numero), self.numero)
@@ -399,13 +529,20 @@ class CartaoQuarto(QFrame):
         self.item = item
         estado = item["estado"]
         livre = estado == "livre"
+        arrumando = estado == "arrumacao"
         self.b_iniciar.setEnabled(livre)
-        self.b_mais.setEnabled(not livre)
-        self.b_liberar.setEnabled(not livre)
-        if livre:
-            self._cor("livre")
-            self.tempo.setText("LIVRE")
-            self.info.setText("")
+        self.b_mais.setEnabled(not livre and not arrumando)
+        self.b_liberar.setEnabled(not livre and not arrumando)
+        self.b_extra.setText("Pôr em arrumação" if livre else "Quarto pronto" if arrumando else "Trocar de quarto")
+        self.etiqueta.setText(ROTULO_ESTADO.get(estado, estado.upper()))
+        self.etiqueta.setVisible(not livre and not arrumando)    # livre/arrumando: o letreiro grande já diz
+        self.barra.setVisible(not livre and not arrumando)
+        if not livre and not arrumando:
+            self.barra.setValue(int(round(fracao_usada(item) * 100)))
+        if livre or arrumando:
+            self._cor(estado)
+            self.tempo.setText("LIVRE" if livre else "ARRUMANDO")
+            self.info.setText("" if livre else "Clique em Quarto pronto quando terminar")
             return
         self.info.setText(
             f"{item.get('nome_profissional') or 'Profissional não identificada'} · {item.get('codigo_profissional') or '—'}\n"
@@ -476,8 +613,14 @@ class JanelaQuartos(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(texto("Controle de Quartos", "titulo"))
         layout.addWidget(texto(
-            "O cliente paga no caixa e depois o tempo começa aqui. Amarelo: tempo acabando; vermelho: tempo esgotado "
-            "(o caixa e a campainha do quarto avisam até liberar).", "suave"))
+            "Verde: livre · Azul: ocupado · Amarelo: acabando · Vermelho: tempo esgotado (o caixa e a campainha avisam "
+            "até liberar) · Roxo: em arrumação.", "suave"))
+        self.faixa = QLabel("")
+        self.faixa.setObjectName("faixa_quartos")
+        self.faixa.setWordWrap(True)
+        self.faixa.setStyleSheet("font-size: 20px; font-weight: bold; padding: 8px 12px; border-radius: 8px;"
+                                 "background: #1e7d32; color: #ffffff;")
+        layout.addWidget(self.faixa)
         self.grade_widget = QWidget()
         self.grade = QGridLayout(self.grade_widget)
         rolagem = QScrollArea()
@@ -498,6 +641,9 @@ class JanelaQuartos(QDialog):
         historico = QPushButton("Histórico de quartos")
         historico.clicked.connect(self.abrir_historico)
         barra.addWidget(historico)
+        garotas = QPushButton("Garotas da noite")
+        garotas.clicked.connect(self.abrir_garotas)
+        barra.addWidget(garotas)
         barra.addStretch()
         fechar = QPushButton("Fechar (Esc)")
         fechar.setAutoDefault(False)
@@ -515,6 +661,10 @@ class JanelaQuartos(QDialog):
         self.verificar_campainhas()
         self.timer.start()
         self.timer_campainhas.start()
+
+    def abrir_garotas(self):
+        self.exigir_acesso()
+        DialogoGarotasNoite(self.controlador(), self).exec()
 
     def abrir_historico(self):
         self.exigir_acesso()
@@ -623,6 +773,11 @@ class JanelaQuartos(QDialog):
         if self.avisos.processar(ctrl, situacao, fmt.agora_dt()):
             _trazer_para_frente(self)
         livres = sum(i["estado"] == "livre" for i in situacao)
+        c = contagem_quartos(situacao)
+        self.faixa.setText(texto_contagem(c))
+        fundo = CORES["livre"][0] if c["livres"] else CORES["estourou"][0]   # vermelho: nenhum quarto livre
+        self.faixa.setStyleSheet("font-size: 20px; font-weight: bold; padding: 8px 12px; border-radius: 8px;"
+                                 f"background: {fundo}; color: #ffffff;")
         self.resumo.setText(
             f"Livres: {livres} de {len(situacao)}  ·  Noite: {resumo['usos']} entradas  ·  "
             f"{fmt_duracao(resumo['minutos']) if resumo['minutos'] else '0 min'}  ·  "
@@ -631,8 +786,9 @@ class JanelaQuartos(QDialog):
 
 # ------------------------------------------------- quartos no caixa
 # Cartões no mesmo desenho dos das comandas (painel_mesas.py): mesmas cores por situação, cantos, pílula e fontes.
-_ESTADO_CARTAO = {"livre": "balcao", "uso": "consumindo", "alerta": "conta", "estourou": "parada"}   # livre verde, ocupado azul
-_PILULA = {"livre": "Livre", "uso": "Em uso", "alerta": "Acabando", "estourou": "Esgotado"}
+_ESTADO_CARTAO = {"livre": "balcao", "uso": "consumindo", "alerta": "conta", "estourou": "parada",
+                  "arrumacao": "parcial"}   # livre verde, ocupado azul
+_PILULA = {"livre": "Livre", "uso": "Em uso", "alerta": "Acabando", "estourou": "Esgotado", "arrumacao": "Arrumando"}
 
 
 class GradeQuartos(QWidget):
@@ -694,10 +850,17 @@ class GradeQuartos(QWidget):
             largura = 1
             if estado == "estourou" and self.piscar:          # pisca a borda: chama o olho sem poluir
                 borda, largura = cores["vermelho"], 3
+            elif estado == "livre":                            # livre salta aos olhos: borda verde grossa
+                largura = 3
             p.setPen(QPen(QColor(borda), largura))
             p.setBrush(QColor(fundo))
             p.drawRoundedRect(QRectF(x1, y1, x2 - x1, y2 - y1), 12, 12)
             pad = 9
+            if estado in ("uso", "alerta", "estourou"):       # barra do tempo já usado, na base do cartão
+                usado = fracao_usada(item)
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(QColor(borda))
+                p.drawRoundedRect(QRectF(x1 + pad, y2 - 5, (x2 - x1 - 2 * pad) * usado, 3), 1.5, 1.5)
             fm_rotulo = QFontMetrics(_fonte(7, True))
             p.setFont(_fonte(7, True))
             p.setPen(QColor(cores["suave"]))
@@ -706,7 +869,11 @@ class GradeQuartos(QWidget):
             p.setPen(QColor(cores["texto"]))
             fm_num = QFontMetrics(_fonte(15, True))
             p.drawText(QPointF(x1 + pad, y1 + 38), str(item["quarto"]))
-            if estado != "livre":
+            if estado == "arrumacao":
+                p.setFont(_fonte(9))
+                p.setPen(QColor(cores["suave"]))
+                p.drawText(QPointF(x1 + pad, y1 + 59), "Em arrumação")
+            elif estado != "livre":
                 nome = item.get("nome_profissional") or "Sem identificação"
                 codigo = item.get("codigo_profissional") or "—"
                 p.setFont(_fonte(10, True))
@@ -719,8 +886,8 @@ class GradeQuartos(QWidget):
                 p.setPen(QColor(cores["suave"]))
                 p.drawText(QPointF(x1 + pad, y1 + 59), "Clique para iniciar")
             espaco = x2 - pad - (x1 + pad + fm_num.horizontalAdvance(str(item["quarto"])) + 6)
-            if estado == "livre":
-                rotulo, fonte = _PILULA["livre"], _fonte(10, True)
+            if estado in ("livre", "arrumacao"):
+                rotulo, fonte = _PILULA[estado], _fonte(10, True)
             else:
                 rotulo = ("+" if estado == "estourou" else "") + fmt_relogio(item["restante_seg"])
                 for tamanho in (12, 11, 10, 9, 8):          # o tempo cabe inteiro: diminui a fonte, não corta
@@ -814,8 +981,8 @@ class PainelQuartosCaixa(QFrame):
     def texto_do_quarto(self, numero: int) -> str:
         """O que o cartão mostra, em texto (para conferência e testes): '3 · 2:54:00', '1 · livre', '4 · +02:00'."""
         item = self.itens[numero]
-        if item["estado"] == "livre":
-            return f"{numero} · livre"
+        if item["estado"] in ("livre", "arrumacao"):
+            return f"{numero} · " + ("livre" if item["estado"] == "livre" else "arrumando")
         return f"{numero} · " + ("+" if item["estado"] == "estourou" else "") + fmt_relogio(item["restante_seg"])
 
     def mudar_pagina(self, passo):
@@ -841,7 +1008,14 @@ class PainelQuartosCaixa(QFrame):
         self.proxima.setEnabled((self.grade.pagina + 1) * self.grade.POR_PAGINA < len(situacao))
         livres = sum(i["estado"] == "livre" for i in situacao)
         esgotados = sum(i["estado"] == "estourou" for i in situacao)
-        self.resumo.setText(f"{livres} livre{'s' if livres != 1 else ''}")   # o esgotado já pisca em vermelho no cartão
+        c = contagem_quartos(situacao)
+        if not c["livres"]:
+            livres_txt = "Nenhum livre"
+        elif len(c["livres"]) <= 4:                       # poucos: diz quais (cabe na lateral)
+            livres_txt = "Livres: " + ", ".join(map(str, c["livres"]))
+        else:
+            livres_txt = f"{len(c['livres'])} livres"
+        self.resumo.setText(f"{livres_txt}\n{c['ocupados']} ocupado{'s' if c['ocupados'] != 1 else ''}")   # o esgotado já pisca em vermelho no cartão
         self.resumo.setToolTip(f"{esgotados} com tempo esgotado" if esgotados else "")
         if self.avisos.processar(ctrl, situacao, fmt.agora_dt()) and self.janela is not None:
             _trazer_para_frente(self.janela)
@@ -849,8 +1023,12 @@ class PainelQuartosCaixa(QFrame):
     def acoes_do_quarto(self, numero: int) -> list[tuple[str, object]]:
         item = self.itens.get(numero, {"estado": "livre", "quarto": numero})
         if item["estado"] == "livre":
-            return [("Iniciar tempo…", lambda c: pedir_iniciar(self, c, numero))]
+            return [("Iniciar tempo…", lambda c: pedir_iniciar(self, c, numero)),
+                    ("Pôr em arrumação", lambda c: pedir_arrumacao(self, c, numero, True))]
+        if item["estado"] == "arrumacao":
+            return [("Quarto pronto", lambda c: pedir_arrumacao(self, c, numero, False))]
         return [("+ Tempo…", lambda c: pedir_mais_tempo(self, c, item)),
+                ("Trocar de quarto…", lambda c: pedir_trocar(self, c, numero)),
                 ("Liberar quarto", lambda c: pedir_liberar(self, c, numero))]
 
     def acionar(self, numero: int):

@@ -2015,14 +2015,14 @@ class JanelaCaixa(QMainWindow):
         quantidade_codigo = QTD_ANTES_DO_CODIGO.fullmatch(texto)
         resto = quantidade_codigo.group(2).strip() if quantidade_codigo else texto
         quarto_garota = QUARTO_GAROTA.fullmatch(resto)
-        if quarto_garota and self.ctx.quartos.ligado():
+        if quarto_garota and self.ctx.quartos.pela_comanda():
             if quantidade_codigo:                     # 2*113Q3 = 2 blocos (1h)
                 self.ent_qtd.setText(quantidade_codigo.group(1))
             garota = quarto_garota.group(1) or quarto_garota.group(3)
             quarto = quarto_garota.group(2) or quarto_garota.group(4)
             self.lancar_quarto(int(garota), int(quarto) if quarto else None)
             return
-        if resto.isdecimal() and len(resto) <= 5 and self.ctx.quartos.ligado() and not self.lista_produtos.isVisible():
+        if resto.isdecimal() and len(resto) <= 5 and self.ctx.quartos.pela_comanda() and not self.lista_produtos.isVisible():
             if self._numero_e_da_garota(resto):
                 if quantidade_codigo:
                     self.ent_qtd.setText(quantidade_codigo.group(1))

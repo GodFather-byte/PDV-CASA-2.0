@@ -17,6 +17,7 @@ class TesteQuartoNaComandaQt(BaseCaixaQt):
     def setUp(self):
         super().setUp()
         self.banco.cfg_set("usar_quartos", "S")
+        self.banco.cfg_set("quartos_pela_comanda", "S")
         self.banco.cfg_set("quartos_qtd", "2")
         CadastroController(self.banco).salvar("garotas", {"numero": 180, "nome": "ANA", "ativo": "S"})
         self.abrir_turno()
@@ -100,6 +101,17 @@ class TesteQuartoNaComandaQt(BaseCaixaQt):
         self.assertEqual(self.banco.valor("SELECT codigo_profissional FROM quartos_uso WHERE quarto = 2 "
                                           "AND liberado_em IS NULL"), "180")
         self.assertFalse(oferecer_fila(self.j, q, 2))                       # fila vazia: não pergunta nada
+
+    def test_padrao_e_marcar_a_mao_no_painel_como_antes(self):
+        self.banco.cfg_set("quartos_pela_comanda", "N")
+        self.lancar(self.j, "33")
+        self.lancar(self.j, "180")                                            # sem produto 180: não marca garota
+        self.assertIn("não encontrado", self.j.lbl_status.text())
+        self.assertIsNone(self.j.venda()["garota_quarto"])
+        self.pagar_tudo()
+        self.assertEqual(self.j.venda_id, None)                               # fechou normal, sem pedir garota
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM quartos_uso"), 0)
+        self.assertEqual(self.j.dialogos.avisos, [])
 
     def test_com_quartos_desligado_33_e_produto_comum(self):
         self.banco.cfg_set("usar_quartos", "N")

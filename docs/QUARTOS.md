@@ -3,7 +3,25 @@
 Conta o tempo de cada quarto. O cliente **paga antes, no caixa** (venda normal). O painel registra os shows a pagar
 na comanda da profissional identificada, separados do consumo do cliente.
 
-## Jeito mais rápido: o quarto vai na comanda do cliente
+## Padrão: marcar o tempo à mão no painel
+
+O caixa recebe o show como qualquer produto. No painel dos quartos (ou na linha Quartos do caixa), clique no quarto
+livre, digite o código da garota e escolha o tempo. Cada cartão também tem:
+- **Ver de longe o que está livre**: faixa no alto do painel com os números dos quartos livres e quantos estão
+  ocupados, acabando, esgotados ou em arrumação (fica vermelha sem nenhum livre). Cada cartão tem a etiqueta
+  (OCUPADO, ACABANDO, ESGOTADO) e uma barra do tempo já usado; no caixa, o livre tem borda verde grossa e a lateral diz
+  quais estão livres.
+- **Trocar de quarto**: passa quem está no quarto para outro livre, com o mesmo horário, tempo e shows.
+- **Pôr em arrumação / Quarto pronto**: o quarto fica roxo e não inicia até ficar pronto. Ao liberar, dá para escolher
+  "Liberar e pôr em arrumação".
+- **Tempo excedido**: ao liberar um quarto que passou do tempo, aparece quanto passou e quantos blocos cobrar
+  (depois da tolerância de `quartos_tolerancia_min`, padrão 5 minutos).
+- **Garotas da noite** (botão no rodapé do painel): entradas, tempo, shows e tempo passado de cada garota.
+
+## Opcional: o quarto vai na comanda do cliente
+
+Só vale com **"Quartos: lançar o quarto na comanda do cliente e iniciar ao pagar"** ligado (Configurações >
+Módulos; `quartos_pela_comanda`, vem desligado).
 
 Em Configurações > Módulos, **"Quartos: código do produto do show"** já vem **33** (o código do PG/show); troque
 só se o seu show tiver outro código. O preço desse produto (ex.: R$ 100) é o valor de cada bloco de 30 min.

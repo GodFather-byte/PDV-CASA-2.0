@@ -1,4 +1,16 @@
-# Handoff — 06/11/2026
+# Handoff — 07/11/2026
+
+
+## Quartos de volta ao manual + painel novo (pedido do usuário depois do PR #59; PR #60 ficou de lado)
+
+- `quartos_pela_comanda` (padrão N, `QuartosController.pela_comanda`) liga tudo do quarto pela comanda (113/113Q no
+  caixa, `marcar_garota`, `_conferir_shows_com_garota`, `registrar_venda` no `fechar`, preço do show no bloco).
+  Desligado, o caixa trata o 113 e o 33 como produto e o tempo é marcado à mão no painel, como antes do PR #57.
+- Painel: `trocar_quarto`, arrumação (`marcar_arrumacao`, `em_arrumacao`, cfg `quartos_arrumacao`, estado
+  `arrumacao`), `liberar(..., arrumar)` devolve `blocos_a_mais` (tolerância `quartos_tolerancia_min`=5),
+  `garotas_da_noite` + `DialogoGarotasNoite`. UI: botão extra no cartão, menu do painel do caixa, `escolher_liberacao`.
+- Livre/ocupado à vista: `contagem_quartos`/`texto_contagem` (faixa `JanelaQuartos.faixa`, lateral do caixa),
+  `CartaoQuarto.etiqueta` + `barra` (`fracao_usada`), borda verde grossa e barra de tempo na `GradeQuartos`.
 
 ## Show pelo código 33; número da garota só marca (pedido do usuário depois do PR #57)
 

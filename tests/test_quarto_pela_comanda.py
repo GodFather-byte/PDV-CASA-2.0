@@ -8,6 +8,7 @@ from tests.test_shows_quartos import BaseShows
 class TesteQuartoPelaComanda(BaseShows):
     def setUp(self):
         super().setUp()
+        self.banco.cfg_set("quartos_pela_comanda", "S")
         self.banco.cfg_set("quartos_qtd", "3")
         self.produto = self.q.produto_quarto()
 
@@ -129,6 +130,7 @@ class TesteQuartoPelaComanda(BaseShows):
 class TesteShowDoCodigo33(BaseShows):
     def setUp(self):
         super().setUp()
+        self.banco.cfg_set("quartos_pela_comanda", "S")
         self.show = self.novo_produto("PG 30 MIN", 10000, codigo="33")
         self.banco.cfg_set("quartos_codigo_show", "33")
 
@@ -173,6 +175,7 @@ class TesteComandaDoClienteSemConfigurar(BaseShows):
 
     def setUp(self):
         super().setUp()
+        self.banco.cfg_set("quartos_pela_comanda", "S")
         self.show = self.novo_produto("PG 30 MIN", 10000, codigo="33")
 
     def test_33_e_o_show_por_padrao_e_pagar_leva_os_shows_e_o_quarto(self):
