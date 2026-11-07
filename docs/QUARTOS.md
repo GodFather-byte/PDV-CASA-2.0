@@ -7,6 +7,10 @@ na comanda da profissional identificada, separados do consumo do cliente.
 
 O caixa recebe o show como qualquer produto. No painel dos quartos (ou na linha Quartos do caixa), clique no quarto
 livre, digite o código da garota e escolha o tempo. Cada cartão também tem:
+- **Ver de longe o que está livre**: faixa no alto do painel com os números dos quartos livres e quantos estão
+  ocupados, acabando, esgotados ou em arrumação (fica vermelha sem nenhum livre). Cada cartão tem a etiqueta
+  (OCUPADO, ACABANDO, ESGOTADO) e uma barra do tempo já usado; no caixa, o livre tem borda verde grossa e a lateral diz
+  quais estão livres.
 - **Trocar de quarto**: passa quem está no quarto para outro livre, com o mesmo horário, tempo e shows.
 - **Pôr em arrumação / Quarto pronto**: o quarto fica roxo e não inicia até ficar pronto. Ao liberar, dá para escolher
   "Liberar e pôr em arrumação".

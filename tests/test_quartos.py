@@ -357,7 +357,7 @@ class TesteQuartosQt(BaseQuartos):
         self.assertEqual(sorted(f.itens), list(range(1, 8)))
         self.assertEqual(f.texto_do_quarto(3), "3 · 3:00:00")
         self.assertEqual(f.texto_do_quarto(1), "1 · livre")
-        self.assertEqual(f.resumo.text().strip(), "6 livres")
+        self.assertEqual(f.resumo.text(), "6 livres\n1 ocupado")
         self.assertEqual((f.grade.colunas, f.grade.height()), (4, 2 * f.grade.ALTURA))   # cartões maiores em duas linhas
         self.avancar(hours=3, minutes=2)
         f.atualizar()
@@ -371,6 +371,34 @@ class TesteQuartosQt(BaseQuartos):
         f = self.painel()
         self.assertEqual(f.grade.focusPolicy(), Qt.FocusPolicy.NoFocus)
         self.assertEqual(f.btn_painel.focusPolicy(), Qt.FocusPolicy.NoFocus)
+
+    def test_faixa_diz_quais_estao_livres_e_cartao_mostra_ocupado(self):
+        self.banco.cfg_set("quartos_qtd", "4")
+        self.q.iniciar(1, 2)
+        self.q.iniciar(2, 1)
+        self.q.marcar_arrumacao(4, True)
+        self.avancar(minutes=27)                               # o 2 está acabando; o 1 usou 45% do tempo
+        j = self.janela()
+        self.assertEqual(j.faixa.text(), "LIVRES: 3  ·  OCUPADOS: 2 (1 acabando)  ·  ARRUMANDO: 1")
+        self.assertEqual([j.cartoes[n].etiqueta.text() for n in (1, 2, 3, 4)],
+                         ["OCUPADO", "ACABANDO", "LIVRE", "EM ARRUMAÇÃO"])
+        self.assertEqual(j.cartoes[1].barra.value(), 45)
+        self.assertTrue(j.cartoes[1].barra.isVisibleTo(j))
+        self.assertFalse(j.cartoes[3].barra.isVisibleTo(j))
+        self.q.iniciar(3, 1)
+        j.atualizar()
+        self.assertTrue(j.faixa.text().startswith("LIVRES: nenhum"))
+        self.assertIn("#c62828", j.faixa.styleSheet())                  # sem quarto livre: faixa vermelha
+
+    def test_resumo_do_caixa_lista_os_livres_quando_sao_poucos(self):
+        self.banco.cfg_set("quartos_qtd", "3")
+        self.q.iniciar(2, 1)
+        f = self.painel()
+        self.assertEqual(f.resumo.text(), "Livres: 1, 3\n1 ocupado")
+        self.q.iniciar(1, 1)
+        self.q.iniciar(3, 1)
+        f.atualizar()
+        self.assertEqual(f.resumo.text(), "Nenhum livre\n3 ocupados")
 
     def test_cartao_arrumacao_pronto_e_troca(self):
         from src.ui_qt import quartos as tela

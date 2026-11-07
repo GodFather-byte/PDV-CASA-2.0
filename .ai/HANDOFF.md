@@ -9,6 +9,8 @@
 - Painel: `trocar_quarto`, arrumação (`marcar_arrumacao`, `em_arrumacao`, cfg `quartos_arrumacao`, estado
   `arrumacao`), `liberar(..., arrumar)` devolve `blocos_a_mais` (tolerância `quartos_tolerancia_min`=5),
   `garotas_da_noite` + `DialogoGarotasNoite`. UI: botão extra no cartão, menu do painel do caixa, `escolher_liberacao`.
+- Livre/ocupado à vista: `contagem_quartos`/`texto_contagem` (faixa `JanelaQuartos.faixa`, lateral do caixa),
+  `CartaoQuarto.etiqueta` + `barra` (`fracao_usada`), borda verde grossa e barra de tempo na `GradeQuartos`.
 
 ## Show pelo código 33; número da garota só marca (pedido do usuário depois do PR #57)
 
