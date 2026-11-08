@@ -70,6 +70,7 @@ class EntregaController:
             raise ErroNegocio("Entregador inválido.")
         self.banco.executar("UPDATE vendas SET entregador_id = ?, saida_entrega_em = ? WHERE id = ?",
                             (entregador_id, fmt.agora(), venda_id))
+        self.caixa.marcar_aviso_online(venda_id, "saiu")
 
     def pendentes(self) -> list[dict]:
         """Pedidos emitidos e ainda não pagos (a lista 'Entregas' da tela do caixa)."""

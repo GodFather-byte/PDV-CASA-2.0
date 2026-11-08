@@ -1026,6 +1026,8 @@ class CaixaController(DivisaoContaMixin):
                     from src.controllers.custos_venda import registrar as registrar_custos
                     registrar_custos(self.banco, venda_id, self.produtos, self.estoque)
                     self.estoque.baixar_venda(venda_id)
+                    if v["modalidade"] == "entrega":
+                        self.marcar_aviso_online(venda_id, "entregue")
                     self._cascos_emprestados(v, "emprestimo")
                     if self._quartos().pela_comanda():
                         self.ultimos_quartos = self._quartos().registrar_venda(self.obter(venda_id))
@@ -1100,6 +1102,9 @@ class CaixaController(DivisaoContaMixin):
             raise ErroNegocio("Esta comanda tem fichas em dinheiro. Confirme a devolução física dos valores.")
         agora = fmt.agora()
         with self.banco.transacao():
+            self.estoque.liberar_reserva(venda_id)
+            if v.get("pedido_online_id"):
+                self.marcar_aviso_online(venda_id, "cancelado")
             for ficha in fichas:
                 ficha_sangria.registrar_estorno(self.banco, self.turnos, ficha["item_id"], self.operador_id)
             if v["status"] in ABERTAS:
@@ -1139,6 +1144,20 @@ class CaixaController(DivisaoContaMixin):
                 raise ErroNegocio("Este cupom já está cancelado.")
             self.banco.log("venda_cancelada", f"venda {venda_id} cupom {v['cupom']} {motivo}".strip(), self.operador_id)
         notificacoes.avisar(self.banco, "cancelamento", "venda_cancelada", venda_id)
+
+    def marcar_aviso_online(self, venda_id: int, situacao: str) -> None:
+        """O cliente acompanha no cardápio. A nuvem é avisada depois (o caixa não espera a rede aqui)."""
+        linha = self.banco.um(
+            "SELECT pedido_online_id, pedido_online_aviso FROM vendas WHERE id = ?", (venda_id,))
+        if linha is None or not linha["pedido_online_id"]:
+            return
+        if linha["pedido_online_aviso"] == "cancelado" and situacao != "cancelado":
+            return
+        if linha["pedido_online_aviso"] == "entregue" and situacao not in ("entregue", "cancelado"):
+            return
+        self.banco.executar(
+            "UPDATE vendas SET pedido_online_aviso = ?, pedido_online_aviso_ok = 0 WHERE id = ?",
+            (situacao, venda_id))
 
     ultimos_quartos: list[dict] = []          # o que o último fechamento fez nos quartos (para a tela avisar)
 

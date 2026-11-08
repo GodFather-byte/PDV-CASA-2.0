@@ -95,6 +95,8 @@ def coletar(banco) -> dict:
                       p.promo_de, p.promo_ate, p.promo_preco_cent,
                       p.sem_inicial, p.sem_final, p.sem_preco_cent,
                       p.hora_ini, p.hora_fim, p.hora_preco_cent,
+                      p.preco_gelada_cent, p.promo_gelada_cent, p.sem_gelada_cent, p.hora_gelada_cent,
+                      p.aceita_decimal, p.casco_produto_id,
                       g.nome AS grupo, s.nome AS subgrupo, s.figura AS foto,
                       f.origem AS foto_origem, f.miniatura AS foto_miniatura
                FROM produtos p
@@ -115,6 +117,12 @@ def coletar(banco) -> dict:
             "sem_preco_cent": int(r["sem_preco_cent"] or 0),
             "hora_ini": r["hora_ini"] or "", "hora_fim": r["hora_fim"] or "",
             "hora_preco_cent": int(r["hora_preco_cent"] or 0),
+            "preco_gelada_cent": int(r["preco_gelada_cent"] or 0),
+            "promo_gelada_cent": int(r["promo_gelada_cent"] or 0),
+            "sem_gelada_cent": int(r["sem_gelada_cent"] or 0),
+            "hora_gelada_cent": int(r["hora_gelada_cent"] or 0),
+            "fracionado": bool(r["aceita_decimal"]),
+            "retornavel": bool(r["casco_produto_id"]),
         }
         codigo = (r["codigo"] or "").strip()
         if codigo.isdigit():

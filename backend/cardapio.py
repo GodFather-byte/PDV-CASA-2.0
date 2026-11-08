@@ -117,6 +117,16 @@ def produto_limpo(item: dict) -> dict | None:
     foto = _url(item.get("foto"))
     if foto:
         limpo["foto"] = foto
+    gelada = max(_int(item.get("preco_gelada_cent")), 0)
+    if 0 < gelada <= 10_000_000:
+        limpo["preco_gelada_cent"] = gelada
+        limpo["promo_gelada_cent"] = max(_int(item.get("promo_gelada_cent")), 0)
+        limpo["sem_gelada_cent"] = max(_int(item.get("sem_gelada_cent")), 0)
+        limpo["hora_gelada_cent"] = max(_int(item.get("hora_gelada_cent")), 0)
+    if item.get("fracionado"):
+        limpo["fracionado"] = True
+    if item.get("retornavel"):
+        limpo["retornavel"] = True
     return limpo
 
 
@@ -153,6 +163,13 @@ def agrupar(produtos: list[dict], quando: datetime | None = None) -> list[dict]:
             publico["foto"] = item["foto"]
         if item.get("codigo"):
             publico["codigo"] = item["codigo"]
+        if item.get("preco_gelada_cent"):
+            from src.controllers.produto_controller import ProdutoController
+            publico["preco_gelada_cent"] = int(ProdutoController.regra_preco_gelada(item, quando)["preco_cent"])
+        if item.get("fracionado"):
+            publico["fracionado"] = True
+        if item.get("retornavel"):
+            publico["retornavel"] = True
         bloco["produtos"].append(publico)
     return grupos
 

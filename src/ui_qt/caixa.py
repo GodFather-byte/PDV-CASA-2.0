@@ -642,7 +642,12 @@ class JanelaCaixa(QMainWindow):
         from src.ui_qt.pedidos_online import VigiaPedidosOnline, atender
         self.btn_pedidos_online = QPushButton("🛵 Pedidos online")
         self.btn_pedidos_online.setObjectName("neutro")
-        self.vigia_pedidos = VigiaPedidosOnline(self.ctx, self.btn_pedidos_online, self)
+        vigia_menu = getattr(self.parent(), "vigia_pedidos", None)
+        if vigia_menu is not None:
+            self.vigia_pedidos = vigia_menu
+            vigia_menu.registrar(self.btn_pedidos_online, self)
+        else:
+            self.vigia_pedidos = VigiaPedidosOnline(self.ctx, self.btn_pedidos_online, self)
         self.btn_pedidos_online.clicked.connect(lambda: self._pode_operar() and atender(self, self.vigia_pedidos))
         linha_operacoes.addWidget(self.btn_pedidos_online)
         c_cen.addLayout(linha_operacoes)
@@ -843,9 +848,19 @@ class JanelaCaixa(QMainWindow):
         self.recarregar()
 
     def _forma_padrao(self) -> None:
-        """A forma de pagamento volta a ser Dinheiro (a primeira da lista) a cada venda: nunca fica a última que foi usada."""
-        i = next((k for k in range(self.cmb_forma.count())
-                  if self.cmb_forma.itemText(k).strip().casefold() == "dinheiro"), 0)
+        """Dinheiro a cada venda. Pedido online já deixa marcada a forma que o cliente escolheu no celular."""
+        v = self.venda()
+        palavras = {
+            "dinheiro": ("dinheiro",),
+            "pix": ("pix",),
+            "cartao": ("cartao", "cartão", "credito", "crédito", "debito", "débito"),
+        }.get((v or {}).get("forma_online") or "", ("dinheiro",))
+        i = 0
+        for k in range(self.cmb_forma.count()):
+            texto = self.cmb_forma.itemText(k).strip().casefold()
+            if any(p in texto for p in palavras):
+                i = k
+                break
         self.cmb_forma.setCurrentIndex(i)
 
     def _carregar_formas(self) -> None:
@@ -1525,15 +1540,23 @@ class JanelaCaixa(QMainWindow):
                 self._limpar_entrada()
             elif acao == "entregador":
                 eid = self._escolher_entregador()
-                if eid is not None:
-                    self._executar(self.ctx.entregas.atribuir_entregador, vid, eid)
+                if eid is not None and self._executar(self.ctx.entregas.atribuir_entregador, vid, eid)[0]:
+                    self._avisar_pedido_online()
             elif acao == "cancelar" and self._autorizar(
                     "caixa_cancelamento", "exigir_senha_cancelamento", "Cancelar pedido exige autorização:"):
                 if self.dialogos.confirmar("Cancelar pedido", "Cancelar este pedido de entrega?", padrao_sim=False):
                     motivo = self._pedir_motivo("Cancelar pedido", "Motivo:", "pedido de entrega cancelado")
-                    if motivo is not None:
-                        self._executar(self.ctx.caixa.cancelar_venda, vid, motivo)
+                    if motivo is not None and self._executar(self.ctx.caixa.cancelar_venda, vid, motivo)[0]:
+                        self._avisar_pedido_online()
         self.recarregar()
+
+    def _avisar_pedido_online(self) -> None:
+        """Saiu, entregue ou cancelado: o cardápio do cliente atualiza sem esperar a próxima busca."""
+        try:
+            from src.sync import pedidos_online as rede
+            rede.empurrar_avisos(self.ctx.banco)
+        except Exception:  # noqa: BLE001 - a busca de 30 s tenta de novo
+            pass
 
     def _escolher_entregador(self, opcional=False):
         opcoes = [(r["id"], r["nome"]) for r in self.ctx.cadastros.listar("operadores", apenas_ativos=True) if r["entregador"]]
@@ -2887,6 +2910,7 @@ class JanelaCaixa(QMainWindow):
         alerta = self._alerta_gaveta()
         self.avisar(f"{texto}   {alerta}" if alerta else texto, AMBAR if alerta else VERDE)
         self._avisar_quartos(venda["id"])
+        self._avisar_pedido_online()
         self.ent_codigo.setFocus()
 
     @staticmethod

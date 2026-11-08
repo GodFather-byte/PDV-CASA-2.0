@@ -99,14 +99,46 @@ class EstoqueController:
             self._mover(m["produto_id"], -m["quantidade"], tipo_estorno, ref_tipo, ref_id)
 
     # ----------------------------------------------------------- vendas
+    def reservar_venda(self, venda_id: int) -> None:
+        """Segura o estoque de um pedido online. Não deixa negativo, mesmo com a venda sem saldo liberada no balcão.
+
+        Idempotente: repetir não reserva de novo. Só produtos que controlam estoque; o resto segue a baixa do fechamento."""
+        with self._auditar_com_operador(), self.banco.transacao():
+            if self._tem_movimento(venda_id, "reserva") or self._tem_movimento(venda_id, "venda"):
+                return
+            consumos = {pid: qtd for pid, qtd in self._consumos_venda(venda_id).items()
+                        if (p := self.produtos.por_id(pid)) and p["controla_estoque"]}
+            faltas = self._faltas_estoque(consumos)
+            if faltas:
+                raise ErroEstoqueInsuficiente(faltas)
+            for produto_id, quantidade in consumos.items():
+                self._mover(produto_id, -quantidade, "reserva", "venda", venda_id, permitir_negativo=False)
+
+    def liberar_reserva(self, venda_id: int) -> None:
+        """Devolve o que o pedido online segurou, se a venda ainda não virou baixa definitiva."""
+        with self._auditar_com_operador(), self.banco.transacao():
+            if self._tem_movimento(venda_id, "estorno_reserva") or self._tem_movimento(venda_id, "venda"):
+                return
+            if not self._tem_movimento(venda_id, "reserva"):
+                return
+            self._estornar_referencia("venda", venda_id, "reserva", "estorno_reserva")
+
+    def _tem_movimento(self, venda_id: int, tipo: str) -> bool:
+        return self.banco.um(
+            "SELECT 1 FROM movimentos_estoque WHERE ref_tipo = 'venda' AND ref_id = ? AND tipo = ? LIMIT 1",
+            (venda_id, tipo)) is not None
+
     def baixar_venda(self, venda_id: int) -> None:
         """Dá baixa nos produtos (e insumos da composição) dos itens não cancelados.
 
-        Idempotente: se a venda já tem movimentos de baixa, repetir a chamada não faz nada."""
+        Idempotente: se a venda já tem movimentos de baixa, repetir a chamada não faz nada.
+        Reserva do pedido online volta antes da baixa, para o movimento oficial continuar sendo 'venda'
+        e o estoque não descer duas vezes."""
         with self._auditar_com_operador(), self.banco.transacao():
-            if self.banco.um("SELECT 1 FROM movimentos_estoque WHERE ref_tipo = 'venda' AND ref_id = ? "
-                             "AND tipo = 'venda' LIMIT 1", (venda_id,)):
+            if self._tem_movimento(venda_id, "venda"):
                 return
+            if self._tem_movimento(venda_id, "reserva") and not self._tem_movimento(venda_id, "estorno_reserva"):
+                self._estornar_referencia("venda", venda_id, "reserva", "estorno_reserva")
             consumos = self._consumos_venda(venda_id)
             faltas = self._faltas_estoque(consumos)
             permitir = self.banco.cfg_bool("permitir_venda_sem_estoque", True)

@@ -1,7 +1,8 @@
 # Cardápio digital (QR da mesa)
 
-Página pública, só consulta, no celular: `https://nuvem.exemplo/cardapio/?loja=CHAVE&mesa=4`.
-Não faz pedido, não mostra custo, estoque, produto inativo, fora de venda ou com **Mostrar no cardápio digital** desmarcado.
+Página pública no celular: `https://nuvem.exemplo/cardapio/?loja=CHAVE&mesa=4`.
+Na boate (WillPDV) é só consulta. No Will Adega, com o pedido online ligado, o cliente pede por aqui.
+Não mostra custo, estoque, produto inativo, fora de venda ou com **Mostrar no cardápio digital** desmarcado.
 
 O preço é o vigente do caixa (promoção por período, dia da semana ou happy hour — vale o menor). A nuvem recalcula na hora da abertura, no horário de Brasília, para o happy hour não ficar preso na hora do envio.
 
@@ -39,10 +40,11 @@ Na boate o cardápio continua **só consulta**. No **Will Adega**, o cliente pod
 2. **No celular** do cliente: botões **+ / −** em cada produto, a barra "Ver pedido", nome, telefone, endereço, bairro,
    pagamento na entrega (dinheiro com troco, Pix ou cartão) e observação. Ao enviar, o pedido vai para a nuvem e abre o
    **WhatsApp com a mensagem pronta** para a loja. O cardápio mostra depois se o pedido foi confirmado ou recusado.
-3. **No caixa**: o botão **🛵 Pedidos online** acende e apita (busca a cada 30 s). **Aceitar** cria a entrega (F6) já
-   preenchida: cliente (achado pelo telefone ou cadastrado), itens com o **preço do caixa**, taxa do bairro, troco e o
-   recado "Pedido online #N". Depois é o fluxo normal: conferir, emitir (F8), entregador e receber. **Recusar** pede o
-   motivo, que o cliente vê no cardápio. Produto que saiu de venda fica de fora e o caixa avisa.
+3. **No caixa e no menu principal**: o botão **🛵 Pedidos online** acende e apita (busca a cada 30 s), mesmo com a
+   janela do caixa fechada. **Aceitar** cria a entrega (F6) já preenchida, reserva o estoque, imprime o pedido e marca
+   a forma que o cliente escolheu (dinheiro, Pix ou cartão). O preço é o do caixa, inclusive gelada. **Recusar** pede o
+   motivo. Produto fora de venda não aceita o resto do pedido. O cliente acompanha no cardápio: confirmado, saiu para
+   entrega, entregue ou cancelado, também se reabrir a página.
 
 Proteções: o preço vale o do caixa; no máximo 3 pedidos aguardando por telefone (6 por hora) e 120 por hora por loja;
 nada é cobrado online. Na nuvem: `backend/pedido_online.py` (tabelas `pedido_online_config` e `pedidos_online`).

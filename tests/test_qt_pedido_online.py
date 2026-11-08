@@ -53,10 +53,15 @@ class TestePedidoOnlineNoCaixa(BaseCaixaQt):
         self.assertEqual(self.bip.call_count, 1)                             # o mesmo pedido não apita de novo
         self.j.dialogos.escolhas = [31, "aceitar"]
         self.j.btn_pedidos_online.click()
-        venda = self.j.venda()
-        self.assertEqual((venda["modalidade"], venda["total_cent"]), ("entrega", 12 * 450 + venda["taxa_cent"]))
+        venda = self.banco.um("SELECT * FROM vendas WHERE mensagem LIKE 'Pedido online #5 ·%'")
+        self.assertEqual(venda["status"], "conta_enviada")
+        self.assertEqual((venda["modalidade"], venda["forma_online"]), ("entrega", "pix"))
+        self.assertEqual(venda["total_cent"], 12 * 450 + venda["taxa_cent"])
         self.assertIn("Pedido online #5", venda["mensagem"])
         self.assertEqual(self.respostas, [("aceitar", 31)])
+        self.j.venda_id = venda["id"]
+        self.j._forma_padrao()
+        self.assertIn("pix", self.j.cmb_forma.currentText().casefold())
         self.assertEqual(self.j.btn_pedidos_online.text(), "🛵 Pedidos online")
         self.respostas.clear()
         v.buscar(sincrono=True)                                              # a nuvem ainda o lista: só reavisa
@@ -70,6 +75,23 @@ class TestePedidoOnlineNoCaixa(BaseCaixaQt):
         self.assertEqual(self.respostas, [("recusar", 31, "Acabou a Skol")])
         self.assertIsNone(self.j.venda_id)
         self.assertIn("#5 recusado", self.j.lbl_status.text())
+
+    def test_menu_principal_avisa_mesmo_sem_a_janela_do_caixa(self):
+        from types import SimpleNamespace
+        from src.ui_qt.app import JanelaPrincipal
+        aplicacao = SimpleNamespace(ctx=self.ctx, servicos=[], estado_servicos=[])
+        principal = JanelaPrincipal(aplicacao)
+        for timer in (principal.vigia_pedidos.timer, principal._timer, principal._primeiro_uso_timer,
+                      principal._atualizacoes_timer):
+            timer.stop()
+        principal.show()
+        self.aplicacao.processEvents()
+        self.assertTrue(principal.btn_pedidos_online.isVisibleTo(principal))
+        with mock.patch.dict(os.environ, {"PDV_EDICAO": "willpdv"}):
+            principal.vigia_pedidos.buscar(sincrono=True)
+            self.assertFalse(principal.btn_pedidos_online.isVisibleTo(principal))
+        principal._fechamento_autorizado = True
+        principal.close()
 
     def test_some_fora_do_will_adega_ou_desligado(self):
         with mock.patch.dict(os.environ, {"PDV_EDICAO": "willpdv"}):

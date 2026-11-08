@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 43
+VERSAO_ESQUEMA = 44
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -507,6 +507,10 @@ TABELAS = [
         troco_para_cent INTEGER NOT NULL DEFAULT 0,
         mensagem TEXT,
         apelido TEXT,
+        forma_online TEXT,
+        pedido_online_id INTEGER,
+        pedido_online_aviso TEXT,
+        pedido_online_aviso_ok INTEGER NOT NULL DEFAULT 1,
         saida_entrega_em TEXT,
         cancelada_por INTEGER REFERENCES operadores(id),
         motivo_cancelamento TEXT,
@@ -1044,6 +1048,14 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v44: pedido online. A forma escolhida no celular, o id na nuvem e o aviso que ainda falta
+    # confirmar (saiu, entregue, cancelado). Vendas antigas nascem com o aviso já confirmado.
+    44: [
+        ("coluna", "vendas", "forma_online", "TEXT"),
+        ("coluna", "vendas", "pedido_online_id", "INTEGER"),
+        ("coluna", "vendas", "pedido_online_aviso", "TEXT"),
+        ("coluna", "vendas", "pedido_online_aviso_ok", "INTEGER NOT NULL DEFAULT 1"),
+    ],
     # v43: o show da casa é o código 33. Com o campo vazio o caixa usava o QUARTO automático e o 33 lançado na conta
     # não ia para a garota nem contava o quarto. Sem produto 33 ativo, continua valendo o QUARTO automático.
     43: [

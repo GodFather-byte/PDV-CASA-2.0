@@ -20,7 +20,8 @@ from datetime import datetime, timedelta
 from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Query
-from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy import Column, Integer, String, Text, UniqueConstraint
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.database import Base, engine, get_db
@@ -46,6 +47,7 @@ class PedidoOnlineConfig(Base):
 
 class PedidoOnline(Base):
     __tablename__ = "pedidos_online"
+    __table_args__ = (UniqueConstraint("chave_loja", "numero", name="ux_pedido_online_numero"),)
     id = Column(Integer, primary_key=True, autoincrement=True)
     chave_loja = Column(String, nullable=False, index=True)
     numero = Column(Integer, nullable=False)
@@ -100,10 +102,16 @@ def config_limpa(bruto) -> dict:
     }
 
 
+def _edicao_cadastrada(loja) -> str:
+    """Vazio na central é WillPDV, como no resto da nuvem. Pedido online exige willadega explícito."""
+    from backend.licencas_fornecedor import edicao_da_loja
+    return edicao_da_loja(loja)
+
+
 def pode_pedir(loja, edicao_enviada) -> bool:
-    """Só loja Will Adega: o caixa diz a edição e o cadastro da central não pode dizer outra."""
-    cadastro = (getattr(loja, "edicao", None) or "").strip().lower()
-    return str(edicao_enviada or "").strip().lower() == EDICAO and cadastro in ("", EDICAO)
+    """Os dois lados dizem Will Adega. Edição vazia ou willpdv não recebe pedido."""
+    enviada = str(edicao_enviada or "").strip().lower()
+    return enviada == EDICAO and _edicao_cadastrada(loja) == EDICAO
 
 
 def gravar_config(db: Session, loja, bruto, edicao_enviada) -> dict:
@@ -126,8 +134,7 @@ def config_da_loja(db: Session, loja) -> dict:
         cfg = json.loads(linha.dados or "{}")
     except ValueError:
         return {"ligado": False}
-    if not isinstance(cfg, dict) or not cfg.get("ligado") or (getattr(loja, "edicao", None) or "").strip().lower() \
-            not in ("", EDICAO):
+    if not isinstance(cfg, dict) or not cfg.get("ligado") or _edicao_cadastrada(loja) != EDICAO:
         return {"ligado": False}
     return cfg
 
@@ -144,13 +151,18 @@ def config_publica(db: Session, loja) -> dict | None:
 def texto_whatsapp(nome_loja: str, numero: int, d: dict) -> str:
     linhas = [f"*Pedido #{numero}* - {nome_loja}".strip(" -"), ""]
     for i in d["itens"]:
-        linhas.append(f"{i['qtd']}x {i['nome']} - {reais(i['qtd'] * i['preco_cent'])}")
+        qtd = i["qtd"]
+        texto_qtd = str(int(qtd)) if float(qtd) == int(qtd) else str(qtd).replace(".", ",")
+        temp = " gelada" if i.get("temperatura") == "gelada" else ""
+        linhas.append(f"{texto_qtd}x {i['nome']}{temp} - {reais(int(round(qtd * i['preco_cent'])))}")
     linhas.append("")
     if d["retirada"]:
         linhas.append("Retirar na loja")
     else:
         linhas.append(f"Entrega: {d['endereco']} - {d['bairro'] or 'bairro não informado'}")
         linhas.append(f"Taxa de entrega: {reais(d['taxa_cent'])}")
+    if d.get("aviso"):
+        linhas.append(d["aviso"])
     linhas.append(f"*Total: {reais(d['total_cent'])}*")
     pagamento = PAGAMENTOS[d["pagamento"]]
     if d["pagamento"] == "dinheiro" and d.get("troco_para_cent"):
@@ -189,26 +201,59 @@ def montar_pedido(cfg: dict, catalogo: dict[str, dict], corpo: dict, quando: dat
         if not isinstance(linha, dict):
             raise HTTPException(status_code=422, detail="Item inválido.")
         codigo = str(linha.get("codigo") or "").strip()
-        qtd = _int(linha.get("qtd"), 0)
         produto = catalogo.get(codigo) if _CODIGO.fullmatch(codigo) else None
         if produto is None:
             raise HTTPException(status_code=422, detail="Um produto do carrinho saiu do cardápio. Atualize a página.")
-        if not 1 <= qtd <= MAX_QTD:
-            raise HTTPException(status_code=422, detail=f"Quantidade de 1 a {MAX_QTD} por produto.")
-        atual = itens.get(codigo)
-        if atual:
-            atual["qtd"] = min(MAX_QTD, atual["qtd"] + qtd)
+        fracionado = bool(produto.get("fracionado"))
+        temperatura = str(linha.get("temperatura") or "natural")
+        if temperatura not in ("natural", "gelada"):
+            raise HTTPException(status_code=422, detail="Escolha natural ou gelada.")
+        if temperatura == "gelada" and not produto.get("preco_gelada_cent"):
+            raise HTTPException(status_code=422, detail=f"{produto['nome']} não tem preço gelado.")
+        try:
+            qtd = float(linha.get("qtd"))
+        except (TypeError, ValueError):
+            qtd = 0
+        if not fracionado:
+            if qtd != int(qtd):
+                raise HTTPException(status_code=422, detail=f"{produto['nome']} não aceita quantidade fracionada.")
+            qtd = int(qtd)
         else:
-            itens[codigo] = {"codigo": codigo, "nome": produto["nome"], "qtd": qtd,
-                             "preco_cent": preco_para_cardapio(produto, quando)["preco_cent"]}
-    subtotal = sum(i["qtd"] * i["preco_cent"] for i in itens.values())
+            qtd = round(qtd, 4)
+        if not 0 < qtd <= MAX_QTD:
+            raise HTTPException(status_code=422, detail=f"Quantidade de 1 a {MAX_QTD} por produto.")
+        cascos = _int(linha.get("cascos"), 0)
+        if cascos < 0 or cascos > int(qtd):
+            raise HTTPException(status_code=422, detail="Os cascos devolvidos não podem passar da quantidade.")
+        if cascos and not produto.get("retornavel"):
+            raise HTTPException(status_code=422, detail=f"{produto['nome']} não trabalha com casco.")
+        if temperatura == "gelada":
+            from src.controllers.produto_controller import ProdutoController
+            preco = int(ProdutoController.regra_preco_gelada(produto, quando)["preco_cent"])
+        else:
+            preco = preco_para_cardapio(produto, quando)["preco_cent"]
+        chave_item = f"{codigo}|{temperatura}"
+        atual = itens.get(chave_item)
+        if atual:
+            atual["qtd"] = min(MAX_QTD, round(atual["qtd"] + qtd, 4))
+            atual["cascos"] = min(int(atual["qtd"]), atual["cascos"] + cascos)
+        else:
+            itens[chave_item] = {"codigo": codigo, "nome": produto["nome"], "qtd": qtd, "preco_cent": preco,
+                                 "temperatura": temperatura, "cascos": cascos}
+    subtotal = sum(int(round(i["qtd"] * i["preco_cent"])) for i in itens.values())
     if subtotal < cfg.get("minimo_cent", 0):
         raise HTTPException(status_code=422, detail=f"O pedido mínimo é {reais(cfg['minimo_cent'])}.")
     taxa = 0
+    aviso = ""
     if not retirada:
         achado = next((b for b in cfg.get("bairros", []) if b["nome"].lower() == bairro.lower()), None)
         taxa = achado["taxa_cent"] if achado else cfg.get("taxa_padrao_cent", 0)
-        bairro = achado["nome"] if achado else bairro
+        if achado:
+            bairro = achado["nome"]
+        elif bairro:
+            aviso = "Bairro não cadastrado: a entrega usa a taxa padrão."
+        else:
+            aviso = "Bairro não informado: a entrega usa a taxa padrão."
     troco = max(0, _int(corpo.get("troco_para_cent"))) if pagamento == "dinheiro" else 0
     total = subtotal + taxa
     if troco and troco < total:
@@ -216,7 +261,7 @@ def montar_pedido(cfg: dict, catalogo: dict[str, dict], corpo: dict, quando: dat
     return {
         "nome": nome, "telefone": telefone, "retirada": retirada, "endereco": "" if retirada else endereco,
         "bairro": "" if retirada else bairro, "pagamento": pagamento, "troco_para_cent": troco,
-        "observacao": _txt(corpo.get("observacao"), 200), "itens": list(itens.values()),
+        "observacao": _txt(corpo.get("observacao"), 200), "aviso": aviso, "itens": list(itens.values()),
         "subtotal_cent": subtotal, "taxa_cent": taxa, "total_cent": total,
     }
 
@@ -230,9 +275,70 @@ def _publico(p: PedidoOnline) -> dict:
             "motivo": p.motivo or "", **(dados if isinstance(dados, dict) else {})}
 
 
+def marcar_lojas_adega(db: Session) -> int:
+    """Loja sem edição na central vira willadega quando a última licença publicada é dessa edição,
+    ou quando o cardápio dela já estava recebendo pedido. WillPDV explícito não muda."""
+    from backend.licencas_fornecedor import edicao_do_codigo
+    from backend.ponte import PonteLicenca
+    from sqlalchemy import inspect
+    from backend.database import engine as motor
+    if not inspect(motor).has_table("lojas"):
+        return 0
+    from backend.main import Loja as Cadastro
+    marcadas = 0
+    for loja in db.query(Cadastro).all():
+        if (getattr(loja, "edicao", None) or "").strip():
+            continue
+        ultima = (db.query(PonteLicenca).filter(PonteLicenca.chave_loja == loja.chave_loja)
+                  .order_by(PonteLicenca.seq.desc()).first()) if inspect(motor).has_table("ponte_licencas") else None
+        if ultima is not None and edicao_do_codigo(ultima.codigo) == EDICAO:
+            loja.edicao = EDICAO
+            marcadas += 1
+            continue
+        cfg = db.get(PedidoOnlineConfig, loja.chave_loja)
+        if cfg is None:
+            continue
+        try:
+            dados = json.loads(cfg.dados or "{}")
+        except ValueError:
+            dados = {}
+        if isinstance(dados, dict) and dados.get("ligado"):
+            loja.edicao = EDICAO
+            marcadas += 1
+    if marcadas:
+        db.commit()
+    return marcadas
+
+
+def _garantir_indice() -> None:
+    """create_all não cria índice único numa tabela que já existia."""
+    import logging
+    from sqlalchemy import inspect, text
+    from backend.database import engine as motor
+    if not inspect(motor).has_table("pedidos_online"):
+        return
+    nomes = {i["name"] for i in inspect(motor).get_indexes("pedidos_online")}
+    if "ux_pedido_online_numero" in nomes:
+        return
+    try:
+        with motor.begin() as con:
+            con.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_pedido_online_numero ON pedidos_online (chave_loja, numero)"))
+    except Exception:
+        logging.getLogger("pdv.nuvem").exception(
+            "Não criei o índice único do pedido online. Confira números repetidos em pedidos_online.")
+
+
 def instalar(app: FastAPI, Loja, autenticar, loja_ativa, catalogo_da_loja) -> APIRouter:
     """`loja_ativa(db, chave)` e `catalogo_da_loja(db, chave)` vêm do cardápio (mesma validação e mesmo catálogo)."""
     Base.metadata.create_all(bind=engine)
+    _garantir_indice()
+    from backend.database import SessionLocal
+    db = SessionLocal()
+    try:
+        marcar_lojas_adega(db)
+    finally:
+        db.close()
     router = APIRouter()
 
     @router.post("/v1/cardapio/pedido")
@@ -254,15 +360,26 @@ def instalar(app: FastAPI, Loja, autenticar, loja_ativa, catalogo_da_loja) -> AP
             raise HTTPException(status_code=429, detail="Você já tem pedidos aguardando. Fale com a loja pelo WhatsApp.")
         if base.filter(PedidoOnline.criado_em >= hora_atras).count() >= POR_LOJA_HORA:
             raise HTTPException(status_code=429, detail="A loja está com muitos pedidos agora. Tente em instantes.")
-        numero = (db.query(PedidoOnline.numero).filter(PedidoOnline.chave_loja == loja.chave_loja)
-                  .order_by(PedidoOnline.numero.desc()).limit(1).scalar() or 0) + 1
         quando = agora.strftime("%Y-%m-%d %H:%M:%S")
-        pedido = PedidoOnline(chave_loja=loja.chave_loja, numero=numero, telefone=dados["telefone"], situacao="novo",
-                              dados=json.dumps(dados, ensure_ascii=False), criado_em=quando, atualizado_em=quando)
-        db.add(pedido)
-        db.commit()
+        pedido = None
+        for _ in range(3):
+            numero = (db.query(PedidoOnline.numero).filter(PedidoOnline.chave_loja == loja.chave_loja)
+                      .order_by(PedidoOnline.numero.desc()).limit(1).scalar() or 0) + 1
+            pedido = PedidoOnline(chave_loja=loja.chave_loja, numero=numero, telefone=dados["telefone"],
+                                  situacao="novo", dados=json.dumps(dados, ensure_ascii=False),
+                                  criado_em=quando, atualizado_em=quando)
+            db.add(pedido)
+            try:
+                db.commit()
+                break
+            except IntegrityError:
+                db.rollback()
+                pedido = None
+        if pedido is None:
+            raise HTTPException(status_code=503, detail="Não foi possível numerar o pedido. Tente de novo.")
+        numero = pedido.numero
         texto = texto_whatsapp(nome_loja, numero, dados)
-        return {"numero": numero, "total_cent": dados["total_cent"], "texto": texto,
+        return {"numero": numero, "total_cent": dados["total_cent"], "texto": texto, "aviso": dados.get("aviso") or "",
                 "whatsapp_url": f"https://wa.me/{cfg['whatsapp']}?text={quote(texto)}"}
 
     @router.get("/v1/cardapio/pedido")
@@ -276,20 +393,23 @@ def instalar(app: FastAPI, Loja, autenticar, loja_ativa, catalogo_da_loja) -> AP
             raise HTTPException(status_code=404, detail="Pedido não encontrado.")
         return {"numero": p.numero, "situacao": p.situacao, "motivo": p.motivo or ""}
 
-    def _do_caixa(acesso) -> str:
+    def _do_caixa(acesso, db: Session) -> str:
         if acesso.admin:
             raise HTTPException(status_code=403, detail="Use o token da loja.")
+        loja = db.query(Loja).filter(Loja.chave_loja == acesso.loja).first()
+        if loja is None or _edicao_cadastrada(loja) != EDICAO:
+            raise HTTPException(status_code=403, detail="Pedido online só existe no Will Adega.")
         return acesso.loja
 
     @router.get("/v1/pedidos-online")
     def listar(acesso=Depends(autenticar), db: Session = Depends(get_db)):
-        chave = _do_caixa(acesso)
+        chave = _do_caixa(acesso, db)
         pedidos = (db.query(PedidoOnline).filter(PedidoOnline.chave_loja == chave, PedidoOnline.situacao == "novo")
                    .order_by(PedidoOnline.id).limit(50).all())
         return {"pedidos": [_publico(p) for p in pedidos]}
 
     def _responder(pedido_id: int, acesso, db: Session, situacao_nova: str, motivo: str | None = None) -> dict:
-        chave = _do_caixa(acesso)
+        chave = _do_caixa(acesso, db)
         p = db.get(PedidoOnline, pedido_id)
         if p is None or p.chave_loja != chave:
             raise HTTPException(status_code=404, detail="Pedido não encontrado.")
@@ -314,6 +434,31 @@ def instalar(app: FastAPI, Loja, autenticar, loja_ativa, catalogo_da_loja) -> AP
         if not motivo:
             raise HTTPException(status_code=422, detail="Informe o motivo da recusa.")
         return _responder(pedido_id, acesso, db, "recusado", motivo)
+
+    _SEGUINTES = {"aceito": {"saiu", "entregue", "cancelado"}, "saiu": {"entregue", "cancelado"}}
+
+    @router.post("/v1/pedidos-online/{pedido_id}/situacao")
+    def andar(pedido_id: int, corpo: dict = Body(default={}), acesso=Depends(autenticar),
+              db: Session = Depends(get_db)):
+        """Depois de aceito: saiu para entrega, entregue ou cancelado. O cliente vê no cardápio."""
+        chave = _do_caixa(acesso, db)
+        nova = str((corpo or {}).get("situacao") or "")
+        if nova not in ("saiu", "entregue", "cancelado"):
+            raise HTTPException(status_code=422, detail="Situação inválida.")
+        p = db.get(PedidoOnline, pedido_id)
+        if p is None or p.chave_loja != chave:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+        if p.situacao == nova:
+            return {"situacao": p.situacao}
+        if nova not in _SEGUINTES.get(p.situacao, ()):
+            raise HTTPException(status_code=409, detail=f"Este pedido já foi {p.situacao}.")
+        p.situacao = nova
+        motivo = _txt((corpo or {}).get("motivo"), 160)
+        if motivo:
+            p.motivo = motivo
+        p.atualizado_em = _agora().strftime("%Y-%m-%d %H:%M:%S")
+        db.commit()
+        return {"situacao": p.situacao}
 
     app.include_router(router)
     return router
