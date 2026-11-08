@@ -75,6 +75,13 @@ class BaseCaixaQt(BaseTeste):
         self.ctx.operador = self.ctx.acesso.autenticar("ADM", "ADM")
         self.janelas = []
         self.addCleanup(self._fechar_janelas)
+        # O cadastro rápido busca nome e foto na internet: nos testes, sem rede (cada teste que quer a busca a simula).
+        from unittest import mock as _mock
+        from src.controllers import foto_produto_controller as _fotos
+        from src.core.erros import ErroNegocio as _Erro
+        sem_rede = _mock.patch.object(_fotos, "buscar_produto", side_effect=_Erro("sem internet no teste"))
+        sem_rede.start()
+        self.addCleanup(sem_rede.stop)
 
     def _fechar_janelas(self):
         for j in self.janelas:

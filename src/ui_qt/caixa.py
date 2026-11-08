@@ -23,7 +23,7 @@ import sys
 
 from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtGui import QColor, QFont, QKeySequence, QPixmap, QShortcut
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
                                QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy, QSpinBox, QStackedWidget,
                                QTableWidget,
@@ -1947,8 +1947,13 @@ class JanelaCaixa(QMainWindow):
         if not self.ctx.acesso.pode(self.ctx.operador, "cad_produtos") and not self._pedir_supervisor(
                 "cad_produtos", "Cadastrar produto exige autorização:"):
             return None
-        nome = self.dialogos.pedir_texto("Produto novo", "Nome do produto:")
-        if nome is None:
+        achado = self._buscar_produto_na_internet(cbarra)
+        if achado["nome"]:
+            nome = self.dialogos.pedir_texto("Produto novo", "Nome do produto (achado na internet; confira):",
+                                             padrao=achado["nome"])
+        else:
+            nome = self.dialogos.pedir_texto("Produto novo", "Nome do produto:")
+        if nome is None or not nome.strip():
             return None
         preco = self._pedir_convertido("Produto novo", "Preço de venda (R$):",
                                       lambda t: ler_dinheiro(t, permitir_zero=True))
@@ -1975,7 +1980,27 @@ class JanelaCaixa(QMainWindow):
         if not ok:
             return None
         self._subgrupo_rapido = p["subgrupo_id"]
+        if achado["foto"] is not None:
+            try:                                  # a foto não impede o cadastro: sem ela o produto segue sem foto
+                from src.controllers.foto_produto_controller import FotoProdutoController
+                FotoProdutoController(self.ctx.banco).gravar(p["id"], achado["foto"])
+            except ErroNegocio:
+                pass
         return p
+
+    def _buscar_produto_na_internet(self, cbarra: str) -> dict:
+        """Nome e foto do produto novo pelo código de barras (base pública Open Food Facts). Sem internet ou sem o
+        produto na base: segue o cadastro digitando, sem travar o caixa."""
+        from src.controllers import foto_produto_controller as fotos
+        self.avisar("Buscando o nome e a foto do produto na internet…", AMBAR)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            return fotos.buscar_produto(cbarra)
+        except ErroNegocio:
+            return {"nome": "", "foto": None}
+        finally:
+            QApplication.restoreOverrideCursor()
+            self.avisar("")
 
     def _enter_codigo(self) -> None:
         """Enter no campo do código: no modo comissão vai para o valor; senão lança o produto."""

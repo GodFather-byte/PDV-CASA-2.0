@@ -3,7 +3,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
+    QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
     QFileDialog, QFormLayout, QHBoxLayout, QHeaderView, QLineEdit, QMessageBox,
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QTabWidget,
     QVBoxLayout, QWidget,
@@ -85,6 +85,11 @@ class FormularioCadastro(QDialog):
             abas.addTab(self.editor_foto, "Foto")
         self.abas = abas
         layout.addWidget(abas)
+        if chave == "produtos":
+            self.btn_buscar_produto = QPushButton("Buscar nome e foto pelo código de barras")
+            self.btn_buscar_produto.setToolTip("Base pública Open Food Facts: confira se é o produto certo antes de salvar")
+            self.btn_buscar_produto.clicked.connect(lambda: self.preencher_pela_internet())
+            layout.addWidget(self.btn_buscar_produto)
         self.mensagem = texto("", "aviso")
         layout.addWidget(self.mensagem)
         botoes = QDialogButtonBox()
@@ -93,6 +98,26 @@ class FormularioCadastro(QDialog):
         botoes.accepted.connect(self.salvar)
         botoes.rejected.connect(self.reject)
         layout.addWidget(botoes)
+
+    def preencher_pela_internet(self, http=None) -> bool:
+        """Produto novo: o nome (se ainda vazio) e a foto pelo código de barras. Nada é gravado até Salvar."""
+        from src.controllers import foto_produto_controller as fotos
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            achado = fotos.buscar_produto(self.campos["cbarra"].text(), http)
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+            return False
+        finally:
+            QApplication.restoreOverrideCursor()
+        if achado["nome"] and not self.campos["nome"].text().strip():
+            self.campos["nome"].setText(achado["nome"])
+        if achado["foto"] is not None and self.editor_foto is not None:
+            self.editor_foto._mostrar(achado["foto"], "Foto encontrada na internet (Open Food Facts). Confira.")
+        partes = [p for p, ok in (("o nome", bool(achado["nome"])), ("a foto", achado["foto"] is not None)) if ok]
+        self.mensagem.setText("Achamos " + " e ".join(partes) + " na internet. Confira, ponha o preço, o grupo e "
+                              "salve.")
+        return True
 
     def valores(self):
         dados = {}

@@ -167,6 +167,64 @@ def buscar_na_internet(cbarra: str, http=None) -> FotoPreparada:
     return preparar(imagem, url)
 
 
+URL_DADOS = ("https://world.openfoodfacts.org/api/v2/product/{gtin}.json"
+             "?fields=product_name_pt,product_name,brands,quantity,image_front_url,image_url")
+NOME_MAX = 50                           # o tamanho do nome no cadastro de produtos
+
+
+def _nome_do_produto(produto: dict) -> str:
+    """'SKOL PILSEN LATA 350 ML': nome (de preferência em português) e a quantidade, em maiúsculas, até 50 letras."""
+    nome = next((str(produto.get(c) or "").strip() for c in ("product_name_pt", "product_name")
+                 if str(produto.get(c) or "").strip()), "")
+    if not nome:
+        marca = str(produto.get("brands") or "").split(",")[0].strip()
+        nome = marca
+    quantidade = str(produto.get("quantity") or "").strip()
+    if nome and quantidade and quantidade.lower() not in nome.lower():
+        nome = f"{nome} {quantidade}"
+    return " ".join(nome.split()).upper()[:NOME_MAX].strip()
+
+
+def buscar_produto(cbarra: str, http=None) -> dict:
+    """Para cadastrar um produto novo pelo código de barras: o nome e a foto da base pública Open Food Facts.
+    Devolve {"nome": str, "foto": FotoPreparada | None}. Nada é gravado aqui. Sem nome nem foto: ErroNegocio."""
+    gtin = re.sub(r"\D", "", cbarra or "")
+    if not GTIN.fullmatch(gtin):
+        raise ErroNegocio("Use um código de barras de 8 a 14 números para buscar o produto.")
+    if http is None:
+        try:
+            import requests as http
+        except ImportError:
+            raise ErroNegocio("Instale as dependências do PDV para buscar produtos na internet.") from None
+    import json
+    try:
+        bruto = _baixar(http, URL_DADOS.format(gtin=gtin), 512 * 1024)
+        try:
+            dados = json.loads(bruto.decode("utf-8")) if bruto else {}
+        except (UnicodeDecodeError, ValueError):
+            raise ErroNegocio("A base de produtos respondeu algo inesperado. Tente de novo mais tarde.") from None
+        produto = dados.get("product") if isinstance(dados, dict) else None
+        produto = produto if isinstance(produto, dict) else {}
+        nome = _nome_do_produto(produto)
+        foto = None
+        url = next((u for u in (produto.get("image_front_url"), produto.get("image_url"))
+                    if isinstance(u, str) and u.strip()), "").strip()
+        if url and _host_permitido(url):
+            imagem = _baixar(http, url, LIMITE_BYTES)
+            if imagem:
+                try:
+                    foto = preparar(imagem, url)
+                except ErroNegocio:
+                    foto = None                 # foto estragada: segue só com o nome
+    except ErroNegocio:
+        raise
+    except Exception as erro:  # noqa: BLE001 - rede: mensagem para a pessoa
+        raise ErroNegocio("Sem conexão com a base de produtos agora. Cadastre digitando o nome.") from erro
+    if not nome and foto is None:
+        raise ErroNegocio("Este código não está na base pública. Cadastre digitando o nome.")
+    return {"nome": nome, "foto": foto}
+
+
 class FotoProdutoController:
     def __init__(self, banco):
         self.banco = banco
