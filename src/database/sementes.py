@@ -122,7 +122,8 @@ CONFIG_PADRAO = {
     # Painel do dono no celular: desligado até o dono pedir (as vendas só saem da loja com isto ligado).
     "painel_dono": "N",
     # Cardápio digital no celular (QR da mesa): desligado até o dono publicar o catálogo na nuvem.
-    "cardapio_digital": "N",
+    "cardapio_digital": "N", "pedido_online": "N", "pedido_online_whatsapp": "", "pedido_online_minimo": "0",
+    "pedido_online_retirada": "S",
     # Central do fornecedor (src/sync/ponte.py): desligada até o fornecedor provisionar este caixa. O ID do caixa nasce
     # sozinho (UUID) e o token é do caixa, emitido pelo fornecedor (não é o api_token da loja).
     "central_ponte_ativa": "N", "central_caixa_id": "", "central_caixa_token": "",

@@ -638,6 +638,13 @@ class JanelaCaixa(QMainWindow):
         linha_operacoes.addWidget(self.btn_pagar_garota)
         linha_operacoes.addWidget(self.btn_comissoes)
         linha_operacoes.addWidget(self.btn_operacoes, 1)
+        # Pedido online do cardápio (só Will Adega com o pedido ligado): o botão acende quando chega pedido.
+        from src.ui_qt.pedidos_online import VigiaPedidosOnline, atender
+        self.btn_pedidos_online = QPushButton("🛵 Pedidos online")
+        self.btn_pedidos_online.setObjectName("neutro")
+        self.vigia_pedidos = VigiaPedidosOnline(self.ctx, self.btn_pedidos_online, self)
+        self.btn_pedidos_online.clicked.connect(lambda: self._pode_operar() and atender(self, self.vigia_pedidos))
+        linha_operacoes.addWidget(self.btn_pedidos_online)
         c_cen.addLayout(linha_operacoes)
         colunas.addWidget(centro, 1)
 

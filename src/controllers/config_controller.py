@@ -109,6 +109,12 @@ CAMPOS_CONFIG = [
      "sn", "Módulos"),
     ("usar_delivery", "Delivery: pedidos de entrega (F6), bairros e taxas de entrega", "sn", "Módulos"),
     ("taxa_entrega_padrao", "Taxa de entrega padrão do delivery (R$)", "texto", "Módulos"),
+    ("pedido_online", "Pedido online pelo cardápio: o cliente pede no celular e o pedido cai no caixa (precisa do "
+     "Delivery e do Cardápio digital ligados)", "sn", "Módulos"),
+    ("pedido_online_whatsapp", "Pedido online: WhatsApp da loja, com DDD (a mensagem do pedido vai para ele)", "texto",
+     "Módulos"),
+    ("pedido_online_minimo", "Pedido online: valor mínimo do pedido (R$; 0 = sem mínimo)", "texto", "Módulos"),
+    ("pedido_online_retirada", "Pedido online: o cliente pode escolher retirar na loja", "sn", "Módulos"),
     ("integracao_ifood_estado", "iFood (preparação apenas; não recebe pedidos)", "escolha", "Integrações",
      [("desativado", "Desativado"), ("preparacao", "Em preparação (sem operação)")]),
     ("integracao_nfce_estado", "NFC-e SP (preparação apenas; não emite notas)", "escolha", "Integrações",
@@ -167,7 +173,8 @@ CAMPOS_CONFIG = [
     ("whatsapp_alerta_conferencia", "Alertar diferença no fechamento do caixa", "sn", "Nuvem"),
     ("whatsapp_alerta_estoque", "Alertar estoque baixo", "sn", "Nuvem"),
     ("painel_dono", "Painel do dono no celular: enviar vendas fechadas, caixa e estoque para a nuvem", "sn", "Nuvem"),
-    ("cardapio_digital", "Cardápio digital: publicar o catálogo na nuvem para o QR da mesa (só consulta, sem pedido)", "sn", "Nuvem"),
+    ("cardapio_digital", "Cardápio digital: publicar o catálogo na nuvem para o QR da mesa (no Will Adega, também o "
+     "pedido online, se ligado)", "sn", "Nuvem"),
     # Central do fornecedor (src/sync/ponte.py): usa o endereço da nuvem acima e um token só deste caixa.
     ("central_ponte_ativa", "Central do fornecedor: buscar a licença publicada e enviar o contato deste caixa", "sn", "Nuvem"),
     ("central_caixa_id", "ID deste caixa na central (passe ao fornecedor)", "texto", "Nuvem"),
@@ -334,6 +341,19 @@ class ConfigController:
     def todas(self) -> dict:
         return {c[0]: self.banco.cfg(c[0]) for c in CAMPOS_CONFIG}
 
+    def _conferir_pedido_online(self) -> None:
+        """Ligar o pedido online sem o que ele usa desfaz o salvamento (com a mensagem do que falta)."""
+        digitos = "".join(c for c in (self.banco.cfg("pedido_online_whatsapp", "") or "") if c.isdigit())
+        if not 10 <= len(digitos) <= 13:
+            raise ErroValidacao("Pedido online: informe o WhatsApp da loja com DDD (ex.: 11 98765-4321).",
+                                {"pedido_online_whatsapp": "inválido"})
+        if not self.banco.cfg_bool("usar_delivery", False):
+            raise ErroValidacao("Pedido online: ligue também o Delivery (os pedidos viram entregas no caixa).",
+                                {"usar_delivery": "inválido"})
+        if not self.banco.cfg_bool("cardapio_digital", False):
+            raise ErroValidacao("Pedido online: ligue também o Cardápio digital (é nele que o cliente pede).",
+                                {"cardapio_digital": "inválido"})
+
     def salvar_config(self, valores: dict) -> None:
         from src.sync import ponte
         chaves_ponte = (ponte.CHAVE_ATIVA, ponte.CHAVE_CAIXA_ID, ponte.CHAVE_TOKEN, "api_url")
@@ -421,9 +441,18 @@ class ConfigController:
                 if chave == "quartos_campainhas":
                     from src.controllers.quartos_controller import ler_campainhas
                     ler_campainhas(v)
+                if chave == "pedido_online_minimo":
+                    try:
+                        if fmt.para_centavos(v or "0") < 0:
+                            raise ValueError
+                    except ValueError:
+                        raise ErroValidacao("Valor mínimo do pedido inválido (ex.: 30,00).", {chave: "inválido"}) from None
                 if chave == "limite_gaveta" and int(v) > 1_000_000:
                     raise ErroValidacao("O limite da gaveta deve ficar abaixo de R$ 1.000.000.", {chave: "inválido"})
                 self.banco.cfg_set(chave, v)
+            if self.banco.cfg_bool("pedido_online", False) and valores.keys() & {
+                    "pedido_online", "pedido_online_whatsapp", "usar_delivery", "cardapio_digital"}:
+                self._conferir_pedido_online()
             if valores.keys() & (set(CODIGOS_ESPECIAIS) | {m for m, _, _ in CODIGOS_ESPECIAIS.values()}):
                 self._conferir_codigos_especiais(valores)
             if ponte.ativa(self.banco) and any(self.banco.cfg(c) != ponte_antes[c] for c in chaves_ponte):

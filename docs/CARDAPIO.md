@@ -28,3 +28,22 @@ O painel do dono (`/painel/`) tem um link **Cardápio** para a mesma página, se
 | `GET /cardapio/` | público | a página |
 
 Código: `src/sync/cardapio_envio.py`, `src/cardapio/`, `src/ui_qt/cardapio_qr.py`, `backend/cardapio.py`, `backend/cardapio_web/`. Esquema **32** (`produtos.mostrar_no_cardapio`). Testes: `tests/test_cardapio.py`.
+
+## Pedido online (só Will Adega)
+
+Na boate o cardápio continua **só consulta**. No **Will Adega**, o cliente pode pedir pelo próprio cardápio:
+
+1. **Ligar** (Configurações > Módulos): "Pedido online pelo cardápio", o **WhatsApp da loja** com DDD, o valor mínimo
+   (opcional) e se aceita **retirada na loja**. Precisa do **Delivery** e do **Cardápio digital** ligados. As taxas vêm do
+   cadastro de **Bairros** (e da taxa padrão para "outro bairro").
+2. **No celular** do cliente: botões **+ / −** em cada produto, a barra "Ver pedido", nome, telefone, endereço, bairro,
+   pagamento na entrega (dinheiro com troco, Pix ou cartão) e observação. Ao enviar, o pedido vai para a nuvem e abre o
+   **WhatsApp com a mensagem pronta** para a loja. O cardápio mostra depois se o pedido foi confirmado ou recusado.
+3. **No caixa**: o botão **🛵 Pedidos online** acende e apita (busca a cada 30 s). **Aceitar** cria a entrega (F6) já
+   preenchida: cliente (achado pelo telefone ou cadastrado), itens com o **preço do caixa**, taxa do bairro, troco e o
+   recado "Pedido online #N". Depois é o fluxo normal: conferir, emitir (F8), entregador e receber. **Recusar** pede o
+   motivo, que o cliente vê no cardápio. Produto que saiu de venda fica de fora e o caixa avisa.
+
+Proteções: o preço vale o do caixa; no máximo 3 pedidos aguardando por telefone (6 por hora) e 120 por hora por loja;
+nada é cobrado online. Na nuvem: `backend/pedido_online.py` (tabelas `pedido_online_config` e `pedidos_online`).
+

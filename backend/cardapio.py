@@ -1,5 +1,6 @@
-"""Cardápio digital, só consulta. O caixa publica o catálogo (POST /v1/cardapio/envio, token da loja)
-e o celular abre /cardapio/?loja=CHAVE&mesa=N sem senha. Não há pedido, custo nem estoque.
+"""Cardápio digital. O caixa publica o catálogo (POST /v1/cardapio/envio, token da loja) e o celular abre
+/cardapio/?loja=CHAVE&mesa=N sem senha. Não há custo nem estoque. Na boate é só consulta; no Will Adega com o pedido
+online ligado, o cliente monta o pedido aqui (backend/pedido_online.py).
 
 A nuvem guarda o catálogo da loja e troca pelo próximo envio. O preço de promoção e de happy hour
 é calculado na consulta, no horário de Brasília.
@@ -110,6 +111,9 @@ def produto_limpo(item: dict) -> dict | None:
     descricao = " ".join(_txt(item.get("descricao"), 240).split())
     if descricao:
         limpo["descricao"] = descricao
+    codigo = _txt(item.get("codigo"), 14).strip()
+    if codigo.isdigit():
+        limpo["codigo"] = codigo
     foto = _url(item.get("foto"))
     if foto:
         limpo["foto"] = foto
@@ -147,6 +151,8 @@ def agrupar(produtos: list[dict], quando: datetime | None = None) -> list[dict]:
             publico["descricao"] = item["descricao"]
         if item.get("foto"):
             publico["foto"] = item["foto"]
+        if item.get("codigo"):
+            publico["codigo"] = item["codigo"]
         bloco["produtos"].append(publico)
     return grupos
 
@@ -187,8 +193,12 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         linha.logo = _logo(dados.get("logo"))
         linha.produtos = json.dumps(produtos, ensure_ascii=False)
         linha.atualizado_em = _txt(dados.get("enviado_em"), 19) or _agora()
+        from backend import pedido_online
+        cadastro = db.query(Loja).filter(Loja.chave_loja == acesso.loja).first()
+        pedido = pedido_online.gravar_config(db, cadastro, dados.get("pedido"), dados.get("edicao")) \
+            if cadastro is not None else {"ligado": False}
         db.commit()
-        return {"produtos": len(produtos)}
+        return {"produtos": len(produtos), "pedido_online": bool(pedido.get("ligado"))}
 
     @router.get("/v1/cardapio")
     def consultar(loja: str = Query(..., max_length=64), mesa: str | None = Query(None, max_length=4),
@@ -198,7 +208,9 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         if linha is None:
             raise HTTPException(status_code=404, detail="O cardápio ainda não foi publicado.")
         numero = _mesa(mesa)
+        from backend import pedido_online
         return {
+            "pedido": pedido_online.config_publica(db, cadastro),
             "loja": {"chave": cadastro.chave_loja, "nome": linha.nome or cadastro.nome},
             "logo": linha.logo or "",
             "mesa": numero,
@@ -206,6 +218,15 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             "grupos": agrupar(_ler_produtos(linha.produtos), agora_local()),
         }
 
+    def _catalogo(db: Session, cadastro) -> tuple[str, dict[str, dict]]:
+        """Nome da loja e os produtos que têm código (os únicos que entram num pedido)."""
+        linha = db.get(CardapioLoja, cadastro.chave_loja)
+        if linha is None:
+            raise HTTPException(status_code=404, detail="O cardápio ainda não foi publicado.")
+        return linha.nome or cadastro.nome, {p["codigo"]: p for p in _ler_produtos(linha.produtos) if p.get("codigo")}
+
+    from backend import pedido_online
+    pedido_online.instalar(app, Loja, autenticar, _loja_ativa, _catalogo)
     app.include_router(router)
     if PASTA_WEB.is_dir():
         @app.get("/cardapio", include_in_schema=False)

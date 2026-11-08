@@ -1,6 +1,19 @@
 # Handoff — 07/11/2026
 
 
+
+## Pedido online pelo cardápio (só Will Adega; boate segue só consulta)
+
+- Nuvem: `backend/pedido_online.py` (tabelas novas `pedido_online_config`, `pedidos_online`; rotas públicas
+  `POST/GET /v1/cardapio/pedido`, do caixa `GET /v1/pedidos-online`, `POST .../{id}/aceitar|recusar`). Só liga quando o
+  caixa manda `edicao=willadega` e o cadastro da loja na central não diz outra edição. `backend/cardapio.py` ganhou o
+  `codigo` do produto, `pedido` na consulta e grava a config no envio (edições pontuais).
+- Caixa: `cardapio_envio.config_pedido` (cfg `pedido_online*`, ocultas no WillPDV via `CHAVES_PEDIDO_ONLINE`),
+  `controllers/pedido_online_controller.py` (vira entrega do F6, idempotente pela marca "Pedido online #N"),
+  `sync/pedidos_online.py`, `ui_qt/pedidos_online.py` (`VigiaPedidosOnline` busca em thread a cada 30 s; botão no caixa).
+- Cardápio web: carrinho, formulário, link `wa.me` e acompanhamento (`sw.js` v2). Docs: `docs/CARDAPIO.md`.
+- Pendente: publicar a nuvem (Render) depois do merge para as rotas existirem.
+
 ## Quartos de volta ao manual + painel novo (pedido do usuário depois do PR #59; PR #60 ficou de lado)
 
 - `quartos_pela_comanda` (padrão N, `QuartosController.pela_comanda`) liga tudo do quarto pela comanda (113/113Q no
