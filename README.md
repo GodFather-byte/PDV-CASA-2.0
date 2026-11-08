@@ -1,6 +1,7 @@
 # WillPDV
 
-Entrega **1.10.0**: [painel com devoluções, sincronização leve e publicação verificada](docs/ENTREGA_1_10.md).
+Entrega **1.11.0**: [pedido online do Will Adega](docs/ENTREGA_1_11.md).
+A anterior, **1.10.0**: [painel com devoluções, sincronização leve e publicação verificada](docs/ENTREGA_1_10.md).
 Roteiro de validação em equipamentos: [Homologação no balcão](docs/HOMOLOGACAO_BALCAO.md).
 
 **Autor:** Willyan  ·  **Licença:** proprietária, código visível (veja [`LICENSE`](LICENSE))
