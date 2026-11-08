@@ -427,3 +427,8 @@ _atualizacao_remota.instalar_no_app(app, autenticar)
 from backend import central_fornecedor as _central_fornecedor  # noqa: E402
 
 _central_fornecedor.instalar(app, Loja)
+
+# Site de vendas na mesma API: / e /site. Rotas explícitas, sem montar arquivo na raiz.
+from backend import site as _site  # noqa: E402
+
+_site.instalar(app)

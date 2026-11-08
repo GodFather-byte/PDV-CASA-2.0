@@ -1,0 +1,104 @@
+:root {
+  --noite: #0c1220;
+  --cartao: #151d30;
+  --texto: #f4efe6;
+  --suave: #c4b8a8;
+  --ouro: #e4b15a;
+  --vinho: #8f2944;
+  --boate: #1c4f8a;
+  --zap: #1f8f4e;
+  --linha: #2a354c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--noite);
+  color: var(--texto);
+  line-height: 1.45;
+  padding-bottom: 4.5rem;
+}
+a { color: inherit; }
+.topo {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+  padding: .75rem 1rem;
+  background: rgba(12, 18, 32, .94);
+  border-bottom: 1px solid var(--linha);
+}
+.marca { font-weight: 750; letter-spacing: .04em; text-decoration: none; }
+.topo nav { display: flex; gap: .9rem; margin-left: auto; font-size: .92rem; }
+.topo nav a { color: var(--suave); text-decoration: none; }
+.topo .pequeno { display: none; }
+main { padding: 0 1rem 2rem; max-width: 960px; margin: 0 auto; }
+section { padding: 1.6rem 0; border-bottom: 1px solid var(--linha); }
+h1 { font-size: 1.85rem; line-height: 1.15; margin: .4rem 0 .8rem; }
+h2 { font-size: 1.35rem; margin: 0 0 .8rem; }
+h3 { margin: 0 0 .4rem; }
+.selo {
+  display: inline-block;
+  margin: 1.2rem 0 0;
+  padding: .2rem .55rem;
+  border: 1px solid var(--ouro);
+  border-radius: 999px;
+  color: var(--ouro);
+  font-size: .78rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.lead { color: var(--suave); margin: 0 0 1rem; }
+.acoes, .grade, .edicoes { display: grid; gap: .75rem; }
+.grade { list-style: none; padding: 0; margin: 0; }
+.grade li, .cartao, details {
+  background: var(--cartao);
+  border: 1px solid var(--linha);
+  border-radius: 14px;
+  padding: 1rem;
+}
+.grade span, .cartao p, details p { display: block; color: var(--suave); margin: .35rem 0 0; }
+.olho { margin: 0; color: var(--ouro); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; }
+.cartao.boate { border-color: #2d5f99; }
+.cartao.adega { border-color: var(--vinho); }
+.preco { color: var(--texto); font-size: 1.7rem; font-weight: 750; margin: .7rem 0 .2rem; }
+.preco small, .nota { color: var(--suave); font-size: .85rem; font-weight: 500; }
+.botao, .zap, .fantasma {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: .7rem 1rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 700;
+}
+.botao { background: var(--ouro); color: #1a1206; }
+.zap { background: var(--zap); color: #f4fff7; }
+.fantasma { border: 1px solid var(--suave); color: var(--texto); }
+.miudo { color: var(--suave); font-size: .9rem; }
+details summary { cursor: pointer; font-weight: 700; }
+footer {
+  padding: 1.5rem 1rem 2rem;
+  text-align: center;
+}
+footer p { color: var(--suave); }
+.fixo {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 3;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+}
+@media (min-width: 800px) {
+  h1 { font-size: 2.6rem; }
+  .grade, .edicoes { grid-template-columns: 1fr 1fr; }
+  .acoes { grid-template-columns: auto auto; justify-content: start; }
+  .topo .pequeno { display: inline-flex; }
+  .fixo { display: none; }
+  body { padding-bottom: 0; }
+}

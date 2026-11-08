@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>WillPDV — caixa para adega, bar e boate</title>
+  <meta name="description" content="WillPDV e Will Adega: caixa no Windows, painel do dono, porteiro no celular e atualização automática. Adega com pedido online.">
+  <meta name="theme-color" content="#0c1220">
+  <link rel="stylesheet" href="/site/estilo.css">
+</head>
+<body>
+  <header class="topo">
+    <a class="marca" href="#inicio">WillPDV</a>
+    <nav>
+      <a href="#edicoes">Edições</a>
+      <a href="#planos">Planos</a>
+      <a href="#faq">Dúvidas</a>
+    </nav>
+    <a class="zap pequeno" href="{{zap_contato}}">WhatsApp</a>
+  </header>
+
+  <main id="inicio">
+    <section class="hero">
+      <p class="selo">Versão {{versao}} · teste grátis de {{dias_teste}} dias</p>
+      <h1>O caixa da casa, no Windows, mesmo sem internet.</h1>
+      <p class="lead">Adega, bar e boate. Venda, estoque, fechamento e impressora no balcão. O dono acompanha pelo celular. A boate não recebe pedido online; a adega recebe.</p>
+      <div class="acoes">
+        <a class="zap" href="{{zap_contato}}">Falar no WhatsApp</a>
+        <a class="fantasma" href="#planos">Ver planos</a>
+      </div>
+    </section>
+
+    <section id="recursos">
+      <h2>O que o caixa faz</h2>
+      <ul class="grade">
+        <li><strong>Balcão, mesa e comanda</strong><span>Lançamento rápido, pagamento e fechamento do turno.</span></li>
+        <li><strong>Estoque e impressora</strong><span>Baixa na venda, gaveta e cupom na térmica.</span></li>
+        <li><strong>Sem internet na venda</strong><span>O caixa vende offline. A nuvem entra no painel, no cardápio e na atualização.</span></li>
+        <li><strong>Licença da loja</strong><span>Cada casa com a própria licença, no WillPDV ou no Will Adega.</span></li>
+      </ul>
+    </section>
+
+    <section id="edicoes">
+      <h2>Duas edições</h2>
+      <div class="edicoes">
+        <article class="cartao boate">
+          <p class="olho">Boate e bar</p>
+          <h3>WillPDV</h3>
+          <p>Casa com mesas, comandas e portaria. O cardápio no celular é só consulta: o pedido é feito no caixa. Não há pedido online.</p>
+          <p class="preco">{{boate_mensal}}<small>/mês</small></p>
+          <a class="botao" href="{{download_willpdv}}">Baixar instalador</a>
+        </article>
+        <article class="cartao adega">
+          <p class="olho">Adega</p>
+          <h3>Will Adega</h3>
+          <p>Pedido online pelo cardápio QR, entrega ou retirada na loja, e o pedido cai no caixa. Gelada, casco e quantidade fracionada quando o produto tem.</p>
+          <p class="preco">{{adega_mensal}}<small>/mês</small></p>
+          <a class="botao" href="{{download_willadega}}">Baixar instalador</a>
+        </article>
+      </div>
+    </section>
+
+    <section id="celular">
+      <h2>Dono e porteiro no celular</h2>
+      <div class="edicoes">
+        <article class="cartao">
+          <h3>Painel do dono</h3>
+          <p>Vendas do dia, caixa, estoque baixo e o movimento da casa, no navegador do celular. Sem instalar aplicativo.</p>
+        </article>
+        <article class="cartao">
+          <h3>Porteiro</h3>
+          <p>Na porta, o celular consulta a comanda: liberada ou devendo. Na rede da casa ou pelo 4G, na mesma página.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="atualizacao">
+      <h2>Atualização automática</h2>
+      <p class="lead">O Windows busca a versão nova, confere a assinatura e instala quando não há venda aberta. Os dados da loja ficam no computador e não vão embora com a atualização.</p>
+    </section>
+
+    <section id="planos">
+      <h2>Planos</h2>
+      <p class="lead">Teste grátis de {{dias_teste}} dias. No plano anual, {{meses_gratis}} meses saem grátis: você paga {{meses_cobrados}}.</p>
+      <div class="edicoes">
+        <article class="cartao adega">
+          <h3>Will Adega</h3>
+          <p class="preco">{{adega_mensal}}<small>/mês</small></p>
+          <p>Ano: {{adega_anual}} <span class="nota">({{meses_gratis}} meses grátis)</span></p>
+          <a class="zap" href="{{zap_adega}}">Assinar</a>
+        </article>
+        <article class="cartao boate">
+          <h3>WillPDV · boate e bar</h3>
+          <p class="preco">{{boate_mensal}}<small>/mês</small></p>
+          <p>Ano: {{boate_anual}} <span class="nota">({{meses_gratis}} meses grátis)</span></p>
+          <a class="zap" href="{{zap_boate}}">Assinar</a>
+        </article>
+        <article class="cartao">
+          <h3>Instalação</h3>
+          <p class="preco">{{instalacao}}<small> uma vez</small></p>
+          <p>Alguém vai à loja, instala o caixa e deixa a primeira venda saindo.</p>
+          <a class="fantasma" href="{{zap_instalacao}}">Pedir instalação</a>
+        </article>
+      </div>
+      <p class="miudo">Assinar abre o WhatsApp. O pagamento automático entra numa etapa seguinte.</p>
+    </section>
+
+    <section id="faq">
+      <h2>Dúvidas</h2>
+      <details>
+        <summary>A venda para se a internet cair?</summary>
+        <p>Não. O caixa vende, imprime e fecha o turno sem rede. O painel, o cardápio e a atualização usam a internet quando ela volta.</p>
+      </details>
+      <details>
+        <summary>A boate recebe pedido pelo celular?</summary>
+        <p>Não. No WillPDV o cardápio é só consulta. Pedido online, entrega e retirada são do Will Adega.</p>
+      </details>
+      <details>
+        <summary>Onde ficam as vendas?</summary>
+        <p>No computador da loja. Atualizar ou reinstalar o programa não apaga o banco.</p>
+      </details>
+      <details>
+        <summary>Como pago?</summary>
+        <p>Hoje a assinatura começa pelo WhatsApp {{telefone}}. O checkout entra depois.</p>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>WillPDV {{versao}} · {{telefone}}</p>
+    <a class="zap" href="{{zap_contato}}">Chamar no WhatsApp</a>
+  </footer>
+  <a class="zap fixo" href="{{zap_contato}}">WhatsApp</a>
+</body>
+</html>
