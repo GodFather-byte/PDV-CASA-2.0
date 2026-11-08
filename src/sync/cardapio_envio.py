@@ -91,7 +91,7 @@ def coletar(banco) -> dict:
     produtos = []
     orcamento = [FOTOS_EMBUTIDAS_TOTAL]
     for r in banco.todos(
-            """SELECT p.nome, p.preco_cent, p.texto_sugestao,
+            """SELECT p.codigo, p.nome, p.preco_cent, p.texto_sugestao,
                       p.promo_de, p.promo_ate, p.promo_preco_cent,
                       p.sem_inicial, p.sem_final, p.sem_preco_cent,
                       p.hora_ini, p.hora_fim, p.hora_preco_cent,
@@ -116,6 +116,9 @@ def coletar(banco) -> dict:
             "hora_ini": r["hora_ini"] or "", "hora_fim": r["hora_fim"] or "",
             "hora_preco_cent": int(r["hora_preco_cent"] or 0),
         }
+        codigo = (r["codigo"] or "").strip()
+        if codigo.isdigit():
+            item["codigo"] = str(int(codigo))              # sem os zeros da frente: é o que o pedido online devolve
         descricao = " ".join((r["texto_sugestao"] or "").split())
         if descricao:
             item["descricao"] = descricao[:240]
@@ -124,11 +127,33 @@ def coletar(banco) -> dict:
             item["foto"] = foto
         if item["nome"]:
             produtos.append(item)
-    return {"loja_nome": config.nome_loja(), "logo": _logo(config.loja().get("logotipo")), "produtos": produtos}
+    from src.core import edicao
+    return {"loja_nome": config.nome_loja(), "logo": _logo(config.loja().get("logotipo")), "produtos": produtos,
+            "edicao": edicao.atual().chave, "pedido": config_pedido(banco)}
+
+
+def config_pedido(banco) -> dict:
+    """Pedido online pelo cardápio: só no Will Adega, com o pedido ligado e o WhatsApp da loja preenchido."""
+    from src.core import edicao
+    whatsapp = "".join(c for c in (banco.cfg("pedido_online_whatsapp", "") or "") if c.isdigit())
+    if edicao.atual().chave != "willadega" or not banco.cfg_bool("pedido_online", False) or not whatsapp:
+        return {"ligado": False}
+    if len(whatsapp) in (10, 11):
+        whatsapp = "55" + whatsapp                   # DDD + número: o link do WhatsApp quer o 55 do Brasil
+    try:
+        minimo = fmt.para_centavos(banco.cfg("pedido_online_minimo", "0") or 0)
+        padrao = fmt.para_centavos(banco.cfg("taxa_entrega_padrao", "0") or 0)
+    except ValueError:
+        minimo = padrao = 0
+    bairros = [{"nome": r["nome"], "taxa_cent": int(r["taxa_cent"] or 0)}
+               for r in banco.todos("SELECT nome, taxa_cent FROM bairros ORDER BY nome LIMIT 300")]
+    return {"ligado": True, "whatsapp": whatsapp, "minimo_cent": max(0, minimo), "taxa_padrao_cent": max(0, padrao),
+            "retirada": banco.cfg_bool("pedido_online_retirada", True), "bairros": bairros}
 
 
 def _hash(corpo: dict) -> str:
-    texto = json.dumps({"loja_nome": corpo["loja_nome"], "logo": corpo["logo"], "produtos": corpo["produtos"]},
+    texto = json.dumps({"loja_nome": corpo["loja_nome"], "logo": corpo["logo"], "produtos": corpo["produtos"],
+                        "pedido": corpo.get("pedido"), "edicao": corpo.get("edicao")},
                        ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(texto.encode("utf-8")).hexdigest()
 

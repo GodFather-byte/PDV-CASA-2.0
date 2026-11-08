@@ -1,5 +1,5 @@
 /* Guarda só a página. O cardápio em si (/v1/cardapio) vai sempre à rede: o preço muda no happy hour. */
-const VERSAO = "cardapio-v1";
+const VERSAO = "cardapio-v2";   // v2: carrinho do pedido online (Will Adega)
 const ARQUIVOS = ["./","./index.html","./app.js","./estilo.css","./manifest.webmanifest","./icone.svg"];
 
 self.addEventListener("install", (evento) => {

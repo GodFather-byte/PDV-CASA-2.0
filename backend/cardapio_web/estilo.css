@@ -66,3 +66,46 @@ main { padding: 0 1rem 2rem; }
 .de { text-decoration: line-through; color: var(--suave); font-size: .8rem; }
 .selo { display: inline-block; margin-top: .15rem; font-size: .7rem; color: var(--verde); font-weight: 700; }
 @media (prefers-color-scheme: dark) { .selo { color: #86efac; } }
+/* Pedido online (Will Adega) */
+.qtd { display: flex; align-items: center; justify-content: flex-end; gap: .35rem; margin-top: .35rem; }
+.qtd span { min-width: 1.2rem; text-align: center; font-weight: 700; }
+.mais {
+  width: 34px; height: 34px; border-radius: 50%; border: 0; font-size: 1.2rem; font-weight: 700;
+  background: var(--verde); color: #fff;
+}
+main { padding-bottom: 5rem; }
+.barra-carrinho {
+  position: fixed; left: 1rem; right: 1rem; bottom: max(1rem, env(safe-area-inset-bottom));
+  display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+  min-height: 52px; padding: 0 1.1rem; border: 0; border-radius: 999px; z-index: 3;
+  background: var(--verde); color: #fff; font-size: 1rem; box-shadow: 0 6px 18px rgba(0, 0, 0, .25);
+}
+.carrinho {
+  width: min(560px, 100%); max-height: 92vh; margin: auto auto 0; padding: 1rem; border: 0;
+  border-radius: 16px 16px 0 0; background: var(--cartao); color: var(--texto);
+}
+.carrinho::backdrop { background: rgba(0, 0, 0, .45); }
+.carrinho-topo { display: flex; justify-content: space-between; align-items: center; }
+.carrinho h2 { margin: 0; font-size: 1.15rem; }
+.fechar { border: 0; background: none; color: var(--texto); font-size: 1.8rem; line-height: 1; }
+.carrinho label { display: block; margin: .6rem 0 0; font-size: .9rem; color: var(--suave); }
+.carrinho input:not([type=checkbox]), .carrinho select {
+  display: block; width: 100%; min-height: 44px; margin-top: .2rem; padding: 0 .75rem; font-size: 1rem;
+  border: 1px solid var(--borda); border-radius: 10px; background: var(--fundo); color: var(--texto);
+}
+.carrinho .marcar { display: flex; align-items: center; gap: .5rem; color: var(--texto); }
+.itens-carrinho { list-style: none; margin: .6rem 0; padding: 0; }
+.itens-carrinho li { display: flex; justify-content: space-between; padding: .3rem 0; border-bottom: 1px solid var(--borda); }
+.total { font-weight: 700; font-size: 1.05rem; margin: .8rem 0 .2rem; }
+.erro { color: #b91c1c; font-size: .9rem; margin: .3rem 0; }
+.enviar {
+  display: block; width: 100%; min-height: 48px; margin-top: .6rem; border: 0; border-radius: 12px;
+  background: #16a34a; color: #fff; font-size: 1.05rem; font-weight: 700; text-align: center;
+  line-height: 48px; text-decoration: none;
+}
+.enviar:disabled { opacity: .6; }
+.resultado p { font-size: 1.05rem; }
+.situacao {
+  margin: 0 1rem 1rem; padding: .7rem 1rem; border-radius: 10px; background: var(--cartao);
+  border: 1px solid var(--borda); font-weight: 600;
+}

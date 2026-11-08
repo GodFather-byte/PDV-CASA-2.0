@@ -32,6 +32,11 @@ CHAVES_CASA_NOTURNA = frozenset({
 })
 
 
+# Pedido online pelo cardápio: só no Will Adega. Na boate o cardápio é só consulta e estas opções não aparecem.
+CHAVES_PEDIDO_ONLINE = frozenset({"pedido_online", "pedido_online_whatsapp", "pedido_online_minimo",
+                                  "pedido_online_retirada"})
+
+
 @dataclass(frozen=True)
 class Edicao:
     chave: str
@@ -56,7 +61,7 @@ class Edicao:
 
 EDICOES = {
     "willpdv": Edicao("willpdv", "WillPDV", "WILLPDV", "willpdv.ico", None, "WILL-PDV",
-                      sufixo_titulo=" • Qt piloto", titulo_entrada="Entrada Qt",
+                      ocultas=CHAVES_PEDIDO_ONLINE, sufixo_titulo=" • Qt piloto", titulo_entrada="Entrada Qt",
                       aviso_entrada="Piloto Qt • Interface em validação"),
     "willadega": Edicao(
         "willadega", "Will Adega", "WILL ADEGA", "willadega.ico", "willadega-logo.png",

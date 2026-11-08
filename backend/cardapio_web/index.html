@@ -18,7 +18,7 @@
     <div>
       <p id="mesa" class="mesa" hidden></p>
       <h1 id="loja">Cardápio</h1>
-      <p class="aviso">Só consulta. O pedido é feito no caixa.</p>
+      <p id="aviso-topo" class="aviso">Só consulta. O pedido é feito no caixa.</p>
     </div>
   </header>
   <div class="busca">
@@ -28,6 +28,37 @@
   <main id="conteudo">
     <p id="estado" class="estado">Carregando o cardápio…</p>
   </main>
+  <p id="situacao-pedido" class="situacao" hidden></p>
+  <button id="barra-carrinho" class="barra-carrinho" type="button" hidden>
+    <span id="barra-texto"></span><strong>Ver pedido ›</strong>
+  </button>
+  <dialog id="carrinho" class="carrinho">
+    <div class="carrinho-topo"><h2>Seu pedido</h2>
+      <button id="fechar-carrinho" type="button" class="fechar" aria-label="Fechar">×</button></div>
+    <form id="form-pedido">
+      <ul id="itens-carrinho" class="itens-carrinho"></ul>
+      <p id="aviso-minimo" class="erro" hidden></p>
+      <label id="linha-retirada" class="marcar"><input id="f-retirada" type="checkbox"> Vou retirar na loja</label>
+      <label>Seu nome <input id="f-nome" required maxlength="60" autocomplete="name"></label>
+      <label>Telefone com DDD <input id="f-telefone" required inputmode="tel" maxlength="20" autocomplete="tel"></label>
+      <div id="bloco-entrega">
+        <label>Endereço (rua, número, complemento)
+          <input id="f-endereco" maxlength="160" autocomplete="street-address"></label>
+        <label>Bairro <select id="f-bairro"></select></label>
+      </div>
+      <label>Pagamento na entrega <select id="f-pagamento"></select></label>
+      <label id="linha-troco">Troco para quanto? (opcional) <input id="f-troco" inputmode="decimal" maxlength="10"
+        placeholder="Ex.: 100,00"></label>
+      <label>Observação (opcional) <input id="f-obs" maxlength="200" placeholder="Ex.: bem gelada"></label>
+      <p id="total-carrinho" class="total"></p>
+      <p id="erro-pedido" class="erro" role="alert"></p>
+      <button id="enviar-pedido" class="enviar" type="submit">Enviar pedido</button>
+    </form>
+    <div id="resultado" class="resultado" hidden>
+      <p id="resultado-texto"></p>
+      <a id="abrir-whatsapp" class="enviar" target="_blank" rel="noopener">Enviar também pelo WhatsApp</a>
+    </div>
+  </dialog>
   <script src="app.js"></script>
 </body>
 </html>

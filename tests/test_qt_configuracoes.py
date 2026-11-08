@@ -349,7 +349,9 @@ class TestConfiguracoesQt(BaseTeste):
         janela = self.janela()
         reais = {chave for secao in SECOES if secao != "loja"
                  for chave in janela.campos[secao]}
-        self.assertEqual(reais, {c[0] for c in CAMPOS_CONFIG if c[3] != "Telegram"})
+        from src.core import edicao
+        fora = edicao.atual().fora_das_configuracoes()          # no WillPDV: as opções do pedido online (só Will Adega)
+        self.assertEqual(reais, {c[0] for c in CAMPOS_CONFIG if c[3] != "Telegram" and c[0] not in fora})
         self.assertEqual(set(janela.campos["loja"]), {c[0] for c in CAMPOS_LOJA})
 
     def test_parametros_modulos_financeiro_e_validacao_atomica(self):

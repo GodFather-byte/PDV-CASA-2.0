@@ -65,6 +65,13 @@ class Contexto:
         return EntregaController(self.banco, self.caixa)
 
     @property
+    def pedidos_online(self):
+        from src.controllers.pedido_online_controller import PedidoOnlineController
+        caixa = self.caixa
+        return PedidoOnlineController(self.banco, caixa, EntregaController(self.banco, caixa), self.produtos,
+                                      self.operador_id)
+
+    @property
     def estoque(self) -> EstoqueController:
         return EstoqueController(self.banco, self.operador_id)
 
