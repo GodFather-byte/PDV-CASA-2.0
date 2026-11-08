@@ -1,5 +1,14 @@
 # Handoff — 08/11/2026
 
+
+## Cadastro pelo código de barras com nome e foto (pedido do usuário)
+
+- `foto_produto_controller.buscar_produto(cbarra)` (Open Food Facts, `URL_DADOS`): nome em maiúsculas com a quantidade
+  (até 50) e a foto preparada (só de `*.openfoodfacts.org`). O cadastro rápido do caixa (`JanelaCaixa._cadastro_rapido`,
+  código desconhecido no leitor) traz o nome preenchido e grava a foto; sem internet ou fora da base, segue digitando.
+  No formulário de produtos, botão "Buscar nome e foto pelo código de barras" (`FormularioCadastro.preencher_pela_internet`).
+  `BaseCaixaQt` troca a busca por "sem internet" nos testes.
+
 ## Site de vendas (mesma API, `/` e `/site`)
 
 Página estática em português, no processo do Render. Preços só em
