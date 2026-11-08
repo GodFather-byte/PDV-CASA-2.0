@@ -1,6 +1,6 @@
 # Handoff — 08/11/2026
 
-## Pedido online (Will Adega 1.10.0, esquema 44)
+## Pedido online (Will Adega 1.11.0, esquema 44)
 
 A boate não recebe pedido. Na nuvem a loja precisa estar marcada `willadega`
 (`edicao` vazia conta como WillPDV). Na subida, `marcar_lojas_adega` marca quem
