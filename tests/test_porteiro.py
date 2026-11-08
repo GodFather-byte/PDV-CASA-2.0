@@ -227,7 +227,9 @@ class TestePinEPagina(BaseCaixa):
     def test_pin_grava_hash_e_nao_o_numero(self):
         definir_pin(self.banco, PIN)
         guardado = self.banco.cfg("porteiro_pin_hash")
-        self.assertNotIn(PIN, guardado)
+        # O sal e o hash são hexadecimais aleatórios e às vezes contêm "2468" por acaso: confere que o PIN não é campo.
+        self.assertTrue(guardado.startswith("pbkdf2$"))
+        self.assertNotIn(PIN, guardado.split("$"))
         self.assertTrue(seguranca.conferir(PIN, guardado))
         self.assertFalse(seguranca.conferir("0000", guardado))
         detalhe = self.banco.valor("SELECT detalhe FROM log_eventos WHERE evento = 'porteiro_pin'")
