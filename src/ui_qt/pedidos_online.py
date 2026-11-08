@@ -24,8 +24,8 @@ class VigiaPedidosOnline(QObject):
     def __init__(self, ctx, botao: QPushButton, janela=None, intervalo_ms: int = INTERVALO_MS):
         super().__init__(botao)
         self.ctx = ctx
-        self.botao = botao
-        self.janela = janela
+        self.botoes = [botao]
+        self.ouvintes = [janela] if janela is not None else []
         self.pedidos: list[dict] = []
         self.vistos: set[int] = set()
         self.erro = ""
@@ -38,6 +38,14 @@ class VigiaPedidosOnline(QObject):
         if self.ligado():
             self.timer.start()
             QTimer.singleShot(1500, self.buscar)
+
+    def registrar(self, botao: QPushButton, janela=None) -> None:
+        """O menu principal e a janela do caixa dividem o mesmo vigia, para o apito não sair duas vezes."""
+        if botao not in self.botoes:
+            self.botoes.append(botao)
+        if janela is not None and janela not in self.ouvintes:
+            self.ouvintes.append(janela)
+        self._mostrar()
 
     def ligado(self) -> bool:
         try:
@@ -84,24 +92,46 @@ class VigiaPedidosOnline(QObject):
         novos = [p for p in pendentes if p["id"] not in self.vistos]
         self.vistos |= {p["id"] for p in pendentes}
         self.pedidos = pendentes
+        try:
+            rede.empurrar_avisos(self.ctx.banco)
+        except Exception:  # noqa: BLE001 - o aviso ao cliente espera a próxima busca
+            pass
         self._mostrar()
         if novos:
             QApplication.beep()
-            avisar = getattr(self.janela, "avisar", None)
-            if callable(avisar):
-                avisar(f"🛵 Pedido online novo: {resumo(novos[-1])}. Clique em Pedidos online.")
+            texto = f"🛵 Pedido online novo: {resumo(novos[-1])}. Clique em Pedidos online."
+            for janela in self.ouvintes:
+                avisar = getattr(janela, "avisar", None)
+                if callable(avisar):
+                    avisar(texto)
+
+    def _botoes_vivos(self) -> list:
+        vivos = []
+        for botao in self.botoes:
+            try:
+                botao.objectName()
+            except RuntimeError:
+                continue
+            vivos.append(botao)
+        self.botoes = vivos
+        return vivos
 
     def _mostrar(self) -> None:
         ligado = self.ligado()
-        self.botao.setVisible(ligado)
-        if not ligado:
+        botoes = self._botoes_vivos()
+        if not botoes:
             return
         n = len(self.pedidos)
-        self.botao.setText(f"🛵 {n} pedido{'s' if n != 1 else ''} online" if n else "🛵 Pedidos online")
-        self.botao.setObjectName("rosa" if n else "neutro")
-        self.botao.style().unpolish(self.botao)
-        self.botao.style().polish(self.botao)
-        self.botao.setToolTip(self.erro or "Pedidos feitos no cardápio pelo celular")
+        texto = f"🛵 {n} pedido{'s' if n != 1 else ''} online" if n else "🛵 Pedidos online"
+        for botao in botoes:
+            botao.setVisible(ligado)
+            if not ligado:
+                continue
+            botao.setText(texto)
+            botao.setObjectName("rosa" if n else "neutro")
+            botao.style().unpolish(botao)
+            botao.style().polish(botao)
+            botao.setToolTip(self.erro or "Pedidos feitos no cardápio pelo celular")
 
     def retirar(self, pedido_id: int) -> None:
         self.pedidos = [p for p in self.pedidos if p["id"] != pedido_id]
@@ -130,15 +160,24 @@ def atender(janela, vigia: VigiaPedidosOnline) -> None:
             return
         try:
             rede.aceitar(janela.ctx.banco, pedido["id"])
+            janela.ctx.banco.executar(
+                "UPDATE vendas SET pedido_online_aviso_ok = 1 WHERE id = ? AND pedido_online_aviso = 'aceito'",
+                (r["venda_id"],))
         except RuntimeError as e:
             dialogos.aviso("Pedido online", f"{e}\nA entrega já está no caixa; o cliente fica sabendo na próxima busca.")
         vigia.retirar(pedido["id"])
         janela.venda_id = r["venda_id"]
         janela.recarregar()
-        if r["faltando"]:
-            dialogos.aviso("Pedido online", "Ficaram de fora (não estão à venda): " + ", ".join(r["faltando"]) +
-                           ".\nAvise o cliente pelo WhatsApp.")
-        janela.avisar(f"{marca(pedido['numero'])} aceito: confira, emita (F8) e mande o entregador.")
+        emitido, _ = janela._executar(janela.ctx.entregas.emitir_pedido, r["venda_id"])
+        if emitido:
+            janela._documento_operacao(
+                "Pedido de entrega", lambda: janela.ctx.impressao.pedido_entrega(r["venda_id"]),
+                f"entrega_{r['venda_id']}", "entrega")
+            janela.venda_id = None
+            janela._limpar_entrada()
+            janela.recarregar()
+        janela.avisar(f"{marca(pedido['numero'])} aceito. O pedido de entrega "
+                      f"{'foi impresso' if emitido else 'está na tela: emita com F8'}.")
     elif acao == "recusar":
         motivo = dialogos.pedir_texto("Recusar pedido", "Motivo (o cliente vê no cardápio):", padrao="Produto em falta")
         if not (motivo or "").strip():

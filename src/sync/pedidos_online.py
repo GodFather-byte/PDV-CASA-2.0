@@ -59,3 +59,31 @@ def aceitar(banco, pedido_id: int, http=None) -> None:
 
 def recusar(banco, pedido_id: int, motivo: str, http=None) -> None:
     _pedir(*acesso(banco), "POST", f"/v1/pedidos-online/{int(pedido_id)}/recusar", http, {"motivo": motivo})
+
+
+def atualizar_situacao(banco, pedido_id: int, situacao: str, motivo: str = "", http=None) -> None:
+    """saiu, entregue ou cancelado. Repetir a mesma situação é inofensivo."""
+    _pedir(*acesso(banco), "POST", f"/v1/pedidos-online/{int(pedido_id)}/situacao", http,
+           {"situacao": situacao, "motivo": motivo or ""})
+
+
+def empurrar_avisos(banco, http=None) -> None:
+    """Manda à nuvem o que o caixa já decidiu (aceito, saiu, entregue, cancelado) e ainda não confirmou."""
+    if not ligado(banco):
+        return
+    linhas = banco.todos(
+        "SELECT id, pedido_online_id, pedido_online_aviso, motivo_cancelamento FROM vendas "
+        "WHERE pedido_online_id IS NOT NULL AND COALESCE(pedido_online_aviso_ok, 1) = 0")
+    for linha in linhas:
+        aviso = linha["pedido_online_aviso"] or ""
+        try:
+            if aviso == "aceito":
+                aceitar(banco, int(linha["pedido_online_id"]), http)
+            elif aviso in ("saiu", "entregue", "cancelado"):
+                atualizar_situacao(banco, int(linha["pedido_online_id"]), aviso,
+                                   linha["motivo_cancelamento"] or "", http)
+            else:
+                continue
+        except RuntimeError:
+            continue
+        banco.executar("UPDATE vendas SET pedido_online_aviso_ok = 1 WHERE id = ?", (linha["id"],))

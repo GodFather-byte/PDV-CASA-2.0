@@ -39,9 +39,22 @@
     return no;
   }
 
-  const carrinho = new Map();     // codigo -> {codigo, nome, preco_cent, qtd}
+  const carrinho = new Map();     // codigo|temperatura -> {codigo, nome, preco_cent, qtd, temperatura, fracionado, retornavel, cascos}
   let pedidoCfg = null;
   let lojaChave = "";
+  let cardapioDados = null;
+
+  function precoDe(p) {
+    return p._temp === "gelada" && p.preco_gelada_cent ? p.preco_gelada_cent : p.preco_cent;
+  }
+
+  function tempDe(p) {
+    return p._temp === "gelada" && p.preco_gelada_cent ? "gelada" : "natural";
+  }
+
+  function chaveDe(p) {
+    return p.codigo + "|" + tempDe(p);
+  }
 
   function totalCarrinho() {
     let itens = 0, cent = 0;
@@ -50,12 +63,15 @@
   }
 
   function mudar(produto, passo) {
-    const atual = carrinho.get(produto.codigo) || { codigo: produto.codigo, nome: produto.nome,
-      preco_cent: produto.preco_cent, qtd: 0 };
-    atual.qtd = Math.max(0, Math.min(99, atual.qtd + passo));
-    if (atual.qtd) carrinho.set(produto.codigo, atual); else carrinho.delete(produto.codigo);
+    const chave = chaveDe(produto);
+    const atual = carrinho.get(chave) || { codigo: produto.codigo, nome: produto.nome,
+      preco_cent: precoDe(produto), qtd: 0, temperatura: tempDe(produto),
+      fracionado: !!produto.fracionado, retornavel: !!produto.retornavel, cascos: 0 };
+    const delta = produto.fracionado ? passo * 0.1 : passo;
+    atual.qtd = Math.max(0, Math.min(99, Math.round((atual.qtd + delta) * 10000) / 10000));
+    if (atual.qtd) carrinho.set(chave, atual); else carrinho.delete(chave);
     atualizarBarra();
-    const marcador = document.querySelector('[data-qtd="' + produto.codigo + '"]');
+    const marcador = document.querySelector('[data-qtd="' + chave + '"]');
     if (marcador) marcador.textContent = atual.qtd ? String(atual.qtd) : "";
   }
 
@@ -68,12 +84,23 @@
 
   function botoesPedido(p) {
     if (!pedidoCfg || !p.codigo) return null;
-    const qtd = carrinho.get(p.codigo);
+    const qtd = carrinho.get(chaveDe(p));
     const menos = el("button", { class: "mais", type: "button", "aria-label": "Tirar " + p.nome, text: "−" });
     const mais = el("button", { class: "mais", type: "button", "aria-label": "Adicionar " + p.nome, text: "+" });
     menos.addEventListener("click", () => mudar(p, -1));
     mais.addEventListener("click", () => mudar(p, 1));
-    return el("div", { class: "qtd" }, menos, el("span", { "data-qtd": p.codigo, text: qtd ? String(qtd.qtd) : "" }), mais);
+    const pedacos = [menos, el("span", { "data-qtd": chaveDe(p), text: qtd ? String(qtd.qtd) : "" }), mais];
+    if (p.preco_gelada_cent) {
+      const gel = el("button", { class: "mais", type: "button",
+        text: tempDe(p) === "gelada" ? "Gelada" : "Natural",
+        "aria-label": "Temperatura de " + p.nome });
+      gel.addEventListener("click", () => {
+        p._temp = tempDe(p) === "gelada" ? "natural" : "gelada";
+        if (cardapioDados) desenhar(cardapioDados, $("campo-busca").value);
+      });
+      pedacos.push(gel);
+    }
+    return el("div", { class: "qtd" }, ...pedacos);
   }
 
   function desenhar(dados, filtro) {
@@ -100,7 +127,7 @@
             ),
             el("div", { class: "preco" },
               p.preco_de_cent ? el("span", { class: "de", text: reais(p.preco_de_cent) }) : null,
-              el("strong", { text: reais(p.preco_cent) }),
+              el("strong", { text: reais(precoDe(p)) }),
               marca ? el("span", { class: "selo", text: marca }) : null,
               botoesPedido(p)
             )
@@ -157,7 +184,9 @@
       $("logo").alt = nome;
     }
     lojaChave = loja;
+    cardapioDados = dados;
     if (dados.pedido) prepararPedido(dados.pedido);
+    acompanhar();
     desenhar(dados, "");
     $("campo-busca").addEventListener("input", (e) => desenhar(dados, e.target.value));
   }
@@ -191,7 +220,6 @@
     $("f-bairro").addEventListener("change", resumoCarrinho);
     $("f-pagamento").addEventListener("change", resumoCarrinho);
     $("form-pedido").addEventListener("submit", enviar);
-    acompanhar();
   }
 
   function taxaEscolhida() {
@@ -205,7 +233,27 @@
     const lista = $("itens-carrinho");
     lista.replaceChildren();
     for (const i of carrinho.values()) {
-      lista.append(el("li", null, el("span", { text: i.qtd + "x " + i.nome }), el("strong", { text: reais(i.qtd * i.preco_cent) })));
+      const nome = i.qtd + "x " + i.nome + (i.temperatura === "gelada" ? " (gelada)" : "");
+      const linha = el("li", null, el("span", { text: nome }), el("strong", { text: reais(Math.round(i.qtd * i.preco_cent)) }));
+      if (i.fracionado) {
+        const campo = el("input", { type: "text", inputmode: "decimal", value: String(i.qtd), maxlength: "8",
+          "aria-label": "Quantidade de " + i.nome });
+        campo.addEventListener("change", () => {
+          const n = parseFloat(String(campo.value).replace(",", "."));
+          i.qtd = !n || n <= 0 ? 0 : Math.min(99, Math.round(n * 10000) / 10000);
+          if (!i.qtd) carrinho.delete(i.codigo + "|" + (i.temperatura || "natural"));
+          atualizarBarra();
+          resumoCarrinho();
+        });
+        linha.append(campo);
+      }
+      if (i.retornavel) {
+        const casco = el("input", { type: "text", inputmode: "numeric", value: String(i.cascos || ""),
+          maxlength: "3", placeholder: "cascos", "aria-label": "Cascos devolvidos de " + i.nome });
+        casco.addEventListener("change", () => { i.cascos = Math.max(0, parseInt(casco.value, 10) || 0); });
+        linha.append(casco);
+      }
+      lista.append(linha);
     }
     const retirada = $("f-retirada").checked;
     $("bloco-entrega").hidden = retirada;
@@ -214,8 +262,11 @@
     const taxa = taxaEscolhida();
     $("total-carrinho").textContent = (retirada ? "" : "Entrega " + reais(taxa) + " · ") + "Total " + reais(cent + taxa);
     const minimo = pedidoCfg.minimo_cent || 0;
-    $("aviso-minimo").hidden = cent >= minimo;
-    $("aviso-minimo").textContent = "Pedido mínimo de " + reais(minimo) + ".";
+    const bairroOutro = !retirada && !$("f-bairro").value;
+    $("aviso-minimo").hidden = cent >= minimo && !bairroOutro;
+    $("aviso-minimo").textContent = cent < minimo
+      ? "Pedido mínimo de " + reais(minimo) + "."
+      : "Bairro não cadastrado: a entrega usa a taxa padrão.";
   }
 
   function abrirCarrinho() {
@@ -240,7 +291,8 @@
       endereco: retirada ? "" : $("f-endereco").value, bairro: retirada ? "" : $("f-bairro").value,
       pagamento: $("f-pagamento").value, troco_para_cent: centavos($("f-troco").value),
       observacao: $("f-obs").value,
-      itens: [...carrinho.values()].map((i) => ({ codigo: i.codigo, qtd: i.qtd })),
+      itens: [...carrinho.values()].map((i) => ({ codigo: i.codigo, qtd: i.qtd,
+        temperatura: i.temperatura || "natural", cascos: i.cascos || 0 })),
     };
     botao.disabled = true;
     $("erro-pedido").textContent = "";
@@ -280,12 +332,17 @@
         "&telefone=" + encodeURIComponent(ultimo.telefone), { cache: "no-store" });
       if (!r.ok) return;
       const s = await r.json();
-      const textos = { novo: "aguardando a loja confirmar", aceito: "confirmado pela loja 👍", recusado: "recusado" };
+      const textos = {
+        novo: "aguardando a loja confirmar", aceito: "confirmado pela loja",
+        saiu: "saiu para entrega", entregue: "entregue", recusado: "recusado", cancelado: "cancelado pela loja",
+      };
       faixa.hidden = false;
       faixa.textContent = "Seu pedido #" + s.numero + ": " + (textos[s.situacao] || s.situacao) +
         (s.motivo ? " (" + s.motivo + ")" : "");
       clearTimeout(timerSituacao);
-      if (s.situacao === "novo") timerSituacao = setTimeout(acompanhar, 20000);
+      if (s.situacao === "novo" || s.situacao === "aceito" || s.situacao === "saiu") {
+        timerSituacao = setTimeout(acompanhar, 20000);
+      }
     } catch (_) { /* sem rede: tenta na próxima abertura */ }
   }
 

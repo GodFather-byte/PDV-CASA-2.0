@@ -276,6 +276,10 @@ class JanelaPrincipal(QMainWindow):
                 continue
             categoria = next((nome for nome, chaves in categorias.items() if chave in chaves), "Manutenção")
             grupos[categoria].addWidget(botao)
+        self.btn_pedidos_online = QPushButton("🛵 Pedidos online")
+        self.btn_pedidos_online.setVisible(False)
+        self.btn_pedidos_online.clicked.connect(self.abrir_pedidos_online)
+        grupos["Operação"].addWidget(self.btn_pedidos_online)
         for grade in grupos.values():
             grade.addStretch(1)
         self.busca_modulos.textChanged.connect(self.filtrar_modulos)
@@ -358,7 +362,20 @@ class JanelaPrincipal(QMainWindow):
         self._atualizacoes_timer = QTimer(self)
         self._atualizacoes_timer.setInterval(60000)
         self._atualizacoes_timer.timeout.connect(self.consultar_atualizacoes)
+        from src.ui_qt.pedidos_online import VigiaPedidosOnline
+        self.vigia_pedidos = VigiaPedidosOnline(self.ctx, self.btn_pedidos_online, self)
         self.atualizar()
+
+    def avisar(self, texto: str, cor: str | None = None) -> None:
+        """O pedido online avisa aqui quando a janela do caixa está fechada."""
+        self.mensagem.setText(texto)
+
+    def abrir_pedidos_online(self) -> None:
+        caixa = self.abrir_caixa()
+        if caixa is None:
+            return
+        from src.ui_qt.pedidos_online import atender
+        atender(caixa, self.vigia_pedidos)
 
     def _titulo(self) -> str:
         return f"{self.edicao.nome} • {self.ctx.config.nome_loja()}{self.edicao.sufixo_titulo}"
