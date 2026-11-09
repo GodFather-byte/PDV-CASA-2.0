@@ -319,8 +319,11 @@ class ProdutoController:
         comps = self.banco.todos("SELECT insumo_id, quantidade FROM composicoes WHERE produto_id = ?", (produto_id,))
         if not comps:
             atual = self.por_id(produto_id)
-            return atual["ult_preco_cent"] if atual else self.banco.valor(
-                "SELECT custo_cent FROM produtos_historico WHERE id = ?", (produto_id,), 0)
+            if not atual:
+                return self.banco.valor("SELECT custo_cent FROM produtos_historico WHERE id = ?", (produto_id,), 0)
+            from src.core.custo_lucro import custo_vigente
+            return custo_vigente(atual["custo_medio_cent"] if "custo_medio_cent" in atual.keys() else 0,
+                                 atual["ult_preco_cent"])
         return sum(fmt.mult_cent(self.custo(c["insumo_id"]), c["quantidade"]) for c in comps)
 
     # ------------------------------------------------- cadastro rápido e embalagens (adega)

@@ -15,7 +15,7 @@ from typing import Callable
 from src.controllers.config_controller import CODIGOS_ESPECIAIS, codigo_especial
 from src.core import seguranca
 from src.core import formatacao as fmt
-from src.core.erros import ErroNegocio, ErroValidacao
+from src.core.erros import ErroNegocio, ErroPermissao, ErroValidacao
 
 
 @dataclass
@@ -118,6 +118,25 @@ def _antes_produto(banco, d, id_):
                                 {"codigo": "reservado"})
     if d.get("preco_cent", 0) < 0:
         raise ErroValidacao("O preço de venda não pode ser negativo.", {"preco_cent": "negativo"})
+    if "custo_medio_cent" in d:
+        if type(d["custo_medio_cent"]) is not int or d["custo_medio_cent"] < 0:
+            raise ErroValidacao("O preço de custo não pode ser negativo.", {"custo_medio_cent": "negativo"})
+        operador = getattr(banco, "_operador_auditoria", None)
+        nivel = banco.valor("SELECT nivel FROM operadores WHERE id = ?", (operador,), 0) if operador else 0
+        anterior = 0 if id_ is None else int(banco.valor(
+            "SELECT custo_medio_cent FROM produtos WHERE id = ?", (id_,), 0) or 0)
+        if d["custo_medio_cent"] == anterior:
+            pass
+        elif nivel < 4:
+            if id_ is None:
+                d.pop("custo_medio_cent")
+            else:
+                raise ErroPermissao("Custo e lucro só aparecem para o gerente.")
+        elif id_ is not None:
+            from src.controllers.estoque_controller import EstoqueController
+            EstoqueController(banco, operador)._gravar_custo(
+                id_, anterior, d["custo_medio_cent"],
+                banco.valor("SELECT qt_atual FROM produtos WHERE id = ?", (id_,), 0), "cadastro")
     if d.get("cbarra") is not None and not re.fullmatch(r"\d{1,14}", d["cbarra"]):
         raise ErroValidacao("Código de barras deve conter apenas números.", {"cbarra": "inválido"})
     if "partes" in d and not (1 <= d["partes"] <= 55):
@@ -351,7 +370,8 @@ _ENTIDADES = [
         Campo("subgrupo_id", "Sub Grupo - Grupo", "lookup", obrigatorio=True, lookup="subgrupos", largura=24),
         Campo("unidade_id", "Unidade", "lookup", obrigatorio=True, lookup="unidades", largura=10),
         Campo("aliquota_id", "Alíquota", "lookup", lookup="aliquotas", na_grade=False),
-        Campo("preco_cent", "Preço", "dinheiro", padrao=0, largura=11),
+        Campo("preco_cent", "Preço de venda", "dinheiro", padrao=0, largura=12),
+        Campo("custo_medio_cent", "Preço de custo", "dinheiro", padrao=0, largura=12),
         _sn("cobrar_servico", "Cobrar serviço", 1),
         _sn("venda", "Venda", 1, na_grade=True),
         _sn("aceita_decimal", "Aceita decimal"),

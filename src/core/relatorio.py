@@ -96,3 +96,49 @@ def para_csv(rel: Relatorio) -> str:
     for rotulo, valor in rel.rodape:
         w.writerow([rotulo, valor])
     return buf.getvalue()
+
+
+def para_pdf(rel: Relatorio) -> bytes:
+    """PDF simples do mesmo texto do relatório, para abrir no celular ou no computador. Sem biblioteca extra."""
+    texto = para_texto(rel, 90)
+    linhas = texto.split("\n")
+    paginas = [linhas[i:i + 48] for i in range(0, max(len(linhas), 1), 48)]
+
+    def esc(linha: str) -> str:
+        limpa = linha.encode("latin-1", "replace").decode("latin-1")
+        return limpa.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+    conteudos = []
+    for bloco in paginas:
+        comandos = ["BT /F1 9 Tf 40 800 Td 11 TL"]
+        for linha in bloco:
+            comandos.append(f"({esc(linha)}) Tj T*")
+        comandos.append("ET")
+        conteudos.append("\n".join(comandos).encode("latin-1", "replace"))
+    n_pag = len(conteudos)
+    # objetos: 1 catalog, 2 pages, 3 font, 4.. conteúdos, depois páginas
+    ids_fluxo = list(range(4, 4 + n_pag))
+    ids_pagina = list(range(4 + n_pag, 4 + 2 * n_pag))
+    pecas = [b"%PDF-1.4\n"]
+    offsets = [0]
+    def acrescentar(dados: bytes) -> None:
+        offsets.append(sum(len(p) for p in pecas))
+        pecas.append(dados)
+    acrescentar(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
+    kids = " ".join(f"{i} 0 R" for i in ids_pagina)
+    acrescentar(f"2 0 obj\n<< /Type /Pages /Count {n_pag} /Kids [{kids}] >>\nendobj\n".encode())
+    acrescentar(b"3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n")
+    for i, fluxo in enumerate(conteudos):
+        acrescentar(f"{ids_fluxo[i]} 0 obj\n<< /Length {len(fluxo)} >>\nstream\n".encode() + fluxo + b"\nendstream\nendobj\n")
+    for i in range(n_pag):
+        acrescentar(
+            f"{ids_pagina[i]} 0 obj\n<< /Type /Page /Parent 2 0 R /Contents {ids_fluxo[i]} 0 R "
+            f"/Resources << /Font << /F1 3 0 R >> >> /MediaBox [0 0 595 842] >>\nendobj\n".encode())
+    xref = sum(len(p) for p in pecas)
+    total = 1 + 2 + n_pag * 2
+    xref_linhas = [f"xref\n0 {total + 1}\n", "0000000000 65535 f \n"]
+    for off in offsets[1:]:
+        xref_linhas.append(f"{off:010d} 00000 n \n")
+    pecas.append("".join(xref_linhas).encode())
+    pecas.append(f"trailer\n<< /Size {total + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+    return b"".join(pecas)

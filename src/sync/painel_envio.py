@@ -132,8 +132,10 @@ def _coletar_vendas(banco, limite: int | None, uuids: list[str] | None) -> list[
         itens = [dict(i) for i in banco.todos(
             """SELECT p.nome, p.codigo, u.abreviatura AS unidade, i.quantidade, i.preco_unit_cent, i.preco_base_cent,
                       i.total_cent, i.temperatura, i.cancelado, i.observacao, i.comissao_cent,
-                      gr.nome AS grupo, COALESCE(st.nome, '') AS setor, p.custo_cent AS custo_unit_cent
+                      gr.nome AS grupo, COALESCE(st.nome, '') AS setor, p.custo_cent AS custo_unit_cent,
+                      c.custo_cent AS custo_linha_cent
                FROM itens_venda i JOIN produtos_historico p ON p.id = i.produto_id
+               LEFT JOIN itens_venda_custos c ON c.item_id = i.id
                JOIN unidades u ON u.id = p.unidade_id JOIN subgrupos s ON s.id = p.subgrupo_id
                JOIN grupos gr ON gr.id = s.grupo_id LEFT JOIN setores_impressao st ON st.id = s.setor_impressao_id
                WHERE i.venda_id = ? ORDER BY i.id""", (v["id"],))]

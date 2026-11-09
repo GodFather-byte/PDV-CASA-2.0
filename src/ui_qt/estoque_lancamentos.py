@@ -84,6 +84,9 @@ class JanelaLancamentosEstoque(QDialog):
                 self.lancamento_id is not None
                 and self.grade_itens.currentRow() >= 0))
         layout.addWidget(self.grade_itens, 2)
+        self.resumo_nota = texto("", "aviso")
+        self.resumo_nota.setWordWrap(True)
+        layout.addWidget(self.resumo_nota)
 
         item_form = QHBoxLayout()
         self.produto = QComboBox()
@@ -159,6 +162,7 @@ class JanelaLancamentosEstoque(QDialog):
             self.itens = []
             self.grade_lancamentos.setRowCount(0)
             self.grade_itens.setRowCount(0)
+            self.resumo_nota.setText("")
             self._habilitar_lancamento(False)
         self.mensagem.setText(str(erro))
         return False
@@ -215,6 +219,7 @@ class JanelaLancamentosEstoque(QDialog):
         self.lancamento = None
         self.itens = []
         self.grade_itens.setRowCount(0)
+        self.resumo_nota.setText("")
         self._limpar_cabecalho()
         self._habilitar_lancamento(False)
         self.mensagem.setText("Preencha os dados e lance o cabeçalho.")
@@ -284,6 +289,7 @@ class JanelaLancamentosEstoque(QDialog):
         self.nota_fiscal.setText(lancamento["nota_fiscal"] or "")
         self.itens = itens
         self._preencher_itens()
+        self._mostrar_resumo()
         self._habilitar_lancamento(True)
         self.mensagem.setText(
             f"Lançamento {lancamento_id} • total dos itens: "
@@ -384,6 +390,21 @@ class JanelaLancamentosEstoque(QDialog):
                 if coluna == 0:
                     item.setData(Qt.ItemDataRole.UserRole, registro["id"])
                 self.grade_itens.setItem(linha, coluna, item)
+
+    def _mostrar_resumo(self) -> None:
+        if not self.ctx.pode("rel_custo") or not self.lancamento or self.lancamento["tipo"] != "compra":
+            self.resumo_nota.setText("")
+            return
+        try:
+            r = self.ctx.relatorios.resumo_nota(self.lancamento_id)
+        except ErroNegocio as erro:
+            self.resumo_nota.setText(str(erro))
+            return
+        self.resumo_nota.setText(
+            f"Nota: custo {fmt.fmt_brl(r['custo_cent'])} · venda prevista {fmt.fmt_brl(r['venda_prevista_cent'])} · "
+            f"lucro previsto {fmt.fmt_brl(r['lucro_previsto_cent'])} ({r['margem_prevista']}). "
+            f"Já vendido: {fmt.fmt_qtd(r['qtd_vendida'])} · lucro realizado {fmt.fmt_brl(r['lucro_realizado_cent'])} "
+            f"({r['margem_realizada']}).")
 
     def remover_item(self):
         linha = self.grade_itens.currentRow()

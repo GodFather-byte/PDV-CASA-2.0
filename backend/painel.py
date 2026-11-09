@@ -714,7 +714,10 @@ def indicadores_bar(vendas: list[dict], pct_comissao: float = 0) -> dict:
                 s = setores.setdefault(nome, {"nome": nome, "valor_cent": 0, "quantidade": 0.0})
                 s["valor_cent"] += valor
                 s["quantidade"] += qtd
-            if "custo_unit_cent" in i:
+            if "custo_linha_cent" in i and i.get("custo_linha_cent") is not None:
+                tem_custo = True
+                cmv += _int(i.get("custo_linha_cent"))
+            elif "custo_unit_cent" in i:
                 tem_custo = True
                 cmv += int(round(qtd * _int(i.get("custo_unit_cent"))))
     for v in mesas:
@@ -742,6 +745,8 @@ def indicadores_bar(vendas: list[dict], pct_comissao: float = 0) -> dict:
         "setores_sincronizados": tem_setor,
         "grupos": sorted(grupos.values(), key=lambda g: -g["valor_cent"]),
         "grupos_sincronizados": tem_grupo,
+        "faturamento_itens_cent": sum(_int(i.get("total_cent")) for v in fechadas for i in (v.get("itens") or [])
+                                     if isinstance(i, dict) and not _int(i.get("cancelado"))),
         "cmv_cent": cmv, "cmv_sincronizado": tem_custo,
         "margem_cent": sum(_int(i.get("total_cent")) for v in fechadas for i in (v.get("itens") or [])
                            if isinstance(i, dict) and not _int(i.get("cancelado"))) - cmv if tem_custo else 0,

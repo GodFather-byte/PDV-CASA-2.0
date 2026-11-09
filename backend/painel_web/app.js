@@ -1200,6 +1200,7 @@
       ));
     $("nota-margem").hidden = bar.cmv_sincronizado !== false;
     $("nota-margem").textContent = "O custo do produto ainda não sobe. Atualize o PDV para ver CMV e margem.";
+    $("faturamento-itens").textContent = formatarCentavos(bar.faturamento_itens_cent || 0);
     $("cmv-dia").textContent = bar.cmv_sincronizado ? formatarCentavos(bar.cmv_cent) : "—";
     $("margem-dia").textContent = bar.cmv_sincronizado ? formatarCentavos(bar.margem_cent) : "—";
   }

@@ -28,9 +28,10 @@ from src.controllers.estoque_controller import EstoqueController
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroValidacao
 
-COLUNAS = ["codigo", "nome", "preco", "comissao", "grupo", "unidade", "quantidade", "estoque_minimo", "codigo_barras", "atalho",
+COLUNAS = ["codigo", "nome", "preco", "custo", "comissao", "grupo", "unidade", "quantidade", "estoque_minimo", "codigo_barras", "atalho",
            "controla_estoque", "preco_gelada", "atacado_qtd", "preco_atacado"]
-TITULOS = {"codigo": "Código", "nome": "Produto", "preco": "Preço", "comissao": "Comissão (R$)", "grupo": "Grupo", "unidade": "Unidade",
+TITULOS = {"codigo": "Código", "nome": "Produto", "preco": "Preço de venda", "custo": "Preço de custo",
+           "comissao": "Comissão (R$)", "grupo": "Grupo", "unidade": "Unidade",
            "quantidade": "Quantidade", "estoque_minimo": "Estoque mínimo", "codigo_barras": "Código de barras", "atalho": "Atalho",
            "controla_estoque": "Controla estoque", "preco_gelada": "Preço gelada", "atacado_qtd": "Atacado a partir de",
            "preco_atacado": "Preço atacado"}
@@ -40,6 +41,7 @@ ALIAS = {
     "nome": {"nome", "produto", "bebida", "descricao", "item", "nome produto", "nome do produto"},
     "preco": {"preco", "valor", "preco venda", "valor venda", "preco de venda", "valor de venda", "preco r", "preco natural",
               "natural"},
+    "custo": {"custo", "preco custo", "preco de custo", "valor custo", "custo unitario", "custo medio"},
     "comissao": {"comissao", "comissao r", "comissao reais", "comissao valor", "comissao garota"},
     "comissao_pct": {"comissao pct", "comissao percentual", "comissao porcentagem"},
     "grupo": {"grupo", "categoria", "subgrupo", "sub grupo", "tipo"},
@@ -162,6 +164,7 @@ class LinhaPrevia:
     codigo: str = ""
     nome: str = ""
     preco_cent: int = 0
+    custo_cent: int | None = None
     comissao_pct: float | None = None
     grupo: str = ""
     unidade: str = ""
@@ -356,6 +359,14 @@ class ImportacaoProdutos:
             raise ValueError("O preço não pode ser negativo.")
         if p.preco_cent == 0:
             p.avisos.append("Preço zero.")
+        bruto_custo = str(l.get("custo") or "").strip()
+        if bruto_custo:
+            try:
+                p.custo_cent = fmt.para_centavos(bruto_custo)
+            except ValueError:
+                raise ValueError(f"Custo inválido: '{bruto_custo}'.") from None
+            if p.custo_cent < 0:
+                raise ValueError("O custo não pode ser negativo.")
         pct = str(l.get("comissao_pct") or "").strip()
         reais = str(l.get("comissao") or "").strip()
         if pct:
@@ -446,6 +457,8 @@ class ImportacaoProdutos:
                     valores["cbarra"] = p.codigo_barras
                 if p.atalho:
                     valores["atalho"] = p.atalho
+                if p.custo_cent is not None:
+                    valores["custo_medio_cent"] = fmt.fmt_num(p.custo_cent)
                 if p.preco_gelada_cent is not None:
                     valores["preco_gelada_cent"] = fmt.fmt_num(p.preco_gelada_cent)
                 if p.atacado_qtd is not None:
@@ -495,20 +508,21 @@ class ImportacaoProdutos:
         """Planilha-modelo (CSV com ';', que o Excel brasileiro abre direto) com dois exemplos."""
         cab = [TITULOS[c] for c in COLUNAS]
         return self._csv([cab,
-                          ["1", "CERVEJA LATA", "4,50", "", "CERVEJA", "UN", "48", "12", "7891234567895", "", "", "5,50", "12", "3,99"],
-                          ["2", "DOSE DE VODKA", "25,00", "10,00", "DESTILADOS", "UN", "", "", "", "", "", "", "", ""]])
+                          ["1", "CERVEJA LATA", "4,50", "", "", "CERVEJA", "UN", "48", "12", "7891234567895", "", "", "5,50", "12", "3,99"],
+                          ["2", "DOSE DE VODKA", "25,00", "", "10,00", "DESTILADOS", "UN", "", "", "", "", "", "", "", ""]])
 
     def exportar(self) -> str:
         """Todos os produtos ativos no mesmo formato da importação: dá para editar preços na planilha e importar de volta."""
         linhas = [[TITULOS[c] for c in COLUNAS]]
         for r in self.banco.todos(
-                """SELECT p.codigo, p.nome, p.preco_cent, p.comissao_pct, g.nome AS grupo, u.abreviatura AS un, p.controla_estoque,
+                """SELECT p.codigo, p.nome, p.preco_cent, p.custo_medio_cent, p.comissao_pct, g.nome AS grupo, u.abreviatura AS un, p.controla_estoque,
                           p.qt_atual, p.estoque_minimo, p.cbarra, p.atalho, p.preco_gelada_cent, p.atacado_qtd, p.preco_atacado_cent
                    FROM produtos p JOIN subgrupos s ON s.id = p.subgrupo_id JOIN grupos g ON g.id = s.grupo_id
                    JOIN unidades u ON u.id = p.unidade_id WHERE p.ativo = 1 ORDER BY CAST(p.codigo AS INTEGER), p.nome"""):
             comissao = fmt.fmt_num(round(r["preco_cent"] * r["comissao_pct"] / 100)) if r["comissao_pct"] else ""
             atacado = r["atacado_qtd"] > 0 and r["preco_atacado_cent"] > 0
             linhas.append([str(int(r["codigo"])) if r["codigo"].isdigit() else r["codigo"], r["nome"], fmt.fmt_num(r["preco_cent"]),
+                           fmt.fmt_num(r["custo_medio_cent"]) if r["custo_medio_cent"] else "",
                            comissao, r["grupo"], r["un"], fmt.fmt_qtd(r["qt_atual"]).rstrip("0").rstrip(",") if r["controla_estoque"] else "",
                            fmt.fmt_qtd(r["estoque_minimo"]).rstrip("0").rstrip(",") if r["estoque_minimo"] else "", r["cbarra"] or "",
                            r["atalho"] or "", "S" if r["controla_estoque"] else "",

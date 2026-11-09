@@ -75,10 +75,27 @@ class FormularioCadastro(QDialog):
                     editor.setMaxLength(campo.tamanho)
                 if campo.tipo == "dinheiro":
                     editor.setPlaceholderText("0,00")
+            if campo.nome in ("custo_medio_cent", "ult_preco_cent") and not ctx.pode("rel_custo"):
+                continue
             editor.setEnabled(not campo.somente_leitura)
             self.campos[campo.nome] = editor
             secoes[campo.secao].addRow(campo.rotulo + (" *" if campo.obrigatorio else ""), editor)
         self.editor_foto = None
+        if chave == "produtos" and "custo_medio_cent" in self.campos:
+            from src.core import custo_lucro
+            self.lbl_lucro = texto("", "aviso")
+            self.margem_desejada = QLineEdit()
+            self.margem_desejada.setPlaceholderText("Margem desejada, em % inteiro. Ex.: 40")
+            sugerir = QPushButton("Sugerir preço de venda")
+            sugerir.clicked.connect(self._sugerir_preco)
+            linha = QHBoxLayout()
+            linha.addWidget(self.lbl_lucro, 1)
+            linha.addWidget(self.margem_desejada)
+            linha.addWidget(sugerir)
+            layout.addLayout(linha)
+            self.campos["preco_cent"].textChanged.connect(self._atualizar_lucro)
+            self.campos["custo_medio_cent"].textChanged.connect(self._atualizar_lucro)
+            self._atualizar_lucro()
         if chave == "produtos":
             from src.ui_qt.foto_produto import EditorFoto
             self.editor_foto = EditorFoto(ctx, id_, lambda: self.campos["cbarra"].text())
@@ -122,7 +139,7 @@ class FormularioCadastro(QDialog):
     def valores(self):
         dados = {}
         for campo in self.entidade.campos:
-            if campo.somente_leitura:
+            if campo.somente_leitura or campo.nome not in self.campos:
                 continue
             editor = self.campos[campo.nome]
             if isinstance(editor, QCheckBox):
@@ -155,6 +172,36 @@ class FormularioCadastro(QDialog):
             if campo.tipo == "senha":
                 self.campos[campo.nome].clear()
         self.accept()
+
+    def _centavos(self, nome: str) -> int:
+        from src.core import formatacao as fmt
+        texto_valor = self.campos[nome].text().strip()
+        return fmt.para_centavos(texto_valor) if texto_valor else 0
+
+    def _atualizar_lucro(self) -> None:
+        from src.core import custo_lucro
+        from src.core import formatacao as fmt
+        try:
+            venda = self._centavos("preco_cent")
+            custo = self._centavos("custo_medio_cent")
+        except ValueError:
+            self.lbl_lucro.setText("Custo ou preço ainda não é um valor.")
+            return
+        self.lbl_lucro.setText(
+            f"Lucro {fmt.fmt_brl(custo_lucro.lucro_cent(venda, custo))} · "
+            f"margem {custo_lucro.margem_texto(venda, custo)}")
+
+    def _sugerir_preco(self) -> None:
+        from src.core import custo_lucro
+        from src.core import formatacao as fmt
+        try:
+            custo = self._centavos("custo_medio_cent")
+            margem = int((self.margem_desejada.text() or "").strip().replace("%", ""))
+            preco = custo_lucro.preco_pela_margem(custo, margem)
+        except (ErroNegocio, ValueError) as erro:
+            self.mensagem.setText(str(erro))
+            return
+        self.campos["preco_cent"].setText(fmt.fmt_num(preco))
 
 
 class FormularioEmbalagem(QDialog):
@@ -389,8 +436,12 @@ class JanelaCadastro(QDialog):
             extras.addWidget(botao)
         layout.addLayout(extras)
         self.colunas = [c for c in self.entidade.campos if c.na_grade and c.tipo != "senha"]
-        self.grade = QTableWidget(0, len(self.colunas))
-        self.grade.setHorizontalHeaderLabels([c.rotulo for c in self.colunas])
+        self._mostra_lucro = chave == "produtos" and ctx.pode("rel_custo")
+        if not self._mostra_lucro:
+            self.colunas = [c for c in self.colunas if c.nome not in ("custo_medio_cent", "ult_preco_cent")]
+        extras = ["Lucro", "Margem"] if self._mostra_lucro else []
+        self.grade = QTableWidget(0, len(self.colunas) + len(extras))
+        self.grade.setHorizontalHeaderLabels([c.rotulo for c in self.colunas] + extras)
         self.grade.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.grade.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.grade.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -423,6 +474,15 @@ class JanelaCadastro(QDialog):
                 item = QTableWidgetItem(valores.get(campo.nome, ""))
                 item.setData(Qt.ItemDataRole.UserRole, linha["id"])
                 self.grade.setItem(numero, coluna, item)
+            if self._mostra_lucro:
+                from src.core import custo_lucro
+                from src.core import formatacao as fmt
+                custo = custo_lucro.custo_vigente(linha.get("custo_medio_cent"), linha.get("ult_preco_cent"))
+                venda = int(linha.get("preco_cent") or 0)
+                self.grade.setItem(numero, len(self.colunas), QTableWidgetItem(fmt.fmt_brl(
+                    custo_lucro.lucro_cent(venda, custo))))
+                self.grade.setItem(numero, len(self.colunas) + 1, QTableWidgetItem(
+                    custo_lucro.margem_texto(venda, custo)))
             if linha["id"] == selecionado:
                 self.grade.selectRow(numero)
         ordem = ("padrão do cadastro" if self.ordem == self.entidade.ordem else "de cadastramento")

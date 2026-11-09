@@ -44,6 +44,7 @@ ACESSOS = [
     ("rel_auditoria", "Auditoria por operador (cancelamentos, descontos e sangrias)", "Relatórios", 3),
     ("rel_comissao_garotas", "Relatório de comissão das garotas", "Relatórios", 2),
     ("rel_cmv", "Relatório C.M.V.", "Relatórios", 3),
+    ("rel_custo", "Custo, lucro e notas de compra", "Relatórios", 4),
     ("rel_clientes", "Clientes inativos e Clientes", "Relatórios", 2),
     ("rel_comissoes", "Relatórios de Comissões", "Relatórios", 3),
     ("rel_financeiro", "Resultado financeiro e Extrato de contas", "Relatórios", 3),

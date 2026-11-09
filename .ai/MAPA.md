@@ -97,7 +97,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Cozinha/Bar em PySide6 | `ui_qt/cozinha.py`; setores em Mais cadastros; navegação por busca em `ui_qt/app.py` |
 | Impressão e fila | `impressao_controller.py`, `fila_impressao_controller.py`, `impressao_assistente.py` |
 | Recuperação após interrupção e roteiro isolado | `fila_impressao_controller.py` (`enviando`/`incerto`, conferência humana), `src/homologacao.py`; guia `docs/MELHORIAS_1_9.md` |
-| Relatórios | `relatorio_controller.py`, `relatorio_vendas.py`, `relatorio_gestao.py` |
+| Relatórios | `relatorio_controller.py`, `relatorio_vendas.py`, `relatorio_gestao.py`, `relatorio_custo.py` (lucro, ABC, giro; módulo `rel_custo`, nível 4) |
 | Devoluções por data/turno do reembolso | `relatorio_vendas.py` (`devolucoes`), menus Relatórios > Caixa Qt; bruto histórico preservado |
 | Resumo do dono no WhatsApp | `src/whatsapp/resumo.py`, `caixa.py`, `alertas.py`; contagem em `ui_qt/contagem.py` |
 | Backup, limpeza e utilitários | `utilitario_controller.py` |

@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao
-from src.core.relatorio import para_csv, para_texto
+from src.core.relatorio import para_csv, para_pdf, para_texto
 from src.ui_qt.tema import texto
 from src.ui_qt.visualizador import JanelaVisualizador
 
@@ -44,6 +44,8 @@ FILTROS = {
     "tipo_caixa": ("Movimento", "escolha:entrada|saida"),
     "tipo_estoque": ("Tipo de movimento", "escolha:compra|entrada|saida|descarte|quebra|oxidacao|devolucao|contagem|inicial|pedido|desc_acabados"),
     "fornecedor_id": ("Fornecedor", "lookup:fornecedores"),
+    "produto_id": ("Produto", "lookup:produtos"),
+    "agrupar": ("Agrupar", "escolha:dia|semana|mês"),
     "plano_id": ("Plano de contas", "lookup:planos_contas"),
     "subplano_id": ("Sub plano", "lookup:subplanos"),
     "por": ("Considerar a data de", "escolha:dt_quitacao|dt_entrada|dt_vencimento"),
@@ -109,6 +111,15 @@ SPECS = {
     "mov_estoque": Spec("Movimento de estoque", "rel_estoque", "movimento_estoque", PERIODO + ("tipo_estoque", "fornecedor_id"), "mes", tipo="tipo_estoque"),
     "posicao_estoque": Spec("Posição do estoque por período", "rel_estoque", "posicao_estoque_periodo", PERIODO, "mes"),
     "custo_medio": Spec("Preço médio de compra", "rel_informativos", "custo_medio", PERIODO + ("fornecedor_id",), "mes"),
+    "lucro_periodo": Spec("Lucro do período", "rel_custo", "lucro_periodo", PERIODO + ("grupo_id", "produto_id", "fornecedor_id"), "mes"),
+    "ranking_lucro": Spec("Produtos mais e menos lucrativos", "rel_custo", "ranking_lucro", PERIODO + ("grupo_id", "produto_id"), "mes"),
+    "alerta_custo": Spec("Vendido abaixo do custo ou sem custo", "rel_custo", "alerta_custo", PERIODO + ("grupo_id", "produto_id"), "mes"),
+    "curva_abc": Spec("Curva ABC pelo lucro", "rel_custo", "curva_abc", PERIODO + ("grupo_id",), "mes"),
+    "giro_estoque": Spec("Giro e valor do estoque", "rel_custo", "giro_estoque", PERIODO + ("grupo_id", "produto_id"), "mes"),
+    "lucro_calendario": Spec("Lucro por dia, semana ou mês", "rel_custo", "lucro_calendario", PERIODO + ("agrupar", "grupo_id"), "mes"),
+    "lucro_forma": Spec("Lucro por forma de pagamento", "rel_custo", "lucro_forma", PERIODO, "mes"),
+    "compras_fornecedor": Spec("Compras por fornecedor", "rel_custo", "compras_fornecedor", PERIODO + ("fornecedor_id",), "mes"),
+    "perdas_cascos": Spec("Perdas, quebras e cascos", "rel_custo", "perdas_cascos", PERIODO, "mes"),
     "form_contagem": Spec("Formulário de contagem", "rel_estoque", "formulario_contagem", (), "vazio"),
     "form_pedidos": Spec("Formulário de pedidos", "rel_estoque", "formulario_pedidos", (), "vazio"),
 }
@@ -213,9 +224,11 @@ class JanelaRelatorios(QDialog):
         self.limpar_botao.clicked.connect(self.limpar)
         self.csv_botao = QPushButton("Exportar CSV")
         self.csv_botao.clicked.connect(lambda: self.exportar_csv())
+        self.pdf_botao = QPushButton("Exportar PDF")
+        self.pdf_botao.clicked.connect(lambda: self.exportar_pdf())
         self.visualizar_botao = QPushButton("Pré-visualizar texto")
         self.visualizar_botao.clicked.connect(self.visualizar)
-        for botao in (self.aplicar, self.limpar_botao, self.visualizar_botao, self.csv_botao):
+        for botao in (self.aplicar, self.limpar_botao, self.visualizar_botao, self.csv_botao, self.pdf_botao):
             barra.addWidget(botao)
         layout.addLayout(barra)
         self.criterios = texto("", "suave")
@@ -265,6 +278,7 @@ class JanelaRelatorios(QDialog):
             grade.setColumnCount(0)
         self.criterios.clear()
         self.csv_botao.setEnabled(False)
+        self.pdf_botao.setEnabled(False)
         self.visualizar_botao.setEnabled(False)
 
     def _alterado(self, *_):
@@ -347,6 +361,7 @@ class JanelaRelatorios(QDialog):
                         rel.colunas, rel.estilos)
         self._preencher(self.totais, ["Indicador", "Valor"], rel.rodape)
         self.csv_botao.setEnabled(True)
+        self.pdf_botao.setEnabled(True)
         self.visualizar_botao.setEnabled(True)
         self.mensagem.setText("Nada encontrado para os critérios." if rel.vazio() else "")
         return True
@@ -372,6 +387,21 @@ class JanelaRelatorios(QDialog):
         except (ErroNegocio, ValueError, KeyError, OSError, sqlite3.Error) as erro:
             return self._falhar(erro)
         self.mensagem.setText("CSV exportado.")
+        return True
+
+    def exportar_pdf(self, caminho=None):
+        try:
+            self._exigir_resultado()
+            if not caminho:
+                caminho, _ = QFileDialog.getSaveFileName(
+                    self, "Exportar relatório", self.chave + ".pdf", "PDF (*.pdf)")
+            if not caminho:
+                return False
+            self._exigir_resultado()
+            Path(caminho).write_bytes(para_pdf(self.rel))
+        except (ErroNegocio, ValueError, KeyError, OSError, sqlite3.Error) as erro:
+            return self._falhar(erro)
+        self.mensagem.setText("PDF exportado.")
         return True
 
     def visualizar(self):

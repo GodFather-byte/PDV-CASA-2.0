@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 44
+VERSAO_ESQUEMA = 45
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -170,6 +170,18 @@ TABELAS = [
         uuid TEXT PRIMARY KEY REFERENCES devolucoes(uuid) ON DELETE CASCADE,
         enviado_em TEXT NOT NULL
     )""",
+    """CREATE TABLE IF NOT EXISTS custo_historico (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        produto_id INTEGER NOT NULL,
+        custo_anterior_cent INTEGER NOT NULL,
+        custo_novo_cent INTEGER NOT NULL,
+        quantidade REAL NOT NULL DEFAULT 0,
+        origem TEXT NOT NULL,
+        ref_tipo TEXT,
+        ref_id INTEGER,
+        criado_em TEXT NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_custo_historico_prod ON custo_historico(produto_id, id)",
     """CREATE TABLE IF NOT EXISTS itens_venda_custos (
         item_id INTEGER PRIMARY KEY REFERENCES itens_venda(id) ON DELETE CASCADE,
         custo_cent INTEGER NOT NULL CHECK (custo_cent >= 0),
@@ -277,6 +289,7 @@ TABELAS = [
         ncm TEXT, desc_aliq_icms TEXT, situacao_tributaria TEXT,
         aliquota_ipi REAL NOT NULL DEFAULT 0, reducao_base REAL NOT NULL DEFAULT 0,
         mostrar_no_cardapio INTEGER NOT NULL DEFAULT 1,
+        custo_medio_cent INTEGER NOT NULL DEFAULT 0,
         ativo INTEGER NOT NULL DEFAULT 1
     )""",
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_produtos_cbarra ON produtos(cbarra) WHERE cbarra IS NOT NULL AND cbarra <> ''",
@@ -1048,6 +1061,12 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v45: custo médio do produto. O último preço de compra continua em ult_preco_cent.
+    # Bancos antigos passam a usar esse último preço como média inicial.
+    45: [
+        ("coluna", "produtos", "custo_medio_cent", "INTEGER NOT NULL DEFAULT 0"),
+        "UPDATE produtos SET custo_medio_cent = ult_preco_cent WHERE custo_medio_cent = 0 AND ult_preco_cent > 0",
+    ],
     # v44: pedido online. A forma escolhida no celular, o id na nuvem e o aviso que ainda falta
     # confirmar (saiu, entregue, cancelado). Vendas antigas nascem com o aviso já confirmado.
     44: [

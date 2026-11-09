@@ -320,7 +320,7 @@ class TesteGravacao(BaseTeste):
                        {"codigo": "2", "nome": "GELO", "preco": "12,00"}])
         texto = self.imp.exportar()
         self.assertIn("Preço gelada;Atacado a partir de;Preço atacado", texto.splitlines()[0])
-        self.assertIn("SKOL;4,50;;DIVERSOS;UN;;;;;;5,50;12;3,99", texto)
+        self.assertIn("SKOL;4,50;;;DIVERSOS;UN;;;;;;5,50;12;3,99", texto)
         self.assertTrue(texto.splitlines()[2].endswith(";;;"))                                       # o gelo sem nada
         previa = self.imp.analisar(ler_tabela(csv_temp(self, texto)))
         self.imp.importar(previa)
