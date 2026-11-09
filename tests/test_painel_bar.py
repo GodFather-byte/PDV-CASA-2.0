@@ -43,6 +43,28 @@ class TestePerfilEMes(unittest.TestCase):
         self.assertEqual(bar["setores"][0]["nome"], "Bar")
         self.assertEqual(bar["grupos"][0]["nome"], "Bebidas")
 
+    def test_lucro_agregado_nao_devolve_item_cru(self):
+        vendas = [{"status": "fechada", "total_cent": 2400, "desconto_cent": 100,
+                   "pagamentos": [{"tipo": "Pix", "valor_cent": 1400, "troco_cent": 0},
+                                  {"tipo": "Dinheiro", "valor_cent": 1000, "troco_cent": 0}],
+                   "itens": [{"nome": "SKOL", "quantidade": 2, "total_cent": 2400, "cancelado": 0,
+                              "custo_linha_cent": 1000},
+                             {"nome": "GELO", "quantidade": 1, "total_cent": 0, "cancelado": 0}]}]
+        retrato = {"lucro": {"estoque_custo_cent": 5000, "estoque_venda_cent": 12000,
+                             "notas": [{"data": "2026-10-01", "numero": "100", "fornecedor": "Bebidas",
+                                        "custo_cent": 5000, "venda_cent": 12000,
+                                        "previsto_cent": 7000, "realizado_cent": 2800}]}}
+        corpo = painel.montar_lucro(vendas, [retrato])
+        self.assertEqual((corpo["faturamento_cent"], corpo["desconto_cent"], corpo["custo_cent"], corpo["lucro_cent"]),
+                         (2400, 100, 1000, 1400))
+        self.assertEqual(corpo["margem"], "58,33%")
+        self.assertEqual(corpo["ranking"][0]["nome"], "SKOL")
+        self.assertEqual(corpo["alertas"][0]["situacao"], "sem custo")
+        self.assertEqual(sum(f["lucro_cent"] for f in corpo["formas"]), 1400)
+        self.assertEqual(corpo["notas"][0]["realizado_cent"], 2800)
+        self.assertNotIn("itens", corpo)
+        self.assertNotIn("pagamentos", corpo)
+
 
 class TesteEnvioDoBar(BasePainel):
     def test_retrato_leva_mesa_garcom_e_modulos_sem_estoque_no_item(self):
@@ -67,6 +89,13 @@ class TesteEnvioDoBar(BasePainel):
         self.assertNotIn("qt_atual", item)
         self.assertIn("garcom", painel_envio.coletar_vendas(self.banco)[0])
         self.assertTrue(venda["uuid"])
+        self.banco.executar("UPDATE produtos SET qt_atual = 0")
+        self.banco.executar(
+            "UPDATE produtos SET qt_atual = 10, controla_estoque = 1, preco_cent = 1200, custo_medio_cent = 500 "
+            "WHERE id = ?", (self.skol,))
+        foto = painel_envio.retrato(self.banco)
+        self.assertEqual((foto["lucro"]["estoque_custo_cent"], foto["lucro"]["estoque_venda_cent"]), (5000, 12000))
+        self.assertEqual(foto["lucro"]["notas"], [])
 
 
 @unittest.skipIf(TestClient is None, "fastapi/httpx não instalados")
@@ -107,6 +136,21 @@ class TestePeriodoNaNuvem(BaseNuvem):
         self.assertEqual(next(d for d in per["dias"] if d["dia"] == "2026-09-01")["faturamento_cent"], 0)
         self.assertEqual(self.http.get("/v1/painel/periodo", params={"de": "2026-10-03", "ate": "2026-10-01"},
                                        headers=sessao).status_code, 422)
+        envio = self.http.post("/v1/painel/envio", json={
+            "vendas": [{"uuid": "lucro-1", "status": "fechada", "dia": "2026-10-04", "total_cent": 2400,
+                        "desconto_cent": 0, "modalidade": "balcao",
+                        "pagamentos": [{"tipo": "Pix", "valor_cent": 2400, "troco_cent": 0}],
+                        "itens": [{"nome": "SKOL", "quantidade": 2, "total_cent": 2400, "cancelado": 0,
+                                   "custo_linha_cent": 1000}]}],
+            "retrato": {"terminal_id": "cx", "dia_operacional": "2026-10-03", "momento": "2026-10-03 22:00:00",
+                        "lucro": {"estoque_custo_cent": 5000, "estoque_venda_cent": 12000, "notas": []}},
+        }, headers=cabecalho())
+        self.assertEqual(envio.status_code, 200, envio.text)
+        lucro = self.http.get("/v1/painel/lucro", params={"de": "2026-10-04", "ate": "2026-10-04"}, headers=sessao)
+        self.assertEqual(lucro.status_code, 200, lucro.text)
+        self.assertEqual(lucro.json()["lucro_cent"], 1400)
+        self.assertEqual(lucro.json()["estoque_custo_cent"], 5000)
+        self.assertNotIn("itens", lucro.json())
         outra = self.entrar("ADEGA-2", "senha-da-outra")
         self.assertEqual(self.http.get("/v1/painel/periodo", params={"de": "2026-09-01", "ate": "2026-10-03"},
                                        headers=outra).json()["quantidade"], 0)

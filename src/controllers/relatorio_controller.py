@@ -3,12 +3,13 @@ from __future__ import annotations
 
 from src.controllers.contas_controller import ContasController
 from src.controllers.relatorio_comissoes import RelatoriosComissoes
+from src.controllers.relatorio_custo import RelatoriosCusto
 from src.controllers.relatorio_gestao import RelatoriosGestao
 from src.controllers.relatorio_vendas import RelatoriosVendas
 from src.core import formatacao as fmt
 
 
-class RelatorioController(RelatoriosVendas, RelatoriosGestao, RelatoriosComissoes):
+class RelatorioController(RelatoriosVendas, RelatoriosGestao, RelatoriosComissoes, RelatoriosCusto):
     def __init__(self, banco):
         self.banco = banco
 

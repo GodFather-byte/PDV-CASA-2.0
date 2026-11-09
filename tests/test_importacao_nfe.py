@@ -103,6 +103,40 @@ class TesteImportacaoNFe(BaseTeste):
         with self.assertRaisesRegex(ErroNegocio, "sem preço de venda"):
             caixa.fechar(venda)
 
+    def test_zip_ipi_st_e_fator_lembrado_por_fornecedor(self):
+        import zipfile
+        zipado = Path(self.pasta.name) / "notas.zip"
+        with zipfile.ZipFile(zipado, "w") as pacote:
+            pacote.writestr("nota.xml", xml_nfe())
+        pacote = self.importador.analisar_pacote(zipado)
+        self.assertEqual(len(pacote), 1)
+        self.assertEqual(pacote[0].numero, "100")
+        nota = Path(self.pasta.name) / "fardo.xml"
+        nota.write_text("""<?xml version="1.0" encoding="UTF-8"?>
+        <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe"><NFe><infNFe Id="NFe35261012345678000199550010000001001000000011">
+          <ide><mod>55</mod><serie>1</serie><nNF>101</nNF><dhEmi>2026-10-04T10:00:00-03:00</dhEmi></ide>
+          <emit><CNPJ>12345678000199</CNPJ><xNome>Distribuidora Exemplo</xNome></emit>
+          <det nItem="1"><prod><cProd>FD12</cProd><cEAN>SEM GTIN</cEAN><xProd>FARDO CERVEJA</xProd>
+            <NCM>22030000</NCM><uCom>FD</uCom><qCom>2.0000</qCom><vUnCom>30.00</vUnCom><vProd>60.00</vProd></prod>
+            <imposto><IPI><IPITrib><vIPI>6.00</vIPI></IPITrib></IPI>
+            <ICMS><ICMS10><vICMSST>4.00</vICMSST></ICMS10></ICMS></imposto></det>
+        </infNFe></NFe></nfeProc>""", encoding="utf-8")
+        previa = self.importador.analisar(nota)
+        self.assertEqual(previa.serie, "1")
+        self.assertEqual(previa.itens[0].custo_total_cent, 7000)
+        self.assertEqual(previa.itens[0].ncm, "22030000")
+        previa.itens[0].fator = 12
+        self.importador.importar(previa, "Adega", precos_venda={1: 400})
+        produto = self.banco.um("SELECT id, qt_atual, ult_preco_cent FROM produtos WHERE nome = 'FARDO CERVEJA'")
+        self.assertEqual(produto["qt_atual"], 24)
+        self.assertEqual(produto["ult_preco_cent"], 292)
+        outra = Path(self.pasta.name) / "fardo2.xml"
+        outra.write_text(nota.read_text(encoding="utf-8").replace("00000011", "00000012").replace("<nNF>101</nNF>", "<nNF>102</nNF>"),
+                         encoding="utf-8")
+        de_novo = self.importador.analisar(outra)
+        self.assertEqual(de_novo.itens[0].produto_id, produto["id"])
+        self.assertEqual(de_novo.itens[0].fator, 12)
+
     def test_preco_minimo_configuravel_desligado_nao_gera_alertas(self):
         produto = self.novo_produto("CERVEJA LATA", 500, estoque=True, qt=4, cbarra="7891234567895")
         previa = self.importador.analisar(self.arquivo)

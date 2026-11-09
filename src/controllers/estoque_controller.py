@@ -328,8 +328,14 @@ class EstoqueController:
             self.banco.executar("UPDATE produtos SET controla_estoque = 1, qt_inicial = ? WHERE id = ?", (qtd, pid))
             self._mover(pid, qtd - antes, "inicial", "item_estoque", item_id)
         elif tipo == "compra":
+            from src.core.custo_lucro import custo_medio_ponderado, custo_vigente
+            liquido = max(int(valor_cent) - int(desconto_cent), 0)
+            unit = fmt.dividir_cent(liquido, qtd)
+            anterior = custo_vigente(p.get("custo_medio_cent"), p.get("ult_preco_cent"))
+            saldo = p["qt_atual"] if p["qt_atual"] and p["qt_atual"] > 0 else 0
+            medio = custo_medio_ponderado(saldo, anterior, qtd, liquido)
             self._mover(pid, qtd, "compra", "item_estoque", item_id)
-            unit = fmt.dividir_cent(max(valor_cent - desconto_cent, 0), qtd)
+            self._gravar_custo(pid, anterior, medio, qtd, "compra", "item_estoque", item_id)
             self.banco.executar("UPDATE produtos SET ult_preco_cent = ? WHERE id = ?", (unit, pid))
         elif tipo == "entrada":
             self._mover(pid, qtd, "entrada", "item_estoque", item_id)
@@ -357,7 +363,8 @@ class EstoqueController:
             if item["aplicado"]:
                 self._estornar_referencia("item_estoque", item_id, None, "estorno")
             self.banco.executar("DELETE FROM itens_estoque WHERE id = ?", (item_id,))
-            if lanc["tipo"] == "compra":
+            if lanc["tipo"] == "compra" and item["aplicado"]:
+                self._reverter_compra(item)
                 self._recalcular_ult_preco(item["produto_id"])
             self._atualizar_total(item["lancamento_id"])
 
@@ -372,6 +379,25 @@ class EstoqueController:
         total = self.total_itens(lanc_id)
         self.banco.executar("UPDATE lancamentos_estoque SET valor_cent = CASE WHEN tipo = 'compra' "
                             "THEN valor_cent ELSE ? END WHERE id = ?", (total, lanc_id))
+
+    def _gravar_custo(self, produto_id: int, anterior: int, novo: int, quantidade, origem: str,
+                      ref_tipo: str | None = None, ref_id: int | None = None) -> None:
+        self.banco.executar("UPDATE produtos SET custo_medio_cent = ? WHERE id = ?", (int(novo), produto_id))
+        self.banco.executar("UPDATE produtos_historico SET custo_cent = ? WHERE id = ?", (int(novo), produto_id))
+        self.banco.inserir("custo_historico", {
+            "produto_id": produto_id, "custo_anterior_cent": int(anterior), "custo_novo_cent": int(novo),
+            "quantidade": fmt.arred_qtd(quantidade or 0), "origem": origem, "ref_tipo": ref_tipo, "ref_id": ref_id,
+            "criado_em": fmt.agora()})
+
+    def _reverter_compra(self, item) -> None:
+        from src.core.custo_lucro import custo_vigente, reverter_custo_medio
+        p = self.produtos.por_id(item["produto_id"])
+        if p is None:
+            return
+        atual = custo_vigente(p.get("custo_medio_cent"), p.get("ult_preco_cent"))
+        liquido = max(int(item["valor_cent"]) - int(item["desconto_cent"]), 0)
+        novo = reverter_custo_medio(p["qt_atual"], atual, item["quantidade"], liquido)
+        self._gravar_custo(p["id"], atual, novo, item["quantidade"], "estorno_compra", "item_estoque", item["id"])
 
     def _recalcular_ult_preco(self, produto_id: int) -> None:
         r = self.banco.um(
@@ -394,7 +420,11 @@ class EstoqueController:
         if self.produtos.por_id(produto_id) is None:
             raise ErroNegocio("Produto não encontrado.")
         with self._auditar_com_operador():
+            atual = self.produtos.por_id(produto_id)
+            from src.core.custo_lucro import custo_vigente
+            anterior = custo_vigente(atual.get("custo_medio_cent"), atual.get("ult_preco_cent"))
             self.banco.executar("UPDATE produtos SET ult_preco_cent = ? WHERE id = ?", (custo_cent, produto_id))
+            self._gravar_custo(produto_id, anterior, custo_cent, atual["qt_atual"], "cadastro")
 
     # ------------------------------------------------------------ pedido
     def confirmar_pedido(self, lanc_id: int, valores: dict | None = None) -> None:

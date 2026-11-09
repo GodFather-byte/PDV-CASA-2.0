@@ -1,5 +1,6 @@
 """Importação Qt de produtos; leitura, validação e gravação pertencem ao controlador."""
 from pathlib import Path
+import re
 import sqlite3
 
 from PySide6.QtCore import Qt
@@ -316,12 +317,22 @@ class JanelaImportarNFe(QDialog):
     def __init__(self, tela_importacao, previa: PreviaNFe):
         super().__init__(tela_importacao)
         self.tela_importacao, self.previa = tela_importacao, previa
+        self.ctx = tela_importacao.ctx
+        self.imp_nfe = getattr(tela_importacao, "imp_nfe", None) or ImportacaoNFe(
+            self.ctx.banco, self.ctx.operador_id)
         self.setWindowTitle(f"Conferir NF-e {previa.numero}")
         self.resize(1000, 620)
         layout = QVBoxLayout(self)
         layout.addWidget(texto(
-            f"NF-e {previa.numero} • {previa.emitente}. O custo e o estoque serão atualizados; "
-            "o preço de venda nunca é alterado.", "titulo"))
+            f"NF-e {previa.numero}{(' série ' + previa.serie) if previa.serie else ''} • {previa.emitente}. "
+            "Confira o vínculo, o fator (fardo de 12 vira 12 unidades) e o custo novo. "
+            "O preço de venda de um produto que já existe não muda.", "titulo"))
+        layout.addWidget(texto(
+            "A chave de 44 dígitos só confere o cabeçalho deste arquivo. "
+            "Baixar a nota na SEFAZ fica para depois: exige certificado digital.", "aviso"))
+        self.chave = QLineEdit()
+        self.chave.setPlaceholderText("Opcional: chave de 44 dígitos para conferir")
+        layout.addWidget(self.chave)
         categoria = QHBoxLayout()
         categoria.addWidget(texto("Categoria para produtos novos:", "suave"))
         self.grupo = QComboBox()
@@ -329,9 +340,10 @@ class JanelaImportarNFe(QDialog):
         categoria.addWidget(self.grupo)
         categoria.addStretch()
         layout.addLayout(categoria)
-        self.grade = QTableWidget(len(previa.itens), 6)
+        self.grade = QTableWidget(len(previa.itens), 9)
         self.grade.setHorizontalHeaderLabels((
-            "Produto da nota", "EAN/GTIN", "Quantidade", "Custo unitário", "Associar produto", "Preço manual (R$)"))
+            "Produto da nota", "EAN/GTIN", "Quantidade", "Custo novo", "Custo atual",
+            "Sugerido (30%)", "Fator", "Associar produto", "Preço manual (R$)"))
         self.grade.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.grade.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.grade.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
@@ -351,12 +363,18 @@ class JanelaImportarNFe(QDialog):
         layout.addLayout(botoes)
         self.associacoes = []
         self.precos_venda = []
+        self.fatores = []
         for linha, item in enumerate(previa.itens):
             for coluna, valor in enumerate((
                     item.nome, item.codigo_barras or "—", fmt.fmt_qtd(item.quantidade),
-                    fmt.fmt_num(item.custo_unit_cent))):
+                    fmt.fmt_num(item.custo_unit_cent), fmt.fmt_num(item.custo_atual_cent),
+                    fmt.fmt_num(item.preco_sugerido_cent))):
                 celula = QTableWidgetItem(str(valor))
                 self.grade.setItem(linha, coluna, celula)
+            fator = QLineEdit()
+            fator.setText(str(item.fator).replace(".", ","))
+            self.grade.setCellWidget(linha, 6, fator)
+            self.fatores.append(fator)
             produtos = {p["id"]: p for p in item.sugestoes}
             if item.produto_id:
                 p = self.tela_importacao.ctx.banco.um(
@@ -371,11 +389,13 @@ class JanelaImportarNFe(QDialog):
                 indice = associar.findData(item.produto_id)
                 if indice >= 0:
                     associar.setCurrentIndex(indice)
-            self.grade.setCellWidget(linha, 4, associar)
+            self.grade.setCellWidget(linha, 7, associar)
             self.associacoes.append(associar)
             preco = QLineEdit()
             preco.setPlaceholderText("Opcional")
-            self.grade.setCellWidget(linha, 5, preco)
+            if item.produto_id is None and item.preco_sugerido_cent:
+                preco.setText(fmt.fmt_num(item.preco_sugerido_cent))
+            self.grade.setCellWidget(linha, 8, preco)
             self.precos_venda.append(preco)
 
     def confirmar(self):
@@ -391,6 +411,21 @@ class JanelaImportarNFe(QDialog):
             QMessageBox.StandardButton.No)
         if resposta != QMessageBox.StandardButton.Yes:
             return False
+        digitos = re.sub(r"\D", "", self.chave.text())
+        if digitos and (len(digitos) != 44 or digitos != re.sub(r"\D", "", self.previa.chave)):
+            QMessageBox.warning(self, "Chave", "A chave precisa ter 44 dígitos e ser a desta NF-e. A SEFAZ não é consultada.")
+            return False
+        from decimal import Decimal, InvalidOperation
+        for item, campo in zip(self.previa.itens, self.fatores):
+            texto_fator = campo.text().strip().replace(",", ".") or "1"
+            try:
+                fator = Decimal(texto_fator)
+                if fator <= 0 or fator > 10000:
+                    raise InvalidOperation
+                item.fator = float(fator)
+            except (InvalidOperation, ValueError):
+                QMessageBox.warning(self, "Fator", f"Fator inválido para '{item.nome}'. Ex.: 12 para um fardo.")
+                return False
         escolhas = {item.numero: combo.currentData() for item, combo in zip(self.previa.itens, self.associacoes)}
         precos = {}
         for item, associacao, campo in zip(self.previa.itens, self.associacoes, self.precos_venda):
@@ -405,7 +440,7 @@ class JanelaImportarNFe(QDialog):
                     QMessageBox.warning(self, "Preço inválido", f"Informe um preço válido para '{item.nome}'.")
                     return False
         try:
-            resultado = self.tela_importacao.imp_nfe.importar(
+            resultado = self.imp_nfe.importar(
                 self.previa, self.grupo.currentText(), escolhas, precos)
         except (ErroNegocio, OSError, ValueError, sqlite3.Error) as erro:
             QMessageBox.warning(self, "Importação não concluída", str(erro))
@@ -417,7 +452,7 @@ class JanelaImportarNFe(QDialog):
                               for p in resultado["alertas_margem"])
             mensagem += "\nMargem mínima comprometida: " + nomes
         QMessageBox.information(self, "Importação NF-e concluída", mensagem)
-        if self.tela_importacao.ao_importar:
+        if getattr(self.tela_importacao, "ao_importar", None):
             self.tela_importacao.ao_importar()
         self.accept()
         return True

@@ -28,9 +28,10 @@ from src.controllers.estoque_controller import EstoqueController
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroValidacao
 
-COLUNAS = ["codigo", "nome", "preco", "comissao", "grupo", "unidade", "quantidade", "estoque_minimo", "codigo_barras", "atalho",
+COLUNAS = ["codigo", "nome", "preco", "custo", "comissao", "grupo", "unidade", "quantidade", "estoque_minimo", "codigo_barras", "atalho",
            "controla_estoque", "preco_gelada", "atacado_qtd", "preco_atacado"]
-TITULOS = {"codigo": "Código", "nome": "Produto", "preco": "Preço", "comissao": "Comissão (R$)", "grupo": "Grupo", "unidade": "Unidade",
+TITULOS = {"codigo": "Código", "nome": "Produto", "preco": "Preço de venda", "custo": "Preço de custo",
+           "comissao": "Comissão (R$)", "grupo": "Grupo", "unidade": "Unidade",
            "quantidade": "Quantidade", "estoque_minimo": "Estoque mínimo", "codigo_barras": "Código de barras", "atalho": "Atalho",
            "controla_estoque": "Controla estoque", "preco_gelada": "Preço gelada", "atacado_qtd": "Atacado a partir de",
            "preco_atacado": "Preço atacado"}
@@ -40,6 +41,7 @@ ALIAS = {
     "nome": {"nome", "produto", "bebida", "descricao", "item", "nome produto", "nome do produto"},
     "preco": {"preco", "valor", "preco venda", "valor venda", "preco de venda", "valor de venda", "preco r", "preco natural",
               "natural"},
+    "custo": {"custo", "preco custo", "preco de custo", "valor custo", "custo unitario", "custo medio"},
     "comissao": {"comissao", "comissao r", "comissao reais", "comissao valor", "comissao garota"},
     "comissao_pct": {"comissao pct", "comissao percentual", "comissao porcentagem"},
     "grupo": {"grupo", "categoria", "subgrupo", "sub grupo", "tipo"},
@@ -162,6 +164,7 @@ class LinhaPrevia:
     codigo: str = ""
     nome: str = ""
     preco_cent: int = 0
+    custo_cent: int | None = None
     comissao_pct: float | None = None
     grupo: str = ""
     unidade: str = ""
@@ -356,6 +359,14 @@ class ImportacaoProdutos:
             raise ValueError("O preço não pode ser negativo.")
         if p.preco_cent == 0:
             p.avisos.append("Preço zero.")
+        bruto_custo = str(l.get("custo") or "").strip()
+        if bruto_custo:
+            try:
+                p.custo_cent = fmt.para_centavos(bruto_custo)
+            except ValueError:
+                raise ValueError(f"Custo inválido: '{bruto_custo}'.") from None
+            if p.custo_cent < 0:
+                raise ValueError("O custo não pode ser negativo.")
         pct = str(l.get("comissao_pct") or "").strip()
         reais = str(l.get("comissao") or "").strip()
         if pct:
@@ -446,6 +457,8 @@ class ImportacaoProdutos:
                     valores["cbarra"] = p.codigo_barras
                 if p.atalho:
                     valores["atalho"] = p.atalho
+                if p.custo_cent is not None:
+                    valores["custo_medio_cent"] = fmt.fmt_num(p.custo_cent)
                 if p.preco_gelada_cent is not None:
                     valores["preco_gelada_cent"] = fmt.fmt_num(p.preco_gelada_cent)
                 if p.atacado_qtd is not None:
@@ -495,20 +508,21 @@ class ImportacaoProdutos:
         """Planilha-modelo (CSV com ';', que o Excel brasileiro abre direto) com dois exemplos."""
         cab = [TITULOS[c] for c in COLUNAS]
         return self._csv([cab,
-                          ["1", "CERVEJA LATA", "4,50", "", "CERVEJA", "UN", "48", "12", "7891234567895", "", "", "5,50", "12", "3,99"],
-                          ["2", "DOSE DE VODKA", "25,00", "10,00", "DESTILADOS", "UN", "", "", "", "", "", "", "", ""]])
+                          ["1", "CERVEJA LATA", "4,50", "", "", "CERVEJA", "UN", "48", "12", "7891234567895", "", "", "5,50", "12", "3,99"],
+                          ["2", "DOSE DE VODKA", "25,00", "", "10,00", "DESTILADOS", "UN", "", "", "", "", "", "", "", ""]])
 
     def exportar(self) -> str:
         """Todos os produtos ativos no mesmo formato da importação: dá para editar preços na planilha e importar de volta."""
         linhas = [[TITULOS[c] for c in COLUNAS]]
         for r in self.banco.todos(
-                """SELECT p.codigo, p.nome, p.preco_cent, p.comissao_pct, g.nome AS grupo, u.abreviatura AS un, p.controla_estoque,
+                """SELECT p.codigo, p.nome, p.preco_cent, p.custo_medio_cent, p.comissao_pct, g.nome AS grupo, u.abreviatura AS un, p.controla_estoque,
                           p.qt_atual, p.estoque_minimo, p.cbarra, p.atalho, p.preco_gelada_cent, p.atacado_qtd, p.preco_atacado_cent
                    FROM produtos p JOIN subgrupos s ON s.id = p.subgrupo_id JOIN grupos g ON g.id = s.grupo_id
                    JOIN unidades u ON u.id = p.unidade_id WHERE p.ativo = 1 ORDER BY CAST(p.codigo AS INTEGER), p.nome"""):
             comissao = fmt.fmt_num(round(r["preco_cent"] * r["comissao_pct"] / 100)) if r["comissao_pct"] else ""
             atacado = r["atacado_qtd"] > 0 and r["preco_atacado_cent"] > 0
             linhas.append([str(int(r["codigo"])) if r["codigo"].isdigit() else r["codigo"], r["nome"], fmt.fmt_num(r["preco_cent"]),
+                           fmt.fmt_num(r["custo_medio_cent"]) if r["custo_medio_cent"] else "",
                            comissao, r["grupo"], r["un"], fmt.fmt_qtd(r["qt_atual"]).rstrip("0").rstrip(",") if r["controla_estoque"] else "",
                            fmt.fmt_qtd(r["estoque_minimo"]).rstrip("0").rstrip(",") if r["estoque_minimo"] else "", r["cbarra"] or "",
                            r["atalho"] or "", "S" if r["controla_estoque"] else "",
@@ -530,6 +544,10 @@ class ItemNFe:
     codigo_barras: str = ""
     produto_id: int | None = None
     sugestoes: list[dict] = field(default_factory=list)
+    ncm: str = ""
+    fator: float = 1.0
+    custo_atual_cent: int = 0
+    preco_sugerido_cent: int = 0
 
 
 @dataclass
@@ -541,6 +559,7 @@ class PreviaNFe:
     data: str
     arquivo: str
     itens: list[ItemNFe]
+    serie: str = ""
 
 
 class ImportacaoNFe:
@@ -566,17 +585,61 @@ class ImportacaoNFe:
         filho = cls._filho(elemento, nome)
         return (filho.text or "").strip() if filho is not None else padrao
 
+    def analisar_pacote(self, caminho: str | Path) -> list[PreviaNFe]:
+        """Um XML ou um ZIP com vários XML. Não baixa nada: o arquivo já está no computador."""
+        caminho = Path(caminho)
+        if caminho.suffix.lower() == ".zip":
+            return self._analisar_zip(caminho)
+        return [self.analisar(caminho)]
+
+    def _analisar_zip(self, caminho: Path) -> list[PreviaNFe]:
+        if caminho.stat().st_size > 20 * 1024 * 1024:
+            raise ErroNegocio("O ZIP da NF-e passa de 20 MiB.")
+        try:
+            pacote = zipfile.ZipFile(caminho)
+        except (OSError, zipfile.BadZipFile) as erro:
+            raise ErroNegocio("O arquivo ZIP não pôde ser aberto.") from erro
+        nomes = [n for n in pacote.namelist() if n.lower().endswith(".xml") and not n.endswith("/")]
+        if not nomes:
+            raise ErroNegocio("O ZIP não tem arquivo XML de NF-e.")
+        if len(nomes) > 30:
+            raise ErroNegocio("O ZIP tem XML demais. O limite é 30 notas.")
+        previas = []
+        total = 0
+        for nome in nomes:
+            info = pacote.getinfo(nome)
+            if info.flag_bits & 0x1:
+                raise ErroNegocio("O ZIP não pode estar criptografado.")
+            if info.file_size > self.LIMITE_XML_BYTES:
+                raise ErroNegocio("Um XML do ZIP passa de 10 MiB.")
+            total += info.file_size
+            if total > 30 * 1024 * 1024:
+                raise ErroNegocio("O ZIP descompactado passa do limite.")
+            previas.append(self.analisar_bytes(pacote.read(nome), Path(nome).name))
+        return previas
+
     def analisar(self, caminho: str | Path) -> PreviaNFe:
         caminho = Path(caminho)
         try:
             if caminho.stat().st_size > self.LIMITE_XML_BYTES:
                 raise ErroNegocio("O XML da NF-e passa de 10 MiB.")
             dados = caminho.read_bytes()
+        except OSError as erro:
+            raise ErroNegocio(f"Não consegui ler o XML da NF-e: {erro}") from erro
+        return self.analisar_bytes(dados, caminho.name)
+
+    def analisar_bytes(self, dados: bytes, nome: str) -> PreviaNFe:
+        try:
+            if len(dados) > self.LIMITE_XML_BYTES:
+                raise ErroNegocio("O XML da NF-e passa de 10 MiB.")
             maiusculo = dados.upper().replace(b"\x00", b"")
-            if b"<!DOCTYPE" in maiusculo or b"<!ENTITY" in maiusculo:
+            # O ElementTree do Python não busca entidade externa. DTD e entidade são recusados mesmo assim.
+            if b"<!DOCTYPE" in maiusculo or b"<!ENTITY" in maiusculo or b"<!ELEMENT" in maiusculo:
                 raise ErroNegocio("O XML da NF-e não pode declarar entidades ou DTD.")
             raiz = ET.fromstring(dados)
-        except (OSError, ET.ParseError) as erro:
+        except ErroNegocio:
+            raise
+        except ET.ParseError as erro:
             raise ErroNegocio(f"Não consegui ler o XML da NF-e: {erro}") from erro
         info = next((e for e in raiz.iter() if e.tag.rsplit("}", 1)[-1] == "infNFe"), None)
         if info is None:
@@ -590,7 +653,7 @@ class ImportacaoNFe:
         chave = info.get("Id", "").removeprefix("NFe") or hashlib.sha256(dados).hexdigest()
         data = self._texto(ide, "dhEmi", self._texto(ide, "dEmi"))[:10]
         previa = PreviaNFe(chave, self._texto(ide, "nNF"), emitente, cnpj, data,
-                           caminho.name, [])
+                           nome, [], self._texto(ide, "serie"))
         for numero, det in enumerate(
                 (e for e in info.iter() if e.tag.rsplit("}", 1)[-1] == "det"), start=1):
             prod = self._filho(det, "prod")
@@ -602,7 +665,7 @@ class ImportacaoNFe:
                 unitario = Decimal(self._texto(prod, "vUnCom"))
                 total = (Decimal(self._texto(prod, "vProd")) - Decimal(self._texto(prod, "vDesc", "0"))
                          + Decimal(self._texto(prod, "vFrete", "0")) + Decimal(self._texto(prod, "vSeg", "0"))
-                         + Decimal(self._texto(prod, "vOutro", "0")))
+                         + Decimal(self._texto(prod, "vOutro", "0")) + self._acrescimos_do_item(det))
                 if (quantidade <= 0 or not unitario.is_finite() or not total.is_finite()
                         or unitario < 0 or total < 0):
                     raise ValueError
@@ -612,8 +675,7 @@ class ImportacaoNFe:
                 total_cent = int((total * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
             except (InvalidOperation, OverflowError):
                 raise ErroNegocio(f"Item {numero} da NF-e tem custo fora do limite permitido.") from None
-            unit_cent = fmt.dividir_cent(total_cent, quantidade)
-            codigo = self._texto(prod, "cProd")
+            codigo = self._texto(prod, "cProd")[:60]
             gtin = ""
             for valor_gtin in (self._texto(prod, "cEAN"), self._texto(prod, "cEANTrib")):
                 candidato = re.sub(r"\D", "", valor_gtin) if valor_gtin.upper() != "SEM GTIN" else ""
@@ -621,20 +683,37 @@ class ImportacaoNFe:
                     gtin = candidato
                     break
             achado = None
+            fator = 1.0
             if gtin:
                 achado = self.banco.um("SELECT id FROM produtos WHERE cbarra = ?", (gtin,))
-            codigo_interno = codigo.zfill(13) if codigo.isdigit() and len(codigo) <= 13 else codigo
-            if achado is None and codigo_interno:
-                achado = self.banco.um("SELECT id FROM produtos WHERE codigo = ?", (codigo_interno,))
+            if achado is None and codigo and cnpj:
+                vinculo = self.banco.um(
+                    """SELECT v.produto_id, v.fator FROM nfe_vinculos v
+                       JOIN fornecedores f ON f.id = v.fornecedor_id
+                       WHERE f.cnpj = ? AND v.codigo_fornecedor = ?""", (cnpj, codigo))
+                if vinculo is not None:
+                    achado = {"id": vinculo["produto_id"]}
+                    fator = float(vinculo["fator"] or 1) or 1.0
             sugestoes = []
             if achado is None and nome:
                 sugestoes = [dict(r) for r in self.banco.todos(
                     """SELECT id, codigo, nome FROM produtos
                        WHERE ativo = 1 AND nome LIKE ? COLLATE NOCASE ORDER BY nome LIMIT 10""",
                     (f"%{nome[:30]}%",))]
-            previa.itens.append(ItemNFe(numero, codigo, nome, unidade, quantidade, unit_cent,
-                                        total_cent, gtin, achado["id"] if achado else None,
-                                        sugestoes))
+            from src.core.custo_lucro import custo_vigente, preco_pela_margem
+            qtd_estoque = fmt.para_qtd(str(Decimal(str(quantidade)) * Decimal(str(fator))))
+            unit_cent = fmt.dividir_cent(total_cent, qtd_estoque)
+            custo_atual = 0
+            if achado is not None:
+                atual = self.banco.um(
+                    "SELECT custo_medio_cent, ult_preco_cent FROM produtos WHERE id = ?", (achado["id"],))
+                if atual is not None:
+                    custo_atual = custo_vigente(atual["custo_medio_cent"], atual["ult_preco_cent"])
+            sugerido = preco_pela_margem(unit_cent, 30) if unit_cent > 0 else 0
+            previa.itens.append(ItemNFe(
+                numero, codigo, nome, unidade, quantidade, unit_cent, total_cent, gtin,
+                achado["id"] if achado else None, sugestoes, self._texto(prod, "NCM")[:8],
+                fator, custo_atual, sugerido))
             if numero > self.LIMITE_ITENS:
                 raise ErroNegocio(f"A NF-e passa do limite de {self.LIMITE_ITENS} itens.")
         if not previa.itens:
@@ -690,13 +769,23 @@ class ImportacaoNFe:
                         "preco_cent": fmt.fmt_num(preco_venda), "controla_estoque": "S", "venda": "S",
                         "cbarra": item.codigo_barras or "",
                     })
-                self.estoque.adicionar_item(lancamento, produto_id, item.quantidade, item.custo_total_cent,
+                fator = item.fator if item.fator and item.fator > 0 else 1
+                qtd = fmt.para_qtd(str(Decimal(str(item.quantidade)) * Decimal(str(fator))))
+                self.estoque.adicionar_item(lancamento, produto_id, qtd, item.custo_total_cent,
                                             ligar_controle=True, observacao=f"Importação NF-e {previa.numero}")
+                if item.codigo:
+                    self.banco.executar(
+                        """INSERT INTO nfe_vinculos (fornecedor_id, codigo_fornecedor, produto_id, fator)
+                           VALUES (?, ?, ?, ?)
+                           ON CONFLICT(fornecedor_id, codigo_fornecedor)
+                           DO UPDATE SET produto_id = excluded.produto_id, fator = excluded.fator""",
+                        (fornecedor_id, item.codigo, produto_id, fator))
                 self.banco.inserir("itens_importacao_nfe", {
                     "importacao_id": importacao_id, "produto_id": produto_id,
                     "codigo_xml": item.codigo, "ean": item.codigo_barras,
-                    "nome_xml": item.nome, "quantidade": item.quantidade,
-                    "custo_unit_cent": item.custo_unit_cent, "custo_total_cent": item.custo_total_cent,
+                    "nome_xml": item.nome, "quantidade": qtd,
+                    "custo_unit_cent": fmt.dividir_cent(item.custo_total_cent, qtd),
+                    "custo_total_cent": item.custo_total_cent,
                     "resultado": resultado})
                 resultados.append({"numero": item.numero, "produto_id": produto_id, "resultado": resultado})
                 produto_atual = self.banco.um("SELECT nome, preco_cent, ult_preco_cent FROM produtos WHERE id = ?",
@@ -712,6 +801,19 @@ class ImportacaoNFe:
         return {"criados": sum(r["resultado"] == "criado" for r in resultados),
                 "atualizados": sum(r["resultado"] == "atualizado" for r in resultados),
                 "itens": resultados, "alertas_margem": com_alerta_preco}
+
+    @staticmethod
+    def _acrescimos_do_item(det) -> Decimal:
+        """Frete já entra em vFrete. IPI, ICMS-ST e FCP-ST entram no custo da unidade."""
+        imposto = ImportacaoNFe._filho(det, "imposto")
+        if imposto is None:
+            return Decimal(0)
+        total = Decimal(0)
+        for elemento in imposto.iter():
+            tag = elemento.tag.rsplit("}", 1)[-1]
+            if tag in ("vIPI", "vICMSST", "vFCPST") and (elemento.text or "").strip():
+                total += Decimal(elemento.text.strip())
+        return total
 
     def _margem_minima(self) -> float:
         try:

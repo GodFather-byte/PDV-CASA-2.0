@@ -39,6 +39,9 @@
     periodoDe: "",
     periodoAte: "",
     periodo: null,
+    atalhoLucro: "hoje",
+    lucroDe: "",
+    lucroAte: "",
     vendas: null,
     paginaVendas: 1,
     carregando: false,
@@ -630,6 +633,95 @@
     renderizarPeriodo(r.dados);
   }
 
+  function datasDoLucro(ateIso, atalho) {
+    if (atalho === "semana") {
+      const partes = String(ateIso).split("-").map(Number);
+      const dt = new Date(partes[0], partes[1] - 1, partes[2]);
+      const volta = dt.getDay() === 0 ? 6 : dt.getDay() - 1;
+      return [somarDiasIso(ateIso, -volta), ateIso];
+    }
+    if (atalho === "mes") return [String(ateIso).slice(0, 7) + "-01", ateIso];
+    return [ateIso, ateIso];
+  }
+
+  function sincronizarDatasDoLucro() {
+    if (estado.atalhoLucro) {
+      const base = (estado.resumo && (estado.resumo.dia_operacional || estado.resumo.dia))
+        || agoraLocalIso().slice(0, 10);
+      const faixa = datasDoLucro(base, estado.atalhoLucro);
+      estado.lucroDe = faixa[0];
+      estado.lucroAte = faixa[1];
+    }
+    if ($("lucro-de")) $("lucro-de").value = estado.lucroDe || "";
+    if ($("lucro-ate")) $("lucro-ate").value = estado.lucroAte || "";
+  }
+
+  function dinheiroOuTraco(valor, ok) {
+    if (!ok || valor === null || valor === undefined) return "—";
+    return formatarCentavos(valor);
+  }
+
+  async function carregarLucro() {
+    sincronizarDatasDoLucro();
+    if (!estado.lucroDe || !estado.lucroAte) return;
+    const r = await carregarComCache(
+      "lucro:" + estado.lucroDe + ":" + estado.lucroAte,
+      "/lucro?de=" + encodeURIComponent(estado.lucroDe) + "&ate=" + encodeURIComponent(estado.lucroAte)
+    );
+    if (!r) return;
+    renderizarLucro(r.dados);
+  }
+
+  function renderizarLucro(d) {
+    $("lucro-faturamento").textContent = formatarCentavos(d.faturamento_cent);
+    $("lucro-desconto").textContent = formatarCentavos(d.desconto_cent);
+    $("lucro-custo").textContent = dinheiroOuTraco(d.custo_cent, d.cmv_sincronizado);
+    $("lucro-valor").textContent = dinheiroOuTraco(d.lucro_cent, d.cmv_sincronizado);
+    $("lucro-margem").textContent = d.cmv_sincronizado
+      ? "Margem " + (d.margem || "—")
+      : "O caixa ainda não enviou o custo.";
+    const nota = $("nota-lucro");
+    nota.hidden = !d.parcial;
+    nota.textContent = d.parcial
+      ? "A nuvem guarda cerca de 120 dias. O começo deste intervalo pode estar incompleto." : "";
+    const lista = $("lista-lucro-produtos");
+    limpar(lista);
+    const ranking = Array.isArray(d.ranking) ? d.ranking : [];
+    $("vazio-lucro-produtos").hidden = ranking.length > 0;
+    ranking.forEach((p) => {
+      const valor = d.cmv_sincronizado
+        ? formatarCentavos(p.lucro_cent) + " · " + (p.margem || "")
+        : formatarCentavos(p.venda_cent);
+      lista.append(el("li", null, el("span", { text: p.nome }), el("span", { class: "total", text: valor })));
+    });
+    const alertas = $("lista-lucro-alertas");
+    limpar(alertas);
+    const avisos = Array.isArray(d.alertas) ? d.alertas : [];
+    $("vazio-lucro-alertas").hidden = avisos.length > 0;
+    avisos.forEach((a) => {
+      alertas.append(el("li", { text: a.nome + " · " + a.situacao + " · venda " + formatarCentavos(a.venda_cent)
+        + " · custo " + formatarCentavos(a.custo_cent) }));
+    });
+    $("lucro-estoque-custo").textContent = dinheiroOuTraco(d.estoque_custo_cent, d.estoque_sincronizado);
+    $("lucro-estoque-venda").textContent = dinheiroOuTraco(d.estoque_venda_cent, d.estoque_sincronizado);
+    const notas = $("lista-lucro-notas");
+    limpar(notas);
+    const listaNotas = Array.isArray(d.notas) ? d.notas : [];
+    $("vazio-lucro-notas").hidden = listaNotas.length > 0;
+    listaNotas.forEach((n) => {
+      notas.append(el("li", { text: (n.data ? formatarData(n.data) + " · " : "") + (n.fornecedor || "Fornecedor")
+        + " · NF " + (n.numero || "—") + " · custo " + formatarCentavos(n.custo_cent)
+        + " · previsto " + formatarCentavos(n.previsto_cent) + " · realizado " + formatarCentavos(n.realizado_cent) }));
+    });
+    const formas = $("lista-lucro-formas");
+    limpar(formas);
+    const listaFormas = Array.isArray(d.formas) ? d.formas : [];
+    $("vazio-lucro-formas").hidden = listaFormas.length > 0;
+    listaFormas.forEach((f) => {
+      formas.append(el("li", null, el("span", { text: f.tipo }), el("span", { class: "total", text: formatarCentavos(f.lucro_cent) })));
+    });
+  }
+
   function renderizarPeriodo(d) {
     $("per-faturamento").textContent = formatarCentavos(d.faturamento_cent);
     $("per-quantidade").textContent = formatarInteiro(d.quantidade);
@@ -760,6 +852,7 @@
       const tarefas = [carregarHistorico(), carregarRanking()];
       if (estado.aba === "vendas") tarefas.push(carregarVendas());
       if (estado.aba === "periodo") tarefas.push(carregarPeriodo());
+      if (estado.aba === "lucro") tarefas.push(carregarLucro());
       await Promise.all(tarefas);
       estado.ultimaAtualizacao = Date.now();
     } finally {
@@ -1200,6 +1293,7 @@
       ));
     $("nota-margem").hidden = bar.cmv_sincronizado !== false;
     $("nota-margem").textContent = "O custo do produto ainda não sobe. Atualize o PDV para ver CMV e margem.";
+    $("faturamento-itens").textContent = formatarCentavos(bar.faturamento_itens_cent || 0);
     $("cmv-dia").textContent = bar.cmv_sincronizado ? formatarCentavos(bar.cmv_cent) : "—";
     $("margem-dia").textContent = bar.cmv_sincronizado ? formatarCentavos(bar.margem_cent) : "—";
   }
@@ -1557,6 +1651,7 @@
     window.scrollTo({ top: 0 });
     if (nome === "vendas" && estado.token) carregarVendas();
     if (nome === "periodo" && estado.token) carregarPeriodo();
+    if (nome === "lucro" && estado.token) carregarLucro();
   }
 
   function mudarDia(novoDia) {
@@ -1646,6 +1741,19 @@
       sincronizarDatasDoAtalho();
       if (estado.token) carregarPeriodo();
     }));
+    document.querySelectorAll("[data-lucro]").forEach((b) => b.addEventListener("click", () => {
+      estado.atalhoLucro = b.dataset.lucro;
+      document.querySelectorAll("[data-lucro]").forEach((x) => x.classList.toggle("ativa", x === b));
+      if (estado.token) carregarLucro();
+    }));
+    const botaoLucro = $("botao-lucro");
+    if (botaoLucro) botaoLucro.addEventListener("click", () => {
+      estado.atalhoLucro = null;
+      document.querySelectorAll("[data-lucro]").forEach((x) => x.classList.remove("ativa"));
+      estado.lucroDe = $("lucro-de").value;
+      estado.lucroAte = $("lucro-ate").value;
+      carregarLucro();
+    });
     $("botao-periodo").addEventListener("click", () => {
       estado.atalhoPeriodo = null;
       marcarAtalho(null);
