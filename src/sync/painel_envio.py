@@ -39,6 +39,7 @@ LIMITE_COMANDAS = 80          # comandas abertas no retrato; o resto não cabe n
 LIMITE_COMISSOES = 300        # lançamentos de comissão dos últimos 30 dias
 LIMITE_FECHAMENTOS = 40
 LIMITE_SANGRIAS = 200
+LIMITE_NOTAS_LUCRO = 24          # notas de compra no retrato: só totais, sem os itens
 DIAS_COMISSAO = 30
 DIAS_MOVIMENTO = 31           # fechamentos e sangrias: um mês, com folga para a virada do dia
 MESES_FATURAMENTO = 12
@@ -336,6 +337,41 @@ def _perdas(banco) -> list[dict]:
     return perdas_recentes(banco)
 
 
+def _lucro_agregado(banco) -> dict:
+    """Estoque a custo/venda e as últimas notas de compra. Só totais: o celular não recebe item de nota."""
+    from src.controllers.relatorio_custo import RelatoriosCusto
+    from src.core import custo_lucro
+    from src.core.erros import ErroNegocio
+    custo = venda = 0
+    for r in banco.todos(
+            """SELECT qt_atual, preco_cent, custo_medio_cent, ult_preco_cent FROM produtos
+               WHERE ativo = 1 AND controla_estoque = 1 AND qt_atual > 0"""):
+        unit = custo_lucro.custo_vigente(r["custo_medio_cent"], r["ult_preco_cent"])
+        custo += fmt.mult_cent(unit, r["qt_atual"])
+        venda += fmt.mult_cent(int(r["preco_cent"] or 0), r["qt_atual"])
+    rel = RelatoriosCusto()
+    rel.banco = banco
+    notas = []
+    for r in banco.todos(
+            """SELECT l.id, l.data, l.nota_fiscal, COALESCE(f.nome, '') AS fornecedor
+               FROM lancamentos_estoque l LEFT JOIN fornecedores f ON f.id = l.fornecedor_id
+               WHERE l.tipo = 'compra' ORDER BY l.data DESC, l.id DESC LIMIT ?""", (LIMITE_NOTAS_LUCRO,)):
+        try:
+            s = rel._resumo_nota(r["id"])
+        except ErroNegocio:
+            continue
+        notas.append({
+            "data": str(r["data"] or "")[:10],
+            "numero": str(r["nota_fiscal"] or r["id"])[:20],
+            "fornecedor": str(r["fornecedor"] or "")[:40],
+            "custo_cent": int(s["custo_cent"]),
+            "venda_cent": int(s["venda_prevista_cent"]),
+            "previsto_cent": int(s["lucro_previsto_cent"]),
+            "realizado_cent": int(s["lucro_realizado_cent"]),
+        })
+    return {"estoque_custo_cent": custo, "estoque_venda_cent": venda, "notas": notas}
+
+
 def retrato(banco) -> dict:
     """O momento da loja: caixa, estoque, caderneta, entregas, comandas, comissões e o movimento do caixa.
     Tudo em centavos e quantidades como estão no banco."""
@@ -398,6 +434,7 @@ def retrato(banco) -> dict:
         "perdas": _perdas(banco),
         "whatsapp": _whatsapp(banco),
         "faturamento_meses": _meses_fechados(banco, virada, hoje),
+        "lucro": _lucro_agregado(banco),
     }
 
 

@@ -10,8 +10,12 @@ A nota de compra atualiza o estoque e o custo médio. A tela mostra quanto a not
 quanto ela deve render na venda e o lucro previsto, e também quanto já foi vendido e o
 lucro já obtido.
 
-Os relatórios de lucro ficam no menu Relatórios, com CSV e PDF. O painel do dono mostra
-venda dos itens, custo e margem.
+Os relatórios de lucro ficam no menu Relatórios do PDV, com CSV e PDF. No celular, a aba
+Relatórios do painel mostra faturamento, custo, lucro e margem do período, o ranking,
+os alertas de custo, o valor do estoque e as notas de compra.
+
+Em Notas de compra, o gerente importa o XML da NF-e (ou um ZIP). A tela confere os
+itens antes de lançar. A consulta à SEFAZ não entra nesta versão.
 
 O operador de caixa não vê custo nem lucro. A boate continua sem pedido online.
 Detalhe em `docs/CUSTO_LUCRO.md`.

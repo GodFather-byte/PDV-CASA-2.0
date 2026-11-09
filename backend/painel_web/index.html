@@ -460,6 +460,76 @@
         </section>
       </section>
 
+      <!-- Aba Relatórios (adega): só agregados, sem item cru -->
+      <section id="aba-lucro" class="aba" role="tabpanel" aria-labelledby="tab-lucro" hidden>
+        <h2>Relatórios</h2>
+        <div class="filtros filtros-quebra" role="group" aria-label="Período do lucro">
+          <button type="button" class="filtro ativa" data-lucro="hoje" id="lucro-hoje">Hoje</button>
+          <button type="button" class="filtro" data-lucro="semana" id="lucro-semana">Semana</button>
+          <button type="button" class="filtro" data-lucro="mes" id="lucro-mes">Mês</button>
+        </div>
+        <div class="linha-dia">
+          <label for="lucro-de">De</label>
+          <input id="lucro-de" type="date" aria-label="Início do relatório">
+          <label for="lucro-ate">até</label>
+          <input id="lucro-ate" type="date" aria-label="Fim do relatório">
+          <button type="button" id="botao-lucro" class="botao-secundario">Ver</button>
+        </div>
+        <p id="nota-lucro" class="legenda" hidden></p>
+        <div class="grade-cartoes">
+          <article class="cartao destaque">
+            <span class="rotulo">Faturamento</span>
+            <strong id="lucro-faturamento" class="valor-grande">R$ 0,00</strong>
+          </article>
+          <article class="cartao">
+            <span class="rotulo">Descontos</span>
+            <strong id="lucro-desconto" class="valor-grande">R$ 0,00</strong>
+          </article>
+          <article class="cartao">
+            <span class="rotulo">Custo</span>
+            <strong id="lucro-custo" class="valor-grande">R$ 0,00</strong>
+          </article>
+          <article class="cartao">
+            <span class="rotulo">Lucro</span>
+            <strong id="lucro-valor" class="valor-grande">R$ 0,00</strong>
+            <span id="lucro-margem" class="detalhe"></span>
+          </article>
+        </div>
+        <section class="bloco">
+          <h2>Produtos por lucro</h2>
+          <ol id="lista-lucro-produtos" class="lista"></ol>
+          <p id="vazio-lucro-produtos" class="vazio" hidden>Nenhuma venda neste período.</p>
+        </section>
+        <section class="bloco">
+          <h2>Sem custo ou abaixo do custo</h2>
+          <ul id="lista-lucro-alertas" class="lista"></ul>
+          <p id="vazio-lucro-alertas" class="vazio" hidden>Nenhum alerta neste período.</p>
+        </section>
+        <section class="bloco">
+          <h2>Estoque</h2>
+          <div class="grade-cartoes">
+            <article class="cartao">
+              <span class="rotulo">A custo</span>
+              <strong id="lucro-estoque-custo" class="valor-grande">—</strong>
+            </article>
+            <article class="cartao">
+              <span class="rotulo">A preço de venda</span>
+              <strong id="lucro-estoque-venda" class="valor-grande">—</strong>
+            </article>
+          </div>
+        </section>
+        <section class="bloco">
+          <h2>Notas de compra</h2>
+          <ul id="lista-lucro-notas" class="lista"></ul>
+          <p id="vazio-lucro-notas" class="vazio" hidden>Nenhuma nota de compra enviada.</p>
+        </section>
+        <section class="bloco">
+          <h2>Por forma de pagamento</h2>
+          <ul id="lista-lucro-formas" class="lista"></ul>
+          <p id="vazio-lucro-formas" class="vazio" hidden>Sem pagamento neste período.</p>
+        </section>
+      </section>
+
     </main>
 
     <nav class="navegacao" role="tablist" aria-label="Seções do painel">
@@ -481,6 +551,9 @@
       </button>
       <button type="button" role="tab" id="tab-vendas" class="aba-botao" data-aba="vendas" aria-selected="false" aria-controls="aba-vendas">
         <span class="icone" aria-hidden="true">&#x1F9FE;</span>Vendas
+      </button>
+      <button type="button" role="tab" id="tab-lucro" class="aba-botao" data-aba="lucro" aria-selected="false" aria-controls="aba-lucro">
+        <span class="icone" aria-hidden="true">&#x1F4B0;</span>Relatórios
       </button>
     </nav>
   </div>

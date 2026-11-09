@@ -11,6 +11,10 @@ quando o caixa novo envia; o custo unitário antigo continua valendo.
 
 Critério da nota: previsto = quantidade × preço de venda de hoje. Realizado = vendas
 na ordem, cada nota absorve o que ainda cabia nela, com o custo da própria nota.
+
+O painel do dono tem a aba Relatórios (`GET /v1/painel/lucro`). Estoque e notas de
+compra sobem no retrato, só com totais. A NF-e entra por XML/ZIP em Notas de compra
+(`nfe_vinculos`, esquema 46). Sem download na SEFAZ.
 Guia: `docs/CUSTO_LUCRO.md`.
 
 ## Pendências

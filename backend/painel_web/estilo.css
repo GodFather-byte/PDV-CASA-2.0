@@ -569,11 +569,12 @@ li.zerado .nome strong { color: var(--vermelho); }
   background: var(--superficie);
   border-top: 1px solid var(--borda);
   display: flex;
+  overflow-x: auto;
   z-index: 10;
 }
 
 .aba-botao {
-  flex: 1;
+  flex: 1 0 3.4rem;
   border: 0;
   background: none;
   color: var(--texto-suave);

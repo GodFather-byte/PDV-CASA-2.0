@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QComboBox, QDialog, QFormLayout,
+    QAbstractItemView, QComboBox, QDialog, QFileDialog, QFormLayout,
     QHBoxLayout, QHeaderView, QInputDialog, QLineEdit, QMessageBox,
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
@@ -39,6 +39,10 @@ class JanelaLancamentosEstoque(QDialog):
         self.btn_novo = QPushButton("Novo lançamento")
         self.btn_novo.clicked.connect(self.novo)
         barra.addWidget(self.btn_novo)
+        self.btn_nfe = QPushButton("Importar XML da NF-e")
+        self.btn_nfe.clicked.connect(self.importar_nfe)
+        self.btn_nfe.setVisible(self.ctx.pode("rel_custo"))
+        barra.addWidget(self.btn_nfe)
         self.btn_atualizar = QPushButton("Atualizar (F5)")
         self.btn_atualizar.clicked.connect(self.atualizar)
         barra.addWidget(self.btn_atualizar)
@@ -223,6 +227,28 @@ class JanelaLancamentosEstoque(QDialog):
         self._limpar_cabecalho()
         self._habilitar_lancamento(False)
         self.mensagem.setText("Preencha os dados e lance o cabeçalho.")
+        return True
+
+    def importar_nfe(self):
+        """Lê o XML (ou ZIP) que o fornecedor mandou. Não consulta a SEFAZ."""
+        try:
+            self._exigir_acesso()
+            if not self.ctx.pode("rel_custo"):
+                raise ErroPermissao("Custo e lucro só aparecem para o gerente.")
+            caminho, _ = QFileDialog.getOpenFileName(
+                self, "Importar XML da NF-e", "", "NF-e (*.xml *.zip)")
+            if not caminho:
+                return False
+            from src.controllers.importacao_produtos import ImportacaoNFe
+            from src.ui_qt.importar_produtos import JanelaImportarNFe
+            previas = ImportacaoNFe(self.ctx.banco, self.ctx.operador_id).analisar_pacote(caminho)
+        except ErroNegocio as erro:
+            return self._erro(erro)
+        for previa in previas:
+            dialogo = JanelaImportarNFe(self, previa)
+            if dialogo.exec() != QDialog.DialogCode.Accepted:
+                break
+        self.atualizar()
         return True
 
     def atualizar(self):

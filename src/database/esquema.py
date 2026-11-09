@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 45
+VERSAO_ESQUEMA = 46
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -464,6 +464,14 @@ TABELAS = [
         resultado TEXT NOT NULL CHECK (resultado IN ('criado','atualizado'))
     )""",
     "CREATE INDEX IF NOT EXISTS ix_itens_importacao_nfe_produto ON itens_importacao_nfe(produto_id)",
+    """CREATE TABLE IF NOT EXISTS nfe_vinculos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fornecedor_id INTEGER NOT NULL REFERENCES fornecedores(id),
+        codigo_fornecedor TEXT NOT NULL,
+        produto_id INTEGER NOT NULL REFERENCES produtos(id),
+        fator REAL NOT NULL DEFAULT 1,
+        UNIQUE (fornecedor_id, codigo_fornecedor)
+    )""",
     # ------------------------------------------------------------- caixa / vendas
     """CREATE TABLE IF NOT EXISTS turnos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1061,6 +1069,8 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v46: o vínculo NF-e (código do fornecedor + fator de unidade) nasce em TABELAS.
+    46: [],
     # v45: custo médio do produto. O último preço de compra continua em ult_preco_cent.
     # Bancos antigos passam a usar esse último preço como média inicial.
     45: [

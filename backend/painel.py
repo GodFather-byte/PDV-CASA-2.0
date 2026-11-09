@@ -946,6 +946,105 @@ def _meses_das_vendas(db: Session, chave_loja: str, ultimo: date) -> list[dict]:
     return _grade_meses(ultimo, somas)
 
 
+def _custo_do_item(item: dict) -> tuple[int, bool]:
+    """(custo em centavos, se o caixa mandou custo). Prefere o total da linha, já inteiro."""
+    if "custo_linha_cent" in item and item.get("custo_linha_cent") is not None:
+        return _int(item.get("custo_linha_cent")), True
+    if "custo_unit_cent" in item and item.get("custo_unit_cent") is not None:
+        return int(round(float(item.get("quantidade") or 0) * _int(item.get("custo_unit_cent")))), True
+    return 0, False
+
+
+def montar_lucro(vendas: list[dict], retratos: list[dict] | None = None) -> dict:
+    """Totais de lucro de um período. A resposta não leva item nem pagamento crus: só os agregados."""
+    from src.core import custo_lucro
+    from src.core import formatacao as fmt
+    fechadas = [v for v in vendas if v.get("status") == "fechada"]
+    faturamento = sum(_int(v.get("total_cent")) for v in fechadas)
+    desconto = sum(_int(v.get("desconto_cent")) for v in fechadas)
+    venda_itens = custo = 0
+    tem_custo = False
+    produtos: dict[str, dict] = {}
+    alertas = []
+    formas: dict[str, int] = defaultdict(int)
+    for v in fechadas:
+        venda_cupom = custo_cupom = 0
+        for i in v.get("itens") or []:
+            if not isinstance(i, dict) or _int(i.get("cancelado")):
+                continue
+            valor = _int(i.get("total_cent"))
+            custo_item, tem = _custo_do_item(i)
+            tem_custo = tem_custo or tem
+            venda_itens += valor
+            custo += custo_item
+            venda_cupom += valor
+            custo_cupom += custo_item
+            nome = str(i.get("nome") or "Sem nome")[:60]
+            bloco = produtos.setdefault(nome, {"nome": nome, "venda_cent": 0, "custo_cent": 0})
+            bloco["venda_cent"] += valor
+            bloco["custo_cent"] += custo_item
+            if not tem:
+                situacao = "sem custo"
+            elif valor < custo_item:
+                situacao = "abaixo do custo"
+            else:
+                situacao = ""
+            if situacao and len(alertas) < 30:
+                alertas.append({"nome": nome, "venda_cent": valor, "custo_cent": custo_item, "situacao": situacao})
+        lucro_cupom = custo_lucro.lucro_cent(venda_cupom, custo_cupom) if tem_custo else 0
+        pagamentos = [p for p in (v.get("pagamentos") or []) if isinstance(p, dict)]
+        pago = sum(_int(p.get("valor_cent")) - _int(p.get("troco_cent")) for p in pagamentos)
+        base = pago if pago > 0 else 1
+        for p in pagamentos:
+            parte = _int(p.get("valor_cent")) - _int(p.get("troco_cent"))
+            if parte <= 0 or not tem_custo:
+                continue
+            tipo = str(p.get("tipo") or "Sem forma")[:30]
+            formas[tipo] += fmt.arredondar(fmt._dec(lucro_cupom) * fmt._dec(parte) / fmt._dec(base))
+    ranking = []
+    for bloco in produtos.values():
+        bloco["lucro_cent"] = custo_lucro.lucro_cent(bloco["venda_cent"], bloco["custo_cent"]) if tem_custo else None
+        bloco["margem"] = custo_lucro.margem_texto(bloco["venda_cent"], bloco["custo_cent"]) if tem_custo else "—"
+        ranking.append(bloco)
+    ranking.sort(key=lambda b: (-(b["lucro_cent"] or 0), b["nome"]))
+    estoque_custo = estoque_venda = 0
+    notas = []
+    tem_estoque = False
+    for retrato in retratos or []:
+        bloco = retrato.get("lucro") if isinstance(retrato, dict) else None
+        if not isinstance(bloco, dict):
+            continue
+        tem_estoque = True
+        estoque_custo += _int(bloco.get("estoque_custo_cent"))
+        estoque_venda += _int(bloco.get("estoque_venda_cent"))
+        for nota in bloco.get("notas") or []:
+            if isinstance(nota, dict):
+                notas.append({
+                    "data": str(nota.get("data") or "")[:10],
+                    "numero": str(nota.get("numero") or "")[:20],
+                    "fornecedor": str(nota.get("fornecedor") or "")[:40],
+                    "custo_cent": _int(nota.get("custo_cent")),
+                    "venda_cent": _int(nota.get("venda_cent")),
+                    "previsto_cent": _int(nota.get("previsto_cent")),
+                    "realizado_cent": _int(nota.get("realizado_cent")),
+                })
+    notas.sort(key=lambda n: (n["data"], n["numero"]), reverse=True)
+    lucro = custo_lucro.lucro_cent(venda_itens, custo) if tem_custo else None
+    return {
+        "faturamento_cent": faturamento, "desconto_cent": desconto, "venda_itens_cent": venda_itens,
+        "custo_cent": custo if tem_custo else None, "lucro_cent": lucro,
+        "margem": custo_lucro.margem_texto(venda_itens, custo) if tem_custo else "—",
+        "cmv_sincronizado": tem_custo,
+        "ranking": ranking[:20],
+        "alertas": alertas,
+        "formas": [{"tipo": nome, "lucro_cent": valor} for nome, valor in sorted(formas.items(), key=lambda par: -par[1])],
+        "estoque_custo_cent": estoque_custo if tem_estoque else None,
+        "estoque_venda_cent": estoque_venda if tem_estoque else None,
+        "estoque_sincronizado": tem_estoque,
+        "notas": notas[:24],
+    }
+
+
 def ranking_produtos(vendas: list[dict], limite: int = 15) -> list[dict]:
     """Os mais vendidos de um conjunto de vendas fechadas: quantidade e faturamento, o valor decide a ordem."""
     return resumo_do_dia(vendas)["produtos"][:limite]
@@ -1254,6 +1353,35 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         if (fim - inicio).days > 400:
             raise HTTPException(status_code=422, detail="O intervalo pode ter no máximo 400 dias.")
         return relatorio_periodo(db, sessao.chave_loja, inicio, fim)
+
+    @router.get("/v1/painel/lucro")
+    def lucro(de: str = Query(..., max_length=10), ate: str = Query(..., max_length=10),
+              sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
+        """Lucro da adega no celular. Sai agregado: nada de item ou pagamento cru."""
+        inicio, fim = _data_segura(de, None), _data_segura(ate, None)
+        if inicio is None or fim is None or str(de)[:10] != inicio.isoformat() or str(ate)[:10] != fim.isoformat():
+            raise HTTPException(status_code=422, detail="Informe as datas como AAAA-MM-DD.")
+        if fim < inicio:
+            raise HTTPException(status_code=422, detail="A data final é anterior à inicial.")
+        if (fim - inicio).days > 400:
+            raise HTTPException(status_code=422, detail="O intervalo pode ter no máximo 400 dias.")
+        vendas = []
+        for _dia, status, total, dados in _linhas_do_periodo(
+                db, sessao.chave_loja, inicio.isoformat(), fim.isoformat()):
+            try:
+                v = json.loads(dados) if isinstance(dados, str) else {}
+            except (TypeError, ValueError):
+                v = {}
+            if not isinstance(v, dict):
+                v = {}
+            v["status"] = status
+            v["total_cent"] = total
+            vendas.append(v)
+        retratos = [dados for _, dados in _ler_caixas(db, sessao.chave_loja)]
+        corpo = montar_lucro(vendas, retratos)
+        corpo.update({"de": inicio.isoformat(), "ate": fim.isoformat(),
+                      "parcial": inicio.isoformat() < _corte_das_vendas()})
+        return corpo
 
     @router.get("/v1/painel/produtos")
     def produtos(periodo: str = Query("hoje"), sessao: PainelSessao = Depends(sessao_ativa),

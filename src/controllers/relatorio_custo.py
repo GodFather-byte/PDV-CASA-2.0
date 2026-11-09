@@ -309,6 +309,9 @@ class RelatoriosCusto:
     def resumo_nota(self, lanc_id: int) -> dict:
         """Previsto pela nota inteira e realizado pelo que as vendas já cobriram dela."""
         self._exigir()
+        return self._resumo_nota(lanc_id)
+
+    def _resumo_nota(self, lanc_id: int) -> dict:
         from src.controllers.estoque_controller import EstoqueController
         est = EstoqueController(self.banco)
         lanc = est.lancamento(lanc_id)
