@@ -111,3 +111,19 @@ class TestePedidoMesaNaNuvem(BasePedido):
         resultado = self.ctrl.importar(novos[0])
         self.assertEqual(self.caixa.obter(resultado["venda_id"])["modalidade"], "mesa")
         self.assertTrue(self.ctrl.importar(novos[0])["ja_existia"])
+
+    def test_confirmacao_e_cancelamento_retomam_fila_da_mesa(self):
+        corpo = {"loja": "ADEGA-1", "mesa": 1, "nome": "Ana", "telefone": "11999990000",
+                 "itens": [{"codigo": self.cod_skol, "qtd": 1}]}
+        pedido = self.http.post("/v1/cardapio/pedido", json=corpo)
+        self.assertEqual(pedido.status_code, 200, pedido.text)
+        novos = self.http.get("/v1/pedidos-online", headers=cabecalho()).json()["pedidos"]
+        resultado = self.ctrl.importar(novos[0])
+        from src.sync import pedidos_online
+        pedidos_online.empurrar_avisos(self.banco, _Http(self.http))
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM pedidos_mesa_importados WHERE aviso_ok = 0"), 0)
+        self.caixa.cancelar_venda(resultado["venda_id"], "Desistiu")
+        pedidos_online.empurrar_avisos(self.banco, _Http(self.http))
+        estado = self.http.get("/v1/cardapio/pedido?loja=ADEGA-1&numero=1&telefone=11999990000")
+        self.assertEqual(estado.json()["situacao"], "cancelado")
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM pedidos_mesa_importados WHERE aviso_ok = 0"), 0)

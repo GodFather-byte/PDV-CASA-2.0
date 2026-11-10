@@ -555,7 +555,7 @@ class JanelaPrincipal(QMainWindow):
             achado = getattr(servico, "erro_porteiro", None)
             if achado:
                 erro = achado
-        texto = descrever_porteiro(self.ctx.banco, erro)
+        texto = "" if "porteiro" in self.edicao.menu_oculto else descrever_porteiro(self.ctx.banco, erro)
         self.linha_porteiro.setVisible(bool(texto))
         self.linha_porteiro.setText(texto)
 

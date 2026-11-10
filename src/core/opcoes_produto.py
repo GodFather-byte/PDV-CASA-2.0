@@ -2,6 +2,13 @@
 from uuid import UUID
 
 
+def identificador(valor):
+    try:
+        return str(UUID(str(valor)))
+    except (ValueError, TypeError, AttributeError):
+        raise ValueError("Identificador do grupo ou opção inválido.") from None
+
+
 def catalogo(grupos):
     if not isinstance(grupos, list) or len(grupos) > 12:
         raise ValueError("Cadastre até 12 grupos de opções.")
@@ -9,7 +16,7 @@ def catalogo(grupos):
     for g in grupos:
         if not isinstance(g, dict):
             raise ValueError("Grupo inválido.")
-        uid = str(UUID(str(g["id"])))
+        uid = identificador(g.get("id"))
         nome = str(g.get("nome") or "").strip()
         minimo, maximo = g.get("minimo", 0), g.get("maximo", 1)
         if uid in usados or not nome or len(nome) > 60:
@@ -24,7 +31,7 @@ def catalogo(grupos):
         for o in opcoes:
             if not isinstance(o, dict):
                 raise ValueError("Opção inválida.")
-            oid = str(UUID(str(o["id"])))
+            oid = identificador(o.get("id"))
             texto, preco = str(o.get("nome") or "").strip(), o.get("preco_cent")
             if oid in usados or not texto or len(texto) > 60:
                 raise ValueError("Opção repetida ou nome inválido.")

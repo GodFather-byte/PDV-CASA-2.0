@@ -28,6 +28,8 @@ Etapas 1/2 passaram no build/autoteste Windows e testes Python 3.10/3.12.
 Etapa 3 passou em 209 testes Python 3.10/3.12; acompanhar os builds e a matriz completa do PR.
 A regressão completa identificou incompatibilidade ao ampliar o JSON v1 de preços; a correção
 mantém esse contrato sem campos extras, usando opcoes_json/adicionais_cent nas colunas próprias.
+Cozinha web já passou no foco Python 3.10/3.12 e instalação no Windows.
+Foi escondida também a linha de status do porteiro no restaurante; a edição mantém cozinha visível.
 Cozinha web acrescenta testes de sessão, TV, CSRF, revogação, PIN, cancelamento e transição concorrente.
 Homologação real em tablet/TV, impressora, dois Windows e escala 125% continua pendente.
 

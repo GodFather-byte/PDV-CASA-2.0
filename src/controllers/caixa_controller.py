@@ -321,6 +321,8 @@ class CaixaController(DivisaoContaMixin):
             garota_quarto = v["garota_quarto"]           # show lançado depois do número dela: já é dela
             quarto_pedido = quarto_pedido if quarto_pedido is not None else v.get("quarto_pedido")
         if garota_quarto is not None or quarto_pedido is not None:
+            if escolhas:
+                raise ErroNegocio("Lançamento de quarto não admite adicionais comerciais.")
             self._validar_quarto_lancado(p, quantidade, garota_quarto, quarto_pedido)
         self._conferir_limite_comanda(v)
 

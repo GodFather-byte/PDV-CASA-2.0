@@ -56,3 +56,14 @@ class TesteTelasRestaurante(BaseQt):
         self.assertNotEqual(self.banco.cfg("cozinha_web_pin_hash"), "123456")
         self.assertIn("/cozinha/", dialogo.endereco.text())
         self.assertEqual(dialogo.pin.text(), "")
+
+    def test_menu_restaurante_nao_mostra_porteiro(self):
+        from src.ui_qt.app import JanelaPrincipal
+        app = self.app()
+        app.ctx.operador = self.ctx.operador
+        janela = self.janela(JanelaPrincipal(app))
+        janela.show()
+        janela.atualizar()
+        self.assertTrue(janela.linha_porteiro.isHidden())
+        self.assertTrue(janela.botoes["porteiro"].isHidden())
+        self.assertFalse(janela.botoes["cozinha"].isHidden())
