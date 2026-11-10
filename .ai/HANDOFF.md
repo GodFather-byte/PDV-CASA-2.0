@@ -24,8 +24,18 @@ foram mexidos aqui. As rotas e os ids que o `app.js` procura continuam os mesmos
   e duas colunas no computador, meta do mês com projeção e botão de ocultar valores (os dois
   guardados no aparelho). `sw.js` foi para `painel-v9`.
 
+- **Papel econômico:** `src/core/fita.py` (`compactar`) tira molduras de três linhas, linhas em
+  branco e separadores repetidos na hora do envio (`ImpressaoController.enviar`); os textos
+  montados por `cupom()` e `fechamento()` não mudaram. Na térmica, `ESC 3 26` aproxima as linhas
+  e `ESC 2` volta ao padrão antes do corte. Chaves `papel_economico` e `papel_linhas_juntas`
+  (as duas nascem ligadas; Configurações > Parâmetros > Impressão). Cupom de exemplo: 28 para 23
+  linhas; fechamento: 96 para 79, fora os cerca de 13% do espaço entre linhas.
+- **Logo no caixa:** `ui_qt/marca_dagua.py` desenha o logotipo como papel de parede (7% de
+  opacidade, por cima de tudo, sem receber clique) e o topo mostra o logo num selo branco maior.
+  Chave `caixa_papel_de_parede` (ligada; Configurações > Parâmetros > Aparência).
+
 Testes novos: `test_primeiros_passos.py`, `test_qt_janelas_cabem.py` e dois casos em
-`test_central_fornecedor.py`.
+`test_central_fornecedor.py`, `test_fita_economica.py` e `test_qt_marca_dagua.py`.
 
 ## Custo e lucro (1.12.0, esquema 45)
 
@@ -37,6 +47,9 @@ Só o nível 4 vê custo e lucro (`rel_custo`). Guia: `docs/CUSTO_LUCRO.md`.
 ## Pendências
 
 - Antigravity: revisar o diff de `backend/central_fornecedor.py`, `central_web/` e `painel_web/`.
+- Imprimir um cupom e um fechamento numa térmica de verdade: o espaço entre linhas (`ESC 3 26`) não
+  foi testado em impressora física. Se alguma marca imprimir linhas encavaladas ou mais espaçadas,
+  desligar "Linhas mais juntas".
 - Conferir em um caixa Windows real com escala de 125% que as janelas abrem inteiras.
 - Meta do mês do painel fica só no aparelho do dono; levar para a nuvem se ele usar mais de um.
 - Ideias não feitas: dono com várias lojas trocar de loja sem sair; aviso push no celular.

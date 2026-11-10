@@ -14,6 +14,7 @@ from src.controllers.conferencia_turno import faixa
 from src.controllers.caixa_controller import CaixaController
 from src.controllers.config_controller import ConfigController
 from src.controllers.relatorio_controller import RelatorioController
+from src.core import fita
 from src.core import formatacao as fmt
 from src.core.posicao import nome as nome_posicao
 from src.core.relatorio import para_texto
@@ -566,14 +567,18 @@ class ImpressaoController:
         Na térmica o documento vai para a FILA e este método volta na hora: a thread da fila imprime, tenta de novo
         se a impressora estiver fora e o caixa não espera. Só levanta ErroImpressao para erro de configuração
         (ex.: nenhuma impressora definida). No modo Windows manda o arquivo para a impressora padrão."""
+        estilo = _ESTILOS.get(tipo or "", {"negrito_linhas": 1})
+        if self.banco.cfg_bool("papel_economico", True):         # mesmo conteúdo, sem molduras nem linhas em branco
+            texto = fita.compactar(texto, self.largura(), estilo.get("grande_prefixos", ()))
         caminho = self._historico(texto, nome)
         modo = self.modo()
         if modo == "termica":
             imp = self.impressora_termica()
             if not imp.configurada:
                 raise ErroImpressao("Nenhuma impressora térmica configurada (Configurações > Máquinas).")
+            espacamento = term.ESPACO_ECONOMICO if self.banco.cfg_bool("papel_linhas_juntas", True) else None
             dados = imp.montar(texto, abrir_gaveta=abrir_gaveta, copias=copias, logotipo=self._logotipo(tipo),
-                               **_ESTILOS.get(tipo or "", {"negrito_linhas": 1}))
+                               espacamento=espacamento, **estilo)
             self.fila.enfileirar("caixa", nome, dados, tipo, venda_id)
         elif modo == "windows" and hasattr(os, "startfile"):
             for _ in range(max(1, copias)):

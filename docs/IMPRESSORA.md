@@ -82,3 +82,18 @@ configurar máquinas, conferida de novo no banco antes de cada teste.
 - O diagnóstico ajuda a achar o problema, mas não certifica nenhum modelo de equipamento.
 - Atalhos: **F5** atualiza, **Esc** fecha, **Enter** no campo do leitor confere o código e **Tab**
   percorre os botões. A janela rola em telas pequenas (mínimo de 560×420).
+
+
+## Economia de papel
+
+Duas opções em **Configurações > Parâmetros e módulos > Impressão**, as duas ligadas de fábrica:
+
+- **Cupom e fechamento compactos:** o documento sai com o mesmo conteúdo, sem molduras de três
+  linhas, sem linhas em branco e sem separadores repetidos. Vale para cupom, pré-conta, fechamento,
+  leitura X e comprovantes. O espaço para assinar no fechamento continua. Em um cupom de exemplo
+  são 23 linhas no lugar de 28; em um fechamento, 79 no lugar de 96.
+- **Linhas mais juntas na impressora térmica:** reduz o espaço entre as linhas (comando ESC/POS
+  `ESC 3`), cerca de 13% a menos de papel. Se a sua impressora imprimir linhas encavaladas ou
+  mais afastadas, desligue só esta opção.
+
+A cópia gravada na pasta `impressao/` é a do papel que saiu.
