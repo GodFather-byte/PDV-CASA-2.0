@@ -61,6 +61,8 @@ def detalhe(pedido: dict) -> str:
     for i in pedido.get("itens") or []:
         temp = " gelada" if i.get("temperatura") == "gelada" else ""
         linhas.append(f"{_texto_qtd(_qtd(i))}x {i.get('nome')}{temp}")
+        for o in i.get("opcoes", []):
+            linhas.append(f"  + {o['nome']} ({fmt.fmt_brl(o['preco_cent'])})")
     linhas.append("")
     if pedido.get("aviso"):
         linhas.append(pedido["aviso"])
@@ -136,7 +138,7 @@ class PedidoOnlineController:
             elif cascos and not p["casco_produto_id"]:
                 faltando.append(f"{item.get('nome')} não trabalha com casco")
             else:
-                linhas.append((p["id"], qtd, temp, cascos))
+                linhas.append((p["id"], qtd, temp, cascos, item.get("opcoes_ids", [])))
         if faltando or not linhas:
             lista = ", ".join(faltando) or "nenhum produto"
             raise ErroNegocio(f"Não aceito: {lista}. Recuse o pedido e avise o cliente.")
@@ -149,8 +151,9 @@ class PedidoOnlineController:
             venda_id = self.entregas.abrir(self._cliente(pedido))
             if pedido.get("retirada"):
                 self.banco.atualizar("vendas", venda_id, {"taxa_cent": 0})
-            for produto_id, qtd, temp, cascos in linhas:
-                self.caixa.adicionar_item(venda_id, produto_id, qtd, temperatura=temp, quantidade_cascos=cascos)
+            for produto_id, qtd, temp, cascos, opcoes_ids in linhas:
+                self.caixa.adicionar_item(venda_id, produto_id, qtd, temperatura=temp, quantidade_cascos=cascos,
+                                          opcoes_ids=opcoes_ids)
             troco = int(pedido.get("troco_para_cent") or 0) if pedido.get("pagamento") == "dinheiro" else 0
             aviso = {"pedido_online_aviso": "aceito", "pedido_online_aviso_ok": 0} if pedido.get("id") else {}
             self.banco.atualizar("vendas", venda_id, {

@@ -52,6 +52,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 
 | Assunto | Arquivo |
 |---|---|
+| Adicionais por produto e retrato por item (v48) | `core/opcoes_produto.py`, `controllers/opcoes_produto_controller.py`, `ui_qt/opcoes_produto.py` |
 | Venda, itens, pagamento, mesas e comandas | `caixa_controller.py` |
 | Divisão por itens e cálculo de totais (auxiliares do CaixaController) | `caixa_divisao.py`, `caixa_totais.py` |
 | Custo congelado e rateio analítico de devoluções | `custos_venda.py`; fila imutável em `src/sync/devolucoes_envio.py` |

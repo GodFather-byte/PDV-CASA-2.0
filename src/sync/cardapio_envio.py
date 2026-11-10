@@ -91,7 +91,7 @@ def coletar(banco) -> dict:
     produtos = []
     orcamento = [FOTOS_EMBUTIDAS_TOTAL]
     for r in banco.todos(
-            """SELECT p.codigo, p.nome, p.preco_cent, p.texto_sugestao,
+            """SELECT p.id AS produto_id, p.codigo, p.nome, p.preco_cent, p.texto_sugestao,
                       p.promo_de, p.promo_ate, p.promo_preco_cent,
                       p.sem_inicial, p.sem_final, p.sem_preco_cent,
                       p.hora_ini, p.hora_fim, p.hora_preco_cent,
@@ -124,6 +124,10 @@ def coletar(banco) -> dict:
             "fracionado": bool(r["aceita_decimal"]),
             "retornavel": bool(r["casco_produto_id"]),
         }
+        from src.controllers.opcoes_produto_controller import OpcoesProdutoController
+        grupos = OpcoesProdutoController(banco).grupos(r["produto_id"])
+        if grupos:
+            item["grupos_opcoes"] = grupos
         codigo = (r["codigo"] or "").strip()
         if codigo.isdigit():
             item["codigo"] = str(int(codigo))              # sem os zeros da frente: é o que o pedido online devolve

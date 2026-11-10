@@ -213,7 +213,7 @@ class ImpressaoController:
         As observações dos itens (ao ponto, sem gelo...) só aparecem aqui, não no cupom do cliente."""
         w = self.largura()
         v = self.caixa.obter(venda_id)
-        sql = """SELECT i.id, i.quantidade, i.observacao, pr.nome, s.nome AS subgrupo FROM itens_venda i
+        sql = """SELECT i.id, i.quantidade, i.observacao, i.opcoes_json, pr.nome, s.nome AS subgrupo FROM itens_venda i
                  JOIN produtos_historico pr ON pr.id = i.produto_id JOIN subgrupos s ON s.id = pr.subgrupo_id
                  WHERE i.venda_id = ? AND i.cancelado = 0 AND s.impressora_remota = 1"""
         params: list = [venda_id]
@@ -228,6 +228,10 @@ class ImpressaoController:
             linhas = [f"PEDIDO - {sub}".center(w), _lr(self._origem(v), fmt.fmt_hora(fmt.agora())[:5], w), "-" * w]
             for r in itens:
                 linhas.append(f"{Q(r['quantidade'], 0) if r['quantidade'] == int(r['quantidade']) else Q(r['quantidade'])} x {r['nome']}"[:w])
+                import json
+                import textwrap
+                for opcao in json.loads(r["opcoes_json"] or "[]"):
+                    linhas.extend(textwrap.wrap(f" + {opcao['nome']} ({fmt.fmt_brl(opcao['preco_cent'])})", w))
                 if r["observacao"]:
                     linhas.append(f"   >> {r['observacao']}"[:w])
             saida[sub] = "\n".join(linhas)

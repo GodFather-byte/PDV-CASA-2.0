@@ -156,6 +156,8 @@ def texto_whatsapp(nome_loja: str, numero: int, d: dict) -> str:
         texto_qtd = str(int(qtd)) if float(qtd) == int(qtd) else str(qtd).replace(".", ",")
         temp = " gelada" if i.get("temperatura") == "gelada" else ""
         linhas.append(f"{texto_qtd}x {i['nome']}{temp} - {reais(int(round(qtd * i['preco_cent'])))}")
+        for o in i.get("opcoes", []):
+            linhas.append(f"  + {o['nome']} ({reais(o['preco_cent'])})")
     linhas.append("")
     if d["retirada"]:
         linhas.append("Retirar na loja")
@@ -233,14 +235,21 @@ def montar_pedido(cfg: dict, catalogo: dict[str, dict], corpo: dict, quando: dat
             preco = int(ProdutoController.regra_preco_gelada(produto, quando)["preco_cent"])
         else:
             preco = preco_para_cardapio(produto, quando)["preco_cent"]
-        chave_item = f"{codigo}|{temperatura}"
+        from src.core.opcoes_produto import selecionar
+        try:
+            escolhas = selecionar(produto.get("grupos_opcoes", []), linha.get("opcoes_ids"))
+        except (ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
+        preco += sum(o["preco_cent"] for o in escolhas)
+        ids = sorted(o["id"] for o in escolhas)
+        chave_item = f"{codigo}|{temperatura}|" + ",".join(ids)
         atual = itens.get(chave_item)
         if atual:
             atual["qtd"] = min(MAX_QTD, round(atual["qtd"] + qtd, 4))
             atual["cascos"] = min(int(atual["qtd"]), atual["cascos"] + cascos)
         else:
             itens[chave_item] = {"codigo": codigo, "nome": produto["nome"], "qtd": qtd, "preco_cent": preco,
-                                 "temperatura": temperatura, "cascos": cascos}
+                                 "temperatura": temperatura, "cascos": cascos, "opcoes_ids": ids, "opcoes": escolhas}
     subtotal = sum(int(round(i["qtd"] * i["preco_cent"])) for i in itens.values())
     if subtotal < cfg.get("minimo_cent", 0):
         raise HTTPException(status_code=422, detail=f"O pedido mínimo é {reais(cfg['minimo_cent'])}.")

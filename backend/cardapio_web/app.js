@@ -45,7 +45,8 @@
   let cardapioDados = null;
 
   function precoDe(p) {
-    return p._temp === "gelada" && p.preco_gelada_cent ? p.preco_gelada_cent : p.preco_cent;
+    const base = p._temp === "gelada" && p.preco_gelada_cent ? p.preco_gelada_cent : p.preco_cent;
+    return base + (p._escolhas || []).reduce((total, o) => total + o.preco_cent, 0);
   }
 
   function tempDe(p) {
@@ -53,7 +54,7 @@
   }
 
   function chaveDe(p) {
-    return p.codigo + "|" + tempDe(p);
+    return p.codigo + "|" + tempDe(p) + "|" + (p._escolhas || []).map(o => o.id).sort().join(",");
   }
 
   function totalCarrinho() {
@@ -66,7 +67,8 @@
     const chave = chaveDe(produto);
     const atual = carrinho.get(chave) || { codigo: produto.codigo, nome: produto.nome,
       preco_cent: precoDe(produto), qtd: 0, temperatura: tempDe(produto),
-      fracionado: !!produto.fracionado, retornavel: !!produto.retornavel, cascos: 0 };
+      fracionado: !!produto.fracionado, retornavel: !!produto.retornavel, cascos: 0,
+      opcoes: produto._escolhas || [], chave };
     const delta = produto.fracionado ? passo * 0.1 : passo;
     atual.qtd = Math.max(0, Math.min(99, Math.round((atual.qtd + delta) * 10000) / 10000));
     if (atual.qtd) carrinho.set(chave, atual); else carrinho.delete(chave);
@@ -82,13 +84,50 @@
     $("barra-texto").textContent = itens + (itens === 1 ? " item" : " itens") + " · " + reais(cent);
   }
 
+  function escolherOpcoes(p, confirmar) {
+    if (!(p.grupos_opcoes || []).length) { confirmar(); return; }
+    const dialogo = el("dialog", { "aria-label": "Opções de " + p.nome });
+    dialogo.append(el("h2", { text: p.nome }));
+    const campos = [];
+    for (const g of p.grupos_opcoes) {
+      const quadro = el("fieldset");
+      quadro.append(el("legend", { text: g.nome + " — de " + g.minimo + " a " + g.maximo }));
+      for (const o of g.opcoes) {
+        const campo = el("input", { type: "checkbox" });
+        campo.checked = (p._escolhas || []).some(e => e.id === o.id);
+        campos.push({ g, o, campo });
+        quadro.append(el("label", null, campo, document.createTextNode(o.nome + " · + " + reais(o.preco_cent))));
+        quadro.append(el("br"));
+      }
+      dialogo.append(quadro);
+    }
+    const erro = el("p", { role: "alert" });
+    const cancelar = el("button", { type: "button", text: "Cancelar" });
+    const aceitar = el("button", { type: "button", text: "Adicionar ao pedido" });
+    const fechar = () => { dialogo.close(); dialogo.remove(); };
+    cancelar.addEventListener("click", fechar);
+    dialogo.addEventListener("cancel", evento => { evento.preventDefault(); fechar(); });
+    aceitar.addEventListener("click", () => {
+      for (const g of p.grupos_opcoes) {
+        const n = campos.filter(c => c.g.id === g.id && c.campo.checked).length;
+        if (n < g.minimo || n > g.maximo) { erro.textContent = g.nome + ": confira a quantidade de escolhas."; return; }
+      }
+      p._escolhas = campos.filter(c => c.campo.checked).map(c => c.o);
+      fechar();
+      confirmar();
+    });
+    dialogo.append(erro, cancelar, aceitar);
+    document.body.append(dialogo);
+    dialogo.showModal();
+  }
+
   function botoesPedido(p) {
     if (!pedidoCfg || !p.codigo) return null;
     const qtd = carrinho.get(chaveDe(p));
     const menos = el("button", { class: "mais", type: "button", "aria-label": "Tirar " + p.nome, text: "−" });
     const mais = el("button", { class: "mais", type: "button", "aria-label": "Adicionar " + p.nome, text: "+" });
     menos.addEventListener("click", () => mudar(p, -1));
-    mais.addEventListener("click", () => mudar(p, 1));
+    mais.addEventListener("click", () => escolherOpcoes(p, () => mudar(p, 1)));
     const pedacos = [menos, el("span", { "data-qtd": chaveDe(p), text: qtd ? String(qtd.qtd) : "" }), mais];
     if (p.preco_gelada_cent) {
       const gel = el("button", { class: "mais", type: "button",
@@ -235,13 +274,17 @@
     for (const i of carrinho.values()) {
       const nome = i.qtd + "x " + i.nome + (i.temperatura === "gelada" ? " (gelada)" : "");
       const linha = el("li", null, el("span", { text: nome }), el("strong", { text: reais(Math.round(i.qtd * i.preco_cent)) }));
+      if ((i.opcoes || []).length) linha.append(el("span", { text: i.opcoes.map(o => o.nome).join(", ") }));
+      const remover = el("button", { type: "button", text: "Remover", "aria-label": "Remover " + i.nome });
+      remover.addEventListener("click", () => { carrinho.delete(i.chave); atualizarBarra(); resumoCarrinho(); });
+      linha.append(remover);
       if (i.fracionado) {
         const campo = el("input", { type: "text", inputmode: "decimal", value: String(i.qtd), maxlength: "8",
           "aria-label": "Quantidade de " + i.nome });
         campo.addEventListener("change", () => {
           const n = parseFloat(String(campo.value).replace(",", "."));
           i.qtd = !n || n <= 0 ? 0 : Math.min(99, Math.round(n * 10000) / 10000);
-          if (!i.qtd) carrinho.delete(i.codigo + "|" + (i.temperatura || "natural"));
+          if (!i.qtd) carrinho.delete(i.chave);
           atualizarBarra();
           resumoCarrinho();
         });
@@ -292,7 +335,7 @@
       pagamento: $("f-pagamento").value, troco_para_cent: centavos($("f-troco").value),
       observacao: $("f-obs").value,
       itens: [...carrinho.values()].map((i) => ({ codigo: i.codigo, qtd: i.qtd,
-        temperatura: i.temperatura || "natural", cascos: i.cascos || 0 })),
+        temperatura: i.temperatura || "natural", cascos: i.cascos || 0, opcoes_ids: (i.opcoes || []).map(o => o.id) })),
     };
     botao.disabled = true;
     $("erro-pedido").textContent = "";

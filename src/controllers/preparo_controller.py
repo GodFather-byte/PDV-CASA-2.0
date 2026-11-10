@@ -30,7 +30,7 @@ class PreparoController:
     def fila(self, setor_id: int | None = None, status: tuple = ("pendente", "em_preparo")) -> list[dict]:
         """Itens não cancelados de subgrupo remoto, mais antigos primeiro. `setor_id` filtra pelo setor do
         subgrupo (subgrupos.setor_impressao_id); sem setor cadastrado no subgrupo, não aparece nesse filtro."""
-        sql = """SELECT i.id, i.quantidade, i.observacao, i.status_preparo, i.criado_em,
+        sql = """SELECT i.id, i.quantidade, i.observacao, i.opcoes_json, i.status_preparo, i.criado_em,
                         pr.nome AS produto, s.nome AS subgrupo, v.modalidade, v.comanda, v.posicao, v.apelido
                  FROM itens_venda i
                  JOIN produtos_historico pr ON pr.id = i.produto_id
@@ -44,6 +44,10 @@ class PreparoController:
             params.append(setor_id)
         linhas = [dict(r) for r in self.banco.todos(sql + " ORDER BY i.criado_em, i.id", params)]
         for r in linhas:
+            import json
+            escolhas = json.loads(r.get("opcoes_json") or "[]")
+            if escolhas:
+                r["observacao"] = " · ".join([o["nome"] for o in escolhas] + ([r["observacao"]] if r["observacao"] else []))
             r["posicao_rotulo"] = _rotulo_posicao(r)
             r["minutos"] = fmt.minutos_entre(r["criado_em"])
         return linhas

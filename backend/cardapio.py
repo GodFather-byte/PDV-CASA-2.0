@@ -108,6 +108,12 @@ def produto_limpo(item: dict) -> dict | None:
         "hora_ini": _hora(item.get("hora_ini")), "hora_fim": _hora(item.get("hora_fim")),
         "hora_preco_cent": max(_int(item.get("hora_preco_cent")), 0),
     }
+    if item.get("grupos_opcoes"):
+        from src.core.opcoes_produto import catalogo
+        try:
+            limpo["grupos_opcoes"] = catalogo(item["grupos_opcoes"])
+        except (ValueError, KeyError, TypeError):
+            raise HTTPException(status_code=422, detail="Cadastro de opções do produto inválido.") from None
     descricao = " ".join(_txt(item.get("descricao"), 240).split())
     if descricao:
         limpo["descricao"] = descricao
@@ -157,6 +163,8 @@ def agrupar(produtos: list[dict], quando: datetime | None = None) -> list[dict]:
             indice[chave] = bloco
         preco = preco_para_cardapio(item, quando)
         publico = {"nome": item["nome"], **preco}
+        if item.get("grupos_opcoes"):
+            publico["grupos_opcoes"] = item["grupos_opcoes"]
         if item.get("descricao"):
             publico["descricao"] = item["descricao"]
         if item.get("foto"):

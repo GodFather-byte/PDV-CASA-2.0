@@ -26,6 +26,21 @@ No Windows, `iniciar_will_restaurante.bat` inicia pelo código-fonte.
 O instalador tem AppId próprio e não instala sobre a Adega ou o WillPDV.
 O workflow Will Restaurante gera um artefato de instalador para revisão, sem publicar na produção.
 
+## Etapa 2 — adicionais comerciais por item
+
+Cadastros > Produtos > Adicionais e opções permite grupos com mínimo/máximo de escolhas e preço por unidade.
+No caixa, grupos obrigatórios precisam ser escolhidos antes de lançar. O preço e o nome ficam congelados
+na linha; mudar o cadastro não altera vendas anteriores. Cancelamento parcial e transferência copiam esse retrato.
+O cardápio publica os grupos; a nuvem ignora preços enviados pelo navegador e calcula pelo catálogo.
+O ticket da cozinha leva as escolhas e o adicional. Opções com preço zero atendem ao ponto da carne.
+
+Os adicionais são opções comerciais, sem cadastro de insumo próprio. A baixa de ingredientes e o CMV
+continuam seguindo a ficha técnica do produto. Não interpretar a escolha de bacon como baixa de um
+insumo adicional sem configurar a composição correspondente. Integração de estoque por opção não faz parte desta etapa.
+
+Esquema 48: produto_opcoes e retrato/preço adicional por item; migração aditiva com padrões vazios.
+Teste: tests.test_opcoes_produto. Não homologado em impressora física.
+
 ## Etapas seguintes do pedido
 
 2. Adicionais/opções por item com preço no caixa, cozinha e cardápio.

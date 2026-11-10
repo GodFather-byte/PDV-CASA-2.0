@@ -11,7 +11,9 @@ a hamburgueria, pizzaria, a_la_carte e rodizio. Garotas, portaria, porteiro e qu
 Mesas/cozinha/delivery ligados; cardápio e pedido habilitados na configuração, sem contato fictício:
 a publicação operacional exige configurar nuvem e WhatsApp real. Pedidos de delivery usam o fluxo existente.
 Licença segue o mecanismo atual por edição. Ícone genérico compartilhado com WillPDV.
-Sem alteração de schema nesta etapa. Guia docs/WILL_RESTAURANTE.md.
+Etapa 2: grupos/opções comerciais por produto, seleção Qt, preços e nomes congelados por item;
+cardápio e nuvem validam IDs/limites e recalculam preços; ticket e fila de preparo mostram escolhas.
+Schema 48 aditivo. Estoque/CMV seguem a ficha técnica do produto, sem baixa extra por opção comercial. Guia docs/WILL_RESTAURANTE.md.
 
 ## Validação
 O ambiente gerenciado não iniciou; alterações feitas pela integração GitHub.
@@ -19,7 +21,6 @@ Workflow Will Restaurante valida perfis/pedidos em Python 3.10/3.12 e empacota n
 Não declarar testes locais nem hardware homologado.
 
 ## Próximas etapas autorizadas
-- Adicionais/opções precificados por item em caixa/ticket/cardápio.
 - Pedido do QR diretamente na mesa, sem desviar do CaixaController.
 - Pix de pedido com confirmação automática; cobrança de licenças independente.
 - Cozinha web local no molde de src/porteiro.

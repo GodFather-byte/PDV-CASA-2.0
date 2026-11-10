@@ -21,6 +21,7 @@ from pathlib import Path
 # se algo ficou para trás. Um teste confere que esta lista acompanha os arquivos de `src/` (módulo novo precisa entrar aqui).
 # `src.app` fica de fora de propósito: no executável ele é o próprio script de entrada (`__main__`), não um módulo importável.
 MODULOS = [
+    "src.core.opcoes_produto", "src.controllers.opcoes_produto_controller", "src.ui_qt.opcoes_produto",
     'src.cardapio.folha',
     'src.cardapio.preco',
     'src.controllers.caixa_divisao',

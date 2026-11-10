@@ -23,7 +23,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: sudo apt-get update -q && sudo apt-get install -y -q libegl1 libopengl0
       - run: pip install --require-hashes -r requirements.txt -r backend/requirements.txt -r requirements-test.txt
-      - run: python -m unittest tests.test_will_restaurante tests.test_edicao tests.test_perfil tests.test_pedido_online tests.test_qt_pedido_online
+      - run: python -m unittest tests.test_opcoes_produto tests.test_will_restaurante tests.test_edicao tests.test_perfil tests.test_pedido_online tests.test_qt_pedido_online
   instalador:
     name: Instalador Will Restaurante / Windows
     runs-on: windows-latest
