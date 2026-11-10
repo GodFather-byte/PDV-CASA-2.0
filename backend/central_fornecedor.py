@@ -61,6 +61,62 @@ def agora():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+# Saúde das lojas: o caixa manda o retrato no lote (15 min por padrão); o dobro disso ainda é "online".
+MINUTOS_ONLINE = 35
+HORAS_PARADA = 24
+
+
+def numero_versao(versao) -> tuple:
+    """'1.12.0' vira (1, 12, 0) para comparar; texto fora do padrão vale zero."""
+    partes = []
+    for parte in str(versao or "").split(".")[:4]:
+        digitos = "".join(c for c in parte if c.isdigit())
+        partes.append(int(digitos) if digitos else 0)
+    return tuple(partes)
+
+
+def saude_das_lojas(db, momento: datetime | None = None) -> dict:
+    """Por loja: último contato dos caixas, versão mais antiga em uso, erros dos últimos 7 dias e chamados em aberto.
+
+    Só o que a central já recebe para suporte. Nada de vendas ou valores da loja.
+    """
+    from backend.erros_caixa import ErroCaixa
+    from backend.painel import PainelCaixa
+    momento = momento or datetime.now()
+    lojas: dict = defaultdict(lambda: {"ultimo_contato": None, "caixas": 0, "versao": None, "edicao_caixa": None,
+                                       "erros_7d": 0, "chamados_abertos": 0})
+    for c in db.query(PainelCaixa):
+        s = lojas[c.chave_loja]
+        s["caixas"] += 1
+        if c.recebido_em and (s["ultimo_contato"] is None or c.recebido_em > s["ultimo_contato"]):
+            s["ultimo_contato"] = c.recebido_em
+        try:
+            foto = json.loads(c.dados)
+        except (ValueError, TypeError):
+            foto = {}
+        versao = foto.get("versao_programa") if isinstance(foto, dict) else None
+        if versao and (s["versao"] is None or numero_versao(versao) < numero_versao(s["versao"])):
+            s["versao"] = str(versao)[:20]
+            s["edicao_caixa"] = str(foto.get("edicao_programa") or "")[:20] or None
+    corte = (momento - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+    for e in db.query(ErroCaixa).filter(ErroCaixa.atualizado_em >= corte, ErroCaixa.nivel != "warning"):
+        lojas[e.chave_loja]["erros_7d"] += 1
+    for c in db.query(ChamadoFornecedor).filter(ChamadoFornecedor.estado != "resolvido"):
+        lojas[c.loja]["chamados_abertos"] += 1
+    mais_nova = max((numero_versao(s["versao"]) for s in lojas.values() if s["versao"]), default=())
+    for s in lojas.values():
+        contato = s["ultimo_contato"]
+        try:
+            minutos = int((momento - datetime.strptime(contato, "%Y-%m-%d %H:%M:%S")).total_seconds() // 60) if contato else None
+        except ValueError:
+            minutos = None
+        s["minutos_sem_contato"] = None if minutos is None else max(0, minutos)
+        s["conexao"] = ("nunca" if minutos is None else "online" if minutos <= MINUTOS_ONLINE
+                        else "parada" if minutos >= HORAS_PARADA * 60 else "recente")
+        s["desatualizada"] = bool(s["versao"]) and numero_versao(s["versao"]) < mais_nova
+    return lojas
+
+
 def digest(valor):
     return hashlib.sha256(valor.encode("utf-8")).hexdigest()
 
@@ -227,7 +283,7 @@ def instalar(app, Loja):
         response.delete_cookie(COOKIE, path="/v1/fornecedor")
         return {"ok": True}
 
-    def resumo_loja(db, loja, plano, ultima_ponte, modo_ponte):
+    def resumo_loja(db, loja, plano, ultima_ponte, modo_ponte, saude=None):
         validade = ultima_ponte.expira_em if modo_ponte and ultima_ponte else None if modo_ponte else loja.licenca_ate
         dias = (date.fromisoformat(validade) - date.today()).days if validade else None
         return {"chave": loja.chave_loja, "nome": loja.nome, "ativa": bool(loja.ativa),
@@ -236,7 +292,10 @@ def instalar(app, Loja):
                 "emissao": "central_local" if modo_ponte and not emissao.habilitada(db, loja.chave_loja) else "nuvem",
                 "edicao": emissao.edicao_da_loja(loja),
                 "mensalidade_cent": plano.valor_cent if plano else None,
-                "plano": cobranca.resumo_assinatura(plano) if plano else None}
+                "plano": cobranca.resumo_assinatura(plano) if plano else None,
+                "saude": saude or {"ultimo_contato": None, "caixas": 0, "versao": None, "edicao_caixa": None,
+                                   "erros_7d": 0, "chamados_abertos": 0, "minutos_sem_contato": None,
+                                   "conexao": "nunca", "desatualizada": False}}
 
     @app.post("/v1/fornecedor/avisos/enviar")
     def enviar_avisos(_=Depends(sessao), db=Depends(get_db)):
@@ -254,13 +313,20 @@ def instalar(app, Loja):
         ultimas = {}
         for p in db.query(ponte.PonteLicenca).order_by(ponte.PonteLicenca.expira_em, ponte.PonteLicenca.seq):
             ultimas[p.chave_loja] = p
-        lojas = [resumo_loja(db, l, planos.get(l.chave_loja), ultimas.get(l.chave_loja), l.chave_loja in modos)
+        saude = saude_das_lojas(db)
+        lojas = [resumo_loja(db, l, planos.get(l.chave_loja), ultimas.get(l.chave_loja), l.chave_loja in modos,
+                             dict(saude[l.chave_loja]) if l.chave_loja in saude else None)
                  for l in db.query(Loja).order_by(Loja.chave_loja)]
         return {"lojas": lojas, "resumo": {"total": len(lojas),
                 "vigentes": sum(l["situacao"] in ("vigente", "a_vencer") for l in lojas),
                 "vencidas": sum(l["situacao"] == "vencida" for l in lojas),
                 "mensalidades_cent": sum(l["mensalidade_cent"] or 0 for l in lojas if l["ativa"]),
-                "central_local": sum(l["emissao"] == "central_local" for l in lojas)},
+                "central_local": sum(l["emissao"] == "central_local" for l in lojas),
+                "online": sum(l["saude"]["conexao"] == "online" for l in lojas if l["ativa"]),
+                "paradas": sum(l["saude"]["conexao"] == "parada" for l in lojas if l["ativa"]),
+                "com_erros": sum(l["saude"]["erros_7d"] > 0 for l in lojas),
+                "desatualizadas": sum(l["saude"]["desatualizada"] for l in lojas),
+                "chamados_abertos": sum(l["saude"]["chamados_abertos"] for l in lojas)},
                 "chave_emissao_pronta": emissao.chave_pronta(),
                 "vencimentos": avisos.vencimentos(db),
                 "avisos_email": bool(avisos.destino()),
