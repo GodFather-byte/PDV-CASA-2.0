@@ -362,7 +362,7 @@ class CaixaController(DivisaoContaMixin):
 
         preco_sem_opcoes = preco
         preco += adicionais
-        retrato.update(preco_unit_cent=preco, adicionais_cent=adicionais, opcoes=escolhas)
+        retrato["preco_unit_cent"] = preco
         total = fmt.mult_cent(preco, quantidade)
         with self.banco.transacao():
             existente = None

@@ -15,6 +15,7 @@ edição Will Adega: boate mostra o cardápio só para consulta. O preço aqui �
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import datetime, timedelta
 from urllib.parse import quote
@@ -229,6 +230,8 @@ def montar_pedido(cfg: dict, catalogo: dict[str, dict], corpo: dict, quando: dat
             qtd = float(linha.get("qtd"))
         except (TypeError, ValueError):
             qtd = 0
+        if isinstance(linha.get("qtd"), bool) or not math.isfinite(qtd):
+            raise HTTPException(status_code=422, detail="Quantidade inválida.")
         if not fracionado:
             if qtd != int(qtd):
                 raise HTTPException(status_code=422, detail=f"{produto['nome']} não aceita quantidade fracionada.")

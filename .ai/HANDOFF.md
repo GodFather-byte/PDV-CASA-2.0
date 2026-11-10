@@ -20,12 +20,14 @@ iFood e NFC-e fora do escopo. Não publicar sem terminar a validação do PR.
   Configuração pelo botão Tablet / TV na cozinha Qt, com cfg_configuracoes e operador util_cozinha.
   Status muda por transição explícita (sem duplo avanço); sem pagamentos e sem comandos offline.
   Empacotamento copia cozinha_web; módulos novos entram em src.autoteste.MODULOS.
-- Schema 49: v48 adiciona opções/retrato; v49 adiciona importação de mesa. Migrações aditivas.
+- Entrega candidata 1.14.0. Schema 49: v48 adiciona opções/retrato; v49 adiciona importação de mesa. Migrações aditivas.
 
 ## Validação e limites
 O ambiente gerenciado falhou ao iniciar. Escrita/testes pelo GitHub e Actions; não declarar teste local.
 Etapas 1/2 passaram no build/autoteste Windows e testes Python 3.10/3.12.
 Etapa 3 passou em 209 testes Python 3.10/3.12; acompanhar os builds e a matriz completa do PR.
+A regressão completa identificou incompatibilidade ao ampliar o JSON v1 de preços; a correção
+mantém esse contrato sem campos extras, usando opcoes_json/adicionais_cent nas colunas próprias.
 Cozinha web acrescenta testes de sessão, TV, CSRF, revogação, PIN, cancelamento e transição concorrente.
 Homologação real em tablet/TV, impressora, dois Windows e escala 125% continua pendente.
 

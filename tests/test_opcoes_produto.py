@@ -57,6 +57,10 @@ class TesteOpcoesProduto(BaseCaixa):
         vid = self.caixa.abrir_balcao()
         item = self.caixa.adicionar_item(vid, self.skol, 2, opcoes_ids=[self.ponto, self.bacon])
         self.assertEqual(self.banco.valor("SELECT preco_unit_cent FROM itens_venda WHERE id = ?", (item,)), 1000)
+        linha = self.caixa.itens(vid)[0]
+        explicacao = self.prod.explicacao_preco_adega(linha, "balcao")
+        self.assertEqual(explicacao["economia_cent"], 200)
+        self.assertIn("adicionais", explicacao["detalhe"])
 
     def test_ticket_da_cozinha_leva_opcoes_e_preco(self):
         self.banco.executar("UPDATE subgrupos SET impressora_remota = 1")
@@ -78,3 +82,32 @@ class TesteOpcoesProduto(BaseCaixa):
         pedido["itens"][0]["opcoes_ids"] = []
         with self.assertRaises(HTTPException):
             montar_pedido({"retirada": True}, {"1": produto}, pedido)
+
+
+class TesteMigracaoRestaurante(BaseCaixa):
+    def test_migrar_47_preserva_itens_e_inicia_retratos_vazios(self):
+        import sqlite3
+        import tempfile
+        from pathlib import Path
+        from contextlib import closing
+        from src.database.conexao import BancoDados
+        vid = self.caixa.abrir_balcao()
+        item = self.caixa.adicionar_item(vid, self.skol, 2)
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = str(Path(pasta) / "anterior.db")
+            self.banco.copiar_para(arquivo)
+            with closing(sqlite3.connect(arquivo)) as con, con:
+                con.execute("DROP TABLE produto_opcoes")
+                con.execute("DROP TABLE pedidos_mesa_importados")
+                con.execute("ALTER TABLE itens_venda DROP COLUMN opcoes_json")
+                con.execute("ALTER TABLE itens_venda DROP COLUMN adicionais_cent")
+                con.execute("PRAGMA user_version = 47")
+            migrado = BancoDados(arquivo)
+            try:
+                self.assertEqual(migrado.valor("PRAGMA user_version"), 49)
+                linha = migrado.um("SELECT total_cent, opcoes_json, adicionais_cent FROM itens_venda WHERE id = ?", (item,))
+                self.assertEqual(tuple(linha), (1600, "[]", 0))
+                self.assertEqual(migrado.todos("PRAGMA foreign_key_check"), [])
+                self.assertTrue(list(Path(pasta).glob("*.antes-migracao-v47-*.bak")))
+            finally:
+                migrado.fechar()
