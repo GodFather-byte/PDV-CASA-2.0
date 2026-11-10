@@ -332,6 +332,8 @@ class UtilitarioController:
     def backup_automatico(self, motivo: str, minimo_min: int = 0) -> str | None:
         """Backup sem o operador pedir (troca de turno, saída, início). NUNCA levanta erro: devolve o caminho ou None, e
         guarda o último problema em `backup_erro` para o painel avisar. `minimo_min` evita repetir um backup recente."""
+        if self.banco.remoto:
+            return ""           # caixa adicional: o banco e o backup são do caixa principal; aqui não é falha
         if minimo_min and (idade := self.idade_backup_horas()) is not None and idade * 60 < minimo_min:
             return None
         try:

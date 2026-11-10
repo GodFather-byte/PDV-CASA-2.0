@@ -31,7 +31,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Pasta | O que tem |
 |---|---|
 | `src/core/` | Dinheiro e datas (`formatacao.py`), licença Ed25519 (`licenca.py`, `ed25519.py`), senhas (`seguranca.py`), erros de negócio (`erros.py`), comanda e mesa (`posicao.py`), log (`registro.py`), base dos relatórios (`relatorio.py`), instância única (`instancia.py`) |
-| `src/database/` | `esquema.py` (tabelas, migrações e histórico de produtos separado do catálogo), `conexao.py`, `protecao.py` (integridade e backup), `sementes.py` (dados iniciais) |
+| `src/database/` | `esquema.py` (tabelas, migrações e histórico de produtos separado do catálogo), `conexao.py`, `protecao.py` (integridade e backup), `sementes.py` (dados iniciais), `rede.py` (vários caixas na mesma loja: principal atende os adicionais pela rede; tela em `ui_qt/rede_caixas.py`; guia `docs/VARIOS_CAIXAS.md`) |
 | `src/controllers/` | Regras de negócio, um arquivo por assunto (lista abaixo) |
 | `src/ui_qt/` | Interface do PDV em PySide6/Qt: login, caixa, cadastros, estoque operacional, relatórios, configurações, máquinas, acessos, Telegram e utilitários; escopo em `docs/INTERFACE_QT.md` |
 | `src/hardware/` | Impressora térmica ESC/POS e gaveta, balança, logotipo no cupom, impressoras do Windows |

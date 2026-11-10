@@ -249,6 +249,8 @@ def ao_iniciar() -> None:
     except Exception:
         return
     try:
+        if banco.remoto:                 # caixa adicional: o pacote baixado está no computador do caixa principal
+            return
         if estado(banco).get("arquivo"):
             rodada(banco, http=None, instalar=disparar_instalacao)
     except Exception:

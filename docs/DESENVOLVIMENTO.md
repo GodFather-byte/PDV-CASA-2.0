@@ -5,7 +5,7 @@ A página para o dono do negócio está no [README](../README.md).
 
 # WillPDV
 
-Entrega **1.12.0**: [custo e lucro](ENTREGA_1_12.md).
+Entrega **1.13.0**: [vários caixas na mesma loja](ENTREGA_1_13.md). Entrega **1.12.0**: [custo e lucro](ENTREGA_1_12.md).
 A anterior, **1.11.0**: [pedido online do Will Adega](ENTREGA_1_11.md).
 A anterior, **1.10.0**: [painel com devoluções, sincronização leve e publicação verificada](ENTREGA_1_10.md).
 Roteiro de validação em equipamentos: [Homologação no balcão](HOMOLOGACAO_BALCAO.md).

@@ -34,6 +34,9 @@ class FilaImpressao:
     def __init__(self, banco, enviador=None):
         self.banco = banco
         self.enviador = enviador or self._enviar_padrao_setor
+        # Com vários caixas na loja a fila é uma só no banco, mas cada caixa imprime (e vê) só o que ele mandou:
+        # o cupom do caixa 2 não pode sair na impressora do caixa 1.
+        self.terminal = banco.cfg_int("terminal", 1)
 
     def _enviar_padrao_setor(self, item: dict, maquina: dict) -> None:
         """Envia os bytes do item pela conexão configurada para o destino dele. Com `setor_id` (módulo
@@ -60,7 +63,8 @@ class FilaImpressao:
             raise ErroNegocio("Nada para imprimir.")
         item_id = self.banco.inserir("fila_impressao", {
             "criado_em": fmt.agora(), "destino": destino, "tipo": tipo, "nome": nome,
-            "dados": bytes(dados), "status": "pendente", "venda_id": venda_id, "setor_id": setor_id})
+            "dados": bytes(dados), "status": "pendente", "venda_id": venda_id, "setor_id": setor_id,
+            "terminal": self.terminal})
         _ACORDAR.set()
         return item_id
 
@@ -71,18 +75,20 @@ class FilaImpressao:
             """SELECT COALESCE(SUM(status = 'pendente'), 0) AS pendentes,
                       COALESCE(SUM(status = 'pendente' AND tentativas > 0), 0) AS falhando,
                       COALESCE(SUM(status = 'erro'), 0) AS erros FROM fila_impressao
-               WHERE status IN ('pendente', 'erro')""")
+               WHERE status IN ('pendente', 'erro') AND terminal = ?""", (self.terminal,))
         ultimo = self.banco.valor(
             "SELECT ultimo_erro FROM fila_impressao WHERE status IN ('pendente','erro') AND ultimo_erro IS NOT NULL "
-            "ORDER BY id DESC LIMIT 1")
+            "AND terminal = ? ORDER BY id DESC LIMIT 1", (self.terminal,))
         return {"pendentes": r["pendentes"], "falhando": r["falhando"], "erros": r["erros"], "ultimo_erro": ultimo}
 
     def texto_indicador(self) -> tuple[str, str]:
         """(texto, nivel) com nivel em 'ok' | 'aviso' | 'erro' para pintar o indicador na tela."""
-        incertos = self.banco.valor("SELECT COUNT(*) FROM fila_impressao WHERE status = 'incerto'", padrao=0)
+        incertos = self.banco.valor(
+            "SELECT COUNT(*) FROM fila_impressao WHERE status = 'incerto' AND terminal = ?", (self.terminal,), 0)
         if incertos:
             return f"Impressora: {incertos} envio(s) interrompido(s); confira o papel", "erro"
-        enviando = self.banco.valor("SELECT COUNT(*) FROM fila_impressao WHERE status = 'enviando'", padrao=0)
+        enviando = self.banco.valor(
+            "SELECT COUNT(*) FROM fila_impressao WHERE status = 'enviando' AND terminal = ?", (self.terminal,), 0)
         if enviando:
             return f"Impressora: {enviando} documento(s) em envio", "aviso"
         c = self.contagem()
@@ -98,7 +104,7 @@ class FilaImpressao:
         return [dict(r) for r in self.banco.todos(
             """SELECT id, criado_em, destino, tipo, nome, status, tentativas, proxima_tentativa, ultimo_erro,
                       enviado_em, venda_id, length(dados) AS bytes
-               FROM fila_impressao ORDER BY id DESC LIMIT ?""", (limite,))]
+               FROM fila_impressao WHERE terminal = ? ORDER BY id DESC LIMIT ?""", (self.terminal, limite))]
 
     # ------------------------------------------------------------ envio
     def processar(self, limite: int = 20) -> dict:
@@ -113,8 +119,8 @@ class FilaImpressao:
                 agora = fmt.agora()
                 item = self.banco.um(
                     "SELECT * FROM fila_impressao WHERE status IN ('pendente','enviando','incerto') "
-                    "AND destino = ? ORDER BY id LIMIT 1",
-                    (destino,))
+                    "AND destino = ? AND terminal = ? ORDER BY id LIMIT 1",
+                    (destino, self.terminal))
                 if (item is None or item["status"] != "pendente"
                         or (item["proxima_tentativa"] and item["proxima_tentativa"] > agora)):
                     break
@@ -142,8 +148,8 @@ class FilaImpressao:
         """Só no início do serviço, com instância única: o papel pode ter saído antes da interrupção."""
         quantidade = self.banco.executar(
             "UPDATE fila_impressao SET status = 'incerto', proxima_tentativa = NULL, "
-            "ultimo_erro = ? WHERE status = 'enviando'",
-            ("Envio interrompido. Confira fisicamente o papel antes de confirmar ou reenviar.",)).rowcount
+            "ultimo_erro = ? WHERE status = 'enviando' AND terminal = ?",
+            ("Envio interrompido. Confira fisicamente o papel antes de confirmar ou reenviar.", self.terminal)).rowcount
         if quantidade:
             self.banco.log("impressao_interrompida", f"{quantidade} documento(s) exigem conferência física.")
         return quantidade
@@ -161,8 +167,9 @@ class FilaImpressao:
         with self.banco.transacao():
             quantidade = self.banco.executar(
                 "UPDATE fila_impressao SET status = ?, enviado_em = ?, ultimo_erro = NULL, "
-                "tentativas = 0, proxima_tentativa = NULL WHERE id = ? AND status = 'incerto'",
-                ("enviado" if impresso else "pendente", fmt.agora() if impresso else None, item_id)).rowcount
+                "tentativas = 0, proxima_tentativa = NULL WHERE id = ? AND status = 'incerto' AND terminal = ?",
+                ("enviado" if impresso else "pendente", fmt.agora() if impresso else None, item_id,
+                 self.terminal)).rowcount
             if not quantidade:
                 raise ErroNegocio("Selecione um envio interrompido que ainda aguarda conferência.")
             self.banco.log("impressao_conferida",
@@ -191,7 +198,8 @@ class FilaImpressao:
         """Tenta agora: serve para item com erro, cancelado ou pendente esperando a próxima tentativa."""
         n = self.banco.executar(
             "UPDATE fila_impressao SET status = 'pendente', tentativas = 0, proxima_tentativa = NULL "
-            "WHERE id = ? AND status IN ('pendente','erro','cancelado')", (item_id,)).rowcount
+            "WHERE id = ? AND status IN ('pendente','erro','cancelado') AND terminal = ?",
+            (item_id, self.terminal)).rowcount
         if not n:
             raise ErroNegocio("Este item não pode ser reenviado. Se interrompido, use a conferência do papel.")
         _ACORDAR.set()
@@ -200,15 +208,15 @@ class FilaImpressao:
         """Devolve à fila tudo que está com erro e antecipa o que está esperando."""
         n = self.banco.executar(
             "UPDATE fila_impressao SET status = 'pendente', tentativas = 0, proxima_tentativa = NULL "
-            "WHERE status IN ('pendente','erro')").rowcount
+            "WHERE status IN ('pendente','erro') AND terminal = ?", (self.terminal,)).rowcount
         if n:
             _ACORDAR.set()
         return n
 
     def cancelar(self, item_id: int) -> None:
         n = self.banco.executar(
-            "UPDATE fila_impressao SET status = 'cancelado' WHERE id = ? AND status IN ('pendente','erro')",
-            (item_id,)).rowcount
+            "UPDATE fila_impressao SET status = 'cancelado' WHERE id = ? AND status IN ('pendente','erro') "
+            "AND terminal = ?", (item_id, self.terminal)).rowcount
         if not n:
             raise ErroNegocio("Só é possível cancelar itens pendentes ou com erro.")
 

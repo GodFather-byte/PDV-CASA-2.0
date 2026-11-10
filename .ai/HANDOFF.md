@@ -1,5 +1,26 @@
 # Handoff — 10/11/2026
 
+## Vários caixas na mesma loja (1.13.0, esquema 47)
+
+Pedido direto do dono, feito na `main`. Guia: `docs/VARIOS_CAIXAS.md`.
+
+- **Como é:** o caixa principal guarda o banco e atende os adicionais pela rede local. O adicional abre
+  `BancoDados("pdv://host:porta")`, que devolve um `BancoRemoto` (`src/database/rede.py`): mesma interface, SQL
+  executado no principal, uma thread e uma conexão SQLite por ligação. Conversa cifrada com chave derivada do
+  código de ligação (`WILLCAIXA1-...`).
+- **Por caixa:** número do terminal (arquivo `caixa_adicional.json` na pasta de dados, não o `config`), turno,
+  venda de balcão em andamento (`CaixaController.balcao_aberto`) e fila de impressão (`fila_impressao.terminal`,
+  migração 47).
+- **Telas:** `ui_qt/rede_caixas.py`. No principal, Configuração > Caixas da loja (rede), permissão `cfg_maquinas`.
+  No adicional, botão na tela de entrada. Sem ligação na abertura, `main()` pergunta: tentar, voltar ao banco
+  próprio ou fechar.
+- **No adicional não rodam:** backup, ponte, porteiro, sincronização e atualização. Os botões de `SO_NO_PRINCIPAL`
+  (`ui_qt/app.py`) ficam desligados.
+- **Queda no meio da transação:** o principal desfaz; o adicional recusa todo comando até o `ROLLBACK` daquela
+  transação. Não mexer nisso sem rodar `TesteQueda`.
+- **Testes:** `tests/test_rede_caixas.py` e `tests/test_qt_rede_caixas.py`. Neste Mac a suíte inteira num processo
+  só termina em falha de segmentação do Qt, com ou sem esta entrega; rodar arquivo por arquivo.
+
 ## README comercial
 
 A página inicial do repositório é o texto para o dono do negócio. O guia técnico
@@ -43,6 +64,11 @@ por XML ou ZIP (`nfe_vinculos`). Sem download na SEFAZ. Guia: `docs/CUSTO_LUCRO.
 
 ## Pendências
 
+- Vários caixas: homologar com dois computadores Windows reais na mesma rede (firewall, Wi-Fi, queda do principal).
+- Vários caixas: atualização automática do adicional (hoje instala-se a mesma versão à mão) e aviso na tela quando
+  a ligação cai fora de uma operação.
+- Antigravity: o painel do dono e a nuvem só recebem dados do caixa principal, que já vê as vendas de todos os
+  caixas. Conferir se `terminal_id` por caixa adicional faz falta no painel.
 - Trocar o WhatsApp e a mensalidade do README pelos dados comerciais reais.
 - Fechar as janelas que os testes antigos deixam abertas (hoje a rede de proteção do `atexit` cobre).
 - Antigravity: revisar o diff de `backend/central_fornecedor.py`, `central_web/` e `painel_web/`.

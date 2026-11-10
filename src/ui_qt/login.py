@@ -106,6 +106,13 @@ class JanelaLogin(QDialog):
         self.btn_licenca.clicked.connect(self.pedir_licenca)
         self.btn_licenca.setVisible(licenca.exigida(ctx.banco))
         formulario.addWidget(self.btn_licenca)
+        self.btn_rede = QPushButton(
+            f"Caixa {ctx.banco.cfg_int('terminal', 1)} • desligar do caixa principal" if ctx.banco.remoto
+            else "Ligar a outro caixa da loja")
+        self.btn_rede.setToolTip("Dois ou mais computadores vendendo no mesmo estoque (código em Caixas da loja)")
+        self.btn_rede.clicked.connect(self.ligar_a_outro_caixa)
+        self.btn_rede.setVisible(ctx.banco.caminho != ":memory:")
+        formulario.addWidget(self.btn_rede)
         formulario.addStretch()
         layout.addLayout(formulario, 1)
         self._timer = QTimer(self)
@@ -200,6 +207,14 @@ class JanelaLogin(QDialog):
         self.mensagem.setText(str(erro))
         self.senha.clear()
         self._ocupar(False)
+
+    def ligar_a_outro_caixa(self):
+        """Faz deste computador um caixa adicional (ou desfaz). Depois da troca o programa fecha: o banco é outro."""
+        if self._ocupada or self._fechada:
+            return
+        from src.ui_qt.rede_caixas import ligar_este_computador
+        if ligar_este_computador(self, self.ctx.banco):
+            self.reject()
 
     def pedir_licenca(self):
         if self._ocupada or self._fechada:

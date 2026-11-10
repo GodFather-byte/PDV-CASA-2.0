@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 46
+VERSAO_ESQUEMA = 47
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -642,7 +642,8 @@ TABELAS = [
         ultimo_erro TEXT,
         enviado_em TEXT,
         venda_id INTEGER,
-        setor_id INTEGER REFERENCES setores_impressao(id)
+        setor_id INTEGER REFERENCES setores_impressao(id),
+        terminal INTEGER NOT NULL DEFAULT 1
     )""",
     "CREATE INDEX IF NOT EXISTS ix_fila_status ON fila_impressao(status, destino, id)",
     # Telegram do dono (v11): `telegram_chats` são as conversas autorizadas (quem digitou o código de pareamento no bot);
@@ -1069,6 +1070,13 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v47: vários caixas na mesma loja (src/database/rede.py). Cada caixa imprime só o que ele mesmo mandou para a
+    # fila; o que já estava na fila fica com o caixa que existia até aqui.
+    47: [
+        ("coluna", "fila_impressao", "terminal", "INTEGER NOT NULL DEFAULT 1"),
+        "UPDATE fila_impressao SET terminal = COALESCE((SELECT CAST(valor AS INTEGER) FROM config "
+        "WHERE chave = 'terminal' AND CAST(valor AS INTEGER) >= 1), 1)",
+    ],
     # v46: o vínculo NF-e (código do fornecedor + fator de unidade) nasce em TABELAS.
     46: [],
     # v45: custo médio do produto. O último preço de compra continua em ult_preco_cent.

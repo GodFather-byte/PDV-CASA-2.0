@@ -48,12 +48,31 @@ def _raiz_dados() -> Path:
 RAIZ = _raiz_dados()
 
 
-def caminho_padrao() -> str:
-    """Banco na raiz do projeto (fora da pasta de código), ou o caminho em PDV_DB."""
+def caminho_local() -> str:
+    """O arquivo do banco neste computador (o que vale no caixa único e no caixa principal)."""
     return os.environ.get("PDV_DB") or str(RAIZ / "loja_offline.db")
 
 
+def caminho_padrao() -> str:
+    """Banco na raiz do projeto (fora da pasta de código), ou o caminho em PDV_DB. Num caixa adicional é o endereço do
+    caixa principal (`pdv://...`, ver src/database/rede.py): o banco da loja fica lá."""
+    if os.environ.get("PDV_DB"):
+        return os.environ["PDV_DB"]
+    from src.database import rede
+    ligacao = rede.ligacao_salva()
+    return rede.caminho_da_ligacao(ligacao) if ligacao else caminho_local()
+
+
 class BancoDados:
+    remoto = False                     # True no caixa adicional (BancoRemoto): o banco está no caixa principal
+
+    def __new__(cls, caminho: str | None = None, semear: bool = True):
+        """`BancoDados("pdv://...")` devolve o banco do caixa principal: serviços e telas abrem do mesmo jeito."""
+        if cls is BancoDados and str(caminho or caminho_padrao()).startswith("pdv://"):
+            from src.database.rede import BancoRemoto
+            return object.__new__(BancoRemoto)
+        return object.__new__(cls)
+
     def __init__(self, caminho: str | None = None, semear: bool = True):
         self.caminho = str(caminho or caminho_padrao())
         self._profundidade = 0

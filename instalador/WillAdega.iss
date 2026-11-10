@@ -8,7 +8,7 @@
 ; do usuário do Windows (separados dos do WillPDV). Por isso atualizar ou desinstalar o programa não apaga as vendas.
 
 #ifndef Versao
-  #define Versao "1.12.0"         ; o build_pdv.py passa a versão de src\versao.py (/DVersao=...)
+  #define Versao "1.13.0"         ; o build_pdv.py passa a versão de src\versao.py (/DVersao=...)
 #endif
 #define Nome "Will Adega"
 #define Pasta "WillAdega"

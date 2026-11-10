@@ -92,9 +92,11 @@ class CaixaController(DivisaoContaMixin):
         return self.banco.inserir("vendas", dados)
 
     def balcao_aberto(self) -> dict | None:
-        """A venda de balcão em andamento, se houver (a que o caixa retoma após uma queda de energia)."""
+        """A venda de balcão em andamento NESTE caixa, se houver (a que ele retoma após uma queda de energia). Com
+        vários caixas na loja, cada um tem a sua: o caixa 2 não pega a venda que o caixa 1 está lançando."""
         r = self.banco.um(
-            "SELECT * FROM vendas WHERE modalidade = 'balcao' AND status = 'aberta' ORDER BY id DESC LIMIT 1")
+            "SELECT * FROM vendas WHERE modalidade = 'balcao' AND status = 'aberta' AND terminal = ? "
+            "ORDER BY id DESC LIMIT 1", (self.turnos.terminal,))
         return dict(r) if r else None
 
     def abrir_balcao(self) -> int:

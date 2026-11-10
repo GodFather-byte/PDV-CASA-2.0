@@ -52,6 +52,7 @@ MODULOS = [
     "src.core.posicao", "src.core.registro", "src.core.relatorio", "src.core.seguranca", "src.core.backup_seguro",
     "src.core.identidade_visual",
     "src.database.conexao", "src.database.esquema", "src.database.protecao", "src.database.sementes",
+    "src.database.rede", "src.ui_qt.rede_caixas",
     "src.hardware.campainha", "src.hardware.dispositivos", "src.hardware.imagem_escpos", "src.hardware.impressora_termica",
     "src.hardware.impressoras_so",
     "src.sync.atualizacoes", "src.sync.licenca_nuvem", "src.sync.painel_envio", "src.sync.sincronizador",

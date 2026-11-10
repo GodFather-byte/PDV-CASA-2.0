@@ -19,6 +19,7 @@ from src.controllers.fila_impressao_controller import ServicoFilaImpressao
 from src.controllers.mesas_modelo import montar_tiles
 from src.core import edicao, formatacao as fmt, licenca, registro
 from src.core.erros import ErroNegocio
+from src.database import rede
 from src.database.conexao import BancoDados, caminho_padrao
 from src.porteiro.servico import ServicoPorteiro, descrever as descrever_porteiro
 from src.sync.ponte import ServicoPonte
@@ -231,8 +232,8 @@ class JanelaPrincipal(QMainWindow):
             "Produtos e estoque": {"produtos", "estoque", "contagem", "retornaveis", "promocoes", "importar_produtos", "composicao"},
             "Gestão": {"relatorio_vendas", "relatorios", "contas", "devolucoes", "whatsapp", "auditoria"},
             "Cadastros": {"operadores", "mais_cadastros"},
-            "Configuração": {"primeiros_passos", "configuracoes", "maquinas", "acessos", "atualizacoes", "diagnostico",
-                             "impressora"},
+            "Configuração": {"primeiros_passos", "configuracoes", "maquinas", "caixas_loja", "acessos", "atualizacoes",
+                             "diagnostico", "impressora"},
         }
         self.botoes = {}
         for chave, titulo, acao in (
@@ -256,6 +257,7 @@ class JanelaPrincipal(QMainWindow):
             ("primeiros_passos", "Primeiros passos da loja", self.abrir_primeiros_passos),
             ("configuracoes", "Configurações gerais", self.abrir_configuracoes),
             ("maquinas", "Máquinas e periféricos", self.abrir_maquinas),
+            ("caixas_loja", "Caixas da loja (rede)", self.abrir_caixas_loja),
             ("acessos", "Níveis de acesso", self.abrir_acessos),
             ("whatsapp", "WhatsApp do dono", self.abrir_whatsapp),
             ("utilitarios", "Utilitários e manutenção", self.abrir_utilitarios),
@@ -380,7 +382,8 @@ class JanelaPrincipal(QMainWindow):
         atender(caixa, self.vigia_pedidos)
 
     def _titulo(self) -> str:
-        return f"{self.edicao.nome} • {self.ctx.config.nome_loja()}{self.edicao.sufixo_titulo}"
+        caixa = f" • Caixa {self.ctx.banco.cfg_int('terminal', 1)}" if self.ctx.banco.remoto else ""
+        return f"{self.edicao.nome} • {self.ctx.config.nome_loja()}{caixa}{self.edicao.sufixo_titulo}"
 
     def _modo_tema(self) -> str:
         return "claro" if self.ctx.banco.cfg("tema_visual") == "claro" else "escuro"
@@ -471,7 +474,7 @@ class JanelaPrincipal(QMainWindow):
             for spec in self._catalogo_relatorios().values()))
         self.botoes["configuracoes"].setEnabled(
             self.ctx.pode("cfg_loja") or self.ctx.pode("cfg_configuracoes"))
-        for chave, modulo in (("maquinas", "cfg_maquinas"), ("acessos", "cfg_acessos"),
+        for chave, modulo in (("maquinas", "cfg_maquinas"), ("caixas_loja", "cfg_maquinas"), ("acessos", "cfg_acessos"),
                               ("whatsapp", "cfg_configuracoes"), ("contagem", "lanc_contagem")):
             self.botoes[chave].setEnabled(self.ctx.pode(modulo))
         from src.ui_qt.utilitarios import MODULOS_UTILITARIOS
@@ -489,6 +492,11 @@ class JanelaPrincipal(QMainWindow):
             "cad_composicao" not in desligados and self.ctx.pode("cad_composicao"))
         self.botoes["auditoria"].setEnabled(
             operador.nivel == 4 and self.ctx.pode("rel_auditoria") and "rel_auditoria" not in desligados)
+        if self.ctx.banco.remoto:
+            # Caixa adicional: o arquivo do banco, o backup, a nuvem e a atualização são do caixa principal.
+            for chave in SO_NO_PRINCIPAL:
+                self.botoes[chave].setEnabled(False)
+                self.botoes[chave].setToolTip("Disponível no caixa principal, onde o banco da loja está guardado.")
         self._atualizar_noite()
         self._atualizar_porteiro()
         self.filtrar_modulos(self.busca_modulos.text())
@@ -581,7 +589,7 @@ class JanelaPrincipal(QMainWindow):
             "WhatsApp do dono, alertas, retornáveis, promoções, cozinha/bar, utilitários, importação, ficha técnica, "
             "impressão, backup e restauração. Use a busca lateral para localizar os módulos. "
             "Valide em cópia dos dados. Serviços externos e periféricos indisponíveis não são simulados. "
-            "Não abra duas instâncias sobre o mesmo banco.")
+            "Não abra duas instâncias sobre o mesmo banco: para dois computadores vendendo, use Caixas da loja.")
 
     def _unica(self, chave, criar):
         janela = self.janelas.get(chave)
@@ -763,6 +771,16 @@ class JanelaPrincipal(QMainWindow):
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
 
+    def abrir_caixas_loja(self):
+        try:
+            from src.ui_qt.rede_caixas import JanelaCaixasDaLoja
+            janela = self.janelas.get("caixas_loja")
+            if janela is not None:
+                janela.exigir_acesso()
+            return self._unica("caixas_loja", lambda: JanelaCaixasDaLoja(self.ctx, self.app.rede_caixas, self))
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+
     def abrir_acessos(self):
         try:
             from src.ui_qt.acessos import JanelaAcessos
@@ -832,7 +850,7 @@ class JanelaPrincipal(QMainWindow):
             self.mensagem.setText(str(erro))
 
     def consultar_atualizacoes(self):
-        if self.ctx.banco.caminho == ":memory:":
+        if self.ctx.banco.caminho == ":memory:" or self.ctx.banco.remoto:     # adicional: quem atualiza é o principal
             return
         try:
             self._janela_atualizacoes().consultar_automaticamente()
@@ -962,6 +980,10 @@ class JanelaPrincipal(QMainWindow):
             evento.ignore()
 
 
+# Telas que mexem no arquivo do banco, no backup, na nuvem ou na atualização: num caixa adicional ficam desligadas.
+SO_NO_PRINCIPAL = ("utilitarios", "atualizacoes", "backup", "restaurar", "verificar_backup", "porteiro")
+
+
 class App:
     """Coordenação de sessão. Banco injetado pertence ao chamador e não é fechado."""
 
@@ -975,6 +997,7 @@ class App:
         self.login = None
         self.principal = None
         self.servicos = []
+        self.rede_caixas = None                     # no caixa principal: atendimento aos caixas adicionais
         self.estado_servicos = []
         self._iniciada = False
         self._finalizada = False
@@ -996,21 +1019,32 @@ class App:
         ligar_erros(self.banco)
         tema.aplicar(self.aplicacao, self.banco.cfg("tema_visual") or "escuro")
         if self._servicos_habilitados:
-            idade = self.ctx.utilitarios.idade_backup_horas()
-            if idade is None or idade >= 12:
-                self.ctx.utilitarios.backup_automatico("início")
-            for classe, nome in ((ServicoFilaImpressao, "Impressão"),
-                                 (ServicoPonte, "Ponte de licenças"), (ServicoPorteiro, "Porteiro"),
-                                 (ServicoSincronizacao, "Sincronização da nuvem")):
+            if self.banco.remoto:
+                # Caixa adicional: só a impressora é dele. Backup, nuvem, porteiro e licença rodam no caixa principal.
+                classes = ((ServicoFilaImpressao, "Impressão"),)
+            else:
+                idade = self.ctx.utilitarios.idade_backup_horas()
+                if idade is None or idade >= 12:
+                    self.ctx.utilitarios.backup_automatico("início")
+                classes = ((ServicoFilaImpressao, "Impressão"),
+                           (ServicoPonte, "Ponte de licenças"), (ServicoPorteiro, "Porteiro"),
+                           (ServicoSincronizacao, "Sincronização da nuvem"),
+                           (rede.ServicoRedeCaixas, "Caixas da loja"))
+            for classe, nome in classes:
                 servico = None
                 try:
                     servico = classe(self.banco.caminho)
+                    if classe is rede.ServicoRedeCaixas:
+                        self.rede_caixas = servico       # a tela Caixas da loja liga e desliga por ele, mesmo se falhar agora
                     servico.iniciar()
                     self.servicos.append(servico)
                     self.estado_servicos.append(f"{nome}: serviço iniciado (não confirma entrega)")
-                except Exception:
+                except Exception as erro:
                     if servico is not None:
                         servico.parar()
+                    if servico is not None and servico is self.rede_caixas:
+                        servico.ultimo_erro = str(erro)
+                        self.servicos.append(servico)    # pode ser religado pela tela: precisa parar na saída
                     logging.getLogger("pdv.qt").exception("Serviço %s indisponível.", nome)
                     self.estado_servicos.append(f"{nome}: indisponível; veja o log")
         else:
@@ -1019,7 +1053,9 @@ class App:
 
     def _erro_na_tela(self, tipo, valor, traceback):
         registro.registrar_excecao(tipo, valor, traceback, "tela Qt")
-        if not self._finalizada:
+        if not self._finalizada and isinstance(valor, rede.ErroLigacao):
+            QMessageBox.warning(self.principal or self.login, "Caixa principal fora do ar", str(valor))
+        elif not self._finalizada:
             QMessageBox.critical(
                 self.principal or self.login, "Erro nesta tela",
                 "Ocorreu um erro inesperado. O que já estava gravado foi preservado. "
@@ -1107,7 +1143,7 @@ class App:
             if self.ctx.operador:
                 self.banco.log("logout", self.ctx.operador.nome, self.ctx.operador_id)
                 self.ctx.operador = None
-            if self._servicos_habilitados:
+            if self._servicos_habilitados and not self.banco.remoto:
                 self.ctx.utilitarios.backup_automatico("saída", minimo_min=60)
         finally:
             for servico in self.servicos:
@@ -1127,11 +1163,15 @@ def preparar_inicio(parent=None):
 
     registro.configurar_logs()
     caminho = caminho_padrao()
-    trava = InstanciaUnica(caminho)
+    remoto = rede.eh_remoto(caminho)
+    # Caixa adicional: o banco está no caixa principal; aqui só existe o arquivo da ligação, e é ele que leva a trava.
+    trava = InstanciaUnica(rede.arquivo_ligacao() if remoto else caminho)
     if not trava.adquirir():
         nome = edicao.atual().nome
         QMessageBox.warning(parent, nome, f"O {nome} já está aberto neste computador. Use a janela existente.")
         return None
+    if remoto:
+        return trava                    # integridade, backup e restauração são conferidos no caixa principal
     try:
         resultado = protecao.preparar_banco(
             caminho, lambda titulo, mensagem: QMessageBox.question(
@@ -1175,7 +1215,20 @@ def main():
         trava = preparar_inicio()
         if trava is None:
             return 1
-        app = App(aplicacao=aplicacao)
+        while app is None:
+            try:
+                app = App(aplicacao=aplicacao)
+            except rede.ErroLigacao as erro:
+                from src.ui_qt.rede_caixas import perguntar_sem_ligacao
+                escolha = perguntar_sem_ligacao(None, erro)
+                if escolha == "fechar":
+                    return 1
+                if escolha == "desligar":       # volta ao banco deste computador: recomeça a proteção pelo arquivo
+                    rede.remover_ligacao()
+                    trava.liberar()
+                    trava = preparar_inicio()
+                    if trava is None:
+                        return 1
         app.iniciar()
         if existente is not None:
             # O hospedeiro já controla exec(); conserva o ciclo e a trava até aboutToQuit.

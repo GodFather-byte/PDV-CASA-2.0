@@ -39,6 +39,6 @@ maquininha.
 5 noites seguidas sem diferença de gaveta inexplicada, sem travar no horário de pico e com backup e restauração conferidos.
 
 ## Limites conhecidos
-- Um caixa por banco (sem rede entre vários caixas).
+- Um caixa por banco no piloto. Vários caixas na mesma loja existem desde a 1.13.0 (`docs/VARIOS_CAIXAS.md`), ainda sem homologação em loja.
 - Pode vender acima do estoque lançado: o saldo fica negativo (é aviso, não bloqueio).
 - A licença vale para a loja (nome), não para um computador, e um código emitido não se revoga.

@@ -276,7 +276,7 @@ novos e existentes, sem mudança de esquema. A consulta compartilhada está em
 | Balança Toledo/Filizola | A leitura automática pela porta serial está implementada (`src/hardware/dispositivos.py`), mas nunca foi homologada com um equipamento real (depende do protocolo exato do modelo). Sem balança configurada, ou se ela não responder, o caixa pede o peso digitado — e produto marcado "Balança" já entra direto nesse fluxo ao ser selecionado (não precisa mais do operador lembrar do F2). |
 | Gaveta | Abre pelo pulso da impressora térmica (ESC p) e a abertura manual é registrada. Sem impressora térmica configurada o caixa só registra. Não testada em gaveta real. |
 | Impressora térmica em equipamento real | Testada só com impressora TCP simulada e arquivo. Faltam modelos reais: página de código, corte, pino da gaveta e velocidade serial variam. |
-| Rede com vários caixas no mesmo banco | O banco SQLite é local a cada terminal. |
+| Rede com vários caixas no mesmo banco | Implementada na 1.13.0: o caixa principal guarda o banco e atende os demais pela rede local (`docs/VARIOS_CAIXAS.md`). Falta homologar com dois computadores Windows reais. Sem o principal, os adicionais não vendem. |
 | Nuvem | Só licença e atualizações (FastAPI); vendas e painel foram retirados de propósito (cada boate guarda as suas). Falta validar em loja e HTTPS. Licença liberada automaticamente no pagamento online: não existe (hoje é `lojas assinatura`). |
 | Tabela de preços por empresa (multi-loja) | Uma única tabela de preços. |
 | E-mail da loja, foto do subgrupo | Os campos são guardados; não são usados. (O logotipo da loja é impresso no cupom térmico quando a opção está ligada.) |

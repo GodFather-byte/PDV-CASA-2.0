@@ -28,7 +28,7 @@ Feito para quem compra e revende bebida. Cardápio por QR com pedido online, pre
 - 📊 **Relatórios em PDF e CSV.** No computador, o gerente filtra o período e exporta. Abre no Excel ou imprime.
 - 🔄 **Atualização do programa.** Quando sai uma versão nova, o caixa pode baixar e instalar sozinho, com o movimento parado, sem formatar o computador.
 - 🔌 **Funciona sem internet.** A venda grava no computador da loja. Quando a rede volta, o caixa conversa com a nuvem (licença, painel e pedidos da adega).
-- 🏪 **Cada casa no seu caixa.** Um ponto de venda por loja. Se você tem mais de uma, cada uma opera sozinha e o dono abre o painel daquela casa.
+- 🏪 **Mais de um caixa na mesma loja.** Dois ou mais computadores vendem no mesmo estoque, com o fiado e os preços iguais. Cada caixa tem o seu turno, a sua gaveta e a sua impressora. Se você tem mais de uma loja, cada uma opera sozinha e o dono abre o painel daquela casa.
 - 🔒 **Quem vê o custo.** O operador de caixa não vê preço de custo nem lucro. Isso fica com o gerente.
 - 💬 **Resumo no WhatsApp.** No fechamento, o sistema monta o resumo do dia e abre o WhatsApp para você enviar. Não é um robô: quem manda a mensagem é o seu celular.
 

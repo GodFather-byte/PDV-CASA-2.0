@@ -329,7 +329,9 @@ class TurnoController:
             formas = self.formas_conferencia(turno_id, operador_id)
             em_andamento = self.banco.valor(
                 "SELECT COUNT(*) FROM vendas WHERE modalidade IN ('balcao','caderneta') AND status = 'aberta' "
-                "AND EXISTS (SELECT 1 FROM itens_venda i WHERE i.venda_id = vendas.id AND i.cancelado = 0)", (), 0)
+                "AND terminal = ? "
+                "AND EXISTS (SELECT 1 FROM itens_venda i WHERE i.venda_id = vendas.id AND i.cancelado = 0)",
+                (self.terminal,), 0)
             if em_andamento:
                 raise ErroNegocio("Há uma venda em andamento no caixa. Conclua ou cancele antes de trocar o turno.")
             res = self.resumo(turno_id)
