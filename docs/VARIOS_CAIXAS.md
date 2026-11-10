@@ -30,7 +30,7 @@ balcão em andamento.
 
 No caixa principal:
 
-1. Menu **Configuração > Caixas da loja (rede)**. Precisa da permissão de Máquinas.
+1. Menu **Manutenção > Caixas da loja (rede)**. Precisa da permissão de Máquinas.
 2. Marque **Atender outros caixas da loja neste computador**. Se o Windows perguntar, permita o acesso na rede
    privada.
 3. Clique em **Copiar código**. O código começa com `WILLCAIXA1-`. Quem tem o código entra no banco da loja:

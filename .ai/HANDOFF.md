@@ -11,7 +11,7 @@ Pedido direto do dono, feito na `main`. Guia: `docs/VARIOS_CAIXAS.md`.
 - **Por caixa:** número do terminal (arquivo `caixa_adicional.json` na pasta de dados, não o `config`), turno,
   venda de balcão em andamento (`CaixaController.balcao_aberto`) e fila de impressão (`fila_impressao.terminal`,
   migração 47).
-- **Telas:** `ui_qt/rede_caixas.py`. No principal, Configuração > Caixas da loja (rede), permissão `cfg_maquinas`.
+- **Telas:** `ui_qt/rede_caixas.py`. No principal, Manutenção > Caixas da loja (rede), permissão `cfg_maquinas`.
   No adicional, botão na tela de entrada. Sem ligação na abertura, `main()` pergunta: tentar, voltar ao banco
   próprio ou fechar.
 - **No adicional não rodam:** backup, ponte, porteiro, sincronização e atualização. Os botões de `SO_NO_PRINCIPAL`

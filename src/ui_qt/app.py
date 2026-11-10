@@ -232,8 +232,9 @@ class JanelaPrincipal(QMainWindow):
             "Produtos e estoque": {"produtos", "estoque", "contagem", "retornaveis", "promocoes", "importar_produtos", "composicao"},
             "Gestão": {"relatorio_vendas", "relatorios", "contas", "devolucoes", "whatsapp", "auditoria"},
             "Cadastros": {"operadores", "mais_cadastros"},
-            "Configuração": {"primeiros_passos", "configuracoes", "maquinas", "caixas_loja", "acessos", "atualizacoes",
-                             "diagnostico", "impressora"},
+            # "caixas_loja" fica em Manutenção: um oitavo botão aqui faz o menu rolar na tela mínima (Windows).
+            "Configuração": {"primeiros_passos", "configuracoes", "maquinas", "acessos", "atualizacoes", "diagnostico",
+                             "impressora"},
         }
         self.botoes = {}
         for chave, titulo, acao in (
