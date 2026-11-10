@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtGui import QFontDatabase, QGuiApplication
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QScrollArea, QVBoxLayout, QWidget
 
@@ -178,11 +178,30 @@ def _desligar_ajuste() -> None:
     _ajuste["ligado"] = False
 
 
+def encerrar_janelas_restantes() -> None:
+    """Destrói as janelas que sobraram enquanto o QApplication ainda existe.
+
+    Janela viva quando o Python finaliza é destruída fora de ordem (depois da aplicação) e derruba o processo na
+    saída. O PDV fecha as suas em `App.finalizar`; isto é a rede de proteção para o que escapar, inclusive janelas
+    que um teste deixou abertas.
+    """
+    _desligar_ajuste()
+    aplicacao = QApplication.instance()
+    if aplicacao is None:
+        return
+    try:
+        for janela in list(aplicacao.topLevelWidgets()):
+            janela.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    except RuntimeError:                    # aplicação já em destruição: não há mais o que fazer
+        pass
+
+
 def instalar_ajuste_de_janelas(aplicacao: QApplication, forcar: bool = False) -> None:
     """Liga o ajuste automático pela mudança de foco (um sinal por janela aberta, sem filtrar cada evento do caixa).
     Na plataforma "offscreen" não há monitor de verdade (a tela é fictícia, 800x800), então só entra se `forcar` pedir."""
     if not _ajuste["ligado"]:
         aplicacao.focusWindowChanged.connect(_foco_mudou)
-        atexit.register(_desligar_ajuste)
+        atexit.register(encerrar_janelas_restantes)
         _ajuste["ligado"] = True
     _ajuste["ativo"] = forcar or QGuiApplication.platformName() != "offscreen"

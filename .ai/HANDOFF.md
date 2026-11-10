@@ -10,6 +10,10 @@ foram mexidos aqui. As rotas e os ids que o `app.js` procura continuam os mesmos
   janela é ajustada uma vez, quando recebe o foco. Não usar filtro de eventos global em Python:
   ele roda a cada evento do caixa e derrubou o processo no encerramento dos testes (CI).
   Na plataforma `offscreen` (tela fictícia 800x800 dos testes) fica desligado; `forcar=True` liga.
+- **Saída do processo:** `tema.encerrar_janelas_restantes` (registrado no `atexit`) destrói as
+  janelas que sobraram antes de o Python finalizar. Alguns testes antigos deixam
+  `JanelaConfiguracoes` e `JanelaPrincipal` vivas; com o formulário novo isso derrubava o processo
+  na saída (segmentation fault depois de todos os testes passarem).
 - **Configurações gerais:** cartões por assunto (grupo do `CAMPOS_CONFIG`), texto com quebra de
   linha, busca por opção, módulos primeiro e só rolagem vertical. A causa do corte era o texto
   longo empurrando os campos para fora.
@@ -47,6 +51,7 @@ Só o nível 4 vê custo e lucro (`rel_custo`). Guia: `docs/CUSTO_LUCRO.md`.
 
 ## Pendências
 
+- Fechar as janelas que os testes antigos deixam abertas (hoje a rede de proteção do `atexit` cobre).
 - Antigravity: revisar o diff de `backend/central_fornecedor.py`, `central_web/` e `painel_web/`.
 - Imprimir um cupom e um fechamento numa térmica de verdade: o espaço entre linhas (`ESC 3 26`) não
   foi testado em impressora física. Se alguma marca imprimir linhas encavaladas ou mais espaçadas,

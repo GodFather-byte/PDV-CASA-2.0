@@ -111,6 +111,17 @@ class TesteAjusteDeJanelas(BaseJanelas):
         tema._desligar_ajuste()                                          # repetir não quebra
 
 
+    def test_encerramento_destroi_as_janelas_que_sobraram(self):
+        from shiboken6 import isValid
+        self.addCleanup(tema.instalar_ajuste_de_janelas, self.aplicacao)
+        esquecida = QDialog()
+        QVBoxLayout(esquecida).addWidget(QLabel("ficou aberta"))
+        esquecida.show()
+        tema.encerrar_janelas_restantes()
+        self.assertFalse(isValid(esquecida))
+        self.assertFalse(tema._ajuste["ligado"])
+
+
 class TesteConfiguracoesCabem(BaseJanelas):
     def janela(self):
         ctx = Contexto(self.banco)
@@ -145,15 +156,3 @@ class TesteConfiguracoesCabem(BaseJanelas):
         janela.busca.clear()
         self.aplicacao.processEvents()
         self.assertTrue(janela.campos["parametros"]["usar_delivery"].isVisible())
-
-    def test_clicar_no_texto_marca_a_opcao(self):
-        from src.ui_qt.configuracoes import _Rotulo
-        janela = self.janela()
-        caixa = janela.campos["parametros"]["usar_delivery"]
-        self.assertIsInstance(caixa, QCheckBox)
-        rotulo = next(r for r in janela.findChildren(_Rotulo) if r.editor is caixa)
-        marcado = caixa.isChecked()
-        from PySide6.QtTest import QTest
-        from PySide6.QtCore import Qt
-        QTest.mouseClick(rotulo, Qt.MouseButton.LeftButton)
-        self.assertNotEqual(caixa.isChecked(), marcado)

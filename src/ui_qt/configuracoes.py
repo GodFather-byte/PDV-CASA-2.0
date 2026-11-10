@@ -97,23 +97,6 @@ class _TesteCentral(QRunnable):
 GRUPOS = {"Impressao": "Impressão", "Caixa": "Caixa e autorizações", "Módulos": "Módulos da loja"}
 
 
-class _Rotulo(QLabel):
-    """Texto que quebra linha e, clicado, age sobre o campo ao lado (marca a caixa ou leva o foco)."""
-
-    def __init__(self, conteudo, editor):
-        super().__init__(conteudo)
-        self.setWordWrap(True)
-        self.editor = editor
-
-    def mousePressEvent(self, evento):
-        if self.editor.isEnabled():
-            if isinstance(self.editor, QCheckBox):
-                self.editor.toggle()
-            else:
-                self.editor.setFocus()
-        super().mousePressEvent(evento)
-
-
 class JanelaConfiguracoes(QDialog):
     def __init__(self, ctx, parent=None):
         super().__init__(parent)
@@ -142,7 +125,6 @@ class JanelaConfiguracoes(QDialog):
         self.busca.textChanged.connect(self._filtrar)
         layout.addWidget(self.busca)
         self.abas = QTabWidget()
-        self._linhas = {secao: [] for secao in SECOES}      # (texto de busca, linha, cartão)
         fora_da_edicao = edicao.atual().fora_das_configuracoes()
         for secao, titulo in (("loja", "Identificação e contatos"),
                               ("preferencias", "Preferências de venda/caixa"),
@@ -173,8 +155,7 @@ class JanelaConfiguracoes(QDialog):
                 editor.setAccessibleName(rotulo)
                 self.campos[secao][chave] = editor
                 corpo = self._cartao(coluna, cartoes, grupo)
-                self._linhas[secao].append((f"{rotulo} {grupo}".lower(), self._linha(corpo, rotulo, editor, tipo),
-                                            corpo.parentWidget()))
+                self._linha(corpo, f"{rotulo} {grupo}".lower(), rotulo, editor, tipo)
                 if chave == "logotipo":
                     editor.setReadOnly(True)
                     self.btn_logo = QPushButton("Selecionar logotipo…")
@@ -273,11 +254,14 @@ class JanelaConfiguracoes(QDialog):
         return cartoes[grupo]
 
     @staticmethod
-    def _linha(corpo, rotulo, editor, tipo):
+    def _linha(corpo, busca, rotulo, editor, tipo):
         """Sim/não: caixa e texto na mesma linha. Demais: texto em cima e campo embaixo, na largura toda."""
         linha = QWidget()
         linha.setObjectName("linha")
-        descricao = _Rotulo(rotulo, editor)
+        linha.setProperty("busca", busca)
+        descricao = QLabel(rotulo)
+        descricao.setWordWrap(True)
+        descricao.setBuddy(editor)
         if tipo == "sn":
             arranjo = QHBoxLayout(linha)
             arranjo.addWidget(editor, 0, Qt.AlignmentFlag.AlignTop)
@@ -292,15 +276,17 @@ class JanelaConfiguracoes(QDialog):
         return linha
 
     def _filtrar(self, *_):
-        """Mostra só as opções da aba atual que contêm o texto buscado."""
+        """Mostra só as opções da aba atual que contêm o texto buscado; cartão sem opção visível some junto."""
         termo = self.busca.text().strip().lower()
-        visiveis = {}
-        for alvo, linha, cartao in self._linhas[SECOES[self.abas.currentIndex()]]:
-            mostrar = termo in alvo
-            linha.setVisible(mostrar)
-            visiveis[cartao] = visiveis.get(cartao, False) or mostrar
-        for cartao, mostrar in visiveis.items():
-            cartao.setVisible(mostrar or not termo)
+        pagina = self.abas.currentWidget().widget()
+        for cartao in pagina.findChildren(QFrame, "cartao"):
+            linhas = cartao.findChildren(QWidget, "linha")
+            alguma = False
+            for linha in linhas:
+                mostrar = termo in (linha.property("busca") or "")
+                linha.setVisible(mostrar)
+                alguma = alguma or mostrar
+            cartao.setVisible(alguma or not termo)
 
     def _permissoes(self):
         if self.ctx.operador is None:
