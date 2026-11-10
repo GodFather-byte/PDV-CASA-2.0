@@ -26,7 +26,8 @@ from sqlalchemy.orm import Session
 
 from backend.database import Base, engine, get_db
 
-EDICAO = "willadega"
+EDICAO = "willadega"  # migração legada: não atribuir esta edição a restaurantes
+EDICOES_PEDIDO = frozenset({"willadega", "willrestaurante"})
 PAGAMENTOS = {"dinheiro": "Dinheiro", "pix": "Pix na entrega", "cartao": "Cartão na entrega"}
 MAX_LINHAS = 40
 MAX_QTD = 99
@@ -111,7 +112,7 @@ def _edicao_cadastrada(loja) -> str:
 def pode_pedir(loja, edicao_enviada) -> bool:
     """Os dois lados dizem Will Adega. Edição vazia ou willpdv não recebe pedido."""
     enviada = str(edicao_enviada or "").strip().lower()
-    return enviada == EDICAO and _edicao_cadastrada(loja) == EDICAO
+    return enviada in EDICOES_PEDIDO and _edicao_cadastrada(loja) == enviada
 
 
 def gravar_config(db: Session, loja, bruto, edicao_enviada) -> dict:
@@ -134,7 +135,7 @@ def config_da_loja(db: Session, loja) -> dict:
         cfg = json.loads(linha.dados or "{}")
     except ValueError:
         return {"ligado": False}
-    if not isinstance(cfg, dict) or not cfg.get("ligado") or _edicao_cadastrada(loja) != EDICAO:
+    if not isinstance(cfg, dict) or not cfg.get("ligado") or _edicao_cadastrada(loja) not in EDICOES_PEDIDO:
         return {"ligado": False}
     return cfg
 
@@ -397,8 +398,8 @@ def instalar(app: FastAPI, Loja, autenticar, loja_ativa, catalogo_da_loja) -> AP
         if acesso.admin:
             raise HTTPException(status_code=403, detail="Use o token da loja.")
         loja = db.query(Loja).filter(Loja.chave_loja == acesso.loja).first()
-        if loja is None or _edicao_cadastrada(loja) != EDICAO:
-            raise HTTPException(status_code=403, detail="Pedido online só existe no Will Adega.")
+        if loja is None or _edicao_cadastrada(loja) not in EDICOES_PEDIDO:
+            raise HTTPException(status_code=403, detail="Pedido online disponível no Will Adega e no Will Restaurante.")
         return acesso.loja
 
     @router.get("/v1/pedidos-online")

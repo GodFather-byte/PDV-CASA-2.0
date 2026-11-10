@@ -1,0 +1,57 @@
+name: Will Restaurante
+on:
+  push:
+    branches: [feat/willrestaurante]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validar:
+    name: Perfis e pedidos / Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: sudo apt-get update -q && sudo apt-get install -y -q libegl1 libopengl0
+      - run: pip install --require-hashes -r requirements.txt -r backend/requirements.txt -r requirements-test.txt
+      - run: python -m unittest tests.test_will_restaurante tests.test_edicao tests.test_perfil tests.test_pedido_online tests.test_qt_pedido_online
+  instalador:
+    name: Instalador Will Restaurante / Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r requirements.txt -r requirements-build.txt
+      - name: Inno Setup
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+      - run: python build_pdv.py --edicao willrestaurante
+      - name: Autoteste do executável
+        run: |
+          $relatorio = Join-Path $env:RUNNER_TEMP "willrestaurante-autoteste.txt"
+          $exe = (Resolve-Path "dist\WillRestaurante\WillRestaurante.exe").Path
+          $p = Start-Process -FilePath $exe -ArgumentList "--autoteste", "`"$relatorio`"" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw "Autoteste não terminou" }
+          if (Test-Path $relatorio) { Get-Content $relatorio }
+          if ($p.ExitCode -ne 0) { throw "Autoteste falhou" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WillRestaurante-instalador
+          path: instalador/saida/WillRestaurante-Setup-*.exe
+          if-no-files-found: error

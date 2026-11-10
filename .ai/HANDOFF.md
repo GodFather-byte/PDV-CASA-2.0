@@ -1,82 +1,31 @@
-# Handoff — 10/11/2026
+# Handoff — Will Restaurante (10/11/2026)
 
-## Vários caixas na mesma loja (1.13.0, esquema 47)
+Base: main 98a873fe, versão 1.13.0, esquema 47. Leia .ai/MAPA.md para a arquitetura atual.
 
-Pedido direto do dono, feito na `main`. Guia: `docs/VARIOS_CAIXAS.md`.
+## Trabalho em andamento
+Pedido do dono: edição willrestaurante; hamburgueria primeiro, depois adicionais, pedido de mesa, Pix e cozinha web.
+Branch feat/willrestaurante. Não publicar como entrega completa enquanto as cinco etapas não forem validadas.
 
-- **Como é:** o caixa principal guarda o banco e atende os adicionais pela rede local. O adicional abre
-  `BancoDados("pdv://host:porta")`, que devolve um `BancoRemoto` (`src/database/rede.py`): mesma interface, SQL
-  executado no principal, uma thread e uma conexão SQLite por ligação. Conversa cifrada com chave derivada do
-  código de ligação (`WILLCAIXA1-...`).
-- **Por caixa:** número do terminal (arquivo `caixa_adicional.json` na pasta de dados, não o `config`), turno,
-  venda de balcão em andamento (`CaixaController.balcao_aberto`) e fila de impressão (`fila_impressao.terminal`,
-  migração 47).
-- **Telas:** `ui_qt/rede_caixas.py`. No principal, Manutenção > Caixas da loja (rede), permissão `cfg_maquinas`.
-  No adicional, botão na tela de entrada. Sem ligação na abertura, `main()` pergunta: tentar, voltar ao banco
-  próprio ou fechar.
-- **No adicional não rodam:** backup, ponte, porteiro, sincronização e atualização. Os botões de `SO_NO_PRINCIPAL`
-  (`ui_qt/app.py`) ficam desligados.
-- **Queda no meio da transação:** o principal desfaz; o adicional recusa todo comando até o `ROLLBACK` daquela
-  transação. Não mexer nisso sem rodar `TesteQueda`.
-- **Testes:** `tests/test_rede_caixas.py` e `tests/test_qt_rede_caixas.py`. Neste Mac a suíte inteira num processo
-  só termina em falha de segmentação do Qt, com ou sem esta entrega; rodar arquivo por arquivo.
+Etapa 1: edição com dados/executável/instalador próprios; perfil inicial hamburgueria e seletor limitado
+a hamburgueria, pizzaria, a_la_carte e rodizio. Garotas, portaria, porteiro e quartos bloqueados.
+Mesas/cozinha/delivery ligados; cardápio e pedido habilitados na configuração, sem contato fictício:
+a publicação operacional exige configurar nuvem e WhatsApp real. Pedidos de delivery usam o fluxo existente.
+Licença segue o mecanismo atual por edição. Ícone genérico compartilhado com WillPDV.
+Sem alteração de schema nesta etapa. Guia docs/WILL_RESTAURANTE.md.
 
-## README comercial
+## Validação
+O ambiente gerenciado não iniciou; alterações feitas pela integração GitHub.
+Workflow Will Restaurante valida perfis/pedidos em Python 3.10/3.12 e empacota no Windows.
+Não declarar testes locais nem hardware homologado.
 
-A página inicial do repositório é o texto para o dono do negócio. O guia técnico
-que estava no README foi para `docs/DESENVOLVIMENTO.md`. O número de WhatsApp e o
-valor da mensalidade ficaram de propósito como placeholder.
+## Próximas etapas autorizadas
+- Adicionais/opções precificados por item em caixa/ticket/cardápio.
+- Pedido do QR diretamente na mesa, sem desviar do CaixaController.
+- Pix de pedido com confirmação automática; cobrança de licenças independente.
+- Cozinha web local no molde de src/porteiro.
+- Sem iFood e sem NFC-e.
 
-## Repaginada dos painéis e instalação
-
-Pedido direto do dono; por isso `backend/painel_web/` e `backend/central_web/` (área do Antigravity)
-foram mexidos. As rotas e os ids que o `app.js` procura continuam os mesmos.
-
-- **Janelas cortadas:** `tema.ajustar_janela` limita qualquer janela à área útil, rola o que não
-  cabe e centraliza. `instalar_ajuste_de_janelas` liga isso ao sinal `focusWindowChanged`: cada
-  janela é ajustada uma vez, quando recebe o foco. Não usar filtro de eventos global em Python:
-  ele roda a cada evento do caixa e derrubou o processo no encerramento dos testes (CI).
-  Na plataforma `offscreen` (tela fictícia 800x800 dos testes) fica desligado; `forcar=True` liga.
-- **Saída do processo:** `tema.encerrar_janelas_restantes` (registrado no `atexit`) destrói as
-  janelas que sobraram antes de o Python finalizar. Alguns testes antigos deixam
-  `JanelaConfiguracoes` e `JanelaPrincipal` vivas; com o formulário novo isso derrubava o processo
-  na saída (segmentation fault depois de todos os testes passarem).
-- **Configurações gerais:** cartões por assunto (grupo do `CAMPOS_CONFIG`), texto com quebra de
-  linha, busca por opção, módulos primeiro e só rolagem vertical.
-- **Primeiros passos:** `controllers/primeiros_passos.py` + `ui_qt/primeiros_passos.py`. Abre na
-  primeira entrada e fica no menu Configuração. Inclui a escolha do tipo de negócio. No Will Adega
-  o passo do tipo não aparece (perfil fixo).
-- **Central do fornecedor:** `saude_das_lojas` devolve por loja último contato, versão mais antiga
-  em uso, erros de 7 dias e chamados abertos (nada de vendas). A página ganhou a fila "Precisa de
-  você hoje", filtros, ordenação, cobrança pelo WhatsApp, planilha CSV e versões em uso.
-- **Painel do dono:** identidade azul-noite/verde-água, menu lateral, meta do mês com projeção e
-  botão de ocultar valores (os dois guardados no aparelho). `sw.js` está em `painel-v9`.
-- **Papel econômico:** `src/core/fita.py` enxuga o cupom na hora do envio. Chaves `papel_economico`
-  e `papel_linhas_juntas` nascem ligadas.
-- **Logo no caixa:** `ui_qt/marca_dagua.py` desenha o logotipo da casa como papel de parede. Chave
-  `caixa_papel_de_parede` (ligada).
-
-## Custo e lucro (1.12.0, esquema 46)
-
-O preço de custo editável é `produtos.custo_medio_cent`. A compra recalcula a média e grava
-`custo_historico`. O painel do dono tem a aba Relatórios (`GET /v1/painel/lucro`). A NF-e entra
-por XML ou ZIP (`nfe_vinculos`). Sem download na SEFAZ. Guia: `docs/CUSTO_LUCRO.md`.
-
-## Pendências
-
-- Vários caixas: homologar com dois computadores Windows reais na mesma rede (firewall, Wi-Fi, queda do principal).
-- Vários caixas: atualização automática do adicional (hoje instala-se a mesma versão à mão) e aviso na tela quando
-  a ligação cai fora de uma operação.
-- Antigravity: o painel do dono e a nuvem só recebem dados do caixa principal, que já vê as vendas de todos os
-  caixas. Conferir se `terminal_id` por caixa adicional faz falta no painel.
-- Trocar o WhatsApp e a mensalidade do README pelos dados comerciais reais.
-- Fechar as janelas que os testes antigos deixam abertas (hoje a rede de proteção do `atexit` cobre).
-- Antigravity: revisar o diff de `backend/central_fornecedor.py`, `central_web/` e `painel_web/`.
-- Imprimir um cupom e um fechamento numa térmica de verdade: o espaço entre linhas (`ESC 3 26`) não
-  foi testado em impressora física. Se alguma marca imprimir linhas encavaladas ou mais espaçadas,
-  desligar "Linhas mais juntas".
-- Conferir em um caixa Windows real com escala de 125% que as janelas abrem inteiras.
-- Meta do mês do painel fica só no aparelho do dono; levar para a nuvem se ele usar mais de um.
-- Ideias não feitas: dono com várias lojas trocar de loja sem sair; aviso push no celular.
-- Checkout do site de vendas ainda é só WhatsApp.
-- Atualização automática segue sem os segredos `PDV_ATUALIZACAO_*`.
+## Cuidados da base preservada
+Vários caixas em rede usam BancoRemoto, transações por conexão e fila por terminal (schema 47).
+Homologação com dois Windows, térmica e escala de 125% continuam pendentes.
+Não registrar segredos; atualização automática ainda depende de PDV_ATUALIZACAO_*.

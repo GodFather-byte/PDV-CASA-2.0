@@ -10,7 +10,7 @@ from src.sync.cardapio_envio import _base_nuvem
 
 def ligado(banco) -> bool:
     from src.core import edicao
-    return (edicao.atual().chave == "willadega" and banco.cfg_bool("pedido_online", False)
+    return (edicao.atual().chave in {"willadega", "willrestaurante"} and banco.cfg_bool("pedido_online", False)
             and banco.cfg_bool("cardapio_digital", False) and bool(banco.cfg("api_url").strip())
             and bool(banco.cfg("api_token").strip()))
 

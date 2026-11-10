@@ -55,6 +55,13 @@ class Edicao:
     executavel: str = "WillPDV"        # nome do .exe e da pasta em dist/ (sem acento nem &: o instalador usa no cmd)
     script_instalador: str = "WillPDV.iss"     # em instalador/ (Inno Setup)
 
+    # Perfis disponíveis dentro da edição; vazio mantém o comportamento de perfil fixo da Adega.
+    perfis: frozenset = frozenset()
+    padroes: dict = field(default_factory=dict)  # aplicados somente na primeira entrada da edição
+
+    def perfil_fixo(self) -> bool:
+        return bool(self.perfil and not self.perfis)
+
     def fora_das_configuracoes(self) -> frozenset:
         return self.ocultas | frozenset(self.fixas)
 
@@ -70,6 +77,19 @@ EDICOES = {
                "usar_quartos": "N"},
         ocultas=CHAVES_CASA_NOTURNA, menu_oculto=frozenset({"cozinha", "quartos"}),
         executavel="WillAdega", script_instalador="WillAdega.iss"),
+    "willrestaurante": Edicao(
+        "willrestaurante", "Will Restaurante", "WILL RESTAURANTE", "willpdv.ico", None,
+        "WILL-RESTAURANTE", perfil="hamburgueria",
+        perfis=frozenset({"hamburgueria", "pizzaria", "a_la_carte", "rodizio"}),
+        padroes={"cardapio_digital": "S", "pedido_online": "S"},
+        fixas={"usar_garotas": "N", "usar_portaria": "N", "usar_quartos": "N", "porteiro_ativo": "N",
+               "painel_mostra_garotas": "N"},
+        ocultas=frozenset(c for c in CHAVES_CASA_NOTURNA if c.startswith(("quartos_", "comissao_", "porteiro_"))
+                         or c in {"exigir_senha_comissao", "codigo_comissao", "imprimir_via_comissao",
+                                  "show_valores", "codigo_saida", "imprimir_saida_ao_pagar",
+                                  "consumacao_minima", "consumacao_minima_de", "consumacao_minima_ate"}),
+        menu_oculto=frozenset({"quartos", "porteiro"}),
+        executavel="WillRestaurante", script_instalador="WillRestaurante.iss"),
 }
 
 
@@ -107,6 +127,8 @@ def preparar(banco, operador_id: int | None = None) -> list[dict]:
     if ed.perfil and banco.cfg("edicao") != ed.chave:
         from src.controllers.perfil_controller import PerfilController
         mudancas = PerfilController(banco, operador_id).aplicar(ed.perfil)
+        for chave, valor in ed.padroes.items():
+            banco.cfg_set(chave, valor)
         banco.cfg_set("edicao", ed.chave)
     for chave, valor in ed.fixas.items():
         if banco.cfg(chave) != valor:

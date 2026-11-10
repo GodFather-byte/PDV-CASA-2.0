@@ -141,10 +141,10 @@ def coletar(banco) -> dict:
 
 
 def config_pedido(banco) -> dict:
-    """Pedido online pelo cardápio: só no Will Adega, com o pedido ligado e o WhatsApp da loja preenchido."""
+    """Pedido online pelo cardápio: no Will Adega e Will Restaurante, com o pedido ligado e o WhatsApp da loja preenchido."""
     from src.core import edicao
     whatsapp = "".join(c for c in (banco.cfg("pedido_online_whatsapp", "") or "") if c.isdigit())
-    if edicao.atual().chave != "willadega" or not banco.cfg_bool("pedido_online", False) or not whatsapp:
+    if edicao.atual().chave not in {"willadega", "willrestaurante"} or not banco.cfg_bool("pedido_online", False) or not whatsapp:
         return {"ligado": False}
     if len(whatsapp) in (10, 11):
         whatsapp = "55" + whatsapp                   # DDD + número: o link do WhatsApp quer o 55 do Brasil
