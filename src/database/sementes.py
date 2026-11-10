@@ -124,6 +124,8 @@ CONFIG_PADRAO = {
     # Painel do dono no celular: desligado até o dono pedir (as vendas só saem da loja com isto ligado).
     "painel_dono": "N",
     # Cardápio digital no celular (QR da mesa): desligado até o dono publicar o catálogo na nuvem.
+    "cozinha_web_ativo": "N", "cozinha_web_porta": "8766",
+    "cozinha_web_pin_hash": "", "cozinha_web_operador_id": "",
     "cardapio_digital": "N", "pedido_online": "N", "pedido_online_whatsapp": "", "pedido_online_minimo": "0",
     "pedido_online_retirada": "S",
     # Central do fornecedor (src/sync/ponte.py): desligada até o fornecedor provisionar este caixa. O ID do caixa nasce

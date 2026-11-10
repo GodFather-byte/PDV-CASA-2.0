@@ -131,7 +131,8 @@ def auditar(db, acao, loja, motivo):
     db.add(AuditoriaFornecedor(acao=acao, loja=loja, motivo=motivo[:500], criada_em=agora()))
 
 
-INSTALADORES = {   # link fixo das Releases publicadas pelo CI; PDV_INSTALADOR_<PROGRAMA> no servidor troca o endereço
+INSTALADORES = {
+    "willrestaurante": "https://github.com/GodFather-byte/PDV-CASA-2.0/releases/download/ultima-versao-restaurante/WillRestaurante-Instalador.exe",   # link fixo das Releases publicadas pelo CI; PDV_INSTALADOR_<PROGRAMA> no servidor troca o endereço
     "willpdv": "https://github.com/GodFather-byte/PDV-CASA-2.0/releases/download/ultima-versao/WillPDV-Instalador.exe",
     "willadega": "https://github.com/GodFather-byte/PDV-CASA-2.0/releases/download/ultima-versao-adega/"
                  "WillAdega-Instalador.exe",

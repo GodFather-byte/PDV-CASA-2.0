@@ -32,6 +32,9 @@ class JanelaCozinha(QDialog):
         barra.addWidget(texto("Setor:"))
         self.setor = QComboBox()
         barra.addWidget(self.setor, 1)
+        self.btn_web = QPushButton("Tablet / TV")
+        self.btn_web.clicked.connect(self.abrir_web)
+        barra.addWidget(self.btn_web)
         layout.addLayout(barra)
         self.grade = QTableWidget(0, 6)
         self.grade.setHorizontalHeaderLabels(
@@ -64,6 +67,18 @@ class JanelaCozinha(QDialog):
         self.setor.currentIndexChanged.connect(self.atualizar)
         QShortcut(QKeySequence("F5"), self, activated=self.atualizar)
         self.atualizar()
+
+    def abrir_web(self):
+        try:
+            self.exigir_acesso()
+            from src.ui_qt.cozinha_web import DialogoCozinhaWeb
+            dialogo = DialogoCozinhaWeb(self.ctx, self)
+            try:
+                dialogo.exec()
+            finally:
+                dialogo.deleteLater()
+        except ErroNegocio as erro:
+            self._erro(erro)
 
     def exigir_acesso(self):
         if self.ctx.operador_id is None or self.ctx.operador_id != self._operador_id:

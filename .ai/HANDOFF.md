@@ -1,32 +1,33 @@
 # Handoff — Will Restaurante (10/11/2026)
 
-Base: main 98a873fe, versão 1.13.0, esquema 47. Leia .ai/MAPA.md para a arquitetura atual.
+## Branch e escopo
+Branch feat/willrestaurante, PR #70, base main 98a873fe (1.13.0).
+Pedido do dono: edição restaurante, adicionais, QR da mesa e cozinha web.
+Pix online foi adiado pelo dono ("sem pix na tela por enquanto"); não acrescentar pagamento/QR online.
+iFood e NFC-e fora do escopo. Não publicar sem terminar a validação do PR.
 
-## Trabalho em andamento
-Pedido do dono: edição willrestaurante; hamburgueria primeiro, depois adicionais, pedido de mesa, Pix e cozinha web.
-Branch feat/willrestaurante. Não publicar como entrega completa enquanto as cinco etapas não forem validadas.
+## Implementação
+- willrestaurante: pasta WILL-RESTAURANTE, executável/instalador próprios e licença por edição.
+  Perfil inicial hamburgueria; seletor limitado a hamburgueria, pizzaria, a_la_carte e rodizio.
+  Quartos, garotas, porteiro e portaria bloqueados. Mesas/cozinha/delivery ligados.
+  Cardápio/pedido habilitados na configuração; publicação operacional exige nuvem e WhatsApp reais.
+- Adicionais comerciais: grupos com mínimo/máximo, nomes e preços congelados por item.
+  Caixa, ticket, fila de preparo e cardápio levam escolhas. Servidor calcula pelo catálogo.
+  Estoque e CMV seguem a ficha técnica; não há baixa extra de insumo por opção comercial.
+- QR da mesa: valida edição e limites, operador confirma, soma na conta pelo CaixaController.
+  pedidos_mesa_importados deduplica e confirma cada pedido, inclusive cancelamento.
+- Cozinha web: src/cozinha, servidor só no principal, porta 8766, PIN hash próprio, sessão TV somente leitura.
+  Configuração pelo botão Tablet / TV na cozinha Qt, com cfg_configuracoes e operador util_cozinha.
+  Status muda por transição explícita (sem duplo avanço); sem pagamentos e sem comandos offline.
+  Empacotamento copia cozinha_web; módulos novos entram em src.autoteste.MODULOS.
+- Schema 49: v48 adiciona opções/retrato; v49 adiciona importação de mesa. Migrações aditivas.
 
-Etapa 1: edição com dados/executável/instalador próprios; perfil inicial hamburgueria e seletor limitado
-a hamburgueria, pizzaria, a_la_carte e rodizio. Garotas, portaria, porteiro e quartos bloqueados.
-Mesas/cozinha/delivery ligados; cardápio e pedido habilitados na configuração, sem contato fictício:
-a publicação operacional exige configurar nuvem e WhatsApp real. Pedidos de delivery usam o fluxo existente.
-Licença segue o mecanismo atual por edição. Ícone genérico compartilhado com WillPDV.
-Etapa 2: grupos/opções comerciais por produto, seleção Qt, preços e nomes congelados por item;
-cardápio e nuvem validam IDs/limites e recalculam preços; ticket e fila de preparo mostram escolhas.
-Etapa 3: QR com mesa limitada ao cadastro do restaurante, confirmação pelo operador, importação
-idempotente na conta e fila de aceite/cancelamento própria. Schema 49 aditivo. Estoque/CMV seguem a ficha técnica do produto, sem baixa extra por opção comercial. Guia docs/WILL_RESTAURANTE.md.
+## Validação e limites
+O ambiente gerenciado falhou ao iniciar. Escrita/testes pelo GitHub e Actions; não declarar teste local.
+Etapas 1/2 passaram no build/autoteste Windows e testes Python 3.10/3.12.
+Etapa 3 passou em 209 testes Python 3.10/3.12; acompanhar os builds e a matriz completa do PR.
+Cozinha web acrescenta testes de sessão, TV, CSRF, revogação, PIN, cancelamento e transição concorrente.
+Homologação real em tablet/TV, impressora, dois Windows e escala 125% continua pendente.
 
-## Validação
-O ambiente gerenciado não iniciou; alterações feitas pela integração GitHub.
-Workflow Will Restaurante valida perfis/pedidos em Python 3.10/3.12 e empacota no Windows.
-Não declarar testes locais nem hardware homologado.
-
-## Próximas etapas autorizadas
-- Pix de pedido com confirmação automática; cobrança de licenças independente.
-- Cozinha web local no molde de src/porteiro.
-- Sem iFood e sem NFC-e.
-
-## Cuidados da base preservada
-Vários caixas em rede usam BancoRemoto, transações por conexão e fila por terminal (schema 47).
-Homologação com dois Windows, térmica e escala de 125% continuam pendentes.
-Não registrar segredos; atualização automática ainda depende de PDV_ATUALIZACAO_*.
+Guia: docs/WILL_RESTAURANTE.md. Localização: .ai/MAPA.md.
+A base de vários caixas (BancoRemoto/transações/fila por terminal, v47) deve ser preservada.

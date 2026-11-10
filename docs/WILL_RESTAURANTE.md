@@ -24,7 +24,8 @@ python -m unittest tests.test_will_restaurante tests.test_edicao tests.test_perf
 
 No Windows, `iniciar_will_restaurante.bat` inicia pelo código-fonte.
 O instalador tem AppId próprio e não instala sobre a Adega ou o WillPDV.
-O workflow Will Restaurante gera um artefato de instalador para revisão, sem publicar na produção.
+O workflow Will Restaurante gera instalador e portátil para revisão na branch. Após merge na main,
+publica a release ultima-versao-restaurante e o kit da central aponta para esse instalador.
 
 ## Etapa 2 — adicionais comerciais por item
 
@@ -56,12 +57,39 @@ O número da mesa no QR não é autenticação de presença física. O fluxo man
 Schema 49: pedidos_mesa_importados. Testes: tests.test_pedido_mesa.
 A Adega continua aceitando entrega/retirada; não recebe pedidos de mesa.
 
-## Etapas seguintes do pedido
+## Etapa 5 — cozinha no tablet / TV
 
-2. Adicionais/opções por item com preço no caixa, cozinha e cardápio.
-3. Pedido direto da mesa pelo QR, com importação pelo CaixaController.
-4. Pix online Mercado Pago com confirmação do servidor, separado das licenças.
-5. Cozinha web local para tablet/TV.
+No caixa principal, abra Cozinha/Bar > Tablet / TV. Ligue, defina PIN próprio de 6 a 8 números
+e selecione o operador que identifica as ações da cozinha (ativo e com acesso util_cozinha).
+A configuração exige acesso cfg_configuracoes. A página usa o mesmo Wi-Fi/rede, normalmente
+`http://IP-DO-CAIXA:8766/cozinha/`; a tela mostra o endereço e QR. O caixa principal precisa ficar aberto.
+No adicional, só o painel Qt é operado; o servidor web permanece no principal.
 
-iFood e NFC-e permanecem fora do escopo. Os itens acima só devem ser considerados entregues
-quando implementados e validados; a edição inicial não os apresenta como disponíveis.
+No tablet, filtre o setor e avance pendente → em preparo → pronto. Sessão TV (`?tv=1`)
+é somente leitura no servidor. Itens cancelados ou que já mudaram não aceitam um segundo avanço.
+A página não altera preços, pagamentos ou o fechamento. O status pronto usa o estado de preparo
+`entregue`, como no Qt; não confirma entrega física ao cliente.
+
+A atualização ocorre a cada 3 segundos, com indicação da última leitura. Sem comunicação,
+os botões ficam bloqueados e a fila é identificada como antiga. Não existe fila offline de comandos.
+O PIN fica apenas como hash; trocar PIN/operador revoga as sessões. O operador inativo perde acesso.
+Nenhum dado de pagamento, custo, telefone ou endereço é devolvido pela API da cozinha.
+Há limite de tentativas de PIN e bloqueio de requisições de outra origem. A página foi desenhada
+para rede local; não encaminhe esta porta do roteador para a internet.
+
+Comece com um operador dedicado à cozinha. Os subgrupos precisam ter impressão remota ligada,
+o mesmo critério do painel Qt. O filtro usa os setores ativos. O navegador pode usar tela cheia.
+A API limita cada resposta aos primeiros 300 itens, informa o total e permite filtrar pelo setor.
+
+Testes: tests.test_cozinha_web; o workflow inclui o JS e os arquivos no executável Windows.
+Ainda é necessário homologar no tablet/TV e na rede real, incluindo firewall e suspensão do caixa.
+
+## Etapa 4 — Pix adiado
+
+Por orientação posterior do dono, esta entrega não acrescenta Pix online, QR de pagamento nem
+confirmação automática no pedido. O acerto continua no caixa/na entrega pelo fluxo existente.
+A cobrança de licenças permanece independente.
+
+## Fora do escopo
+
+iFood, NFC-e, Pix online e baixa de insumos específica por opção comercial.

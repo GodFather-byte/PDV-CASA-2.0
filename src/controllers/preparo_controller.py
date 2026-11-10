@@ -17,6 +17,8 @@ _PROXIMO = {"pendente": "em_preparo", "em_preparo": "entregue"}
 def _rotulo_posicao(venda: dict) -> str:
     if venda["modalidade"] == "balcao":
         return "Balcão"
+    if venda["modalidade"] == "entrega":
+        return f"Entrega #{venda['venda_id']}"
     base = nome_posicao(bool(venda["comanda"]), venda["posicao"])
     apelido = (venda.get("apelido") or "").strip()
     return f"{base} ({apelido})" if apelido else base
@@ -31,7 +33,7 @@ class PreparoController:
         """Itens não cancelados de subgrupo remoto, mais antigos primeiro. `setor_id` filtra pelo setor do
         subgrupo (subgrupos.setor_impressao_id); sem setor cadastrado no subgrupo, não aparece nesse filtro."""
         sql = """SELECT i.id, i.quantidade, i.observacao, i.opcoes_json, i.status_preparo, i.criado_em,
-                        pr.nome AS produto, s.nome AS subgrupo, v.modalidade, v.comanda, v.posicao, v.apelido
+                        pr.nome AS produto, s.nome AS subgrupo, v.id AS venda_id, v.modalidade, v.comanda, v.posicao, v.apelido
                  FROM itens_venda i
                  JOIN produtos_historico pr ON pr.id = i.produto_id
                  JOIN subgrupos s ON s.id = pr.subgrupo_id
