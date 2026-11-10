@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cozinha — Will Restaurante</title><link rel="stylesheet" href="estilo.css"><script src="app.js" defer></script></head>
+<body>
+<header><h1>Cozinha</h1><div><button id="tela-cheia" type="button">Tela cheia</button><button id="sair" type="button" hidden>Sair</button></div></header>
+<form id="login"><h2>Entrar na cozinha</h2><label>PIN da cozinha
+<input id="pin" type="password" inputmode="numeric" pattern="[0-9]{6,8}" minlength="6" maxlength="8" required autocomplete="current-password"></label>
+<button id="entrar" type="submit">Entrar</button><p>O PIN é definido no caixa em Cozinha/Bar → Tablet / TV.</p></form>
+<main id="painel" hidden><div class="filtros"><label>Setor <select id="setor"><option value="">Todos</option></select></label><span id="modo"></span><span id="atualizado"></span></div>
+<p id="vazio" hidden>Nenhum item aguardando neste setor.</p><section id="fila" aria-label="Fila de preparo"></section></main>
+<p id="aviso" role="status" aria-live="polite"></p>
+</body></html>

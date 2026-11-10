@@ -100,3 +100,21 @@ class TestePedidoOnlineNoCaixa(BaseCaixaQt):
         self.banco.cfg_set("pedido_online", "N")
         self.j.vigia_pedidos.buscar(sincrono=True)
         self.assertFalse(self.j.btn_pedidos_online.isVisibleTo(self.j))
+
+    def test_restaurante_lanca_na_mesa_sem_emitir_entrega(self):
+        from src.core import edicao
+        with mock.patch.dict(os.environ, {"PDV_EDICAO": "willrestaurante"}):
+            edicao.preparar(self.banco)
+            self.j = self.janela()
+            self.j.vigia_pedidos.timer.stop()
+            self.na_nuvem[0]["mesa"] = 2
+            self.j.vigia_pedidos.buscar(sincrono=True)
+            self.j.dialogos.escolhas = [31, "aceitar"]
+            with mock.patch.object(self.ctx.entregas, "emitir_pedido") as entrega, \
+                    mock.patch.object(self.j, "_enviar_remoto") as cozinha:
+                self.j.btn_pedidos_online.click()
+            entrega.assert_not_called()
+            cozinha.assert_called_once()
+            venda = self.ctx.caixa.obter(self.j.venda_id)
+            self.assertEqual((venda["modalidade"], venda["posicao"], venda["comanda"]), ("mesa", 2, 0))
+            self.assertEqual(self.respostas, [("aceitar", 31)])

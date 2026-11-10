@@ -406,6 +406,9 @@ class JanelaCadastro(QDialog):
             botao = QPushButton("Criar fardo")
             botao.clicked.connect(self.criar_embalagem)
             barra.addWidget(botao)
+            adicionais = QPushButton("Adicionais e opções")
+            adicionais.clicked.connect(self.adicionais)
+            barra.addWidget(adicionais)
             botao = QPushButton("Criar combo")
             botao.clicked.connect(self.criar_combo)
             barra.addWidget(botao)
@@ -702,6 +705,22 @@ class JanelaCadastro(QDialog):
                 dialogo.deleteLater()
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
+
+    def adicionais(self):
+        try:
+            self.exigir_acesso()
+            produto_id = self.selecionado()
+            if produto_id is None:
+                self.mensagem.setText("Selecione o produto.")
+                return
+            from src.ui_qt.opcoes_produto import DialogoCadastroOpcoes
+            dialogo = DialogoCadastroOpcoes(self.ctx, produto_id, self)
+            try:
+                dialogo.exec()
+            finally:
+                dialogo.deleteLater()
+        except ErroNegocio as exc:
+            self.mensagem.setText(str(exc))
 
     def criar_combo(self):
         try:

@@ -34,8 +34,11 @@ class DialogoPerfil(QDialog):
             "O tipo liga e desliga de uma vez os módulos do caixa. Preços, códigos e cadastros não mudam, "
             "e cada opção continua ajustável depois em Configurações.", "suave"))
         self.escolha = QComboBox()
+        from src.core import edicao
+        permitidos = edicao.atual().perfis
         for chave, (nome, _descricao, _valores) in PERFIS.items():
-            self.escolha.addItem(nome, chave)
+            if not permitidos or chave in permitidos:
+                self.escolha.addItem(nome, chave)
         self.escolha.setCurrentIndex(self.escolha.findData(PerfilController(ctx.banco).atual()))
         self.escolha.currentIndexChanged.connect(self._mostrar)
         layout.addWidget(self.escolha)

@@ -146,6 +146,7 @@ class ProdutoController:
                                "O cadastro atual não comprova a promoção ou faixa aplicada.",
                     "economia_cent": 0}
         base = retrato["preco_base_cent"]
+        adicionais = item.get("adicionais_cent", 0)
         atacado = retrato["tipo"] == "atacado"
         etiquetas = [temperatura] if gelada or retrato["tem_preco_gelada"] else []
         economia = 0
@@ -158,9 +159,11 @@ class ProdutoController:
             quantidade = fmt.fmt_qtd(minimo, fmt.CASAS_QTD).rstrip("0").rstrip(",") if minimo else ""
             regra = (f"a partir de {quantidade} un da mesma bebida/temperatura"
                      if minimo else "faixa de quantidade indisponível")
-            economia = max(0, fmt.mult_cent(base, item["quantidade"]) - item["total_cent"])
+            economia = max(0, fmt.mult_cent(base + adicionais, item["quantidade"]) - item["total_cent"])
             detalhe = (f"Atacado {temperatura.lower()}: {regra}; "
                        f"economia nesta linha: {fmt.fmt_brl(economia)}; {detalhe}")
+        if adicionais:
+            detalhe += f"; adicionais por unidade: {fmt.fmt_brl(adicionais)}"
         bases = [l["base"] for l in retrato["leituras"]] or [retrato["base"]]
         promocoes = sorted({b["criterio"] for b in bases if b["tipo"] == "promocao"})
         if promocoes:

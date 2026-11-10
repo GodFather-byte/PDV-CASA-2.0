@@ -44,11 +44,23 @@ PERFIS = {
               "delivery, caderneta (fiado) e desconto liberado",
               {**_SEM_BOATE, "usar_mesas": "N", "usar_delivery": "S", "usar_caderneta": "S", "cobra_servico_mesa": "N",
                "cobra_servico_comanda": "N", "agrupar_itens_balcao": "S"}),
+    "hamburgueria": ("Hamburgueria", "mesas, cozinha, delivery e pedido online; sem recursos da casa noturna",
+                    {**_RESTAURANTE, "pergunta_pessoas": "N"}),
+    "pizzaria": ("Pizzaria", "mesas, cozinha, delivery e pedido online",
+                {**_RESTAURANTE, "pergunta_pessoas": "N"}),
+    "a_la_carte": ("À la carte", "mesas com serviço, cozinha e delivery", {**_RESTAURANTE}),
+    "rodizio": ("Rodízio", "mesas com cobrança por pessoa, cozinha e delivery",
+                {**_RESTAURANTE, "usar_rodizio": "S"}),
 }
 PADRAO = "boate"
 
 # Categorias (grupo: subgrupos) que o perfil cria se ainda não existirem: nunca apaga nem renomeia as da casa.
 CATEGORIAS = {
+    "hamburgueria": {"LANCHES": ["HAMBÚRGUERES", "ACOMPANHAMENTOS", "SOBREMESAS"],
+                     "BEBIDAS": ["REFRIGERANTES", "ÁGUAS E SUCOS"]},
+    "pizzaria": {"PIZZAS": ["PIZZAS SALGADAS", "PIZZAS DOCES"], "BEBIDAS": ["REFRIGERANTES", "ÁGUAS E SUCOS"]},
+    "a_la_carte": {"COZINHA": ["PRATOS", "PORÇÕES", "SOBREMESAS"]},
+    "rodizio": {"COZINHA": ["RODÍZIO", "EXTRAS", "SOBREMESAS"]},
     "adega": {"BEBIDAS": ["CERVEJAS", "DESTILADOS", "VINHOS E ESPUMANTES", "REFRIGERANTES", "ÁGUAS E SUCOS", "ENERGÉTICOS"],
               "CONVENIÊNCIA": ["GELO E CARVÃO", "TABACARIA", "PETISCOS", "DESCARTÁVEIS"]},
 }
@@ -111,6 +123,10 @@ class PerfilController:
 
     @staticmethod
     def _valores(perfil: str) -> dict:
+        from src.core import edicao
+        ed = edicao.atual()
+        if ed.perfis and perfil not in ed.perfis:
+            raise ErroNegocio(f"O {ed.nome} aceita apenas os perfis: {', '.join(sorted(ed.perfis))}.")
         if perfil not in PERFIS:
             raise ErroNegocio(f"Perfil desconhecido: {perfil}.")
         return PERFIS[perfil][2]

@@ -15,6 +15,7 @@ edição Will Adega: boate mostra o cardápio só para consulta. O preço aqui �
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import datetime, timedelta
 from urllib.parse import quote
@@ -25,9 +26,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.database import Base, engine, get_db
+from src.core.formatacao import mult_cent
 
-EDICAO = "willadega"
-PAGAMENTOS = {"dinheiro": "Dinheiro", "pix": "Pix na entrega", "cartao": "Cartão na entrega"}
+EDICAO = "willadega"  # migração legada: não atribuir esta edição a restaurantes
+EDICOES_PEDIDO = frozenset({"willadega", "willrestaurante"})
+PAGAMENTOS = {"dinheiro": "Dinheiro", "pix": "Pix na entrega", "cartao": "Cartão na entrega",
+              "na_mesa": "Acertar a conta no caixa"}
 MAX_LINHAS = 40
 MAX_QTD = 99
 ABERTOS_POR_TELEFONE = 3        # pedidos ainda não respondidos pelo caixa, por telefone
@@ -98,6 +102,7 @@ def config_limpa(bruto) -> dict:
         "minimo_cent": max(0, min(_int(bruto.get("minimo_cent")), 10_000_000)),
         "taxa_padrao_cent": max(0, min(_int(bruto.get("taxa_padrao_cent")), 100000)),
         "retirada": bool(bruto.get("retirada", True)),
+        "mesas": min(999, max(0, _int(bruto.get("mesas")))),
         "bairros": bairros,
     }
 
@@ -111,12 +116,14 @@ def _edicao_cadastrada(loja) -> str:
 def pode_pedir(loja, edicao_enviada) -> bool:
     """Os dois lados dizem Will Adega. Edição vazia ou willpdv não recebe pedido."""
     enviada = str(edicao_enviada or "").strip().lower()
-    return enviada == EDICAO and _edicao_cadastrada(loja) == EDICAO
+    return enviada in EDICOES_PEDIDO and _edicao_cadastrada(loja) == enviada
 
 
 def gravar_config(db: Session, loja, bruto, edicao_enviada) -> dict:
     """Chamado no envio do cardápio. Boate (ou cadastro de outra edição) fica sempre desligada."""
     cfg = config_limpa(bruto) if pode_pedir(loja, edicao_enviada) else {"ligado": False}
+    if _edicao_cadastrada(loja) != "willrestaurante" and cfg.get("ligado"):
+        cfg["mesas"] = 0
     linha = db.get(PedidoOnlineConfig, loja.chave_loja)
     if linha is None:
         linha = PedidoOnlineConfig(chave_loja=loja.chave_loja)
@@ -134,8 +141,10 @@ def config_da_loja(db: Session, loja) -> dict:
         cfg = json.loads(linha.dados or "{}")
     except ValueError:
         return {"ligado": False}
-    if not isinstance(cfg, dict) or not cfg.get("ligado") or _edicao_cadastrada(loja) != EDICAO:
+    if not isinstance(cfg, dict) or not cfg.get("ligado") or _edicao_cadastrada(loja) not in EDICOES_PEDIDO:
         return {"ligado": False}
+    if _edicao_cadastrada(loja) != "willrestaurante":
+        cfg["mesas"] = 0
     return cfg
 
 
@@ -145,7 +154,8 @@ def config_publica(db: Session, loja) -> dict | None:
     if not cfg.get("ligado") or not cfg.get("whatsapp"):
         return None
     return {k: cfg[k] for k in ("minimo_cent", "taxa_padrao_cent", "retirada", "bairros")} | {
-        "pagamentos": [{"chave": k, "nome": v} for k, v in PAGAMENTOS.items()]}
+        "mesas": cfg.get("mesas", 0) if _edicao_cadastrada(loja) == "willrestaurante" else 0,
+        "pagamentos": [{"chave": k, "nome": v} for k, v in PAGAMENTOS.items() if k != "na_mesa"]}
 
 
 def texto_whatsapp(nome_loja: str, numero: int, d: dict) -> str:
@@ -154,9 +164,13 @@ def texto_whatsapp(nome_loja: str, numero: int, d: dict) -> str:
         qtd = i["qtd"]
         texto_qtd = str(int(qtd)) if float(qtd) == int(qtd) else str(qtd).replace(".", ",")
         temp = " gelada" if i.get("temperatura") == "gelada" else ""
-        linhas.append(f"{texto_qtd}x {i['nome']}{temp} - {reais(int(round(qtd * i['preco_cent'])))}")
+        linhas.append(f"{texto_qtd}x {i['nome']}{temp} - {reais(mult_cent(i['preco_cent'], qtd))}")
+        for o in i.get("opcoes", []):
+            linhas.append(f"  + {o['nome']} ({reais(o['preco_cent'])})")
     linhas.append("")
-    if d["retirada"]:
+    if d.get("mesa"):
+        linhas.append(f"Mesa {d['mesa']} — pedido aguardando confirmação do caixa")
+    elif d["retirada"]:
         linhas.append("Retirar na loja")
     else:
         linhas.append(f"Entrega: {d['endereco']} - {d['bairro'] or 'bairro não informado'}")
@@ -177,19 +191,22 @@ def texto_whatsapp(nome_loja: str, numero: int, d: dict) -> str:
 def montar_pedido(cfg: dict, catalogo: dict[str, dict], corpo: dict, quando: datetime | None = None) -> dict:
     """Valida o que o cliente mandou e calcula o total estimado com o preço do cardápio naquele momento."""
     from src.cardapio.preco import preco_para_cardapio
+    mesa = corpo.get("mesa")
+    if mesa is not None and (type(mesa) is not int or not 1 <= mesa <= cfg.get("mesas", 0)):
+        raise HTTPException(status_code=422, detail="Esta mesa não está disponível para pedido online.")
     nome = _txt(corpo.get("nome"), 60)
     telefone = _so_digitos(corpo.get("telefone"))
-    retirada = bool(corpo.get("retirada")) and cfg.get("retirada", True)
+    retirada = mesa is not None or (bool(corpo.get("retirada")) and cfg.get("retirada", True))
     endereco = _txt(corpo.get("endereco"), 160)
     bairro = _txt(corpo.get("bairro"), 60)
-    pagamento = str(corpo.get("pagamento") or "")
+    pagamento = "na_mesa" if mesa is not None else str(corpo.get("pagamento") or "")
     if len(nome) < 2:
         raise HTTPException(status_code=422, detail="Informe o seu nome.")
     if not _TEL.fullmatch(telefone):
         raise HTTPException(status_code=422, detail="Informe o telefone com DDD (só números).")
     if not retirada and len(endereco) < 5:
         raise HTTPException(status_code=422, detail="Informe o endereço de entrega.")
-    if pagamento not in PAGAMENTOS:
+    if pagamento not in PAGAMENTOS or (mesa is None and pagamento == "na_mesa"):
         raise HTTPException(status_code=422, detail="Escolha a forma de pagamento.")
     linhas = corpo.get("itens")
     if not isinstance(linhas, list) or not linhas:
@@ -214,6 +231,8 @@ def montar_pedido(cfg: dict, catalogo: dict[str, dict], corpo: dict, quando: dat
             qtd = float(linha.get("qtd"))
         except (TypeError, ValueError):
             qtd = 0
+        if isinstance(linha.get("qtd"), bool) or not math.isfinite(qtd):
+            raise HTTPException(status_code=422, detail="Quantidade inválida.")
         if not fracionado:
             if qtd != int(qtd):
                 raise HTTPException(status_code=422, detail=f"{produto['nome']} não aceita quantidade fracionada.")
@@ -232,15 +251,22 @@ def montar_pedido(cfg: dict, catalogo: dict[str, dict], corpo: dict, quando: dat
             preco = int(ProdutoController.regra_preco_gelada(produto, quando)["preco_cent"])
         else:
             preco = preco_para_cardapio(produto, quando)["preco_cent"]
-        chave_item = f"{codigo}|{temperatura}"
+        from src.core.opcoes_produto import selecionar
+        try:
+            escolhas = selecionar(produto.get("grupos_opcoes", []), linha.get("opcoes_ids"))
+        except (ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
+        preco += sum(o["preco_cent"] for o in escolhas)
+        ids = sorted(o["id"] for o in escolhas)
+        chave_item = f"{codigo}|{temperatura}|" + ",".join(ids)
         atual = itens.get(chave_item)
         if atual:
             atual["qtd"] = min(MAX_QTD, round(atual["qtd"] + qtd, 4))
             atual["cascos"] = min(int(atual["qtd"]), atual["cascos"] + cascos)
         else:
             itens[chave_item] = {"codigo": codigo, "nome": produto["nome"], "qtd": qtd, "preco_cent": preco,
-                                 "temperatura": temperatura, "cascos": cascos}
-    subtotal = sum(int(round(i["qtd"] * i["preco_cent"])) for i in itens.values())
+                                 "temperatura": temperatura, "cascos": cascos, "opcoes_ids": ids, "opcoes": escolhas}
+    subtotal = sum(mult_cent(i["preco_cent"], i["qtd"]) for i in itens.values())
     if subtotal < cfg.get("minimo_cent", 0):
         raise HTTPException(status_code=422, detail=f"O pedido mínimo é {reais(cfg['minimo_cent'])}.")
     taxa = 0
@@ -259,6 +285,7 @@ def montar_pedido(cfg: dict, catalogo: dict[str, dict], corpo: dict, quando: dat
     if troco and troco < total:
         raise HTTPException(status_code=422, detail="O valor para troco é menor que o total.")
     return {
+        **({"mesa": mesa} if mesa is not None else {}),
         "nome": nome, "telefone": telefone, "retirada": retirada, "endereco": "" if retirada else endereco,
         "bairro": "" if retirada else bairro, "pagamento": pagamento, "troco_para_cent": troco,
         "observacao": _txt(corpo.get("observacao"), 200), "aviso": aviso, "itens": list(itens.values()),
@@ -397,8 +424,8 @@ def instalar(app: FastAPI, Loja, autenticar, loja_ativa, catalogo_da_loja) -> AP
         if acesso.admin:
             raise HTTPException(status_code=403, detail="Use o token da loja.")
         loja = db.query(Loja).filter(Loja.chave_loja == acesso.loja).first()
-        if loja is None or _edicao_cadastrada(loja) != EDICAO:
-            raise HTTPException(status_code=403, detail="Pedido online só existe no Will Adega.")
+        if loja is None or _edicao_cadastrada(loja) not in EDICOES_PEDIDO:
+            raise HTTPException(status_code=403, detail="Pedido online disponível no Will Adega e no Will Restaurante.")
         return acesso.loja
 
     @router.get("/v1/pedidos-online")
@@ -414,6 +441,8 @@ def instalar(app: FastAPI, Loja, autenticar, loja_ativa, catalogo_da_loja) -> AP
         if p is None or p.chave_loja != chave:
             raise HTTPException(status_code=404, detail="Pedido não encontrado.")
         if p.situacao != "novo":
+            if situacao_nova == "aceito" and p.situacao in {"aceito", "saiu", "entregue", "cancelado"}:
+                return {"situacao": p.situacao}
             if p.situacao == situacao_nova:
                 return {"situacao": p.situacao}          # repetir é inofensivo (o caixa tenta de novo sem rede)
             raise HTTPException(status_code=409, detail=f"Este pedido já foi {p.situacao}.")

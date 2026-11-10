@@ -2148,6 +2148,16 @@ class JanelaCaixa(QMainWindow):
             if partes is None:
                 return
         opcoes = {}
+        from src.controllers.opcoes_produto_controller import OpcoesProdutoController
+        if OpcoesProdutoController(self.ctx.banco).grupos(p["id"]):
+            from src.ui_qt.opcoes_produto import DialogoEscolherOpcoes
+            dialogo = DialogoEscolherOpcoes(self.ctx.banco, p["id"], self)
+            try:
+                if dialogo.exec() != QDialog.DialogCode.Accepted:
+                    return
+                opcoes["opcoes_ids"] = dialogo.opcoes_ids
+            finally:
+                dialogo.deleteLater()
         if p.get("preco_gelada_cent", 0) > 0:
             temperatura = self.dialogos.escolher(
                 "Temperatura da bebida", f"{p['nome']}: como o cliente vai levar? "

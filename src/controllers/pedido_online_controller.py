@@ -49,7 +49,8 @@ def _texto_qtd(qtd: float) -> str:
 
 def resumo(pedido: dict) -> str:
     """Uma linha para a lista do caixa: '#12 · João · Centro · 3 itens · R$ 87,50'."""
-    onde = "Retira na loja" if pedido.get("retirada") else (pedido.get("bairro") or "Sem bairro")
+    onde = (f"Mesa {pedido['mesa']}" if pedido.get("mesa") else
+            "Retira na loja" if pedido.get("retirada") else (pedido.get("bairro") or "Sem bairro"))
     itens = sum(_qtd(i) for i in pedido.get("itens") or [])
     texto_itens = _texto_qtd(itens)
     return (f"#{pedido.get('numero')} · {pedido.get('nome', '')} · {onde} · {texto_itens} "
@@ -61,6 +62,8 @@ def detalhe(pedido: dict) -> str:
     for i in pedido.get("itens") or []:
         temp = " gelada" if i.get("temperatura") == "gelada" else ""
         linhas.append(f"{_texto_qtd(_qtd(i))}x {i.get('nome')}{temp}")
+        for o in i.get("opcoes", []):
+            linhas.append(f"  + {o['nome']} ({fmt.fmt_brl(o['preco_cent'])})")
     linhas.append("")
     if pedido.get("aviso"):
         linhas.append(pedido["aviso"])
@@ -84,8 +87,12 @@ class PedidoOnlineController:
         self.produtos = produtos
         self.operador_id = operador_id
 
-    def ja_importado(self, numero) -> int | None:
+    def ja_importado(self, numero, pedido_id=None) -> int | None:
         """O número inteiro: '#1' não pode casar com '#10' nem com '#11'."""
+        if pedido_id is not None:
+            mesa = self.banco.um("SELECT venda_id FROM pedidos_mesa_importados WHERE pedido_id = ?", (pedido_id,))
+            if mesa:
+                return mesa["venda_id"]
         texto = marca(numero)
         r = self.banco.um(
             "SELECT id FROM vendas WHERE modalidade = 'entrega' AND status <> 'cancelada' "
@@ -118,6 +125,9 @@ class PedidoOnlineController:
         """Cria a entrega do pedido. Devolve venda_id e se já existia. Item fora de venda não entra: o pedido não é aceito."""
         if not self.banco.cfg_bool("pedido_online", False):
             raise ErroNegocio("O pedido online está desligado (Configurações > Módulos).")
+        if pedido.get("mesa") is not None:
+            from src.controllers.pedido_mesa_controller import importar
+            return importar(self, pedido)
         existente = self.ja_importado(pedido.get("numero"))
         if existente:
             return {"venda_id": existente, "faltando": [], "ja_existia": True}
@@ -136,7 +146,9 @@ class PedidoOnlineController:
             elif cascos and not p["casco_produto_id"]:
                 faltando.append(f"{item.get('nome')} não trabalha com casco")
             else:
-                linhas.append((p["id"], qtd, temp, cascos))
+                from src.controllers.opcoes_produto_controller import OpcoesProdutoController
+                ids = OpcoesProdutoController(self.banco).conferir_pedido(p["id"], item)
+                linhas.append((p["id"], qtd, temp, cascos, ids))
         if faltando or not linhas:
             lista = ", ".join(faltando) or "nenhum produto"
             raise ErroNegocio(f"Não aceito: {lista}. Recuse o pedido e avise o cliente.")
@@ -149,8 +161,9 @@ class PedidoOnlineController:
             venda_id = self.entregas.abrir(self._cliente(pedido))
             if pedido.get("retirada"):
                 self.banco.atualizar("vendas", venda_id, {"taxa_cent": 0})
-            for produto_id, qtd, temp, cascos in linhas:
-                self.caixa.adicionar_item(venda_id, produto_id, qtd, temperatura=temp, quantidade_cascos=cascos)
+            for produto_id, qtd, temp, cascos, opcoes_ids in linhas:
+                self.caixa.adicionar_item(venda_id, produto_id, qtd, temperatura=temp, quantidade_cascos=cascos,
+                                          opcoes_ids=opcoes_ids)
             troco = int(pedido.get("troco_para_cent") or 0) if pedido.get("pagamento") == "dinheiro" else 0
             aviso = {"pedido_online_aviso": "aceito", "pedido_online_aviso_ok": 0} if pedido.get("id") else {}
             self.banco.atualizar("vendas", venda_id, {

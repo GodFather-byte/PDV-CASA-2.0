@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 47
+VERSAO_ESQUEMA = 49
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -164,6 +164,17 @@ MAQUINAS_DDL = """CREATE TABLE IF NOT EXISTS maquinas (
 )"""
 
 TABELAS = [
+    """CREATE TABLE IF NOT EXISTS pedidos_mesa_importados (
+        pedido_id INTEGER PRIMARY KEY,
+        venda_id INTEGER NOT NULL REFERENCES vendas(id) ON DELETE CASCADE,
+        aviso TEXT NOT NULL DEFAULT 'aceito',
+        aviso_ok INTEGER NOT NULL DEFAULT 0,
+        criado_em TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS produto_opcoes (
+        produto_id INTEGER PRIMARY KEY REFERENCES produtos(id) ON DELETE CASCADE,
+        grupos_json TEXT NOT NULL DEFAULT '[]'
+    )""",
     "CREATE TABLE IF NOT EXISTS painel_revisao (id INTEGER PRIMARY KEY CHECK (id = 1), revisao INTEGER NOT NULL)",
     "INSERT OR IGNORE INTO painel_revisao(id, revisao) VALUES (1, 0)",
     """CREATE TABLE IF NOT EXISTS painel_devolucoes_enviadas (
@@ -551,6 +562,8 @@ TABELAS = [
         preco_unit_cent INTEGER NOT NULL,
         preco_base_cent INTEGER,
         regra_preco_json TEXT,
+        opcoes_json TEXT NOT NULL DEFAULT '[]',
+        adicionais_cent INTEGER NOT NULL DEFAULT 0 CHECK (adicionais_cent >= 0),
         temperatura TEXT NOT NULL DEFAULT 'natural' CHECK (temperatura IN ('natural', 'gelada')),
         cascos_emprestados INTEGER NOT NULL DEFAULT 0 CHECK (cascos_emprestados >= 0),
         garota_quarto INTEGER,
@@ -1070,6 +1083,9 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    49: [],  # tabela aditiva de deduplicação e confirmação dos pedidos de mesa
+    48: [("coluna", "itens_venda", "opcoes_json", "TEXT NOT NULL DEFAULT '[]'"),
+         ("coluna", "itens_venda", "adicionais_cent", "INTEGER NOT NULL DEFAULT 0 CHECK (adicionais_cent >= 0)")],
     # v47: vários caixas na mesma loja (src/database/rede.py). Cada caixa imprime só o que ele mesmo mandou para a
     # fila; o que já estava na fila fica com o caixa que existia até aqui.
     47: [

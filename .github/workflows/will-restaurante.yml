@@ -1,0 +1,119 @@
+name: Will Restaurante
+on:
+  push:
+    branches: [feat/willrestaurante, main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: will-restaurante-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validar:
+    if: github.ref != 'refs/heads/main'
+    name: Perfis e pedidos / Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: sudo apt-get update -q && sudo apt-get install -y -q libegl1 libopengl0
+      - run: pip install --require-hashes -r requirements.txt -r backend/requirements.txt -r requirements-test.txt
+      - run: node --check backend/cardapio_web/app.js && node --check src/cozinha/web/app.js
+      - run: python -m unittest tests.test_qt_restaurante tests.test_autoteste tests.test_migracao_itens_antigos tests.test_rede_caixas tests.test_cozinha_web tests.test_qt_cozinha tests.test_caixa tests.test_devolucoes tests.test_caixa_divisao_itens tests.test_alterar_quantidade tests.test_adega tests.test_adega_retrato tests.test_cozinha tests.test_pedido_mesa tests.test_opcoes_produto tests.test_will_restaurante tests.test_edicao tests.test_perfil tests.test_pedido_online tests.test_qt_pedido_online
+  instalador:
+    name: Instalador Will Restaurante / Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    outputs:
+      versao: ${{ steps.info.outputs.versao }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r requirements.txt -r requirements-build.txt
+      - name: Inno Setup
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+      - name: Versão
+        id: info
+        run: |
+          $versao = python -c "from src.versao import VERSAO; print(VERSAO)"
+          "versao=$versao" >> $env:GITHUB_OUTPUT
+      - run: python build_pdv.py --edicao willrestaurante
+      - name: Autoteste do executável
+        run: |
+          $relatorio = Join-Path $env:RUNNER_TEMP "willrestaurante-autoteste.txt"
+          $exe = (Resolve-Path "dist\WillRestaurante\WillRestaurante.exe").Path
+          $p = Start-Process -FilePath $exe -ArgumentList "--autoteste", "`"$relatorio`"" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw "Autoteste não terminou" }
+          if (Test-Path $relatorio) { Get-Content $relatorio }
+          if ($p.ExitCode -ne 0) { throw "Autoteste falhou" }
+      - name: Instalação real no Windows de teste
+        run: |
+          $destino = Join-Path $env:RUNNER_TEMP "WillRestaurante-instalado"
+          $setup = (Get-ChildItem "instalador\saida\WillRestaurante-Setup-*.exe" | Select-Object -First 1).FullName
+          $p = Start-Process -FilePath $setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$destino`"" -PassThru
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "Instalação não terminou" }
+          if ($p.ExitCode -ne 0) { throw "Instalador falhou" }
+          $relatorio = Join-Path $env:RUNNER_TEMP "willrestaurante-instalado.txt"
+          $p = Start-Process -FilePath (Join-Path $destino "WillRestaurante.exe") -ArgumentList "--autoteste", "`"$relatorio`"" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw "Autoteste instalado não terminou" }
+          if (Test-Path $relatorio) { Get-Content $relatorio }
+          if ($p.ExitCode -ne 0) { throw "Autoteste do instalado falhou" }
+      - name: Pacote portátil
+        run: Compress-Archive -Path "dist\WillRestaurante\*" -DestinationPath "instalador\saida\WillRestaurante-Portatil.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WillRestaurante-instalador
+          path: |
+            instalador/saida/WillRestaurante-Setup-*.exe
+            instalador/saida/WillRestaurante-Portatil.zip
+          if-no-files-found: error
+
+  publicar:
+    name: Publicar última versão do Will Restaurante
+    if: github.ref == 'refs/heads/main'
+    needs: instalador
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: WillRestaurante-instalador
+          path: release
+      - name: Publicar instalador e portátil
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSAO: ${{ needs.instalador.outputs.versao }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          origem = next(Path("release").rglob("WillRestaurante-Setup-*.exe"))
+          shutil.copyfile(origem, Path("release") / "WillRestaurante-Instalador.exe")
+          PY
+          gh api --method PATCH "repos/$GH_REPO/git/refs/tags/ultima-versao-restaurante" -f sha="$GITHUB_SHA" -F force=true > /dev/null ||
+            gh api --method POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/ultima-versao-restaurante -f sha="$GITHUB_SHA" > /dev/null
+          if gh release view ultima-versao-restaurante --repo "$GH_REPO" > /dev/null 2>&1; then
+            gh release edit ultima-versao-restaurante --title "Will Restaurante $VERSAO" --notes "Instalador e portátil do commit $GITHUB_SHA, com autoteste do executável e da instalação no Windows." --latest=false
+          else
+            gh release create ultima-versao-restaurante --title "Will Restaurante $VERSAO" --notes "Instalador e portátil do commit $GITHUB_SHA, com autoteste do executável e da instalação no Windows." --latest=false
+          fi
+          gh release upload ultima-versao-restaurante release/WillRestaurante-Instalador.exe release/WillRestaurante-Portatil.zip --clobber

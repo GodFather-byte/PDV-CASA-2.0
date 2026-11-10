@@ -22,6 +22,7 @@ from src.core.erros import ErroNegocio
 from src.database import rede
 from src.database.conexao import BancoDados, caminho_padrao
 from src.porteiro.servico import ServicoPorteiro, descrever as descrever_porteiro
+from src.cozinha.servico import ServicoCozinha
 from src.sync.ponte import ServicoPonte
 from src.sync.sincronizador import ServicoSincronizacao
 from src.controllers.contexto import Contexto
@@ -554,7 +555,7 @@ class JanelaPrincipal(QMainWindow):
             achado = getattr(servico, "erro_porteiro", None)
             if achado:
                 erro = achado
-        texto = descrever_porteiro(self.ctx.banco, erro)
+        texto = "" if "porteiro" in self.edicao.menu_oculto else descrever_porteiro(self.ctx.banco, erro)
         self.linha_porteiro.setVisible(bool(texto))
         self.linha_porteiro.setText(texto)
 
@@ -1029,6 +1030,7 @@ class App:
                     self.ctx.utilitarios.backup_automatico("início")
                 classes = ((ServicoFilaImpressao, "Impressão"),
                            (ServicoPonte, "Ponte de licenças"), (ServicoPorteiro, "Porteiro"),
+                           (ServicoCozinha, "Cozinha web"),
                            (ServicoSincronizacao, "Sincronização da nuvem"),
                            (rede.ServicoRedeCaixas, "Caixas da loja"))
             for classe, nome in classes:

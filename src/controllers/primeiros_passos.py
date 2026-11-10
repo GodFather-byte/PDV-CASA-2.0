@@ -22,7 +22,7 @@ class PrimeirosPassos:
     def passos(self) -> list[dict]:
         """[{chave, titulo, feito, detalhe, essencial}], na ordem em que a instalação costuma andar."""
         passos = [self._licenca(), self._loja()]
-        if not edicao.atual().perfil:               # edição com perfil fixo (Will Adega) não escolhe tipo de negócio
+        if not edicao.atual().perfil_fixo():               # edição com perfil fixo (Will Adega) não escolhe tipo de negócio
             passos.append(self._perfil())
         passos += [self._impressora(), self._produtos(), self._nuvem(), self._backup()]
         return passos

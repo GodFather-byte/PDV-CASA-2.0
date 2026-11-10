@@ -60,6 +60,9 @@ class CaixaController(DivisaoContaMixin):
             sql += " AND i.cancelado = 0"
         linhas = [dict(r) for r in self.banco.todos(sql + " ORDER BY i.id", (venda_id,))]
         for ln in linhas:
+            ln["opcoes"] = json.loads(ln.get("opcoes_json") or "[]")
+            if ln["opcoes"]:
+                ln["nome"] += " (" + ", ".join(o["nome"] for o in ln["opcoes"]) + ")"
             ln["partes_nomes"] = [r[0] for r in self.banco.todos(
                 "SELECT p.nome FROM itens_venda_partes x JOIN produtos_historico p ON p.id = x.produto_id "
                 "WHERE x.item_id = ? ORDER BY x.id", (ln["id"],))]
@@ -259,14 +262,19 @@ class CaixaController(DivisaoContaMixin):
                        partes: list[int] | None = None, *, temperatura: str = "natural",
                        quantidade_cascos: int = 0, confirmar_entrega_ficha: bool = False,
                        cascos_emprestados: int = 0, garota_quarto: int | None = None,
-                       quarto_pedido: int | None = None) -> int:
+                       quarto_pedido: int | None = None, opcoes_ids: list[str] | None = None) -> int:
         v = self._aberta(venda_id)
         p = self.produtos.por_id(produto_id)
         if p is None or not p["ativo"]:
             raise ErroNegocio("Produto não encontrado.")
         if not p["venda"]:
             raise ErroNegocio(f"'{p['nome']}' não está liberado para venda.")
+        from src.controllers.opcoes_produto_controller import OpcoesProdutoController
+        escolhas = OpcoesProdutoController(self.banco).selecionar(produto_id, opcoes_ids)
+        adicionais = sum(o["preco_cent"] for o in escolhas)
         ficha_credito = ficha_sangria.eh_ficha(self.banco, p)
+        if ficha_credito and escolhas:
+            raise ErroNegocio("Ficha em dinheiro não admite adicionais.")
         if ficha_credito and not confirmar_entrega_ficha:
             raise ErroNegocio("Confirme a entrega física do dinheiro para lançar esta ficha.")
         if ficha_credito and (v["modalidade"] != "mesa" or not v["comanda"]):
@@ -313,6 +321,8 @@ class CaixaController(DivisaoContaMixin):
             garota_quarto = v["garota_quarto"]           # show lançado depois do número dela: já é dela
             quarto_pedido = quarto_pedido if quarto_pedido is not None else v.get("quarto_pedido")
         if garota_quarto is not None or quarto_pedido is not None:
+            if escolhas:
+                raise ErroNegocio("Lançamento de quarto não admite adicionais comerciais.")
             self._validar_quarto_lancado(p, quantidade, garota_quarto, quarto_pedido)
         self._conferir_limite_comanda(v)
 
@@ -352,17 +362,20 @@ class CaixaController(DivisaoContaMixin):
 
         observacao = self._observacao_temperatura(observacao, temperatura)
 
+        preco_sem_opcoes = preco
+        preco += adicionais
+        retrato["preco_unit_cent"] = preco
         total = fmt.mult_cent(preco, quantidade)
         with self.banco.transacao():
             existente = None
-            if (v["modalidade"] == "balcao" and not partes and garota_quarto is None
+            if (v["modalidade"] == "balcao" and not partes and not escolhas and garota_quarto is None
                     and self.banco.cfg_bool("agrupar_itens_balcao", False)
                     and not self.banco.valor("SELECT impressora_remota FROM subgrupos WHERE id = ?", (p["subgrupo_id"],))):
                 existente = self.banco.um(
                     """SELECT i.* FROM itens_venda i WHERE i.venda_id = ? AND i.produto_id = ?
                        AND i.cancelado = 0 AND i.temperatura = ? AND i.preco_base_cent = ?
                        AND i.observacao IS ? AND i.operador_id IS ? AND i.cobra_servico = ?
-                       AND i.status_preparo = 'pendente' AND i.partes = 1
+                       AND i.status_preparo = 'pendente' AND i.partes = 1 AND i.opcoes_json = '[]'
                        AND NOT EXISTS (SELECT 1 FROM itens_venda_partes x WHERE x.item_id = i.id)
                        ORDER BY i.id DESC LIMIT 1""",
                     (venda_id, produto_id, temperatura, preco, observacao, self.operador_id, p["cobrar_servico"]))
@@ -399,7 +412,8 @@ class CaixaController(DivisaoContaMixin):
             else:
                 item_id = self.banco.inserir("itens_venda", {
                     "venda_id": venda_id, "produto_id": produto_id, "quantidade": quantidade,
-                    "preco_unit_cent": preco, "preco_base_cent": None if partes else preco,
+                    "preco_unit_cent": preco, "preco_base_cent": None if partes else preco_sem_opcoes,
+                    "opcoes_json": json.dumps(escolhas, ensure_ascii=False), "adicionais_cent": adicionais,
                     "regra_preco_json": json.dumps(retrato, ensure_ascii=False),
                     "temperatura": temperatura, "total_cent": total, "cobra_servico": 0 if ficha_credito else p["cobrar_servico"],
                     "observacao": observacao, "comissao_cent": 0 if ficha_credito else fmt.pct_de(total, p["comissao_pct"]),
@@ -462,7 +476,7 @@ class CaixaController(DivisaoContaMixin):
             quantidades[chave] = fmt.arred_qtd(quantidades.get(chave, 0) + i["quantidade"])
         for i in itens:
             preco = self.produtos.preco_por_quantidade_adega(
-                i, i["preco_base_cent"], quantidades[(i["produto_id"], i["temperatura"])], i["temperatura"])
+                i, i["preco_base_cent"], quantidades[(i["produto_id"], i["temperatura"])], i["temperatura"]) + i["adicionais_cent"]
             total = fmt.mult_cent(preco, i["quantidade"])
             if i["qtd_paga_item"] > 0:
                 # Linha já paga por item não muda: nem preço (recusa) nem o total exato que foi pago.
@@ -484,7 +498,7 @@ class CaixaController(DivisaoContaMixin):
                 minimo = i["atacado_gelada_qtd" if gelada else "atacado_qtd"]
                 faixa = i["preco_atacado_gelada_cent" if gelada else "preco_atacado_cent"]
                 quantidade_grupo = quantidades[(i["produto_id"], i["temperatura"])]
-                novos = {"tipo": "atacado" if preco < i["preco_base_cent"] else retrato["base"]["tipo"],
+                novos = {"tipo": "atacado" if preco - i["adicionais_cent"] < i["preco_base_cent"] else retrato["base"]["tipo"],
                          "preco_unit_cent": preco, "minimo_qtd": minimo, "preco_faixa_cent": faixa,
                          "quantidade_grupo": quantidade_grupo,
                          "faixa_atingida": minimo > 0 and faixa > 0 and quantidade_grupo >= minimo}
@@ -1105,7 +1119,8 @@ class CaixaController(DivisaoContaMixin):
         agora = fmt.agora()
         with self.banco.transacao():
             self.estoque.liberar_reserva(venda_id)
-            if v.get("pedido_online_id"):
+            if v.get("pedido_online_id") or self.banco.um(
+                    "SELECT 1 FROM pedidos_mesa_importados WHERE venda_id = ?", (venda_id,)):
                 self.marcar_aviso_online(venda_id, "cancelado")
             for ficha in fichas:
                 ficha_sangria.registrar_estorno(self.banco, self.turnos, ficha["item_id"], self.operador_id)
@@ -1149,6 +1164,9 @@ class CaixaController(DivisaoContaMixin):
 
     def marcar_aviso_online(self, venda_id: int, situacao: str) -> None:
         """O cliente acompanha no cardápio. A nuvem é avisada depois (o caixa não espera a rede aqui)."""
+        self.banco.executar(
+            "UPDATE pedidos_mesa_importados SET aviso = ?, aviso_ok = 0 WHERE venda_id = ? "
+            "AND (aviso <> 'cancelado' OR ? = 'cancelado')", (situacao, venda_id, situacao))
         linha = self.banco.um(
             "SELECT pedido_online_id, pedido_online_aviso FROM vendas WHERE id = ?", (venda_id,))
         if linha is None or not linha["pedido_online_id"]:

@@ -91,7 +91,7 @@ def coletar(banco) -> dict:
     produtos = []
     orcamento = [FOTOS_EMBUTIDAS_TOTAL]
     for r in banco.todos(
-            """SELECT p.codigo, p.nome, p.preco_cent, p.texto_sugestao,
+            """SELECT p.id AS produto_id, p.codigo, p.nome, p.preco_cent, p.texto_sugestao,
                       p.promo_de, p.promo_ate, p.promo_preco_cent,
                       p.sem_inicial, p.sem_final, p.sem_preco_cent,
                       p.hora_ini, p.hora_fim, p.hora_preco_cent,
@@ -124,6 +124,10 @@ def coletar(banco) -> dict:
             "fracionado": bool(r["aceita_decimal"]),
             "retornavel": bool(r["casco_produto_id"]),
         }
+        from src.controllers.opcoes_produto_controller import OpcoesProdutoController
+        grupos = OpcoesProdutoController(banco).grupos(r["produto_id"])
+        if grupos:
+            item["grupos_opcoes"] = grupos
         codigo = (r["codigo"] or "").strip()
         if codigo.isdigit():
             item["codigo"] = str(int(codigo))              # sem os zeros da frente: é o que o pedido online devolve
@@ -141,10 +145,10 @@ def coletar(banco) -> dict:
 
 
 def config_pedido(banco) -> dict:
-    """Pedido online pelo cardápio: só no Will Adega, com o pedido ligado e o WhatsApp da loja preenchido."""
+    """Pedido online pelo cardápio: no Will Adega e Will Restaurante, com o pedido ligado e o WhatsApp da loja preenchido."""
     from src.core import edicao
     whatsapp = "".join(c for c in (banco.cfg("pedido_online_whatsapp", "") or "") if c.isdigit())
-    if edicao.atual().chave != "willadega" or not banco.cfg_bool("pedido_online", False) or not whatsapp:
+    if edicao.atual().chave not in {"willadega", "willrestaurante"} or not banco.cfg_bool("pedido_online", False) or not whatsapp:
         return {"ligado": False}
     if len(whatsapp) in (10, 11):
         whatsapp = "55" + whatsapp                   # DDD + número: o link do WhatsApp quer o 55 do Brasil
@@ -156,7 +160,9 @@ def config_pedido(banco) -> dict:
     bairros = [{"nome": r["nome"], "taxa_cent": int(r["taxa_cent"] or 0)}
                for r in banco.todos("SELECT nome, taxa_cent FROM bairros ORDER BY nome LIMIT 300")]
     return {"ligado": True, "whatsapp": whatsapp, "minimo_cent": max(0, minimo), "taxa_padrao_cent": max(0, padrao),
-            "retirada": banco.cfg_bool("pedido_online_retirada", True), "bairros": bairros}
+            "retirada": banco.cfg_bool("pedido_online_retirada", True), "bairros": bairros,
+            "mesas": (min(999, max(0, banco.cfg_int("num_mesas", 0))) if edicao.atual().chave == "willrestaurante"
+                      and banco.cfg_bool("usar_mesas") else 0)}
 
 
 def _hash(corpo: dict) -> str:
