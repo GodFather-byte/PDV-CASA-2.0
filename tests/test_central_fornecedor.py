@@ -89,6 +89,57 @@ class TesteCentralFornecedor(unittest.TestCase):
             self.assertEqual(self.http.post("/v1/fornecedor/login", json={"credencial": "errada"}, headers={"X-Central-Login": "1"}).status_code, 401)
         self.assertEqual(self.http.post("/v1/fornecedor/login", json={"credencial": "errada"}, headers={"X-Central-Login": "1"}).status_code, 429)
 
+    def test_lista_traz_a_saude_de_cada_loja_sem_expor_vendas(self):
+        from datetime import datetime
+        from backend import erros_caixa
+        from backend.painel import PainelCaixa
+        agora = datetime.now()
+        marca = lambda **k: (agora - timedelta(**k)).strftime("%Y-%m-%d %H:%M:%S")
+        with nuvem.SessionLocal() as db:
+            db.query(PainelCaixa).delete()
+            db.query(erros_caixa.ErroCaixa).delete()
+            db.add(PainelCaixa(chave_loja="LOJA-1", terminal_id="a", terminal=1, recebido_em=marca(minutes=5),
+                               dados=json.dumps({"versao_programa": "1.12.0", "faturamento_cent": 99999})))
+            db.add(PainelCaixa(chave_loja="LOJA-1", terminal_id="b", terminal=2, recebido_em=marca(hours=3),
+                               dados=json.dumps({"versao_programa": "1.11.0"})))
+            db.add(PainelCaixa(chave_loja="LOJA-2", terminal_id="a", terminal=1, recebido_em=marca(days=2), dados="quebrado"))
+            db.add(erros_caixa.ErroCaixa(chave_loja="LOJA-2", assinatura="e" * 64, nivel="error", modulo="caixa",
+                                         mensagem="falha", traceback="", contexto="", vezes=3,
+                                         criado_em=marca(days=1), atualizado_em=marca(days=1)))
+            db.add(erros_caixa.ErroCaixa(chave_loja="LOJA-2", assinatura="f" * 64, nivel="error", modulo="caixa",
+                                         mensagem="antigo", traceback="", contexto="", vezes=1,
+                                         criado_em=marca(days=30), atualizado_em=marca(days=30)))
+            db.commit()
+        self.addCleanup(self._limpar_saude)
+        self.assertEqual(self.post("/lojas/LOJA-2/chamados", {"titulo": "Cupom", "descricao": "cortado"}).status_code, 200)
+        r = self.http.get("/v1/fornecedor/lojas").json()
+        lojas = {l["chave"]: l["saude"] for l in r["lojas"]}
+        a1, a2 = lojas["LOJA-1"], lojas["LOJA-2"]
+        self.assertEqual((a1["conexao"], a1["caixas"], a1["versao"], a1["desatualizada"]), ("online", 2, "1.11.0", True))
+        self.assertLessEqual(a1["minutos_sem_contato"], 6)
+        self.assertEqual((a2["conexao"], a2["versao"], a2["erros_7d"], a2["chamados_abertos"]), ("parada", None, 1, 1))
+        self.assertFalse(a2["desatualizada"])                             # sem versão informada não há o que comparar
+        resumo = r["resumo"]
+        self.assertEqual((resumo["online"], resumo["paradas"], resumo["com_erros"], resumo["desatualizadas"],
+                          resumo["chamados_abertos"]), (1, 1, 1, 1, 1))
+        self.assertNotIn("99999", json.dumps(r))                          # nada do retrato de vendas chega à central
+
+    def _limpar_saude(self):
+        from backend import erros_caixa
+        from backend.painel import PainelCaixa
+        with nuvem.SessionLocal() as db:
+            db.query(PainelCaixa).delete()
+            db.query(erros_caixa.ErroCaixa).delete()
+            db.commit()
+
+    def test_loja_sem_envio_aparece_como_nunca_e_versao_compara_por_numero(self):
+        r = self.http.get("/v1/fornecedor/lojas").json()
+        self.assertTrue(all(l["saude"]["conexao"] == "nunca" and l["saude"]["minutos_sem_contato"] is None
+                            for l in r["lojas"]))
+        self.assertLess(central.numero_versao("1.9.3"), central.numero_versao("1.12.0"))
+        self.assertEqual(central.numero_versao("2.0-beta"), (2, 0))
+        self.assertEqual(central.numero_versao(None), (0,))
+
     def test_cadastro_token_unico_e_auditoria_sem_segredo(self):
         r = self.post("/lojas", {"chave": "NOVA", "nome": "Nova loja", "motivo": "Contrato"})
         self.assertEqual(r.status_code, 200, r.text)

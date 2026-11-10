@@ -1,45 +1,51 @@
-/* WillPDV Painel: estilo mobile-first, tema verde-escuro, sem dependências. */
+/* WillPDV Painel: mobile-first, identidade azul-noite e verde-água do PDV, sem dependências. */
 
 :root {
-  --verde: #14532d;
-  --verde-escuro: #0f3d21;
-  --verde-claro: #dcfce7;
-  --verde-medio: #16a34a;
-  --fundo: #f3f6f4;
+  /* Mesma identidade do PDV: azul-noite e verde-água. */
+  --topo: #101827;
+  --verde: #0f6b55;
+  --verde-escuro: #0a4a3b;
+  --verde-claro: #dff3ea;
+  --verde-medio: #14997a;
+  --marca: #5ee2bb;
+  --fundo: #eef2f6;
   --superficie: #ffffff;
-  --texto: #0f172a;
-  --texto-suave: #52606d;
-  --borda: #d8e0db;
-  --vermelho: #b91c1c;
-  --vermelho-fundo: #fee2e2;
-  --ambar: #92400e;
-  --ambar-fundo: #fef3c7;
+  --texto: #1e2a3c;
+  --texto-suave: #5a6a82;
+  --borda: #d5dde8;
+  --vermelho: #a32f26;
+  --vermelho-fundo: #fbe6e2;
+  --ambar: #7d4b00;
+  --ambar-fundo: #fff1d3;
   --azul: #1d4ed8;
   --azul-fundo: #dbeafe;
-  --barra: #16a34a;
-  --barra-fraca: #bbf7d0;
-  --raio: 12px;
-  --sombra: 0 1px 2px rgba(0, 0, 0, .08);
-  --altura-nav: 64px;
+  --barra: #14997a;
+  --barra-fraca: #cfe9df;
+  --raio: 14px;
+  --sombra: 0 4px 16px rgba(16, 24, 39, .07);
+  --altura-nav: 62px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --fundo: #0b1410;
-    --superficie: #152219;
-    --texto: #e7f0ea;
-    --texto-suave: #9fb3a6;
-    --borda: #243a2c;
-    --verde-claro: #1d3a28;
-    --vermelho: #fca5a5;
-    --vermelho-fundo: #3b1212;
-    --ambar: #fcd34d;
-    --ambar-fundo: #3a2a07;
+    --verde: #187e65;
+    --verde-escuro: #0f5a48;
+    --verde-claro: #12332c;
+    --verde-medio: #5ee2bb;
+    --fundo: #0c1320;
+    --superficie: #151f30;
+    --texto: #e6edf7;
+    --texto-suave: #9eaec4;
+    --borda: #2a3850;
+    --vermelho: #ff9d94;
+    --vermelho-fundo: #40191a;
+    --ambar: #ffd28a;
+    --ambar-fundo: #3a2c10;
     --azul: #93c5fd;
     --azul-fundo: #13284a;
-    --barra: #22c55e;
-    --barra-fraca: #1f4a2d;
-    --sombra: none;
+    --barra: #5ee2bb;
+    --barra-fraca: #22304a;
+    --sombra: 0 8px 24px rgba(0, 0, 0, .3);
   }
 }
 
@@ -616,3 +622,240 @@ li.zerado .nome strong { color: var(--vermelho); }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+
+/* =====================================================================
+   Repaginada: cabeçalho, cartões, alertas, meta do mês, navegação e
+   layout de computador. Fica por último para valer sobre o que veio antes.
+   ===================================================================== */
+
+body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.45; }
+
+/* ---------- Login ---------- */
+.tela-login { background: radial-gradient(120% 90% at 50% 0%, #1b2a44 0%, var(--topo) 60%); }
+.cartao-login { border-radius: 20px; padding: 1.75rem 1.5rem; }
+.cartao-login input { border-radius: 10px; }
+.botao-principal { border-radius: 10px; }
+
+/* ---------- Cabeçalho ---------- */
+.cabecalho {
+  background: var(--topo);
+  padding: calc(.55rem + env(safe-area-inset-top)) .85rem .55rem;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+.cabecalho-titulo strong { font-size: 1.02rem; letter-spacing: -.01em; }
+.status-atualizacao { font-size: .74rem; color: #9eaec4; opacity: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cabecalho-acoes { gap: .3rem; }
+.botao-icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  min-width: 38px;
+  min-height: 38px;
+  padding: .35rem .55rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .07);
+  border-color: rgba(255, 255, 255, .12);
+  font-size: .85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.botao-icone svg { width: 18px; height: 18px; flex-shrink: 0; }
+.botao-icone[aria-pressed="true"] { background: var(--marca); color: #04231b; border-color: var(--marca); }
+.botao-icone.girando svg { animation: girar 1s linear infinite; }
+@media (max-width: 599px) { .botao-icone .rot { display: none; } }
+
+/* ---------- Cartões ---------- */
+.cartao, .bloco { border: 1px solid var(--borda); }
+.cartao.destaque {
+  border: 0;
+  background: linear-gradient(135deg, var(--verde) 0%, var(--verde-escuro) 100%);
+}
+.cartao-mes {
+  background: linear-gradient(135deg, #16263f 0%, var(--topo) 100%) !important;
+  padding: 1.1rem;
+  gap: .25rem;
+}
+.cartao-mes .valor-grande { font-size: 2.3rem !important; letter-spacing: -.02em; color: var(--marca); }
+.cartao-mes .legenda { color: rgba(255, 255, 255, .7); margin: 0; }
+.rotulo { font-size: .72rem; font-weight: 700; letter-spacing: .06em; }
+.valor-grande { letter-spacing: -.01em; }
+.bloco h2 { font-size: 1rem; letter-spacing: -.01em; }
+.linha-dia input { max-width: none; width: 44px; }
+
+/* Ocultar valores: o dono mostra o celular sem expor o faturamento. */
+body.valores-ocultos .valor-grande,
+body.valores-ocultos .valor,
+body.valores-ocultos .total,
+body.valores-ocultos .detalhe,
+body.valores-ocultos .linha-detalhes strong,
+body.valores-ocultos .barra .topo,
+body.valores-ocultos .detalhe-grafico,
+body.valores-ocultos .tabela-meses td,
+body.valores-ocultos #meta-texto,
+body.valores-ocultos #meta-projecao,
+body.valores-ocultos .legenda,
+body.valores-ocultos .sec { filter: blur(7px); user-select: none; }
+
+/* ---------- Meta do mês ---------- */
+.meta { margin-top: .7rem; padding-top: .7rem; border-top: 1px solid rgba(255, 255, 255, .14); }
+.meta-topo { display: flex; justify-content: space-between; align-items: center; gap: .5rem; font-size: .88rem; }
+.botao-link {
+  background: none;
+  border: 0;
+  color: var(--marca);
+  font-weight: 700;
+  font-size: .85rem;
+  cursor: pointer;
+  padding: .3rem 0;
+  white-space: nowrap;
+}
+.medidor-meta { height: 10px; border-radius: 5px; background: rgba(255, 255, 255, .14); margin: .45rem 0; }
+.medidor-meta > span { background: var(--marca); border-radius: 5px; transition: width .4s ease; }
+.medidor-meta.batida > span { background: #ffd28a; }
+.meta-form { display: flex; gap: .4rem; margin-top: .5rem; }
+.meta-form input {
+  flex: 1;
+  min-width: 0;
+  padding: .55rem .7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, .25);
+  background: rgba(255, 255, 255, .08);
+  color: #fff;
+}
+.meta-form input::placeholder { color: rgba(255, 255, 255, .55); }
+.meta-form button {
+  padding: .55rem .9rem;
+  border-radius: 10px;
+  border: 0;
+  background: var(--marca);
+  color: #04231b;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ---------- Alertas ---------- */
+#cartao-alertas { gap: .5rem; }
+#badge-alertas {
+  display: inline-block;
+  min-width: 1.3rem;
+  padding: 0 .4rem;
+  margin-left: .3rem;
+  border-radius: 999px;
+  background: var(--ambar-fundo);
+  color: var(--ambar);
+  text-align: center;
+  font-weight: 800;
+}
+#lista-alertas { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+#lista-alertas > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+  padding: .65rem .75rem;
+  border-radius: 10px;
+  background: var(--fundo);
+  border-left: 4px solid var(--ambar);
+  font-size: .92rem;
+}
+#lista-alertas > li:only-child:not(:has(details)) { border-left-color: var(--barra); color: var(--texto-suave); }
+#lista-alertas details { flex: 1 1 100%; }
+#lista-alertas summary { font-weight: 700; cursor: pointer; }
+#lista-alertas details p { margin: .35rem 0 0; font-size: .85rem; color: var(--texto-suave); }
+#cartao-alertas button {
+  padding: .45rem .8rem;
+  min-height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--borda);
+  background: var(--superficie);
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+#cartao-alertas button:active { background: var(--verde-claro); }
+.acoes-resumo { display: flex; flex-wrap: wrap; gap: .4rem; }
+#cartao-alertas #botao-resumo-whatsapp { background: var(--verde); border-color: var(--verde); color: #fff; }
+
+/* ---------- Navegação inferior ---------- */
+.navegacao {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  overflow: visible;
+  box-shadow: 0 -4px 16px rgba(16, 24, 39, .08);
+}
+.aba-botao {
+  position: relative;
+  font-size: .62rem;
+  letter-spacing: -.01em;
+  gap: .2rem;
+  padding: .35rem 0;
+  min-width: 0;
+}
+.aba-botao .icone { display: grid; place-items: center; }
+.aba-botao .icone svg { width: 22px; height: 22px; }
+.aba-botao.ativa { color: var(--verde-medio); }
+.aba-botao.ativa::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 22%;
+  right: 22%;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--verde-medio);
+}
+.aba-botao .selo { position: absolute; top: 4px; left: 56%; }
+.rotulo-aba { display: inline; }
+@media (prefers-color-scheme: dark) { .aba-botao.ativa { color: var(--marca); } }
+
+/* ---------- Tablet ---------- */
+@media (min-width: 600px) {
+  .conteudo { max-width: 860px; }
+  .aba-botao { font-size: .72rem; }
+}
+
+/* ---------- Computador: menu lateral e blocos em duas colunas ---------- */
+@media (min-width: 1000px) {
+  .navegacao {
+    top: 0;
+    bottom: 0;
+    right: auto;
+    width: 208px;
+    height: auto;
+    padding: 76px 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-top: 0;
+    border-right: 1px solid var(--borda);
+    box-shadow: none;
+    z-index: 9;
+  }
+  .aba-botao {
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: .7rem;
+    padding: .7rem .8rem;
+    border-radius: 10px;
+    font-size: .92rem;
+  }
+  .aba-botao.ativa { background: var(--verde-claro); }
+  .aba-botao.ativa::before { display: none; }
+  .aba-botao .selo { position: static; margin-left: .4rem; }
+  .cabecalho { padding-left: 1.25rem; padding-right: 1.25rem; }
+  .faixa { margin-left: 208px; }
+  .conteudo { max-width: none; margin: 0 0 0 208px; padding: 1.25rem 1.5rem 2rem; }
+  .aba { max-width: 1280px; column-count: 2; column-gap: 1rem; }
+  .aba > * { break-inside: avoid; }
+  .aba > .cartao-mes, .aba > .linha-dia, .aba > .grade-cartoes, .aba > #cartao-alertas { column-span: all; }
+  .aba > .bloco:first-of-type { margin-top: .85rem; }
+  .grade-cartoes { grid-template-columns: repeat(6, 1fr); }
+  #aba-vendas, #aba-lucro { column-count: 1; }
+}
+.botao-icone.girando span { animation: none; }
+.linha-dia { margin-top: .85rem; }
+#lista-alertas > li button { font-size: .78rem; padding: .4rem .7rem; }
+.grade-cartoes { grid-auto-flow: dense; }

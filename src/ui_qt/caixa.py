@@ -340,12 +340,15 @@ class JanelaCaixa(QMainWindow):
         self.lbl_cabecalho = _rotulo("", "titulo")
         cabecalho = QHBoxLayout()
         self.logo_loja = QLabel()
-        dados_logo = preview_logotipo(self.ctx.config.loja().get("logotipo"), (64, 48))
+        self.logo_loja.setObjectName("logo_loja")       # selo branco de cantos arredondados: o logotipo não fica solto
+        caminho_logo = self.ctx.config.loja().get("logotipo")
+        dados_logo = preview_logotipo(caminho_logo, (176, 52))
         if dados_logo:
             imagem = QPixmap()
             imagem.loadFromData(dados_logo, "PNG")
             self.logo_loja.setPixmap(imagem)
             cabecalho.addWidget(self.logo_loja)
+            cabecalho.addSpacing(6)
         cabecalho.addWidget(self.lbl_cabecalho, 1)
         self.relogio = RelogioCaixa()                   # em tela cheia a barra do Windows some: a hora fica aqui
         cabecalho.addWidget(self.relogio)
@@ -370,6 +373,8 @@ class JanelaCaixa(QMainWindow):
         self.lbl_status = _rotulo("", "status")
         geral.addWidget(self.lbl_status)
         self.setCentralWidget(fundo)
+        self.marca_dagua = None                         # o logotipo da casa como papel de parede (Configurações > Aparência)
+        self._atualizar_marca_dagua()
         atalho = QShortcut(QKeySequence("F12"), self)
         atalho.activated.connect(self.fechar_venda)
         for tecla, passo in ((Qt.Key_PageUp, -1), (Qt.Key_PageDown, 1)):
@@ -1089,12 +1094,31 @@ class JanelaCaixa(QMainWindow):
     def alternar_tela_cheia(self) -> None:
         self.aplicar_tela_cheia(not self.isFullScreen())
 
+    def _atualizar_marca_dagua(self) -> None:
+        """Papel de parede do caixa: o logotipo da casa bem claro, por cima de tudo e sem receber clique. Refaz quando o
+        modo claro/escuro muda (desenho claro no escuro, escuro no claro) e some se a opção estiver desligada."""
+        if self.marca_dagua is not None:
+            self.marca_dagua.setParent(None)
+            self.marca_dagua.deleteLater()
+            self.marca_dagua = None
+        if not self.ctx.banco.cfg_bool("caixa_papel_de_parede", True):
+            return
+        from src.ui_qt import marca_dagua
+        self.marca_dagua = marca_dagua.aplicar(self.centralWidget(), self.ctx.config.loja().get("logotipo"),
+                                               self._modo_visual() == "claro")
+        if self.marca_dagua is not None:
+            self.marca_dagua.acompanhar()
+            self.marca_dagua.show()
+
     def _aplicar_estilo(self) -> None:
         """Noite de boate (azul-marinho) no modo escuro; o estilo claro de sempre no modo claro. Só reaplica se o modo mudou."""
         modo = self._modo_visual()
         if modo != getattr(self, "_estilo_modo", None):
             self._estilo_modo = modo
+            if getattr(self, "marca_dagua", None) is not None:
+                self._atualizar_marca_dagua()
             self.setStyleSheet((ESTILO_NOITE if modo == "escuro" else ESTILO) + """
+                QLabel#logo_loja { background: #ffffff; border-radius: 10px; padding: 3px 10px; }
                 QPushButton { padding: 3px 7px; min-height: 18px; font-size: 10pt; }
                 QPushButton#primario, QPushButton#perigo { padding: 4px 8px; }
                 QLineEdit#codigo, QLineEdit#quantidade { font-size: 12pt; min-height: 24px; padding: 2px 6px; }
@@ -2519,6 +2543,8 @@ class JanelaCaixa(QMainWindow):
 
     def resizeEvent(self, ev) -> None:
         super().resizeEvent(ev)
+        if getattr(self, "marca_dagua", None) is not None:
+            self.marca_dagua.acompanhar()
         if getattr(self, "cartoes", None) is not None:
             self.cartoes.definir_colunas(3 if self.width() >= 1560 else 2 if self.width() >= 1300 else 1)
 

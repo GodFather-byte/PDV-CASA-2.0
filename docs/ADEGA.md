@@ -161,3 +161,12 @@ da categoria). A nuvem precisa estar atualizada para aceitar as miniaturas.
   campo "Preço gelada". Vale nas mesmas datas/horários da promoção natural; 0 deixa a gelada no preço normal. O
   atacado da gelada continua valendo quando for menor que a promoção.
 - Pendências conhecidas (não impedem a operação): sem NFC-e (cupom não fiscal).
+
+
+## Logotipo no caixa
+
+Com o logotipo cadastrado (Configurações > Identificação e contatos), o caixa mostra o logo num selo
+no canto superior esquerdo e também como papel de parede: uma marca d'água bem clara no centro da
+tela, que não recebe clique e não cobre os números. Para tirar, desligue **Logotipo da casa como
+papel de parede do caixa** em Configurações > Parâmetros e módulos > Aparência. Vale no WillPDV e
+no Will Adega.

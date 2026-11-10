@@ -231,7 +231,8 @@ class JanelaPrincipal(QMainWindow):
             "Produtos e estoque": {"produtos", "estoque", "contagem", "retornaveis", "promocoes", "importar_produtos", "composicao"},
             "Gestão": {"relatorio_vendas", "relatorios", "contas", "devolucoes", "whatsapp", "auditoria"},
             "Cadastros": {"operadores", "mais_cadastros"},
-            "Configuração": {"configuracoes", "maquinas", "acessos", "atualizacoes", "diagnostico", "impressora"},
+            "Configuração": {"primeiros_passos", "configuracoes", "maquinas", "acessos", "atualizacoes", "diagnostico",
+                             "impressora"},
         }
         self.botoes = {}
         for chave, titulo, acao in (
@@ -252,6 +253,7 @@ class JanelaPrincipal(QMainWindow):
             ("devolucoes", "Devoluções e trocas por cupom", self.abrir_devolucoes),
             ("operadores", "Operadores", lambda: self.abrir_cadastro("operadores")),
             ("mais_cadastros", "Mais cadastros", self.escolher_cadastro_adicional),
+            ("primeiros_passos", "Primeiros passos da loja", self.abrir_primeiros_passos),
             ("configuracoes", "Configurações gerais", self.abrir_configuracoes),
             ("maquinas", "Máquinas e periféricos", self.abrir_maquinas),
             ("acessos", "Níveis de acesso", self.abrir_acessos),
@@ -358,7 +360,7 @@ class JanelaPrincipal(QMainWindow):
         self._timer.start()
         self._primeiro_uso_timer = QTimer(self)
         self._primeiro_uso_timer.setSingleShot(True)
-        self._primeiro_uso_timer.timeout.connect(self.oferecer_cadastro_loja)
+        self._primeiro_uso_timer.timeout.connect(self.abrir_primeiros_passos)
         self._atualizacoes_timer = QTimer(self)
         self._atualizacoes_timer.setInterval(60000)
         self._atualizacoes_timer.timeout.connect(self.consultar_atualizacoes)
@@ -731,6 +733,13 @@ class JanelaPrincipal(QMainWindow):
                 "configuracoes", lambda: JanelaConfiguracoes(self.ctx, self))
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
+
+    def abrir_primeiros_passos(self):
+        """Lista de conferência da instalação: abre sozinha na primeira entrada e fica no menu Configuração."""
+        if self.ctx.operador is None:
+            return None
+        from src.ui_qt.primeiros_passos import JanelaPrimeirosPassos
+        return self._unica("primeiros_passos", lambda: JanelaPrimeirosPassos(self.ctx, self))
 
     def oferecer_cadastro_loja(self):
         if self.ctx.config.loja_cadastrada() or self.ctx.operador is None:

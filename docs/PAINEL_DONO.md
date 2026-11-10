@@ -46,6 +46,15 @@ O "dia" é o **dia operacional** da loja (Configurações > Caixa > hora da vira
 de 1h da manhã conta no dia anterior, igual aos relatórios do caixa. Cascos aparecem como produtos vendidos (não há saldo
 de vasilhames por cliente, conforme a regra escolhida).
 
+### Meta do mês e ocultar valores
+
+No cartão do faturamento do mês, **Definir meta** guarda uma meta em reais. O painel mostra o
+percentual atingido, a projeção do fechamento no ritmo atual e quanto falta vender por dia. O botão
+do olho, no topo, borra todos os valores para mostrar o celular a alguém sem expor o faturamento.
+As duas preferências ficam só naquele aparelho (não sobem para a nuvem).
+
+No computador o painel usa menu lateral e duas colunas.
+
 ## O que sobe para a nuvem (e o que não sobe)
 
 Só com **Configurações > Nuvem > "Painel do dono no celular" = Sim**. Desligado (padrão), nada sai da loja.

@@ -37,6 +37,13 @@ ALINHAR_DIR = ESC + b"a\x02"
 TAMANHO_NORMAL = GS + b"!\x00"          # GS ! 0
 TAMANHO_ALTO = GS + b"!\x01"            # dobro da altura (mantém a largura/colunas)
 TAMANHO_GRANDE = GS + b"!\x11"          # dobro de largura e altura
+ESPACO_PADRAO = ESC + b"2"              # ESC 2  — volta ao espaço entre linhas de fábrica
+ESPACO_ECONOMICO = 26                   # pontos entre linhas (a letra tem 24): cerca de 13% menos papel
+
+
+def espaco_entre_linhas(pontos: int) -> bytes:
+    """ESC 3 n: espaço entre linhas em pontos. Abaixo da altura da letra a impressora usa a altura da letra."""
+    return ESC + b"3" + bytes([max(24, min(int(pontos), 255))])
 
 # Página de código: nome do codec Python -> número da tabela ESC/POS (ESC t n).
 CODEPAGES = {"cp850": 2, "cp860": 3, "cp1252": 16, "cp437": 0, "ascii": 0, "utf-8": None}
@@ -75,8 +82,11 @@ def _estilo_prefixo(linha: str, prefixos) -> bool:
 def texto_para_escpos(texto: str, *, codepage: str = "cp850", cortar: bool = True,
                       abrir_gaveta: bool = False, pino_gaveta: int = 0,
                       negrito_linhas: int = 0, negrito_prefixos=(), grande_prefixos=(),
-                      logotipo: bytes | None = None) -> bytes:
+                      logotipo: bytes | None = None, espacamento: int | None = None) -> bytes:
     """Converte um texto já formatado (colunas fixas) em bytes ESC/POS.
+
+    `espacamento` (pontos) aproxima as linhas para gastar menos papel; antes do avanço e do corte volta ao
+    padrão, para a última linha não ficar presa na guilhotina.
 
     A ênfase é por linha, sem mexer no layout em colunas: `negrito_linhas` deixa as N primeiras
     linhas não vazias em negrito e centralizadas (cabeçalho da loja); `grande_prefixos` imprime em
@@ -88,6 +98,8 @@ def texto_para_escpos(texto: str, *, codepage: str = "cp850", cortar: bool = Tru
     out += _selecionar_codepage(codepage)
     if logotipo:
         out += logotipo            # já vem centralizado e termina com o alinhamento à esquerda
+    if espacamento:
+        out += espaco_entre_linhas(espacamento)
     destacadas = 0
     for linha in texto.split("\n"):
         tem_texto = bool(linha.strip())
@@ -103,6 +115,8 @@ def texto_para_escpos(texto: str, *, codepage: str = "cp850", cortar: bool = Tru
         out += _codificar(linha, codepage) + b"\n"
         if grande or negrito:
             out += TAMANHO_NORMAL + NEGRITO_OFF + ALINHAR_ESQ
+    if espacamento:
+        out += ESPACO_PADRAO
     if abrir_gaveta:
         out += pulso_gaveta(pino_gaveta)
     if cortar:

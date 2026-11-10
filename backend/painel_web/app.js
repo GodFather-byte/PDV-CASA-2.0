@@ -610,6 +610,7 @@
     $("mes-faturamento").textContent = formatarCentavos(mes.faturamento_cent);
     $("mes-periodo").textContent = mes.de && mes.ate
       ? formatarData(mes.de) + " a " + formatarData(mes.ate) : "";
+    renderizarMeta(mes);
     const ant = mes.anterior || {};
     if (!ant.de) {
       $("mes-comparacao").textContent = "";
@@ -619,6 +620,96 @@
       "): " + formatarCentavos(ant.faturamento_cent) + " · diferença " + formatarCentavos(mes.variacao_cent);
     if (mes.parcial) texto += ". A nuvem guarda cerca de 120 dias; o mês anterior pode estar incompleto.";
     $("mes-comparacao").textContent = texto;
+  }
+
+  // ------------------------------------------------------------------
+  // Meta do mês e ocultar valores (preferências deste aparelho)
+  // ------------------------------------------------------------------
+
+  function chaveMeta() {
+    return "pdv-meta-" + ((estado.loja && estado.loja.chave) || "loja");
+  }
+
+  function metaDoMes() {
+    const valor = Number(lerArmazenamento(chaveMeta()) || 0);
+    return Number.isFinite(valor) && valor > 0 ? Math.round(valor) : 0;
+  }
+
+  // "50.000,00", "50000" e "50000.5" viram centavos; texto sem número vale zero (apaga a meta).
+  function lerValorEmCentavos(texto) {
+    let limpo = String(texto || "").replace(/[^0-9.,]/g, "");
+    // Com vírgula, ou só com pontos de milhar ("50.000"), o ponto não é decimal.
+    if (limpo.indexOf(",") >= 0 || /^\d{1,3}(\.\d{3})+$/.test(limpo)) limpo = limpo.replace(/\./g, "").replace(",", ".");
+    const reais = Number(limpo);
+    return Number.isFinite(reais) && reais > 0 ? Math.round(reais * 100) : 0;
+  }
+
+  function renderizarMeta(mes) {
+    estado.mesAtual = mes || estado.mesAtual || {};
+    const dados = estado.mesAtual;
+    const meta = metaDoMes();
+    const feito = dados.faturamento_cent || 0;
+    const medidor = $("meta-medidor");
+    $("botao-meta").textContent = meta ? "Alterar meta" : "Definir meta";
+    medidor.hidden = !meta;
+    // Projeção: média por dia até aqui, aplicada aos dias do mês.
+    let projecao = 0;
+    const ate = dados.ate ? String(dados.ate).split("-").map(Number) : null;
+    if (ate && ate.length === 3 && ate[2] > 0) {
+      const diasNoMes = new Date(ate[0], ate[1], 0).getDate();
+      projecao = Math.round(feito / ate[2] * diasNoMes);
+      $("meta-projecao").textContent = "No ritmo atual o mês fecha em " + formatarCentavos(projecao) +
+        (meta ? (projecao >= meta ? ", acima da meta." : ", " + formatarCentavos(meta - projecao) + " abaixo da meta.") : ".") +
+        (meta && feito < meta && diasNoMes > ate[2]
+          ? " Para bater, faltam " + formatarCentavos(Math.ceil((meta - feito) / (diasNoMes - ate[2]))) + " por dia."
+          : "");
+    } else {
+      $("meta-projecao").textContent = "";
+    }
+    if (!meta) {
+      $("meta-texto").textContent = "Defina uma meta para acompanhar o mês.";
+      return;
+    }
+    const pct = Math.min(100, Math.round(feito * 100 / meta));
+    $("meta-barra").style.width = pct + "%";
+    medidor.classList.toggle("batida", feito >= meta);
+    $("meta-texto").textContent = feito >= meta
+      ? "Meta de " + formatarCentavos(meta) + " batida!"
+      : pct + "% da meta de " + formatarCentavos(meta);
+  }
+
+  function configurarMeta() {
+    const form = $("meta-form");
+    $("botao-meta").addEventListener("click", () => {
+      form.hidden = !form.hidden;
+      if (!form.hidden) {
+        const meta = metaDoMes();
+        $("meta-valor").value = meta ? String(meta / 100).replace(".", ",") : "";
+        $("meta-valor").focus();
+      }
+    });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      gravarArmazenamento(chaveMeta(), String(lerValorEmCentavos($("meta-valor").value)));
+      form.hidden = true;
+      renderizarMeta(null);
+    });
+  }
+
+  function configurarOcultarValores() {
+    const botao = $("botao-ocultar");
+    const aplicar = (oculto) => {
+      document.body.classList.toggle("valores-ocultos", oculto);
+      botao.setAttribute("aria-pressed", oculto ? "true" : "false");
+      botao.title = oculto ? "Mostrar valores" : "Ocultar valores";
+      botao.setAttribute("aria-label", botao.title);
+    };
+    aplicar(lerArmazenamento("pdv-ocultar-valores") === "1");
+    botao.addEventListener("click", () => {
+      const oculto = !document.body.classList.contains("valores-ocultos");
+      gravarArmazenamento("pdv-ocultar-valores", oculto ? "1" : "0");
+      aplicar(oculto);
+    });
   }
 
   async function carregarPeriodo() {
@@ -1700,6 +1791,8 @@
     $("form-login").addEventListener("submit", entrar);
     $("botao-sair").addEventListener("click", () => encerrarSessao(true));
     $("botao-atualizar").addEventListener("click", () => atualizarAgora());
+    configurarMeta();
+    configurarOcultarValores();
     const botaoResumo = $("botao-resumo-whatsapp");
     if (botaoResumo) botaoResumo.addEventListener("click", () => compartilharWhatsapp(""));
     const botaoCopiar = $("botao-copiar-resumo");

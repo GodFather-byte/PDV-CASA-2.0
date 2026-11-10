@@ -116,6 +116,19 @@ Cole a linha que começa por `PDVL1.` e confirme. Depois entre com **ADM / ADM**
 ainda não tem o par de chaves, veja "WillPDV Licenças: o gerador de licenças" no `README.md` (ou `docs/LICENCIADOR.md`) (a chave pública que vai no programa é a de
 `src/core/licenca.py`; um código só vale se foi emitido pela chave privada correspondente).
 
+### Primeiros passos (lista de conferência)
+
+Na primeira entrada o PDV abre a janela **Primeiros passos da loja**: licença, nome da casa, tipo de
+negócio, impressora, produtos, nuvem com painel do dono e backup externo. Cada passo pendente tem um
+botão que abre a tela certa, e a lista se confere sozinha ao voltar. Dá para fechar e vender antes de
+terminar; ela fica em **Configuração > Primeiros passos da loja**.
+
+**Tipo de negócio** (boate, bar, restaurante, churrascaria, comércio, adega) liga e desliga os módulos
+de uma vez e mostra o que vai mudar antes de aplicar. No Will Adega esse passo não aparece.
+
+As janelas se ajustam à tela: em monitor pequeno (1024x600, 1366x768) ou com a escala do Windows em
+125%/150%, a janela encolhe, ganha rolagem e abre centralizada, sem botão escondido.
+
 ## 5. Roteiro rápido de teste (uns 15 minutos)
 
 1. Entrar (ADM, trocar a senha) e olhar o **menu novo**: setas + Enter, letras de atalho, cartões do painel.
