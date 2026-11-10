@@ -79,6 +79,9 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Entrega | `entrega_controller.py` |
 | Preparação de iFood e NFC-e SP (sem operação) | `integracoes_controller.py`; campos em `config_controller.py`, padrões em `sementes.py`; pendências em Configurações Qt |
 | Módulos de operação configuráveis (Configurações > Módulos: liga/desliga por tipo de negócio) | convenção em `config_controller.py` (`MODULOS_OPCIONAIS`); ver `docs/ESPECIFICACAO.md` |
+| Primeiros passos da instalação (lista do que falta, escolha do tipo de negócio) | `primeiros_passos.py`; UI `ui_qt/primeiros_passos.py`; abre no primeiro uso (`ui_qt/app.py`, `abrir_primeiros_passos`) |
+| Janela inteira dentro da tela (limite, rolagem e centro em qualquer resolução) | `ui_qt/tema.py` (`ajustar_janela`, `instalar_ajuste_de_janelas`) |
+| Saúde das lojas na central (último contato, versão, erros, chamados) | `backend/central_fornecedor.py` (`saude_das_lojas`) |
 | Perfil do estabelecimento (boate, bar, restaurante, churrascaria, comércio: liga os módulos de uma vez) | `perfil_controller.py` (`PERFIS`) · UI Qt (`ui_qt/configuracoes.py`, primeiro acesso em `ui_qt/app.py`) |
 | Códigos especiais do caixa (comissão 50, saída 1002) e o módulo de cada um | `config_controller.py` (`CODIGOS_ESPECIAIS`, `codigo_especial`) |
 | Foto do produto (arquivo ou Open Food Facts pelo código de barras; caixa ao lançar; cardápio) | `controllers/foto_produto_controller.py` (tabela `produto_fotos`, v37), UI `ui_qt/foto_produto.py` (aba Foto do cadastro, `QuadroFoto` no caixa), `sync/cardapio_envio.py`, `backend/cardapio.py` (`_url` aceita miniatura JPEG) |

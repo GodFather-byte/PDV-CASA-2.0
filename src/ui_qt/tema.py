@@ -21,6 +21,8 @@ QCheckBox { background: transparent; spacing: 6px; }
 QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid #405570; border-radius: 4px; background: #182437; }
 QCheckBox::indicator:checked { background: #5ee2bb; border: 3px solid #187e65; }
 QCheckBox::indicator:disabled { background: #1b2534; }
+QProgressBar { background: #24364d; border: 0; border-radius: 5px; }
+QProgressBar::chunk { background: #5ee2bb; border-radius: 5px; }
 QLabel#secao { color: #5ee2bb; font-size: 14px; font-weight: 700; }
 QLabel#aviso { color: #ffd28a; }
 QPushButton { background: #24364d; border: 1px solid #405570; border-radius: 7px;

@@ -85,6 +85,7 @@ def saude_das_lojas(db, momento: datetime | None = None) -> dict:
     momento = momento or datetime.now()
     lojas: dict = defaultdict(lambda: {"ultimo_contato": None, "caixas": 0, "versao": None, "edicao_caixa": None,
                                        "erros_7d": 0, "chamados_abertos": 0})
+    mais_nova: tuple = ()                           # a versão mais nova vista em qualquer caixa de qualquer loja
     for c in db.query(PainelCaixa):
         s = lojas[c.chave_loja]
         s["caixas"] += 1
@@ -95,6 +96,8 @@ def saude_das_lojas(db, momento: datetime | None = None) -> dict:
         except (ValueError, TypeError):
             foto = {}
         versao = foto.get("versao_programa") if isinstance(foto, dict) else None
+        if versao:
+            mais_nova = max(mais_nova, numero_versao(versao))
         if versao and (s["versao"] is None or numero_versao(versao) < numero_versao(s["versao"])):
             s["versao"] = str(versao)[:20]
             s["edicao_caixa"] = str(foto.get("edicao_programa") or "")[:20] or None
@@ -103,7 +106,6 @@ def saude_das_lojas(db, momento: datetime | None = None) -> dict:
         lojas[e.chave_loja]["erros_7d"] += 1
     for c in db.query(ChamadoFornecedor).filter(ChamadoFornecedor.estado != "resolvido"):
         lojas[c.loja]["chamados_abertos"] += 1
-    mais_nova = max((numero_versao(s["versao"]) for s in lojas.values() if s["versao"]), default=())
     for s in lojas.values():
         contato = s["ultimo_contato"]
         try:

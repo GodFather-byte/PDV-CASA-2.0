@@ -71,6 +71,20 @@ O botão **Enviar resumo por e-mail agora** serve também para testar o e-mail.
 Se a chave de emissão faltar na nuvem ou dois pedidos chegarem juntos, a consulta do caixa
 continua devolvendo o último código publicado; a renovação pendente fica registrada no log.
 
+### Saúde das lojas
+
+A lista mostra, por loja, a situação do caixa: **Online** (envio nos últimos 35 minutos), **Hoje**,
+**Parada** (mais de 24 h sem enviar) ou **Sem envio**, com a versão mais antiga em uso, os erros
+recebidos em 7 dias e os chamados em aberto. Loja abaixo da versão mais nova vista em qualquer caixa
+aparece como **Desatualizada**. Nenhum valor de venda chega à central.
+
+- **Precisa de você hoje:** licenças vencidas ou a vencer, caixas parados, erros e chamados.
+- **Indicadores:** tocar em um deles filtra a lista. Há ordenação por urgência, nome, validade e contato.
+- **Cobrar no WhatsApp:** abre a conversa do responsável (o WhatsApp do plano) com a mensagem pronta;
+  sem WhatsApp no plano, copia a mensagem.
+- **Baixar planilha (CSV):** a carteira inteira, para abrir no Excel.
+- **Versões em uso:** em Correções e atualizações, quantas lojas estão em cada versão.
+
 ## Transferir lojas da central local
 
 1. Fazer backup externo da chave privada e dos dados locais do licenciador/central.
