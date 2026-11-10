@@ -41,6 +41,7 @@
 
   const carrinho = new Map();     // codigo|temperatura -> {codigo, nome, preco_cent, qtd, temperatura, fracionado, retornavel, cascos}
   let pedidoCfg = null;
+  let mesaPedido = null;
   let lojaChave = "";
   let cardapioDados = null;
 
@@ -241,6 +242,17 @@
 
   function prepararPedido(cfg) {
     pedidoCfg = cfg;
+    const mesa = Number(params().mesa);
+    if (mesa && cfg.mesas) {
+      if (!Number.isInteger(mesa) || mesa < 1 || mesa > cfg.mesas) {
+        pedidoCfg = null;
+        $("aviso-topo").textContent = "Mesa fora da configuração da loja. Peça ajuda ao atendente.";
+        return;
+      }
+      mesaPedido = mesa;
+      $("f-retirada").checked = true;
+      $("f-endereco").required = false;
+    }
     $("aviso-topo").textContent = "Peça por aqui: o pedido vai direto para a loja.";
     const bairro = $("f-bairro");
     for (const b of cfg.bairros || []) {
@@ -250,7 +262,11 @@
     for (const pg of cfg.pagamentos || []) {
       $("f-pagamento").append(el("option", { value: pg.chave, text: pg.nome }));
     }
-    $("linha-retirada").hidden = !cfg.retirada;
+    $("linha-retirada").hidden = !!mesaPedido || !cfg.retirada;
+    if (mesaPedido) {
+      $("aviso-topo").textContent = "Pedido para a mesa " + mesaPedido + ". A equipe confirma antes de lançar na conta.";
+      $("f-pagamento").replaceChildren(el("option", { value: "na_mesa", text: "Acertar a conta no caixa" }));
+    }
     const salvo = guardado("cliente") || {};
     for (const campo of ["nome", "telefone", "endereco"]) if (salvo[campo]) $("f-" + campo).value = salvo[campo];
     $("barra-carrinho").addEventListener("click", abrirCarrinho);
@@ -330,6 +346,7 @@
     const botao = $("enviar-pedido");
     const retirada = $("f-retirada").checked;
     const corpo = {
+      ...(mesaPedido ? { mesa: mesaPedido } : {}),
       loja: lojaChave, nome: $("f-nome").value, telefone: $("f-telefone").value, retirada,
       endereco: retirada ? "" : $("f-endereco").value, bairro: retirada ? "" : $("f-bairro").value,
       pagamento: $("f-pagamento").value, troco_para_cent: centavos($("f-troco").value),

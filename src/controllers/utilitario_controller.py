@@ -464,6 +464,8 @@ class UtilitarioController:
         """Vendas antigas que podem sair sem quebrar o histórico de devoluções: a venda fica se alguma devolução dela é
         do período preservado ou se a venda nova da troca fica (aberta ou fechada depois do corte), e vice-versa."""
         ids = {r[0] for r in self.banco.todos(f"SELECT id FROM vendas WHERE {alvo}", (data,))}
+        ids.difference_update(r[0] for r in self.banco.todos(
+            "SELECT venda_id FROM pedidos_mesa_importados WHERE aviso_ok = 0"))
         if self.banco.cfg_bool("painel_dono", False):
             # Uma limpeza não pode apagar eventos que a nuvem ainda não confirmou.
             protegidas = {r[0] for r in self.banco.todos("SELECT id FROM vendas WHERE sincronizado = 0")}

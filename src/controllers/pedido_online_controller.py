@@ -49,7 +49,8 @@ def _texto_qtd(qtd: float) -> str:
 
 def resumo(pedido: dict) -> str:
     """Uma linha para a lista do caixa: '#12 · João · Centro · 3 itens · R$ 87,50'."""
-    onde = "Retira na loja" if pedido.get("retirada") else (pedido.get("bairro") or "Sem bairro")
+    onde = (f"Mesa {pedido['mesa']}" if pedido.get("mesa") else
+            "Retira na loja" if pedido.get("retirada") else (pedido.get("bairro") or "Sem bairro"))
     itens = sum(_qtd(i) for i in pedido.get("itens") or [])
     texto_itens = _texto_qtd(itens)
     return (f"#{pedido.get('numero')} · {pedido.get('nome', '')} · {onde} · {texto_itens} "
@@ -86,8 +87,12 @@ class PedidoOnlineController:
         self.produtos = produtos
         self.operador_id = operador_id
 
-    def ja_importado(self, numero) -> int | None:
+    def ja_importado(self, numero, pedido_id=None) -> int | None:
         """O número inteiro: '#1' não pode casar com '#10' nem com '#11'."""
+        if pedido_id is not None:
+            mesa = self.banco.um("SELECT venda_id FROM pedidos_mesa_importados WHERE pedido_id = ?", (pedido_id,))
+            if mesa:
+                return mesa["venda_id"]
         texto = marca(numero)
         r = self.banco.um(
             "SELECT id FROM vendas WHERE modalidade = 'entrega' AND status <> 'cancelada' "
@@ -120,6 +125,9 @@ class PedidoOnlineController:
         """Cria a entrega do pedido. Devolve venda_id e se já existia. Item fora de venda não entra: o pedido não é aceito."""
         if not self.banco.cfg_bool("pedido_online", False):
             raise ErroNegocio("O pedido online está desligado (Configurações > Módulos).")
+        if pedido.get("mesa") is not None:
+            from src.controllers.pedido_mesa_controller import importar
+            return importar(self, pedido)
         existente = self.ja_importado(pedido.get("numero"))
         if existente:
             return {"venda_id": existente, "faltando": [], "ja_existia": True}

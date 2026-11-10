@@ -1117,7 +1117,8 @@ class CaixaController(DivisaoContaMixin):
         agora = fmt.agora()
         with self.banco.transacao():
             self.estoque.liberar_reserva(venda_id)
-            if v.get("pedido_online_id"):
+            if v.get("pedido_online_id") or self.banco.um(
+                    "SELECT 1 FROM pedidos_mesa_importados WHERE venda_id = ?", (venda_id,)):
                 self.marcar_aviso_online(venda_id, "cancelado")
             for ficha in fichas:
                 ficha_sangria.registrar_estorno(self.banco, self.turnos, ficha["item_id"], self.operador_id)
@@ -1161,6 +1162,9 @@ class CaixaController(DivisaoContaMixin):
 
     def marcar_aviso_online(self, venda_id: int, situacao: str) -> None:
         """O cliente acompanha no cardápio. A nuvem é avisada depois (o caixa não espera a rede aqui)."""
+        self.banco.executar(
+            "UPDATE pedidos_mesa_importados SET aviso = ?, aviso_ok = 0 WHERE venda_id = ? "
+            "AND (aviso <> 'cancelado' OR ? = 'cancelado')", (situacao, venda_id, situacao))
         linha = self.banco.um(
             "SELECT pedido_online_id, pedido_online_aviso FROM vendas WHERE id = ?", (venda_id,))
         if linha is None or not linha["pedido_online_id"]:

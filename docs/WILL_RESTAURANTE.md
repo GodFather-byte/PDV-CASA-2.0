@@ -41,6 +41,21 @@ insumo adicional sem configurar a composição correspondente. Integração de e
 Esquema 48: produto_opcoes e retrato/preço adicional por item; migração aditiva com padrões vazios.
 Teste: tests.test_opcoes_produto. Não homologado em impressora física.
 
+## Etapa 3 — pedido pelo QR da mesa
+
+No Will Restaurante, o catálogo publica a quantidade de mesas cadastradas.
+O QR existente (`?loja=...&mesa=N`) abre o pedido naquela mesa: sem endereço ou taxa de entrega.
+O cliente informa nome e telefone e acompanha a confirmação. A equipe aceita no botão Pedidos online;
+só então os itens entram na conta da mesa e seguem para impressão/preparo. Não há lançamento silencioso
+na conta de outra pessoa pela internet. Confira a mesa com o cliente antes de aceitar.
+
+Vários pedidos podem somar na mesma mesa. Reenvio mantém a mesma importação, com confirmação durável
+para retomar depois de falha de rede. O acerto continua no caixa; preços e serviço da conta são os do PDV.
+O número da mesa no QR não é autenticação de presença física. O fluxo mantém a confirmação do operador.
+
+Schema 49: pedidos_mesa_importados. Testes: tests.test_pedido_mesa.
+A Adega continua aceitando entrega/retirada; não recebe pedidos de mesa.
+
 ## Etapas seguintes do pedido
 
 2. Adicionais/opções por item com preço no caixa, cozinha e cardápio.

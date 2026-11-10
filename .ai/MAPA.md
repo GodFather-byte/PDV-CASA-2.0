@@ -52,6 +52,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 
 | Assunto | Arquivo |
 |---|---|
+| Pedido online de mesa (v49), deduplicação e ACK | `controllers/pedido_mesa_controller.py`; tabela `pedidos_mesa_importados` |
 | Adicionais por produto e retrato por item (v48) | `core/opcoes_produto.py`, `controllers/opcoes_produto_controller.py`, `ui_qt/opcoes_produto.py` |
 | Venda, itens, pagamento, mesas e comandas | `caixa_controller.py` |
 | Divisão por itens e cálculo de totais (auxiliares do CaixaController) | `caixa_divisao.py`, `caixa_totais.py` |

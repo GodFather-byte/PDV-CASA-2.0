@@ -160,7 +160,9 @@ def config_pedido(banco) -> dict:
     bairros = [{"nome": r["nome"], "taxa_cent": int(r["taxa_cent"] or 0)}
                for r in banco.todos("SELECT nome, taxa_cent FROM bairros ORDER BY nome LIMIT 300")]
     return {"ligado": True, "whatsapp": whatsapp, "minimo_cent": max(0, minimo), "taxa_padrao_cent": max(0, padrao),
-            "retirada": banco.cfg_bool("pedido_online_retirada", True), "bairros": bairros}
+            "retirada": banco.cfg_bool("pedido_online_retirada", True), "bairros": bairros,
+            "mesas": (min(999, max(0, banco.cfg_int("num_mesas", 0))) if edicao.atual().chave == "willrestaurante"
+                      and banco.cfg_bool("usar_mesas") else 0)}
 
 
 def _hash(corpo: dict) -> str:

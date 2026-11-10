@@ -82,7 +82,7 @@ class VigiaPedidosOnline(QObject):
             return
         pendentes = []
         for p in pedidos:
-            if self.ctx.pedidos_online.ja_importado(p.get("numero")):
+            if self.ctx.pedidos_online.ja_importado(p.get("numero"), p.get("id")):
                 try:                                    # aceito no caixa, mas a nuvem não soube: avisa de novo
                     rede.aceitar(self.ctx.banco, p["id"])
                     continue
@@ -151,9 +151,10 @@ def atender(janela, vigia: VigiaPedidosOnline) -> None:
     if pedido is None:
         return
     acao = dialogos.escolher(f"Pedido online #{pedido['numero']}", detalhe(pedido) + "\n\nO que fazer?", [
-        ("aceitar", "Aceitar: vira entrega no caixa"), ("recusar", "Recusar e avisar o cliente")])
+        ("aceitar", f"Aceitar: lançar na mesa {pedido['mesa']}" if pedido.get("mesa") else "Aceitar: vira entrega no caixa"), ("recusar", "Recusar e avisar o cliente")])
     if acao == "aceitar":
-        if not janela._exigir_venda_vazia():
+        atual = janela.ctx.caixa.obter(janela.venda_id) if janela.venda_id else None
+        if (not pedido.get("mesa") or (atual and atual["modalidade"] == "balcao")) and not janela._exigir_venda_vazia():
             return
         ok, r = janela._executar(janela.ctx.pedidos_online.importar, pedido)
         if not ok:
@@ -161,13 +162,21 @@ def atender(janela, vigia: VigiaPedidosOnline) -> None:
         try:
             rede.aceitar(janela.ctx.banco, pedido["id"])
             janela.ctx.banco.executar(
+                "UPDATE pedidos_mesa_importados SET aviso_ok = 1 WHERE pedido_id = ? AND aviso = 'aceito'",
+                (pedido["id"],))
+            janela.ctx.banco.executar(
                 "UPDATE vendas SET pedido_online_aviso_ok = 1 WHERE id = ? AND pedido_online_aviso = 'aceito'",
                 (r["venda_id"],))
         except RuntimeError as e:
-            dialogos.aviso("Pedido online", f"{e}\nA entrega já está no caixa; o cliente fica sabendo na próxima busca.")
+            dialogos.aviso("Pedido online", f"{e}\nO pedido já está no caixa; o cliente fica sabendo na próxima busca.")
         vigia.retirar(pedido["id"])
         janela.venda_id = r["venda_id"]
         janela.recarregar()
+        if pedido.get("mesa"):
+            if r.get("item_ids"):
+                janela._enviar_remoto(r["item_ids"])
+            janela.avisar(f"{marca(pedido['numero'])} lançado na mesa {pedido['mesa']}.")
+            return
         emitido, _ = janela._executar(janela.ctx.entregas.emitir_pedido, r["venda_id"])
         if emitido:
             janela._documento_operacao(

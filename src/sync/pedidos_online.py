@@ -87,3 +87,14 @@ def empurrar_avisos(banco, http=None) -> None:
         except RuntimeError:
             continue
         banco.executar("UPDATE vendas SET pedido_online_aviso_ok = 1 WHERE id = ?", (linha["id"],))
+
+    # Uma mesa recebe vários pedidos: cada confirmação tem sua própria fila durável.
+    for linha in banco.todos("SELECT pedido_id, aviso FROM pedidos_mesa_importados WHERE aviso_ok = 0 ORDER BY pedido_id"):
+        try:
+            aceitar(banco, linha["pedido_id"], http)
+            if linha["aviso"] != "aceito":
+                atualizar_situacao(banco, linha["pedido_id"], linha["aviso"], http=http)
+        except RuntimeError:
+            continue
+        banco.executar("UPDATE pedidos_mesa_importados SET aviso_ok = 1 WHERE pedido_id = ? AND aviso = ?",
+                        (linha["pedido_id"], linha["aviso"]))
