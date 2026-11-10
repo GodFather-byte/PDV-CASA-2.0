@@ -1,9 +1,10 @@
 """Identidade visual compartilhada pelas telas do piloto Qt."""
+import atexit
 import os
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QFontDatabase, QGuiApplication
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QScrollArea, QVBoxLayout, QWidget
 
@@ -139,28 +140,49 @@ def ajustar_janela(janela) -> None:
     janela.move(x, y)
 
 
-class _AjusteDeJanelas(QObject):
-    """Toda janela ou diálogo passa por `ajustar_janela` na primeira vez que aparece."""
+_ajuste = {"ativo": False, "ligado": False}
 
-    ativo = True
 
-    def eventFilter(self, objeto, evento):
-        if (self.ativo and evento.type() == QEvent.Type.Show and isinstance(objeto, QWidget) and objeto.isWindow()
-                and objeto.windowType() in (Qt.WindowType.Window, Qt.WindowType.Dialog)
-                and not objeto.property(_MARCA_AJUSTE)):
-            objeto.setProperty(_MARCA_AJUSTE, True)
-            try:
-                ajustar_janela(objeto)
-            except RuntimeError:            # janela já destruída pelo Qt
-                pass
+def ajustar_na_primeira_exibicao(janela) -> bool:
+    """Ajusta a janela uma vez só; depois disso vale o tamanho e o lugar que o operador escolher."""
+    if (janela is None or not janela.isWindow() or janela.property(_MARCA_AJUSTE)
+            or janela.windowType() not in (Qt.WindowType.Window, Qt.WindowType.Dialog)):
         return False
+    janela.setProperty(_MARCA_AJUSTE, True)
+    ajustar_janela(janela)
+    return True
+
+
+def _foco_mudou(janela_do_sistema=None) -> None:
+    """Toda janela ou diálogo que recebe o foco pela primeira vez passa pelo ajuste (inclusive os abertos com exec)."""
+    if not _ajuste["ativo"] or janela_do_sistema is None:
+        return
+    try:
+        for janela in QApplication.topLevelWidgets():
+            if janela.windowHandle() is janela_do_sistema or janela.windowHandle() == janela_do_sistema:
+                ajustar_na_primeira_exibicao(janela)
+                return
+    except RuntimeError:                    # janela já destruída pelo Qt
+        pass
+
+
+def _desligar_ajuste() -> None:
+    """No encerramento o Qt ainda emite mudanças de foco; sem desligar, chamaria o Python já finalizado."""
+    _ajuste["ativo"] = False
+    aplicacao = QApplication.instance()
+    if _ajuste["ligado"] and aplicacao is not None:
+        try:
+            aplicacao.focusWindowChanged.disconnect(_foco_mudou)
+        except (RuntimeError, TypeError):
+            pass
+    _ajuste["ligado"] = False
 
 
 def instalar_ajuste_de_janelas(aplicacao: QApplication, forcar: bool = False) -> None:
-    """Liga o ajuste automático. Na plataforma "offscreen" não há monitor de verdade (a tela é fictícia,
-    800x800), então o ajuste só entra se `forcar` pedir."""
-    filtro = getattr(aplicacao, "_will_ajuste_janelas", None)
-    if filtro is None:
-        filtro = aplicacao._will_ajuste_janelas = _AjusteDeJanelas(aplicacao)
-        aplicacao.installEventFilter(filtro)
-    filtro.ativo = forcar or QGuiApplication.platformName() != "offscreen"
+    """Liga o ajuste automático pela mudança de foco (um sinal por janela aberta, sem filtrar cada evento do caixa).
+    Na plataforma "offscreen" não há monitor de verdade (a tela é fictícia, 800x800), então só entra se `forcar` pedir."""
+    if not _ajuste["ligado"]:
+        aplicacao.focusWindowChanged.connect(_foco_mudou)
+        atexit.register(_desligar_ajuste)
+        _ajuste["ligado"] = True
+    _ajuste["ativo"] = forcar or QGuiApplication.platformName() != "offscreen"

@@ -6,9 +6,10 @@ Pedido direto do dono; por isso `backend/painel_web/` e `backend/central_web/` (
 foram mexidos aqui. As rotas e os ids que o `app.js` procura continuam os mesmos.
 
 - **Janelas cortadas:** `tema.ajustar_janela` limita qualquer janela à área útil, rola o que não
-  cabe e centraliza. O filtro `_AjusteDeJanelas` chama isso na primeira exibição de toda janela.
-  Na plataforma `offscreen` (tela fictícia 800x800 dos testes) o filtro nasce desligado;
-  `instalar_ajuste_de_janelas(app, forcar=True)` liga.
+  cabe e centraliza. `instalar_ajuste_de_janelas` liga isso ao sinal `focusWindowChanged`: cada
+  janela é ajustada uma vez, quando recebe o foco. Não usar filtro de eventos global em Python:
+  ele roda a cada evento do caixa e derrubou o processo no encerramento dos testes (CI).
+  Na plataforma `offscreen` (tela fictícia 800x800 dos testes) fica desligado; `forcar=True` liga.
 - **Configurações gerais:** cartões por assunto (grupo do `CAMPOS_CONFIG`), texto com quebra de
   linha, busca por opção, módulos primeiro e só rolagem vertical. A causa do corte era o texto
   longo empurrando os campos para fora.

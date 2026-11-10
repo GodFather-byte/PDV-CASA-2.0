@@ -75,24 +75,40 @@ class TesteAjusteDeJanelas(BaseJanelas):
         tema.ajustar_janela(janela)                                      # repetir não embrulha de novo
         self.assertEqual(len(janela.findChildren(QScrollArea)), 1)
 
-    def test_filtro_ajusta_na_primeira_exibicao_e_respeita_o_tamanho_que_o_usuario_escolher_depois(self):
-        filtro = tema._AjusteDeJanelas()
-        filtro.ativo = True
+    def test_ajusta_na_primeira_exibicao_e_respeita_o_tamanho_que_o_usuario_escolher_depois(self):
         janela = self.nova(QDialog())
         janela.resize(self.area.width() + 300, 400)
-        filtro.eventFilter(janela, QEvent(QEvent.Type.Show))
+        self.assertTrue(tema.ajustar_na_primeira_exibicao(janela))
         self.assertCabe(janela)
         janela.resize(500, 350)
         janela.move(self.area.left(), self.area.top())
-        filtro.eventFilter(janela, QEvent(QEvent.Type.Show))
+        self.assertFalse(tema.ajustar_na_primeira_exibicao(janela))
         self.assertEqual((janela.x(), janela.y()), (self.area.left(), self.area.top()))
+        filho = QLabel("não é janela", janela)
+        self.assertFalse(tema.ajustar_na_primeira_exibicao(filho))
 
-    def test_ajuste_automatico_fica_desligado_na_tela_ficticia_e_liga_quando_pedido(self):
-        tema.instalar_ajuste_de_janelas(self.aplicacao)
+    def test_foco_em_janela_nova_dispara_o_ajuste_so_quando_ligado(self):
         self.addCleanup(tema.instalar_ajuste_de_janelas, self.aplicacao)
-        self.assertFalse(self.aplicacao._will_ajuste_janelas.ativo)
+        tema.instalar_ajuste_de_janelas(self.aplicacao)
+        self.assertFalse(tema._ajuste["ativo"])                          # tela fictícia dos testes: desligado
+        janela = self.nova(QDialog())
+        janela.resize(self.area.width() + 300, 400)
+        janela.show()
+        self.aplicacao.processEvents()
+        tema._foco_mudou(janela.windowHandle())
+        self.assertGreater(janela.width(), self.area.width())
         tema.instalar_ajuste_de_janelas(self.aplicacao, forcar=True)
-        self.assertTrue(self.aplicacao._will_ajuste_janelas.ativo)
+        self.assertTrue(tema._ajuste["ativo"])
+        tema._foco_mudou(janela.windowHandle())
+        self.assertCabe(janela)
+        tema._foco_mudou(None)                                           # foco saindo de todas as janelas: nada a fazer
+
+    def test_desligar_no_encerramento_para_de_ouvir_o_foco(self):
+        self.addCleanup(tema.instalar_ajuste_de_janelas, self.aplicacao)
+        tema.instalar_ajuste_de_janelas(self.aplicacao, forcar=True)
+        tema._desligar_ajuste()
+        self.assertEqual(tema._ajuste, {"ativo": False, "ligado": False})
+        tema._desligar_ajuste()                                          # repetir não quebra
 
 
 class TesteConfiguracoesCabem(BaseJanelas):
