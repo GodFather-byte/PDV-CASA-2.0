@@ -1,5 +1,5 @@
 """Logotipo da casa como papel de parede do caixa: uma marca d'água por cima da tela, que não recebe clique nem foco."""
-from PySide6.QtCore import QEvent, QRect, Qt
+from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QWidget
 
@@ -45,18 +45,12 @@ class MarcaDagua(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        pai.installEventFilter(self)
-        self._acompanhar()
+        self.acompanhar()
 
-    def _acompanhar(self) -> None:
+    def acompanhar(self) -> None:
+        """Cobre a janela dona inteira e fica por cima. A janela chama isto quando muda de tamanho."""
         self.setGeometry(self.parentWidget().rect())
         self.raise_()
-
-    def eventFilter(self, objeto, evento):
-        if objeto is self.parentWidget() and evento.type() in (QEvent.Type.Resize, QEvent.Type.Show,
-                                                               QEvent.Type.ChildAdded):
-            self._acompanhar()
-        return False
 
     def area_do_desenho(self) -> QRect:
         tamanho = self.imagem.size()

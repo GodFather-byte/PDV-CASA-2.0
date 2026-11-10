@@ -41,7 +41,10 @@ class TesteMarcaDagua(BaseTeste):
 
     def _fechar(self):
         for janela in self.janelas:
-            janela.hide()
+            if isinstance(janela, JanelaCaixa):                 # mesmo encerramento dos outros testes do caixa
+                janela._ocupado = janela._fechando_venda = False
+                janela.venda_id = None
+            janela.close()
             janela.deleteLater()
         self.aplicacao.processEvents()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
@@ -72,6 +75,7 @@ class TesteMarcaDagua(BaseTeste):
         janela.resize(600, 400)
         janela.show()
         self.aplicacao.processEvents()
+        marca.acompanhar()
         self.assertEqual(marca.geometry(), janela.rect())
         area = marca.area_do_desenho()
         self.assertEqual(area.center(), janela.rect().center())
@@ -82,7 +86,7 @@ class TesteMarcaDagua(BaseTeste):
         QTest.mouseClick(botao, Qt.MouseButton.LeftButton)
         self.assertEqual(cliques, [1])
         janela.resize(900, 500)
-        self.aplicacao.processEvents()
+        marca.acompanhar()                                                   # no caixa quem chama é o resizeEvent
         self.assertEqual(marca.geometry(), janela.rect())
 
     def caixa(self, logo=True):
@@ -100,6 +104,10 @@ class TesteMarcaDagua(BaseTeste):
         self.assertIsInstance(janela.marca_dagua, marca_dagua.MarcaDagua)
         self.assertIs(janela.marca_dagua.parentWidget(), janela.centralWidget())
         self.assertFalse(janela.logo_loja.pixmap().isNull())
+        janela.resize(1100, 640)
+        janela.show()
+        self.aplicacao.processEvents()
+        self.assertEqual(janela.marca_dagua.geometry(), janela.centralWidget().rect())
         self.assertEqual(janela.logo_loja.objectName(), "logo_loja")
 
     def test_sem_logotipo_ou_com_a_opcao_desligada_o_caixa_fica_sem_marca(self):

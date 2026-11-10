@@ -1107,6 +1107,7 @@ class JanelaCaixa(QMainWindow):
         self.marca_dagua = marca_dagua.aplicar(self.centralWidget(), self.ctx.config.loja().get("logotipo"),
                                                self._modo_visual() == "claro")
         if self.marca_dagua is not None:
+            self.marca_dagua.acompanhar()
             self.marca_dagua.show()
 
     def _aplicar_estilo(self) -> None:
@@ -2542,6 +2543,8 @@ class JanelaCaixa(QMainWindow):
 
     def resizeEvent(self, ev) -> None:
         super().resizeEvent(ev)
+        if getattr(self, "marca_dagua", None) is not None:
+            self.marca_dagua.acompanhar()
         if getattr(self, "cartoes", None) is not None:
             self.cartoes.definir_colunas(3 if self.width() >= 1560 else 2 if self.width() >= 1300 else 1)
 

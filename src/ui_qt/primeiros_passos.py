@@ -191,6 +191,9 @@ class JanelaPrimeirosPassos(QDialog):
         return janela
 
     def changeEvent(self, evento):
-        if evento.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
-            self.atualizar()
+        if evento.type() == QEvent.Type.ActivationChange and self.isVisible() and self.isActiveWindow():
+            try:
+                self.atualizar()
+            except Exception:  # noqa: BLE001 - conferir de novo nunca pode derrubar a janela (banco fechando, por exemplo)
+                pass
         super().changeEvent(evento)
