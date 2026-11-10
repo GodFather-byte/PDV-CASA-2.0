@@ -62,6 +62,15 @@ class TesteOpcoesProduto(BaseCaixa):
         self.assertEqual(explicacao["economia_cent"], 200)
         self.assertIn("adicionais", explicacao["detalhe"])
 
+    def test_opcao_renomeada_no_cadastro_nao_muda_pedido_pendente(self):
+        ids = [self.ponto, self.bacon]
+        pedido = {"opcoes_ids": ids, "opcoes": self.ctrl.selecionar(self.skol, ids)}
+        novo = copy.deepcopy(self.grupos)
+        novo[1]["opcoes"][0]["nome"] = "Outro ingrediente"
+        self.ctrl.salvar(self.skol, novo)
+        with self.assertRaisesRegex(ErroNegocio, "mudaram"):
+            self.ctrl.conferir_pedido(self.skol, pedido)
+
     def test_ticket_da_cozinha_leva_opcoes_e_preco(self):
         self.banco.executar("UPDATE subgrupos SET impressora_remota = 1")
         vid, _ = self.caixa.abrir_mesa(1)

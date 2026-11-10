@@ -146,7 +146,9 @@ class PedidoOnlineController:
             elif cascos and not p["casco_produto_id"]:
                 faltando.append(f"{item.get('nome')} não trabalha com casco")
             else:
-                linhas.append((p["id"], qtd, temp, cascos, item.get("opcoes_ids", [])))
+                from src.controllers.opcoes_produto_controller import OpcoesProdutoController
+                ids = OpcoesProdutoController(self.banco).conferir_pedido(p["id"], item)
+                linhas.append((p["id"], qtd, temp, cascos, ids))
         if faltando or not linhas:
             lista = ", ".join(faltando) or "nenhum produto"
             raise ErroNegocio(f"Não aceito: {lista}. Recuse o pedido e avise o cliente.")

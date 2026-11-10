@@ -29,10 +29,12 @@ def importar(ctrl, pedido):
                 qtd = fmt.validar_qtd(i.get("qtd"))
             except (ValueError, TypeError):
                 raise ErroNegocio("Quantidade inválida no pedido.") from None
+            from src.controllers.opcoes_produto_controller import OpcoesProdutoController
+            opcoes_ids = OpcoesProdutoController(b).conferir_pedido(p["id"], i)
             item_ids.append(ctrl.caixa.adicionar_item(venda_id, p["id"], qtd,
                                      observacao=(pedido.get("observacao") or "")[:200],
                                      temperatura=i.get("temperatura") or "natural",
-                                     opcoes_ids=i.get("opcoes_ids") or []))
+                                     opcoes_ids=opcoes_ids))
         b.executar("INSERT INTO pedidos_mesa_importados(pedido_id, venda_id, criado_em) VALUES (?,?,?)",
                    (pedido_id, venda_id, fmt.agora()))
         b.log("pedido_mesa_aceito", f"Pedido {pedido_id}: mesa {mesa}, venda {venda_id}", ctrl.operador_id)

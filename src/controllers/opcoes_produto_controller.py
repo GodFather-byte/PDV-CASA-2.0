@@ -33,3 +33,16 @@ class OpcoesProdutoController:
             return opcoes_produto.selecionar(self.grupos(produto_id), ids)
         except (ValueError, KeyError, TypeError) as exc:
             raise ErroNegocio(str(exc)) from None
+
+    def conferir_pedido(self, produto_id, item):
+        ids = item.get("opcoes_ids") or []
+        atuais = self.selecionar(produto_id, ids)
+        esperadas = item.get("opcoes")
+        if esperadas is not None:
+            if not isinstance(esperadas, list) or any(not isinstance(o, dict) for o in esperadas):
+                raise ErroNegocio("Escolhas do pedido inválidas.")
+            resumo = lambda opcoes: sorted(((o.get("id"), o.get("grupo"), o.get("nome")) for o in opcoes),
+                                          key=lambda o: str(o[0]))
+            if resumo(atuais) != resumo(esperadas):
+                raise ErroNegocio("As opções do produto mudaram desde o pedido. Confira com o cliente antes de aceitar.")
+        return ids

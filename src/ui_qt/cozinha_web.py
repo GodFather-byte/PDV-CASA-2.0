@@ -58,6 +58,9 @@ class DialogoCozinhaWeb(QDialog):
 
     def mostrar_endereco(self):
         self.qr.clear()
+        if self.ctx.banco.remoto:
+            self.endereco.setText("Abra esta configuração no caixa principal para obter o endereço da cozinha.")
+            return
         if self.ctx.banco.cfg_bool("cozinha_web_ativo"):
             porta = self.ctx.banco.cfg_int("cozinha_web_porta", PORTA_PADRAO)
             enderecos = urls(porta)
