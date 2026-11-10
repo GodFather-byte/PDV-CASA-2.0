@@ -140,8 +140,10 @@ def ajustar_janela(janela) -> None:
 class _AjusteDeJanelas(QObject):
     """Toda janela ou diálogo passa por `ajustar_janela` na primeira vez que aparece."""
 
+    ativo = True
+
     def eventFilter(self, objeto, evento):
-        if (evento.type() == QEvent.Type.Show and isinstance(objeto, QWidget) and objeto.isWindow()
+        if (self.ativo and evento.type() == QEvent.Type.Show and isinstance(objeto, QWidget) and objeto.isWindow()
                 and objeto.windowType() in (Qt.WindowType.Window, Qt.WindowType.Dialog)
                 and not objeto.property(_MARCA_AJUSTE)):
             objeto.setProperty(_MARCA_AJUSTE, True)
@@ -152,7 +154,11 @@ class _AjusteDeJanelas(QObject):
         return False
 
 
-def instalar_ajuste_de_janelas(aplicacao: QApplication) -> None:
-    if getattr(aplicacao, "_will_ajuste_janelas", None) is None:
-        aplicacao._will_ajuste_janelas = _AjusteDeJanelas(aplicacao)
-        aplicacao.installEventFilter(aplicacao._will_ajuste_janelas)
+def instalar_ajuste_de_janelas(aplicacao: QApplication, forcar: bool = False) -> None:
+    """Liga o ajuste automático. Na plataforma "offscreen" não há monitor de verdade (a tela é fictícia,
+    800x800), então o ajuste só entra se `forcar` pedir."""
+    filtro = getattr(aplicacao, "_will_ajuste_janelas", None)
+    if filtro is None:
+        filtro = aplicacao._will_ajuste_janelas = _AjusteDeJanelas(aplicacao)
+        aplicacao.installEventFilter(filtro)
+    filtro.ativo = forcar or QGuiApplication.platformName() != "offscreen"
