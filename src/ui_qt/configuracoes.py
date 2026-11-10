@@ -4,10 +4,10 @@ JanelaConfiguracoes(ctx, parent) usa as APIs do ConfigController e os acessos
 cfg_loja/cfg_configuracoes. Cada aba grava separadamente, apenas alterações.
 Equipamentos, acessos e Telegram possuem janelas próprias.
 """
-from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
+from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal, Slot
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QInputDialog,
+    QApplication, QCheckBox, QComboBox, QDialog, QFrame, QGridLayout, QHBoxLayout, QInputDialog,
     QFileDialog, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea, QTabWidget, QVBoxLayout, QWidget,
 )
 
@@ -93,6 +93,27 @@ class _TesteCentral(QRunnable):
                 banco.fechar()
 
 
+# Nomes dos cartões: o controlador guarda o grupo sem acento em alguns casos.
+GRUPOS = {"Impressao": "Impressão", "Caixa": "Caixa e autorizações", "Módulos": "Módulos da loja"}
+
+
+class _Rotulo(QLabel):
+    """Texto que quebra linha e, clicado, age sobre o campo ao lado (marca a caixa ou leva o foco)."""
+
+    def __init__(self, conteudo, editor):
+        super().__init__(conteudo)
+        self.setWordWrap(True)
+        self.editor = editor
+
+    def mousePressEvent(self, evento):
+        if self.editor.isEnabled():
+            if isinstance(self.editor, QCheckBox):
+                self.editor.toggle()
+            else:
+                self.editor.setFocus()
+        super().mousePressEvent(evento)
+
+
 class JanelaConfiguracoes(QDialog):
     def __init__(self, ctx, parent=None):
         super().__init__(parent)
@@ -109,30 +130,36 @@ class JanelaConfiguracoes(QDialog):
         self.campos = {secao: {} for secao in SECOES}
         self._originais = {secao: {} for secao in SECOES}
         self.setWindowTitle("Configurações gerais da loja • Qt")
-        self.resize(850, 700)
+        self.resize(900, 700)
         layout = QVBoxLayout(self)
         layout.addWidget(texto("Configurações gerais da loja", "titulo"))
         layout.addWidget(texto(
-            "Cada aba salva somente suas alterações pelas regras existentes. "
-            "Parâmetros incluem serviço, módulos e autorizações do caixa; revise antes de salvar. "
-            "Reabra as telas operacionais para reler as configurações. Nuvem não inicia "
-            "sincronização de vendas nem contrata serviços automaticamente.",
-            "suave"))
+            "Cada aba salva só o que você alterou nela. Reabra o caixa para valer. "
+            "A nuvem não envia vendas nem contrata serviços sozinha.", "suave"))
+        self.busca = QLineEdit()
+        self.busca.setPlaceholderText("Buscar uma opção nesta aba (ex.: comanda, serviço, estoque)…")
+        self.busca.setClearButtonEnabled(True)
+        self.busca.textChanged.connect(self._filtrar)
+        layout.addWidget(self.busca)
         self.abas = QTabWidget()
+        self._linhas = {secao: [] for secao in SECOES}      # (texto de busca, linha, cartão)
         fora_da_edicao = edicao.atual().fora_das_configuracoes()
         for secao, titulo in (("loja", "Identificação e contatos"),
                               ("preferencias", "Preferências de venda/caixa"),
                               ("parametros", "Parâmetros e módulos"),
                               ("nuvem", "Conexão com a nuvem")):
             pagina = QWidget()
-            formulario = QFormLayout(pagina)
-            formulario.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
-            for campo in CAMPOS[secao]:
+            coluna = QVBoxLayout(pagina)
+            coluna.setSpacing(10)
+            cartoes = {}
+            campos = [c for c in CAMPOS[secao] if c[0] not in fora_da_edicao]   # adega: sem mesas, garotas...
+            if secao == "parametros":                 # os módulos primeiro: é por eles que a instalação começa
+                campos.sort(key=lambda c: c[3] != "Módulos")
+            for campo in campos:
                 chave, rotulo, tipo = campo[:3]
-                if chave in fora_da_edicao:           # opção que não existe nesta edição (adega: mesas, garotas...)
-                    continue
+                grupo = GRUPOS.get(campo[3], campo[3]) if len(campo) > 3 else titulo
                 if tipo == "sn":
-                    editor = QCheckBox("Sim")
+                    editor = QCheckBox()
                 elif tipo == "escolha":
                     editor = QComboBox()
                     for valor, descricao in campo[4]:
@@ -143,8 +170,11 @@ class JanelaConfiguracoes(QDialog):
                     if chave in SEGREDOS:
                         editor.setEchoMode(QLineEdit.EchoMode.Password)
                         editor.setPlaceholderText("Vazio mantém o token atual")
+                editor.setAccessibleName(rotulo)
                 self.campos[secao][chave] = editor
-                formulario.addRow(rotulo, editor)
+                corpo = self._cartao(coluna, cartoes, grupo)
+                self._linhas[secao].append((f"{rotulo} {grupo}".lower(), self._linha(corpo, rotulo, editor, tipo),
+                                            corpo.parentWidget()))
                 if chave == "logotipo":
                     editor.setReadOnly(True)
                     self.btn_logo = QPushButton("Selecionar logotipo…")
@@ -152,19 +182,23 @@ class JanelaConfiguracoes(QDialog):
                     self.btn_logo.clicked.connect(self._selecionar_logotipo)
                     self.btn_remover_logo.clicked.connect(
                         lambda: self.campos["loja"]["logotipo"].clear())
-                    formulario.addRow(self.btn_logo, self.btn_remover_logo)
+                    botoes_logo = QHBoxLayout()
+                    botoes_logo.addWidget(self.btn_logo)
+                    botoes_logo.addWidget(self.btn_remover_logo)
+                    corpo.addLayout(botoes_logo)
                     self.preview_logo = QLabel()
-                    formulario.addRow("Preview", self.preview_logo)
+                    corpo.addWidget(self.preview_logo)
                     editor.textChanged.connect(self._preview_logotipo)
             if secao == "parametros":
                 self.btn_integracoes = QPushButton("Pendências das integrações…")
                 self.btn_integracoes.clicked.connect(self.mostrar_integracoes)
-                formulario.addRow(self.btn_integracoes)
+                self._cartao(coluna, cartoes, "Integrações").addWidget(self.btn_integracoes)
             if secao == "nuvem":
+                acoes = self._cartao(coluna, cartoes, "Tokens e central do fornecedor")
                 self.apagar_token = QCheckBox("Apagar o token salvo ao salvar esta aba")
-                formulario.addRow(self.apagar_token)
+                acoes.addWidget(self.apagar_token)
                 self.apagar_token_caixa = QCheckBox("Apagar o token do caixa (central do fornecedor) ao salvar esta aba")
-                formulario.addRow(self.apagar_token_caixa)
+                acoes.addWidget(self.apagar_token_caixa)
                 self.btn_copiar_caixa = QPushButton("Copiar o ID deste caixa")
                 self.btn_copiar_caixa.setToolTip("Passe este ID ao fornecedor; ele devolve o token do caixa.")
                 self.btn_copiar_caixa.clicked.connect(self.copiar_id_caixa)
@@ -172,34 +206,35 @@ class JanelaConfiguracoes(QDialog):
                 self.btn_testar_central = QPushButton("Testar conexão agora")
                 self.btn_testar_central.clicked.connect(self.testar_central_agora)
                 self.btn_situacao_central.clicked.connect(self.mostrar_situacao_central)
-                linha_central = QHBoxLayout()
-                linha_central.addWidget(self.btn_copiar_caixa)
-                linha_central.addWidget(self.btn_situacao_central)
-                linha_central.addWidget(self.btn_testar_central)
                 self.btn_novo_caixa = QPushButton("Gerar novo ID do caixa…")
                 self.btn_novo_caixa.setToolTip("Token perdido ou revogado: apaga o token, desliga a central e exige nova aprovação.")
                 self.btn_novo_caixa.clicked.connect(self.gerar_novo_id_caixa)
-                linha_central.addWidget(self.btn_novo_caixa)
-                formulario.addRow(linha_central)
+                grade = QGridLayout()                 # dois por linha: quatro lado a lado não cabem em tela pequena
+                for indice, botao in enumerate((self.btn_copiar_caixa, self.btn_testar_central,
+                                                self.btn_situacao_central, self.btn_novo_caixa)):
+                    grade.addWidget(botao, indice // 2, indice % 2)
+                acoes.addLayout(grade)
+                dono = self._cartao(coluna, cartoes, "Painel do dono e cardápio")
                 self.btn_senha_painel = QPushButton("Trocar a senha do painel do dono…")
                 self.btn_senha_painel.setToolTip(
                     "Muda a senha que o dono usa no celular (painel da nuvem). Usa o endereço e o token já salvos.")
                 self.btn_senha_painel.clicked.connect(self.trocar_senha_painel)
-                formulario.addRow(self.btn_senha_painel)
+                dono.addWidget(self.btn_senha_painel)
                 self.btn_cardapio_qr = QPushButton("QR do cardápio das mesas…")
                 self.btn_cardapio_qr.setToolTip(
                     "Gera a folha A4 com um QR por mesa, apontando para o cardápio na nuvem.")
                 self.btn_cardapio_qr.clicked.connect(self.abrir_cardapio_qr)
-                formulario.addRow(self.btn_cardapio_qr)
-                orientacao = texto(
+                dono.addWidget(self.btn_cardapio_qr)
+                dono.addWidget(texto(
                     "Para enviar vendas, caixa e estoque, habilite também o Painel do dono. "
                     "Para enviar comandas abertas ao porteiro, habilite o porteiro e defina o PIN. "
                     "O envio automático funciona com o PDV aberto. Sem internet, as vendas aguardam nova tentativa; "
-                    "o prazo depende da conexão e da disponibilidade da nuvem.", "suave")
-                orientacao.setWordWrap(True)
-                formulario.addRow(orientacao)
+                    "o prazo depende da conexão e da disponibilidade da nuvem.", "suave"))
+            coluna.addStretch()
             rolagem = QScrollArea()
             rolagem.setWidgetResizable(True)
+            # Só rolagem vertical: os textos quebram linha, então nenhum campo fica fora da janela.
+            rolagem.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
             rolagem.setWidget(pagina)
             self.abas.addTab(rolagem, titulo)
         layout.addWidget(self.abas)
@@ -207,6 +242,7 @@ class JanelaConfiguracoes(QDialog):
         layout.addWidget(self.mensagem)
         barra = QHBoxLayout()
         self.btn_salvar = QPushButton("Salvar esta aba")
+        self.btn_salvar.setObjectName("primario")
         self.btn_recarregar = QPushButton("Descartar alterações desta aba")
         self.btn_salvar.clicked.connect(self.salvar)
         self.btn_recarregar.clicked.connect(self.recarregar)
@@ -221,6 +257,50 @@ class JanelaConfiguracoes(QDialog):
                 self._carregar(secao)
         self.abas.setCurrentIndex(next(i for i, s in enumerate(SECOES) if permissoes[s]))
         self.abas.currentChanged.connect(self._trocar_aba)
+        self.abas.currentChanged.connect(self._filtrar)
+
+    @staticmethod
+    def _cartao(coluna, cartoes, grupo):
+        """Um cartão por assunto; devolve o layout onde entram as linhas."""
+        if grupo not in cartoes:
+            quadro = QFrame()
+            quadro.setObjectName("cartao")
+            corpo = QVBoxLayout(quadro)
+            corpo.setSpacing(8)
+            corpo.addWidget(texto(grupo, "secao"))
+            coluna.addWidget(quadro)
+            cartoes[grupo] = corpo
+        return cartoes[grupo]
+
+    @staticmethod
+    def _linha(corpo, rotulo, editor, tipo):
+        """Sim/não: caixa e texto na mesma linha. Demais: texto em cima e campo embaixo, na largura toda."""
+        linha = QWidget()
+        linha.setObjectName("linha")
+        descricao = _Rotulo(rotulo, editor)
+        if tipo == "sn":
+            arranjo = QHBoxLayout(linha)
+            arranjo.addWidget(editor, 0, Qt.AlignmentFlag.AlignTop)
+            arranjo.addWidget(descricao, 1)
+        else:
+            arranjo = QVBoxLayout(linha)
+            arranjo.setSpacing(3)
+            arranjo.addWidget(descricao)
+            arranjo.addWidget(editor)
+        arranjo.setContentsMargins(0, 0, 0, 0)
+        corpo.addWidget(linha)
+        return linha
+
+    def _filtrar(self, *_):
+        """Mostra só as opções da aba atual que contêm o texto buscado."""
+        termo = self.busca.text().strip().lower()
+        visiveis = {}
+        for alvo, linha, cartao in self._linhas[SECOES[self.abas.currentIndex()]]:
+            mostrar = termo in alvo
+            linha.setVisible(mostrar)
+            visiveis[cartao] = visiveis.get(cartao, False) or mostrar
+        for cartao, mostrar in visiveis.items():
+            cartao.setVisible(mostrar or not termo)
 
     def _permissoes(self):
         if self.ctx.operador is None:

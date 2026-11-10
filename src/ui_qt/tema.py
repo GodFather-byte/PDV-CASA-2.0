@@ -3,8 +3,9 @@ import os
 import sys
 from pathlib import Path
 
-from PySide6.QtGui import QFontDatabase
-from PySide6.QtWidgets import QApplication, QLabel
+from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtGui import QFontDatabase, QGuiApplication
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QScrollArea, QVBoxLayout, QWidget
 
 
 ESTILO = """
@@ -15,6 +16,12 @@ QLabel { background: transparent; }
 QLabel#titulo { font-size: 22px; font-weight: 700; }
 QLabel#marca { color: #5ee2bb; font-size: 24px; font-weight: 800; }
 QLabel#suave { color: #afbdd1; }
+QWidget#linha { background: transparent; }
+QCheckBox { background: transparent; spacing: 6px; }
+QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid #405570; border-radius: 4px; background: #182437; }
+QCheckBox::indicator:checked { background: #5ee2bb; border: 3px solid #187e65; }
+QCheckBox::indicator:disabled { background: #1b2534; }
+QLabel#secao { color: #5ee2bb; font-size: 14px; font-weight: 700; }
 QLabel#aviso { color: #ffd28a; }
 QPushButton { background: #24364d; border: 1px solid #405570; border-radius: 7px;
               padding: 5px 10px; text-align: left; }
@@ -62,6 +69,7 @@ def aplicar(aplicacao: QApplication, aparencia: str = "escuro") -> None:
         for original, nova in cores.items():
             estilo = estilo.replace(original, nova)
     aplicacao.setStyleSheet(estilo)
+    instalar_ajuste_de_janelas(aplicacao)
     from src.core import edicao
     ed = edicao.atual()
     aplicacao.setApplicationName(f"{ed.nome}{ed.sufixo_titulo}")
@@ -74,10 +82,77 @@ def texto(conteudo: str, nome: str = "", quebra: bool = True) -> QLabel:
     return rotulo
 
 
+# Reserva para a moldura do Windows: a barra de título e as bordas não entram no tamanho pedido.
+RESERVA_LARGURA = 16
+RESERVA_ALTURA = 40
+_MARCA_AJUSTE = "_will_janela_ajustada"
+
+
+def _area_util(janela):
+    tela = janela.screen() or QGuiApplication.primaryScreen()
+    return tela.availableGeometry() if tela is not None else None
+
+
+def _rolar_conteudo(janela) -> None:
+    """Conteúdo maior que a tela ganha rolagem em vez de ficar cortado."""
+    antigo = janela.layout()
+    if antigo is None or getattr(janela, "_will_rolagem", None) is not None:
+        return
+    miolo = QWidget()
+    miolo.setLayout(antigo)                 # o Qt transfere o layout e os campos para o miolo
+    rolagem = QScrollArea()
+    rolagem.setWidgetResizable(True)
+    rolagem.setWidget(miolo)
+    externo = QVBoxLayout(janela)
+    externo.setContentsMargins(0, 0, 0, 0)
+    externo.addWidget(rolagem)
+    janela._will_rolagem = rolagem
+
+
 def ajustar_janela(janela) -> None:
-    """Abertura dentro da área útil, reservando moldura e barra de tarefas."""
-    tela = janela.screen()
-    if tela is not None and not janela.isMaximized() and not janela.isFullScreen():
-        area = tela.availableGeometry()
-        janela.resize(min(janela.width(), max(320, area.width() - 24)),
-                      min(janela.height(), max(240, area.height() - 48)))
+    """Abre a janela inteira dentro da área útil: limita o tamanho, rola o que não cabe e centraliza.
+
+    Vale para qualquer resolução (1024x600, 1366x768) e para a escala de 125% ou 150% do Windows.
+    """
+    if janela.isMaximized() or janela.isFullScreen():
+        return
+    area = _area_util(janela)
+    if area is None:
+        return
+    largura_max = max(320, area.width() - RESERVA_LARGURA)
+    altura_max = max(240, area.height() - RESERVA_ALTURA)
+    minimo = janela.minimumSizeHint().expandedTo(janela.minimumSize())
+    if minimo.width() > largura_max or minimo.height() > altura_max:
+        if isinstance(janela, QDialog) and type(janela).__module__.startswith("src."):
+            _rolar_conteudo(janela)
+        janela.setMinimumSize(min(minimo.width(), largura_max), min(minimo.height(), altura_max))
+    janela.resize(min(janela.width(), largura_max), min(janela.height(), altura_max))
+    # Posição: centro da janela dona (ou da tela), sem passar das bordas.
+    dona = janela.parentWidget().window() if janela.parentWidget() is not None else None
+    base = dona.frameGeometry() if dona is not None and dona.isVisible() else area
+    x = base.center().x() - janela.width() // 2
+    y = base.center().y() - (janela.height() + RESERVA_ALTURA) // 2
+    x = max(area.left() + RESERVA_LARGURA // 2, min(x, area.right() - janela.width() - RESERVA_LARGURA // 2 + 1))
+    y = max(area.top() + RESERVA_ALTURA - 8, min(y, area.bottom() - janela.height() - 8 + 1))
+    janela.move(x, y)
+
+
+class _AjusteDeJanelas(QObject):
+    """Toda janela ou diálogo passa por `ajustar_janela` na primeira vez que aparece."""
+
+    def eventFilter(self, objeto, evento):
+        if (evento.type() == QEvent.Type.Show and isinstance(objeto, QWidget) and objeto.isWindow()
+                and objeto.windowType() in (Qt.WindowType.Window, Qt.WindowType.Dialog)
+                and not objeto.property(_MARCA_AJUSTE)):
+            objeto.setProperty(_MARCA_AJUSTE, True)
+            try:
+                ajustar_janela(objeto)
+            except RuntimeError:            # janela já destruída pelo Qt
+                pass
+        return False
+
+
+def instalar_ajuste_de_janelas(aplicacao: QApplication) -> None:
+    if getattr(aplicacao, "_will_ajuste_janelas", None) is None:
+        aplicacao._will_ajuste_janelas = _AjusteDeJanelas(aplicacao)
+        aplicacao.installEventFilter(aplicacao._will_ajuste_janelas)
