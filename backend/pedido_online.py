@@ -26,6 +26,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.database import Base, engine, get_db
+from src.core.formatacao import mult_cent
 
 EDICAO = "willadega"  # migração legada: não atribuir esta edição a restaurantes
 EDICOES_PEDIDO = frozenset({"willadega", "willrestaurante"})
@@ -163,7 +164,7 @@ def texto_whatsapp(nome_loja: str, numero: int, d: dict) -> str:
         qtd = i["qtd"]
         texto_qtd = str(int(qtd)) if float(qtd) == int(qtd) else str(qtd).replace(".", ",")
         temp = " gelada" if i.get("temperatura") == "gelada" else ""
-        linhas.append(f"{texto_qtd}x {i['nome']}{temp} - {reais(int(round(qtd * i['preco_cent'])))}")
+        linhas.append(f"{texto_qtd}x {i['nome']}{temp} - {reais(mult_cent(i['preco_cent'], qtd))}")
         for o in i.get("opcoes", []):
             linhas.append(f"  + {o['nome']} ({reais(o['preco_cent'])})")
     linhas.append("")
@@ -265,7 +266,7 @@ def montar_pedido(cfg: dict, catalogo: dict[str, dict], corpo: dict, quando: dat
         else:
             itens[chave_item] = {"codigo": codigo, "nome": produto["nome"], "qtd": qtd, "preco_cent": preco,
                                  "temperatura": temperatura, "cascos": cascos, "opcoes_ids": ids, "opcoes": escolhas}
-    subtotal = sum(int(round(i["qtd"] * i["preco_cent"])) for i in itens.values())
+    subtotal = sum(mult_cent(i["preco_cent"], i["qtd"]) for i in itens.values())
     if subtotal < cfg.get("minimo_cent", 0):
         raise HTTPException(status_code=422, detail=f"O pedido mínimo é {reais(cfg['minimo_cent'])}.")
     taxa = 0

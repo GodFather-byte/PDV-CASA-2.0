@@ -58,9 +58,14 @@
     return p.codigo + "|" + tempDe(p) + "|" + (p._escolhas || []).map(o => o.id).sort().join(",");
   }
 
+  function totalDaLinha(i) {
+    const quantidade = Math.round(i.qtd * 10000);
+    return Math.floor((i.preco_cent * quantidade + 5000) / 10000);
+  }
+
   function totalCarrinho() {
     let itens = 0, cent = 0;
-    for (const i of carrinho.values()) { itens += i.qtd; cent += i.qtd * i.preco_cent; }
+    for (const i of carrinho.values()) { itens += i.qtd; cent += totalDaLinha(i); }
     return { itens, cent };
   }
 
@@ -289,7 +294,7 @@
     lista.replaceChildren();
     for (const i of carrinho.values()) {
       const nome = i.qtd + "x " + i.nome + (i.temperatura === "gelada" ? " (gelada)" : "");
-      const linha = el("li", null, el("span", { text: nome }), el("strong", { text: reais(Math.round(i.qtd * i.preco_cent)) }));
+      const linha = el("li", null, el("span", { text: nome }), el("strong", { text: reais(totalDaLinha(i)) }));
       if ((i.opcoes || []).length) linha.append(el("span", { text: i.opcoes.map(o => o.nome).join(", ") }));
       const remover = el("button", { type: "button", text: "Remover", "aria-label": "Remover " + i.nome });
       remover.addEventListener("click", () => { carrinho.delete(i.chave); atualizarBarra(); resumoCarrinho(); });

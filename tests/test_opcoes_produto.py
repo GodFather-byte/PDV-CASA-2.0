@@ -80,6 +80,15 @@ class TesteOpcoesProduto(BaseCaixa):
         self.assertIn("Bacon extra", texto)
         self.assertIn("3,00", texto)
 
+    def test_fracao_arredonda_centavos_como_o_caixa(self):
+        from backend.pedido_online import montar_pedido, texto_whatsapp
+        produto = {"nome": "Produto fracionado", "preco_cent": 50, "fracionado": True}
+        pedido = {"nome": "Ana", "telefone": "11999990000", "retirada": True, "pagamento": "dinheiro",
+                  "itens": [{"codigo": "1", "qtd": 0.01}]}
+        dados = montar_pedido({"retirada": True}, {"1": produto}, pedido)
+        self.assertEqual(dados["total_cent"], 1)
+        self.assertIn("R$ 0,01", texto_whatsapp("Loja", 1, dados))
+
     def test_nuvem_recalcula_preco_sem_aceitar_valor_do_navegador(self):
         from backend.pedido_online import montar_pedido
         produto = {"nome": "Hambúrguer", "preco_cent": 800, "grupos_opcoes": self.grupos}
