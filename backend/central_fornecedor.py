@@ -586,6 +586,25 @@ def instalar(app, Loja):
         db.commit()
         return {"codigo": codigo, "validade": expira, "programa": EDICOES[emissao.edicao_da_loja(loja)].nome}
 
+    @app.post("/v1/fornecedor/lojas/{chave}/recuperar-senha")
+    def recuperar_senha(chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
+        """Gerente esqueceu a senha: assina a liberação do pedido que o caixa mostra (src/core/recuperacao_senha.py)."""
+        from backend import recuperacao_senha
+        from backend.main import semente_licenca
+        loja = obter(db, chave)
+        motivo = texto(dados, "motivo", 500)
+        if not loja.ativa:
+            raise HTTPException(409, "Loja desativada.")
+        if not emissao.chave_pronta():
+            raise HTTPException(409, "A chave de emissão da nuvem não está pronta. Use a ferramenta local (tools.gerar_licenca recuperar-senha).")
+        try:
+            liberacao = recuperacao_senha.emitir(db, semente_licenca(), chave, texto(dados, "pedido", 20))
+        except ValueError as erro:
+            raise HTTPException(422, str(erro)) from None
+        auditar(db, "recuperar_senha", chave, f"pedido {liberacao['pedido']}: {motivo}")
+        db.commit()
+        return liberacao
+
     @app.post("/v1/fornecedor/lojas/{chave}/conciliar")
     def conciliar(chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
         obter(db, chave)

@@ -55,6 +55,18 @@ As duas preferências ficam só naquele aparelho (não sobem para a nuvem).
 
 No computador o painel usa menu lateral e duas colunas.
 
+### Minhas lojas (um dono, várias lojas)
+
+Quem tem mais de uma loja vê todas no mesmo painel. No fim da aba **Hoje**, em **Adicionar outra loja**,
+o dono digita o código e a senha do painel da outra loja (a prova de que ela é dele). A partir daí aparece,
+no topo da aba Hoje, o bloco **Minhas lojas**: o total de hoje e do mês somando todas, e uma linha por
+loja com hoje, mês e se o caixa está enviando. Tocar numa loja troca o painel inteiro para ela, sem pedir
+senha de novo. **Remover** tira a loja do grupo (os dados dela continuam na nuvem; o acesso volta a ser
+pelo código e senha dela). Até 20 lojas por grupo. Com uma loja só, o bloco não aparece.
+
+Ligar uma loja a outra junta os dois grupos: quem entrar por qualquer uma vê todas. Trocar a senha do
+painel de uma loja não desfaz o grupo; para tirar o acesso de alguém, remova a loja do grupo.
+
 ### Notas de compra
 
 Na aba **Produtos**, **Enviar XML da nota** manda para a loja a nota de compra do fornecedor (o arquivo
@@ -252,4 +264,8 @@ permite usá-lo como hospedagem de serviço comercial.
 | `GET /v1/painel/produtos?periodo=` | sessão | mais vendidos. `periodo` é `hoje`, `7d` ou `30d`, a partir do dia operacional |
 | `GET /v1/painel/vendas?dia=&pagina=` | sessão | vendas do dia, 50 por página (cada uma com o `terminal_id` do caixa) |
 | `GET /v1/painel/historico?dias=14` | sessão | faturamento, vendas e canceladas por dia (1 a 90; o app pede 30) |
+| `GET /v1/painel/lojas` | sessão | lojas do grupo do dono, cada uma com hoje, mês e atraso do envio, mais o total |
+| `POST /v1/painel/lojas/vincular` | sessão + código e senha da outra loja | junta a outra loja ao grupo (senha errada devolve 403, não 401) |
+| `POST /v1/painel/lojas/trocar` | sessão | fecha a sessão atual e abre outra na loja escolhida do grupo |
+| `DELETE /v1/painel/lojas/{chave}` | sessão | tira a loja do grupo |
 | `GET /painel/` | público | o app web (a API não expõe dados sem sessão) |

@@ -101,6 +101,10 @@ class JanelaLogin(QDialog):
         self.btn_entrar.setObjectName("primario")
         self.btn_entrar.clicked.connect(self.entrar)
         formulario.addWidget(self.btn_entrar)
+        self.btn_esqueci = QPushButton("Esqueci a senha")
+        self.btn_esqueci.setToolTip("Gerente sem a senha: gera um pedido para o fornecedor liberar a troca")
+        self.btn_esqueci.clicked.connect(self.esqueci_a_senha)
+        formulario.addWidget(self.btn_esqueci)
         self.btn_licenca = QPushButton("Ativar licença ou instalar loja")
         self.btn_licenca.setToolTip("Cole o código de licença ou o código de instalação (WILL1-...) da central")
         self.btn_licenca.clicked.connect(self.pedir_licenca)
@@ -121,7 +125,7 @@ class JanelaLogin(QDialog):
 
     def _ocupar(self, valor):
         self._ocupada = valor
-        for campo in (self.btn_entrar, self.usuario, self.senha, self.btn_licenca):
+        for campo in (self.btn_entrar, self.usuario, self.senha, self.btn_licenca, self.btn_esqueci):
             campo.setEnabled(not valor)
 
     def entrar(self):
@@ -215,6 +219,23 @@ class JanelaLogin(QDialog):
         from src.ui_qt.rede_caixas import ligar_este_computador
         if ligar_este_computador(self, self.ctx.banco):
             self.reject()
+
+    def esqueci_a_senha(self):
+        """Abre a recuperação; trocada a senha, o nome do gerente já fica no campo de usuário."""
+        if self._ocupada or self._fechada:
+            return None
+        from src.ui_qt.esqueci_senha import DialogoEsqueciSenha
+        dialogo = DialogoEsqueciSenha(self.ctx, self)
+        if dialogo.exec() == QDialog.DialogCode.Accepted and dialogo.operador:
+            indice = self.usuario.findText(dialogo.operador)
+            if indice >= 0:
+                self.usuario.setCurrentIndex(indice)
+            else:
+                self.usuario.setEditText(dialogo.operador)
+            self.senha.clear()
+            self.senha.setFocus()
+            self.mensagem.setText(f"Senha de {dialogo.operador} trocada. Entre com a senha nova.")
+        return dialogo
 
     def pedir_licenca(self):
         if self._ocupada or self._fechada:
