@@ -108,6 +108,7 @@ class TesteMigracaoRestaurante(BaseCaixa):
         import tempfile
         from pathlib import Path
         from contextlib import closing
+        from src.database import esquema
         from src.database.conexao import BancoDados
         vid = self.caixa.abrir_balcao()
         item = self.caixa.adicionar_item(vid, self.skol, 2)
@@ -122,7 +123,7 @@ class TesteMigracaoRestaurante(BaseCaixa):
                 con.execute("PRAGMA user_version = 47")
             migrado = BancoDados(arquivo)
             try:
-                self.assertEqual(migrado.valor("PRAGMA user_version"), 49)
+                self.assertEqual(migrado.valor("PRAGMA user_version"), esquema.VERSAO_ESQUEMA)
                 linha = migrado.um("SELECT total_cent, opcoes_json, adicionais_cent FROM itens_venda WHERE id = ?", (item,))
                 self.assertEqual(tuple(linha), (1600, "[]", 0))
                 self.assertEqual(migrado.todos("PRAGMA foreign_key_check"), [])

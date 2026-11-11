@@ -55,6 +55,23 @@ As duas preferências ficam só naquele aparelho (não sobem para a nuvem).
 
 No computador o painel usa menu lateral e duas colunas.
 
+### Notas de compra
+
+Na aba **Produtos**, **Enviar XML da nota** manda para a loja a nota de compra do fornecedor (o arquivo
+XML que chega por e-mail; foto e PDF do DANFE não servem). Dá para enviar até 10 arquivos por vez, de
+até 2 MB cada. A lista mostra a situação de cada nota:
+
+- **Aguardando o caixa buscar:** ainda na nuvem. Dá para excluir.
+- **No caixa, aguardando conferência:** chegou ao PDV. O caixa busca na sincronização (em geral em até
+  15 minutos com a loja aberta) ou no botão **Buscar agora**.
+- **Lançada no estoque:** o gerente conferiu os itens e confirmou a entrada.
+- **Recusada pelo caixa:** com o motivo. Pode ser enviada de novo.
+
+No PDV a nota aparece em **Notas do dono** (menu Produtos e estoque, e na tela de Lançamentos de
+estoque). **Conferir e lançar** abre a mesma conferência do XML importado pelo arquivo: liga cada item
+ao produto, mostra custo e preço sugerido e só então dá entrada. Nada entra sozinho. Exige o acesso de
+lançamento de estoque e o de custo (gerente).
+
 ## O que sobe para a nuvem (e o que não sobe)
 
 Só com **Configurações > Nuvem > "Painel do dono no celular" = Sim**. Desligado (padrão), nada sai da loja.

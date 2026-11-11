@@ -1176,6 +1176,10 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             resposta["heartbeat_confirmado"] = heartbeat_confirmado
         if erros_aceitos:
             resposta["erros"] = erros_aceitos
+        from backend import notas_dono
+        notas = notas_dono.pendentes(db, acesso.loja)    # o dono subiu nota de compra: o caixa busca em /v1/notas-dono
+        if notas:
+            resposta["notas_pendentes"] = notas
         return resposta
 
     # ---- senha do painel (administrador ou o próprio PDV da loja)

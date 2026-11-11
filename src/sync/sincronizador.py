@@ -143,7 +143,9 @@ class Sincronizador:
         self._atualizar_programa()
         self._enviar_porteiro(forcar)
         self._enviar_cardapio()
-        return self._enviar_painel(forcar) and sucesso
+        painel = self._enviar_painel(forcar)
+        self._buscar_notas()
+        return painel and sucesso
 
     def _ponte(self) -> None:
         """Central do fornecedor (opcional, não precisa do token da loja); tem intervalo e espera próprios."""
@@ -186,6 +188,15 @@ class Sincronizador:
         except Exception:
             log.exception("Falha ao enviar os dados do painel do dono.")
             return False
+
+    def _buscar_notas(self) -> None:
+        """Notas de compra que o dono subiu pelo painel. Só usa a rede quando o envio do painel avisou que há nota
+        (ou há desfecho a contar). Falha aqui não segura o resto: a próxima rodada tenta de novo."""
+        try:
+            from src.sync import notas_dono
+            notas_dono.sincronizar(self.banco, self._http)
+        except Exception:
+            log.exception("Falha ao buscar as notas enviadas pelo dono.")
 
     def iniciar_loop(self, rodadas: int | None = None, dormir=time.sleep) -> None:
         """Repete as rodadas. Sem falha, acorda a cada poucos segundos só para olhar a fila local.

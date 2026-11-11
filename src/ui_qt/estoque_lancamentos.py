@@ -43,6 +43,10 @@ class JanelaLancamentosEstoque(QDialog):
         self.btn_nfe.clicked.connect(self.importar_nfe)
         self.btn_nfe.setVisible(self.ctx.pode("rel_custo"))
         barra.addWidget(self.btn_nfe)
+        self.btn_notas_dono = QPushButton("Notas do dono")
+        self.btn_notas_dono.setToolTip("Notas de compra que o dono enviou pelo painel e esperam conferência.")
+        self.btn_notas_dono.clicked.connect(self.abrir_notas_dono)
+        barra.addWidget(self.btn_notas_dono)
         self.btn_atualizar = QPushButton("Atualizar (F5)")
         self.btn_atualizar.clicked.connect(self.atualizar)
         barra.addWidget(self.btn_atualizar)
@@ -229,6 +233,20 @@ class JanelaLancamentosEstoque(QDialog):
         self.mensagem.setText("Preencha os dados e lance o cabeçalho.")
         return True
 
+    def abrir_notas_dono(self):
+        from src.ui_qt.notas_dono import JanelaNotasDono
+        dialogo = JanelaNotasDono(self.ctx, self)
+        dialogo.exec()
+        self.atualizar()
+        return dialogo
+
+    def _rotular_notas_dono(self):
+        quantidade = self.ctx.notas_dono.quantidade()
+        self.btn_notas_dono.setText(f"Notas do dono ({quantidade})" if quantidade else "Notas do dono")
+        self.btn_notas_dono.setObjectName("primario" if quantidade else "")
+        self.btn_notas_dono.style().unpolish(self.btn_notas_dono)
+        self.btn_notas_dono.style().polish(self.btn_notas_dono)
+
     def importar_nfe(self):
         """Lê o XML (ou ZIP) que o fornecedor mandou. Não consulta a SEFAZ."""
         try:
@@ -254,6 +272,7 @@ class JanelaLancamentosEstoque(QDialog):
     def atualizar(self):
         try:
             self._exigir_acesso()
+            self._rotular_notas_dono()
             controlador = self.ctx.estoque
             todos = controlador.lancamentos()
             registros = todos[:LIMITE_LANCAMENTOS]

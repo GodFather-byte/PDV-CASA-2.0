@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 49
+VERSAO_ESQUEMA = 50
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -164,6 +164,22 @@ MAQUINAS_DDL = """CREATE TABLE IF NOT EXISTS maquinas (
 )"""
 
 TABELAS = [
+    # Notas de compra que o dono subiu pelo painel (src/sync/notas_dono.py). `id` é o da nota na nuvem. O XML fica
+    # aqui até a conferência; `aviso_ok = 0` é desfecho (lançada ou recusada) que a nuvem ainda não confirmou.
+    """CREATE TABLE IF NOT EXISTS notas_dono (
+        id INTEGER PRIMARY KEY,
+        chave TEXT NOT NULL,
+        numero TEXT NOT NULL DEFAULT '',
+        emitente TEXT NOT NULL DEFAULT '',
+        arquivo TEXT NOT NULL DEFAULT 'nota.xml',
+        xml BLOB,
+        enviada_em TEXT,
+        recebida_em TEXT NOT NULL,
+        situacao TEXT NOT NULL DEFAULT 'pendente' CHECK (situacao IN ('pendente','lancada','recusada')),
+        situacao_em TEXT,
+        detalhe TEXT NOT NULL DEFAULT '',
+        aviso_ok INTEGER NOT NULL DEFAULT 1
+    )""",
     """CREATE TABLE IF NOT EXISTS pedidos_mesa_importados (
         pedido_id INTEGER PRIMARY KEY,
         venda_id INTEGER NOT NULL REFERENCES vendas(id) ON DELETE CASCADE,
@@ -1083,6 +1099,7 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    50: [],  # tabela aditiva das notas de compra enviadas pelo painel do dono
     49: [],  # tabela aditiva de deduplicação e confirmação dos pedidos de mesa
     48: [("coluna", "itens_venda", "opcoes_json", "TEXT NOT NULL DEFAULT '[]'"),
          ("coluna", "itens_venda", "adicionais_cent", "INTEGER NOT NULL DEFAULT 0 CHECK (adicionais_cent >= 0)")],
