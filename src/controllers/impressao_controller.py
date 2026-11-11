@@ -41,7 +41,8 @@ _ESTILOS = {
     "via_comissao": {"negrito_linhas": 1, "grande_prefixos": ("Valor desta", "Pontos desta")},
     # Pagamento da garota: o recibo e o comprovante de saída da gaveta saem com as linhas que ela confere em letra mais alta.
     # A identificação começa pelo número, sem rótulo, e continua em letra alta.
-    "recibo_garota": {"negrito_linhas": 1, "grande_prefixos": (*tuple("0123456789"), "RECIBO", "Pago em:", "COMISSÃO", "SHOWS", "TOTAL PAGO",
+    "recibo_garota": {"negrito_linhas": 1, "grande_prefixos": (*tuple("0123456789"), "RECIBO", "Pago em:", "COMISSÃO", "COMISSÕES", "SHOWS",
+                                                              "TOTAL PAGO",
                                                               "Dinheiro", "Vale", "Pix", "Saiu do dinheiro", "Pago fora",
                                                               "Conta fechada")},
     "saida_garota": {"negrito_linhas": 1, "grande_prefixos": ("Valor", "Motivo:", "Operador:")},
@@ -435,8 +436,9 @@ class ImpressaoController:
         return self.enviar(texto, f"via_comissao_{lanc['garota']}_{lancamento_id}", tipo="via_comissao")
 
     def recibo_comissao(self, pag: dict, operador: str) -> str:
-        """Recibo do acerto da garota (não fiscal): a comissão (quantos lançamentos e o total), os shows manuais ou dos quartos
-        (quantidade x valor), o total entregue e a linha da assinatura. Os lançamentos não saem um a um: só a quantidade e o total.
+        """Recibo do acerto da garota (não fiscal): a comissão (quantas comissões x o valor de cada uma e o total), os shows
+        manuais ou dos quartos (quantidade x valor), o total entregue e a linha da assinatura. Os lançamentos não saem um a um.
+        Com a comissão em reais, ou um total que não fecha em comissões inteiras, sai a quantidade de lançamentos.
         Sem shows é o recibo de comissão de sempre; sem comissão nem shows é o recibo do fechamento zerado."""
         w = self.largura()
         quem = f"{pag['garota']} {pag['nome']}".strip()
@@ -445,10 +447,20 @@ class ImpressaoController:
         so_comissao = bool(pag["quantidade"]) and not shows
         linhas = self.cabecalho(w) + _titulo("RECIBO DE COMISSÃO" if so_comissao else "RECIBO DE ACERTO", w) + [
             quem[:w], _lr("Pago em:", fmt.fmt_datahora(pag["pago_em"])[:16], w), "-" * w]
+        # A casa conta a comissão em unidades (cada uma vale `comissao_valor_ponto`, R$ 5,00 de fábrica): um gin de
+        # R$ 30,00 são 6 comissões. O papel mostra essa conta (88 x 5,00), não quantos lançamentos foram feitos.
+        from src.controllers.comissao_controller import ComissaoController
+        comissoes = ComissaoController(self.banco)
+        unidade = comissoes.valor_ponto_cent()
+        em_unidades = comissoes.em_pontos() and comissao > 0 and comissao % unidade == 0
+        linha_comissao = (_lr(f"COMISSÕES: {comissao // unidade} x {M(unidade)}", M(comissao), w) if em_unidades
+                          else _lr(f"COMISSÃO ({pag['quantidade']})", M(comissao), w))
         if shows:
-            linhas += [_lr(f"COMISSÃO ({pag['quantidade']})", M(comissao), w),
+            linhas += [linha_comissao,
                        _lr(f"SHOWS: {shows} x {M(pag['valor_show_cent'])}", M(pag["shows_cent"]), w),
                        "-" * w, _lr("TOTAL PAGO", M(pag["total_cent"]), w)]
+        elif em_unidades:
+            linhas += [linha_comissao, "-" * w, _lr("TOTAL PAGO", M(pag["total_cent"]), w)]
         else:
             linhas.append(_lr(f"TOTAL PAGO ({pag['quantidade']})", M(pag["total_cent"]), w))
         if pag.get("shows_quartos"):
