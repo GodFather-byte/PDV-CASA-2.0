@@ -49,6 +49,7 @@ class Loja(Base):
     criada_em = Column(String)
     licenca_ate = Column(String, nullable=True)     # AAAA-MM-DD: até quando a assinatura está paga (backend.lojas assinatura)
     edicao = Column(String, nullable=True)          # programa da loja (willpdv, willadega); vazio = WillPDV
+    grupo_id = Column(Integer, nullable=True)       # rede do dono (tabela grupos); vazio = loja avulsa
 
 
 class Versao(Base):
@@ -88,7 +89,7 @@ Base.metadata.create_all(bind=engine)
 def _acrescentar_colunas() -> None:
     """create_all não altera tabela existente: colunas novas de tabelas que já existiam entram aqui."""
     from sqlalchemy import inspect, text
-    novas = {"lojas": {"licenca_ate": "VARCHAR", "edicao": "VARCHAR"}}
+    novas = {"lojas": {"licenca_ate": "VARCHAR", "edicao": "VARCHAR", "grupo_id": "INTEGER"}}
     with engine.begin() as con:
         for tabela, colunas in novas.items():
             existentes = {c["name"] for c in inspect(con).get_columns(tabela)}
@@ -99,6 +100,9 @@ def _acrescentar_colunas() -> None:
 
 _acrescentar_colunas()
 cobranca.garantir_esquema(engine)
+from backend import grupos as _grupos_esquema  # noqa: E402
+
+_grupos_esquema.garantir_esquema(engine)
 
 
 @asynccontextmanager
@@ -249,6 +253,102 @@ def admin_reenviar(dados: dict = Body(...), acesso: Acesso = Depends(autenticar)
     except cobranca.ErroCobranca as erro:
         db.rollback()
         raise _erro_cobranca(erro) from None
+
+
+def _erro_grupo(erro) -> HTTPException:
+    from backend.grupos import ErroGrupo
+    codigo = 404 if "não encontrada" in str(erro) else 422
+    return HTTPException(status_code=codigo, detail=str(erro))
+
+
+@app.get("/v1/admin/grupos")
+def admin_listar_grupos(acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db)):
+    if not acesso.admin:
+        raise HTTPException(status_code=403, detail="Só o administrador lista as redes.")
+    from backend import grupos
+    return {"grupos": grupos.listar(db)}
+
+
+@app.post("/v1/admin/grupos")
+def admin_criar_grupo(dados: dict = Body(...), acesso: Acesso = Depends(autenticar), db: Session = Depends(get_db)):
+    if not acesso.admin:
+        raise HTTPException(status_code=403, detail="Só o administrador cria uma rede.")
+    from backend import grupos
+    try:
+        grupo, senha = grupos.criar(db, str(dados.get("nome") or ""), str(dados.get("chave") or ""),
+                                    str(dados.get("senha") or ""), temporaria=bool(dados.get("temporaria", True)))
+    except grupos.ErroGrupo as erro:
+        db.rollback()
+        raise _erro_grupo(erro) from None
+    corpo = grupos.resumo(db, grupo)
+    corpo["senha"] = senha
+    return corpo
+
+
+@app.post("/v1/admin/grupos/{chave}/lojas")
+def admin_grupo_loja(chave: str, dados: dict = Body(...), acesso: Acesso = Depends(autenticar),
+                     db: Session = Depends(get_db)):
+    if not acesso.admin:
+        raise HTTPException(status_code=403, detail="Só o administrador altera a rede.")
+    from backend import grupos
+    try:
+        grupo = grupos.obter(db, chave)
+        grupos.adicionar_loja(db, grupo, str(dados.get("chave_loja") or ""))
+    except grupos.ErroGrupo as erro:
+        db.rollback()
+        raise _erro_grupo(erro) from None
+    return grupos.resumo(db, grupo)
+
+
+@app.delete("/v1/admin/grupos/{chave}/lojas/{loja}")
+def admin_grupo_remover_loja(chave: str, loja: str, acesso: Acesso = Depends(autenticar),
+                             db: Session = Depends(get_db)):
+    if not acesso.admin:
+        raise HTTPException(status_code=403, detail="Só o administrador altera a rede.")
+    from backend import grupos
+    try:
+        grupo = grupos.obter(db, chave)
+        grupos.remover_loja(db, grupo, loja)
+    except grupos.ErroGrupo as erro:
+        db.rollback()
+        raise _erro_grupo(erro) from None
+    return grupos.resumo(db, grupo)
+
+
+@app.post("/v1/admin/grupos/{chave}/senha")
+def admin_grupo_senha(chave: str, dados: dict = Body(default={}), acesso: Acesso = Depends(autenticar),
+                      db: Session = Depends(get_db)):
+    if not acesso.admin:
+        raise HTTPException(status_code=403, detail="Só o administrador define a senha da rede.")
+    from backend import grupos
+    try:
+        grupo = grupos.obter(db, chave)
+        senha = grupos.definir_senha(db, grupo, str((dados or {}).get("senha") or ""),
+                                     temporaria=bool((dados or {}).get("temporaria", True)))
+    except grupos.ErroGrupo as erro:
+        db.rollback()
+        raise _erro_grupo(erro) from None
+    return {"chave": grupo.chave, "senha": senha, "deve_trocar_senha": bool(grupo.deve_trocar_senha),
+            "link": f"/painel/?grupo={grupo.chave}"}
+
+
+@app.post("/v1/admin/grupos/{chave}/assinatura")
+def admin_grupo_assinatura(chave: str, dados: dict = Body(...), acesso: Acesso = Depends(autenticar),
+                           db: Session = Depends(get_db)):
+    if not acesso.admin:
+        raise HTTPException(status_code=403, detail="Só o administrador cadastra a mensalidade da rede.")
+    from backend import grupos
+    try:
+        grupo = grupos.obter(db, chave)
+        situacao = grupos.definir_assinatura(db, grupo, dados)
+        emitidas = cobranca.gerar_recorrencias(db, chave=grupo.chave)
+    except grupos.ErroGrupo as erro:
+        db.rollback()
+        raise _erro_grupo(erro) from None
+    except cobranca.ErroCobranca as erro:
+        db.rollback()
+        raise _erro_cobranca(erro) from None
+    return {"situacao": situacao, "emitidas": emitidas, "chave": grupo.chave}
 
 
 @app.get("/health")

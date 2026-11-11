@@ -13,6 +13,7 @@
   <a class="marca" href="/central/"><b>W</b><span>WILLPDV<small>CENTRAL DO FORNECEDOR</small></span></a>
   <nav aria-label="Principal">
     <button data-view="lojas" class="selecionado">Lojas e licenças</button>
+    <button data-view="redes">Redes</button>
     <button data-view="atualizacoes">Correções e atualizações</button>
     <button data-view="auditoria">Histórico de ações</button>
   </nav>
@@ -87,6 +88,22 @@
     </div>
   </div>
   <p class="nota">Mensalidades cadastradas representam o valor dos planos das lojas ativas, não o dinheiro recebido. Confira os pagamentos no detalhe da loja. A situação do caixa vem do último envio recebido: "online" é contato nos últimos 35 minutos.</p>
+</section>
+
+<section id="view-redes" hidden>
+  <div class="cabecalho">
+    <div><h2>Redes</h2><p>Um login e uma mensalidade para várias lojas. Cada caixa continua separado.</p></div>
+  </div>
+  <form method="post" id="criarRede" class="cartao">
+    <h3>Nova rede</h3>
+    <label for="redeNome">Nome</label>
+    <input id="redeNome" required maxlength="80" placeholder="Nome da rede">
+    <label for="redeChave">Chave do link</label>
+    <input id="redeChave" required maxlength="64" placeholder="REDE-EXEMPLO" pattern="[A-Za-z0-9._-]{1,64}">
+    <p class="nota">O dono entra em /painel/?grupo=CHAVE. A senha gerada é temporária: ele troca no primeiro acesso.</p>
+    <button>Criar rede</button>
+  </form>
+  <div id="redes" class="lista"></div>
 </section>
 
 <section id="view-atualizacoes" hidden>

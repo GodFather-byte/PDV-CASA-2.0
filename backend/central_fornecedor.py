@@ -724,6 +724,70 @@ def instalar(app, Loja):
         return {"eventos": [{"id": a.id, "acao": a.acao, "loja": a.loja, "motivo": a.motivo, "criada_em": a.criada_em}
                 for a in db.query(AuditoriaFornecedor).order_by(AuditoriaFornecedor.id.desc()).limit(100)]}
 
+    def _grupo_ou_erro(db, chave):
+        from backend.grupos import ErroGrupo, obter as obter_grupo
+        try:
+            return obter_grupo(db, chave)
+        except ErroGrupo as erro:
+            raise HTTPException(404 if "não encontrada" in str(erro) else 422, str(erro)) from None
+
+    @app.get("/v1/fornecedor/grupos")
+    def listar_grupos(_=Depends(sessao), db=Depends(get_db)):
+        from backend import grupos
+        return {"grupos": grupos.listar(db)}
+
+    @app.post("/v1/fornecedor/grupos")
+    def criar_grupo(dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
+        from backend import grupos
+        from backend.grupos import ErroGrupo
+        try:
+            auditar(db, "criar_rede", None, texto(dados, "nome", 80))
+            grupo, senha = grupos.criar(db, dados.get("nome") or "", dados.get("chave") or "",
+                                        dados.get("senha") or "", temporaria=bool(dados.get("temporaria", True)))
+        except ErroGrupo as erro:
+            raise HTTPException(422, str(erro)) from None
+        corpo = grupos.resumo(db, grupo)
+        corpo["senha"] = senha
+        return corpo
+
+    @app.post("/v1/fornecedor/grupos/{chave}/lojas")
+    def rede_adicionar(chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
+        from backend import grupos
+        from backend.grupos import ErroGrupo
+        grupo = _grupo_ou_erro(db, chave)
+        try:
+            auditar(db, "rede_adicionar_loja", dados.get("chave_loja"), grupo.chave)
+            grupos.adicionar_loja(db, grupo, str(dados.get("chave_loja") or ""))
+        except ErroGrupo as erro:
+            raise HTTPException(422, str(erro)) from None
+        return grupos.resumo(db, grupo)
+
+    @app.post("/v1/fornecedor/grupos/{chave}/remover")
+    def rede_remover(chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
+        from backend import grupos
+        from backend.grupos import ErroGrupo
+        grupo = _grupo_ou_erro(db, chave)
+        try:
+            auditar(db, "rede_remover_loja", dados.get("chave_loja"), grupo.chave)
+            grupos.remover_loja(db, grupo, str(dados.get("chave_loja") or ""))
+        except ErroGrupo as erro:
+            raise HTTPException(422, str(erro)) from None
+        return grupos.resumo(db, grupo)
+
+    @app.post("/v1/fornecedor/grupos/{chave}/senha")
+    def rede_senha(chave: str, dados: dict = Body(default={}), _=Depends(sessao), db=Depends(get_db)):
+        from backend import grupos
+        from backend.grupos import ErroGrupo
+        grupo = _grupo_ou_erro(db, chave)
+        try:
+            auditar(db, "rede_senha_temporaria", None, grupo.chave)
+            senha = grupos.definir_senha(db, grupo, str((dados or {}).get("senha") or ""),
+                                         temporaria=bool((dados or {}).get("temporaria", True)))
+        except ErroGrupo as erro:
+            raise HTTPException(422, str(erro)) from None
+        return {"chave": grupo.chave, "senha": senha, "deve_trocar_senha": bool(grupo.deve_trocar_senha),
+                "link": f"/painel/?grupo={grupo.chave}"}
+
     # Retaguarda da loja pela central: as mesmas telas do dono, com a sessão do fornecedor (backend/retaguarda.py).
     from backend import retaguarda
     retaguarda.instalar_fornecedor(app, sessao, obter, auditar)
