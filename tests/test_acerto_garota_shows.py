@@ -31,7 +31,7 @@ class TesteAcertoComShows(BaseComissao):
         self.garota(180, "MARIA")
         self.lancar(180, 25)
         recibo = ImpressaoController(self.banco).recibo_comissao(self.acertar(10, 5000), "ADM")
-        for trecho in ("RECIBO DE ACERTO", "180 MARIA", "COMISSÃO (1)", "25,00", "SHOWS: 10 x 50,00", "500,00",
+        for trecho in ("RECIBO DE ACERTO", "180 MARIA", "COMISSÕES: 5 x 5,00", "25,00", "SHOWS: 10 x 50,00", "500,00",
                        "TOTAL PAGO", "525,00", "Assinatura"):
             self.assertIn(trecho, recibo)
         self.assertNotIn("garota", recibo.lower())
@@ -81,11 +81,56 @@ class TesteAcertoComShows(BaseComissao):
         recibo = ImpressaoController(self.banco).recibo_comissao(self.com.pagar(180, self.turno, self.adm), "ADM")
         self.assertNotIn("lançamento", recibo)
         self.assertIn("RECIBO DE COMISSÃO", recibo)
-        self.assertIn("TOTAL PAGO (2)", recibo)
+        self.assertIn("COMISSÕES: 11 x 5,00", recibo)
+        self.assertNotIn("(2)", recibo)                                        # a quantidade de lançamentos não sai mais
         self.assertIn("55,00", recibo)
         recibo = ImpressaoController(self.banco).recibo_comissao(self.acertar(2, 5000), "ADM")
         self.assertNotIn("lançamento", recibo)
         self.assertEqual(recibo.count("-" * 40), 2)                           # sem faixas de traços seguidas onde estavam as linhas
+
+    def test_recibo_conta_as_comissoes_pelo_valor_de_cada_uma_e_nao_pelos_lancamentos(self):
+        """Caso da casa: 19 lançamentos somando R$ 440,00 são 88 comissões de R$ 5,00, não "19"."""
+        self.garota(200, "JULIANA")
+        for valor in [30] * 3 + [20] * 12 + [25] * 2 + [10, 50]:             # 3 gins (6 comissões cada) e outros 16 itens
+            self.lancar(200, valor)
+        p = self.com.pagar(200, self.turno, self.adm, shows=10, valor_show_cent=6000)
+        self.assertEqual((p["quantidade"], p["comissao_cent"]), (19, 44000))
+        linhas = ImpressaoController(self.banco).recibo_comissao(p, "ADM").splitlines()
+        self.assertIn("COMISSÕES: 88 x 5,00" + " " * 14 + "440,00", linhas)
+        self.assertIn("SHOWS: 10 x 60,00" + " " * 17 + "600,00", linhas)
+        self.assertFalse(any("(19)" in linha for linha in linhas))
+        self.assertTrue(any(linha.startswith("TOTAL PAGO") and linha.endswith("1.040,00") for linha in linhas))
+
+    def test_recibo_soma_as_comissoes_conforme_os_lancamentos(self):
+        self.garota(180, "MARIA")
+        for esperado in (6, 12, 18):                                           # 1, 2 e 3 gins de R$ 30,00
+            self.lancar(180, 30)
+            pendente = self.com.pendente(180)
+            self.assertEqual(pendente // self.com.valor_ponto_cent(), esperado)
+        recibo = ImpressaoController(self.banco).recibo_comissao(self.com.pagar(180, self.turno, self.adm), "ADM")
+        self.assertIn("COMISSÕES: 18 x 5,00", recibo)
+        self.assertIn("90,00", recibo)
+
+    def test_recibo_respeita_o_valor_da_comissao_configurado(self):
+        self.banco.cfg_set("comissao_valor_ponto", "10")
+        self.garota(180, "MARIA")
+        self.lancar(180, 30)
+        recibo = ImpressaoController(self.banco).recibo_comissao(self.com.pagar(180, self.turno, self.adm), "ADM")
+        self.assertIn("COMISSÕES: 3 x 10,00", recibo)
+
+    def test_recibo_volta_a_quantidade_de_lancamentos_quando_nao_fecha_em_comissoes(self):
+        self.garota(180, "MARIA")
+        self.lancar(180, 25)
+        self.banco.cfg_set("comissao_em_pontos", "N")                          # casa que marca a comissão em reais
+        recibo = ImpressaoController(self.banco).recibo_comissao(self.com.pagar(180, self.turno, self.adm), "ADM")
+        self.assertIn("TOTAL PAGO (1)", recibo)
+        self.assertNotIn("COMISSÕES", recibo)
+        self.banco.cfg_set("comissao_em_pontos", "S")
+        self.banco.cfg_set("comissao_valor_ponto", "5")
+        self.lancar(180, 25)
+        self.banco.cfg_set("comissao_valor_ponto", "10")                       # R$ 25,00 não fecha em comissões de R$ 10,00
+        recibo = ImpressaoController(self.banco).recibo_comissao(self.acertar(1, 5000), "ADM")
+        self.assertIn("COMISSÃO (1)", recibo)
 
     def test_recibo_do_fechamento_sem_valor(self):
         p = self.com.pagar(180, self.turno, self.adm, permitir_zerado=True)
@@ -102,7 +147,7 @@ class TesteAcertoComShows(BaseComissao):
         imp = ImpressaoController(self.banco)
         recibo = imp.recibo_comissao(self.com.pagar(180, self.turno, self.adm), "ADM")
         dados = term.texto_para_escpos(recibo, **_ESTILOS["recibo_garota"])
-        for linha in ("180 MARIA", "TOTAL PAGO (1)"):
+        for linha in ("180 MARIA", "COMISSÕES: 5 x 5,00", "TOTAL PAGO"):
             posicao = dados.index(linha.encode("cp850"))
             self.assertIn(term.TAMANHO_ALTO, dados[max(0, posicao - 12):posicao], linha)      # o dobro de altura vem logo antes
         saida = imp.comprovante_movimento("saida", 2500, "Comissão garota 180 MARIA", "ADM")
