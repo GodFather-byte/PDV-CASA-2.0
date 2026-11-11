@@ -394,6 +394,17 @@
 
       <!-- Aba Produtos & Estoque -->
       <section id="aba-produtos" class="aba" role="tabpanel" aria-labelledby="tab-produtos" hidden>
+        <section class="bloco" id="bloco-notas">
+          <h2>Notas de compra</h2>
+          <p class="legenda">Envie o XML da nota do fornecedor (o arquivo que chega por e-mail, não a foto nem o PDF).
+            O caixa da loja recebe na próxima sincronização e confere os itens antes de dar entrada no estoque.</p>
+          <label class="botao-arquivo" for="arquivo-nota" id="rotulo-arquivo-nota">Enviar XML da nota</label>
+          <input id="arquivo-nota" class="arquivo-oculto" type="file" accept=".xml,text/xml,application/xml" multiple>
+          <p id="aviso-notas" class="aviso" role="status" hidden></p>
+          <ul id="lista-notas" class="lista lista-notas"></ul>
+          <p id="vazio-notas" class="vazio">Nenhuma nota enviada ainda.</p>
+        </section>
+
         <section class="bloco">
           <h2>Mais vendidos</h2>
           <div class="filtros" role="group" aria-label="Período do ranking">

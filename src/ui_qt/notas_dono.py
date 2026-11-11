@@ -34,7 +34,10 @@ class JanelaNotasDono(QDialog):
         self.grade.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.grade.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.grade.verticalHeader().setVisible(False)
-        self.grade.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        cabecalho = self.grade.horizontalHeader()
+        for coluna, modo in enumerate((QHeaderView.ResizeMode.Stretch, QHeaderView.ResizeMode.ResizeToContents,
+                                       QHeaderView.ResizeMode.ResizeToContents, QHeaderView.ResizeMode.Stretch)):
+            cabecalho.setSectionResizeMode(coluna, modo)
         self.grade.itemSelectionChanged.connect(self._habilitar)
         self.grade.itemDoubleClicked.connect(lambda *_: self.conferir())
         layout.addWidget(self.grade, 1)

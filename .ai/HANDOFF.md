@@ -1,37 +1,36 @@
-# Handoff — Will Restaurante (10/11/2026)
+# Handoff — Notas de compra do dono (10/11/2026)
 
 ## Branch e escopo
-Branch feat/willrestaurante, PR #70, base main 98a873fe (1.13.0).
-Pedido do dono: edição restaurante, adicionais, QR da mesa e cozinha web.
-Pix online foi adiado pelo dono ("sem pix na tela por enquanto"); não acrescentar pagamento/QR online.
-iFood e NFC-e fora do escopo. Não publicar sem terminar a validação do PR.
+Branch `notas-do-dono`, base main fab49a4 (1.14.0 candidata, esquema 49 -> 50).
+Pedido do dono: subir a nota de compra pelo painel e ela aparecer no PDV da adega.
+Decisão: a nota chega **pendente** e só entra no estoque depois da conferência no caixa.
 
 ## Implementação
-- willrestaurante: pasta WILL-RESTAURANTE, executável/instalador próprios e licença por edição.
-  Perfil inicial hamburgueria; seletor limitado a hamburgueria, pizzaria, a_la_carte e rodizio.
-  Quartos, garotas, porteiro e portaria bloqueados. Mesas/cozinha/delivery ligados.
-  Cardápio/pedido habilitados na configuração; publicação operacional exige nuvem e WhatsApp reais.
-- Adicionais comerciais: grupos com mínimo/máximo, nomes e preços congelados por item.
-  Caixa, ticket, fila de preparo e cardápio levam escolhas. Servidor calcula pelo catálogo.
-  Estoque e CMV seguem a ficha técnica; não há baixa extra de insumo por opção comercial.
-- QR da mesa: valida edição e limites, operador confirma, soma na conta pelo CaixaController.
-  pedidos_mesa_importados deduplica e confirma cada pedido, inclusive cancelamento.
-- Cozinha web: src/cozinha, servidor só no principal, porta 8766, PIN hash próprio, sessão TV somente leitura.
-  Configuração pelo botão Tablet / TV na cozinha Qt, com cfg_configuracoes e operador util_cozinha.
-  Status muda por transição explícita (sem duplo avanço); sem pagamentos e sem comandos offline.
-  Empacotamento copia cozinha_web; módulos novos entram em src.autoteste.MODULOS.
-- Entrega candidata 1.14.0. Schema 49: v48 adiciona opções/retrato; v49 adiciona importação de mesa. Migrações aditivas.
+- Nuvem `backend/notas_dono.py` (tabela `painel_notas`): o dono envia o XML em base64 (`POST /v1/painel/notas`),
+  lista e exclui; o caixa busca (`GET /v1/notas-dono`, 5 por vez) e confirma (`POST /v1/notas-dono/confirmar`).
+  Situações: pendente -> baixada -> lancada | recusada. O XML sai da nuvem na situação final. Só NF-e modelo 55,
+  até 2 MiB, sem DTD/entidade; 40 pendentes por loja. A nuvem não lança estoque nem consulta a SEFAZ.
+- `backend/painel.py`: a resposta de `/v1/painel/envio` ganha `notas_pendentes` só quando há nota (contrato
+  antigo intacto). `backend/main.py` instala o módulo.
+- PDV: `src/sync/notas_dono.py` busca só quando o envio do painel avisou (chave `notas_dono_na_nuvem`) ou há
+  desfecho a contar; `Sincronizador._buscar_notas` chama a cada rodada. Tabela local `notas_dono` (v50, aditiva).
+  `controllers/notas_dono_controller.py` dá a prévia pela `ImportacaoNFe.analisar_bytes` e registra o desfecho;
+  nota cuja chave já está em `importacoes_nfe` sai da fila sozinha.
+- Telas: `ui_qt/notas_dono.py` (fila, Conferir e lançar, Recusar, Buscar agora); botão em Lançamentos de
+  estoque e botão "Notas do dono (N)" no menu, visível só com nota esperando. Conferir exige `lanc_estoque` e
+  `rel_custo`, como a importação pelo arquivo.
+- Painel `/painel/`: bloco "Notas de compra" na aba Produtos. `sw.js` em `painel-v10`.
 
 ## Validação e limites
-O ambiente gerenciado falhou ao iniciar. Escrita/testes pelo GitHub e Actions; não declarar teste local.
-Etapas 1/2 passaram no build/autoteste Windows e testes Python 3.10/3.12.
-Etapa 3 passou em 209 testes Python 3.10/3.12; acompanhar os builds e a matriz completa do PR.
-A regressão completa identificou incompatibilidade ao ampliar o JSON v1 de preços; a correção
-mantém esse contrato sem campos extras, usando opcoes_json/adicionais_cent nas colunas próprias.
-Cozinha web já passou no foco Python 3.10/3.12 e instalação no Windows.
-Foi escondida também a linha de status do porteiro no restaurante; a edição mantém cozinha visível.
-Cozinha web acrescenta testes de sessão, TV, CSRF, revogação, PIN, cancelamento e transição concorrente.
-Homologação real em tablet/TV, impressora, dois Windows e escala 125% continua pendente.
+- `tests/test_notas_dono.py` (19 casos: nuvem, caixa ponta a ponta com TestClient, tela Qt).
+- Conferido por captura: painel no celular (envio de 2 XML e 1 arquivo inválido) e fila no PDV.
+- Não testado em loja: XML real de fornecedor grande, vários caixas na mesma loja (a busca roda onde roda a
+  sincronização do painel) e a publicação da nuvem.
+- A nuvem precisa ser publicada antes dos caixas: caixa novo com nuvem antiga só não recebe o aviso.
 
-Guia: docs/WILL_RESTAURANTE.md. Localização: .ai/MAPA.md.
-A base de vários caixas (BancoRemoto/transações/fila por terminal, v47) deve ser preservada.
+## Pendências
+- Antigravity: revisar `backend/notas_dono.py` e a linha nova em `backend/painel.py` e `sincronizador.py`.
+- Avisar o dono por push quando o caixa lançar ou recusar (hoje ele vê ao abrir a aba Produtos).
+- Foto ou PDF do DANFE não vira entrada: só o XML.
+- Homologação do Will Restaurante (tablet/TV, impressora, dois Windows, escala 125%) continua pendente.
+- Imprimir cupom e fechamento numa térmica de verdade (espaço entre linhas `ESC 3 26`).

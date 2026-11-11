@@ -623,6 +623,124 @@
   }
 
   // ------------------------------------------------------------------
+  // Notas de compra: o dono envia o XML e o caixa da loja busca e confere
+  // ------------------------------------------------------------------
+
+  const SITUACOES_NOTA = {
+    pendente: "Aguardando o caixa buscar",
+    baixada: "No caixa, aguardando conferência",
+    lancada: "Lançada no estoque",
+    recusada: "Recusada pelo caixa",
+  };
+  const LIMITE_NOTA_BYTES = 2 * 1024 * 1024;
+  const MAXIMO_NOTAS_POR_VEZ = 10;
+
+  function dataCurta(iso) {
+    const t = String(iso || "");
+    return t.length >= 16 ? t.slice(8, 10) + "/" + t.slice(5, 7) + " " + t.slice(11, 16) : "";
+  }
+
+  function avisarNotas(texto, erro) {
+    const aviso = $("aviso-notas");
+    aviso.textContent = texto || "";
+    aviso.hidden = !texto;
+    aviso.classList.toggle("erro", !!erro);
+  }
+
+  function linhaDaNota(nota) {
+    const detalhes = ["NF " + (nota.numero || "s/n")];
+    if (nota.itens) detalhes.push(nota.itens + (nota.itens === 1 ? " item" : " itens"));
+    if (nota.valor_cent) detalhes.push(formatarCentavos(nota.valor_cent));
+    if (nota.enviada_em) detalhes.push("enviada " + dataCurta(nota.enviada_em));
+    let situacao = SITUACOES_NOTA[nota.situacao] || nota.situacao;
+    if (nota.situacao === "recusada" && nota.detalhe) situacao += ": " + nota.detalhe;
+    const item = el("li", { class: "nota" },
+      el("div", { class: "nota-texto" },
+        el("strong", { text: nota.emitente || "Fornecedor não informado" }),
+        el("span", { class: "sec", text: detalhes.join(" · ") }),
+        el("span", { class: "etiqueta-nota " + nota.situacao, text: situacao })));
+    if (nota.situacao === "pendente" || nota.situacao === "recusada") {
+      const excluir = el("button", { type: "button", class: "botao-link perigo", text: "Excluir" });
+      excluir.addEventListener("click", async () => {
+        excluir.disabled = true;
+        try {
+          await chamarApi("/notas/" + nota.id, { metodo: "DELETE" });
+          avisarNotas("Nota excluída.");
+        } catch (e) {
+          avisarNotas(e.message || "Não consegui excluir a nota.", true);
+        }
+        carregarNotas();
+      });
+      item.append(excluir);
+    }
+    return item;
+  }
+
+  async function carregarNotas() {
+    if (!estado.token) return;
+    let dados;
+    try {
+      dados = await chamarApi("/notas");
+    } catch (e) {
+      if (e instanceof ErroApi && e.status === 404) {       // nuvem antiga: sem o recurso, o bloco some
+        $("bloco-notas").hidden = true;
+        return;
+      }
+      avisarNotas(e.message || "Não consegui carregar as notas.", true);
+      return;
+    }
+    const notas = (dados && dados.notas) || [];
+    const lista = $("lista-notas");
+    limpar(lista);
+    notas.forEach((nota) => lista.append(linhaDaNota(nota)));
+    $("vazio-notas").hidden = notas.length > 0;
+  }
+
+  function paraBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binario = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binario += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(binario);
+  }
+
+  async function enviarNotas(arquivos) {
+    const rotulo = $("rotulo-arquivo-nota");
+    const lista = Array.from(arquivos || []).slice(0, MAXIMO_NOTAS_POR_VEZ);
+    if (!lista.length) return;
+    rotulo.classList.add("ocupado");
+    let enviadas = 0;
+    const falhas = [];
+    for (const arquivo of lista) {
+      avisarNotas("Enviando " + arquivo.name + "…");
+      try {
+        if (arquivo.size > LIMITE_NOTA_BYTES) throw new Error("passa de 2 MB");
+        const conteudo = paraBase64(await arquivo.arrayBuffer());
+        await chamarApi("/notas", { metodo: "POST", corpo: { nome: arquivo.name, conteudo_b64: conteudo } });
+        enviadas += 1;
+      } catch (e) {
+        falhas.push(arquivo.name + ": " + (e.message || "falhou"));
+      }
+    }
+    rotulo.classList.remove("ocupado");
+    const partes = [];
+    if (enviadas) partes.push(enviadas + (enviadas === 1 ? " nota enviada. O caixa recebe" : " notas enviadas. O caixa recebe") + " na próxima sincronização.");
+    if (falhas.length) partes.push("Não enviei: " + falhas.join("; "));
+    if (arquivos.length > lista.length) partes.push("Envie no máximo " + MAXIMO_NOTAS_POR_VEZ + " arquivos por vez.");
+    avisarNotas(partes.join(" "), falhas.length > 0);
+    carregarNotas();
+  }
+
+  function configurarNotas() {
+    const campo = $("arquivo-nota");
+    campo.addEventListener("change", () => {
+      const arquivos = campo.files;
+      enviarNotas(arquivos).finally(() => { campo.value = ""; });
+    });
+  }
+
+  // ------------------------------------------------------------------
   // Meta do mês e ocultar valores (preferências deste aparelho)
   // ------------------------------------------------------------------
 
@@ -1743,6 +1861,7 @@
     if (nome === "vendas" && estado.token) carregarVendas();
     if (nome === "periodo" && estado.token) carregarPeriodo();
     if (nome === "lucro" && estado.token) carregarLucro();
+    if (nome === "produtos" && estado.token) carregarNotas();
   }
 
   function mudarDia(novoDia) {
@@ -1792,6 +1911,7 @@
     $("botao-sair").addEventListener("click", () => encerrarSessao(true));
     $("botao-atualizar").addEventListener("click", () => atualizarAgora());
     configurarMeta();
+    configurarNotas();
     configurarOcultarValores();
     const botaoResumo = $("botao-resumo-whatsapp");
     if (botaoResumo) botaoResumo.addEventListener("click", () => compartilharWhatsapp(""));
