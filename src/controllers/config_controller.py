@@ -177,6 +177,8 @@ CAMPOS_CONFIG = [
     ("whatsapp_alerta_conferencia", "Alertar diferença no fechamento do caixa", "sn", "Nuvem"),
     ("whatsapp_alerta_estoque", "Alertar estoque baixo", "sn", "Nuvem"),
     ("painel_dono", "Painel do dono no celular: enviar vendas fechadas, caixa e estoque para a nuvem", "sn", "Nuvem"),
+    ("retaguarda_nuvem", "Retaguarda na nuvem: o dono (painel) e o fornecedor (central) podem alterar cadastros, estoque, "
+     "contas e configurações desta loja de longe. Envia os cadastros para a nuvem; precisa do painel do dono ligado", "sn", "Nuvem"),
     ("cardapio_digital", "Cardápio digital: publicar o catálogo na nuvem para o QR da mesa (no Will Adega, também o "
      "pedido online, se ligado)", "sn", "Nuvem"),
     # Central do fornecedor (src/sync/ponte.py): usa o endereço da nuvem acima e um token só deste caixa.

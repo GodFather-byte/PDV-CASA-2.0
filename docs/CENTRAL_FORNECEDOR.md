@@ -158,3 +158,10 @@ que credenciais de uma loja não dão acesso à central. Usar homologação para
 conciliar e migrar antes de fazer essas operações em produção.
 
 `python -m unittest tests.test_central_fornecedor tests.test_ponte_backend tests.test_cobrancas_mercadopago tests.test_assinatura_mercadopago`
+
+## Retaguarda da loja
+
+Na ficha da loja, aba **Suporte e caixas**, **Abrir a retaguarda da loja** abre `/retaguarda/?loja=CHAVE` com a
+sessão da central: as mesmas telas do dono (produtos, estoque, pessoas, financeiro, configurações), em qualquer
+loja que tenha ligado a retaguarda no caixa. Cada alteração pedida entra na auditoria (ação `retaguarda`).
+Guia completo em `docs/RETAGUARDA.md`.

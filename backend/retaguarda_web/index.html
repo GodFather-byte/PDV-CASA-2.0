@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>WillPDV Retaguarda</title>
+  <meta name="description" content="Retaguarda da loja: produtos, estoque, pessoas, financeiro e configurações alterados de longe.">
+  <meta name="theme-color" content="#101827">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" sizes="192x192" href="/painel/icones/icone-192.png">
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">
+      <strong>Retaguarda</strong>
+      <span id="loja-nome">carregando…</span>
+    </div>
+    <div class="topo-acoes">
+      <span id="espelho-quando" class="suave"></span>
+      <button id="botao-atualizar" type="button" class="botao secundario">Atualizar</button>
+      <a id="link-voltar" class="botao secundario" href="/painel/">Voltar ao painel</a>
+    </div>
+  </header>
+
+  <div id="aviso-geral" class="faixa" hidden></div>
+
+  <section id="tela-entrada" class="cartao centro" hidden>
+    <h1>Entre para usar a retaguarda</h1>
+    <p id="entrada-texto">Abra o painel do dono, entre com o código e a senha da loja e volte para cá.</p>
+    <a id="entrada-link" class="botao" href="/painel/">Abrir o painel do dono</a>
+  </section>
+
+  <section id="tela-desligada" class="cartao centro" hidden>
+    <h1>Esta loja ainda não ligou a retaguarda</h1>
+    <p>No caixa da loja, abra <strong>Configurações &gt; Nuvem</strong>, marque
+      <strong>Retaguarda na nuvem</strong> e deixe o <strong>Painel do dono</strong> ligado.
+      Na próxima sincronização os cadastros aparecem aqui.</p>
+    <p class="suave">Enquanto estiver desligada, nada da loja pode ser alterado de longe.</p>
+  </section>
+
+  <div id="tela-app" class="app" hidden>
+    <nav id="menu" class="menu" aria-label="Seções da retaguarda"></nav>
+    <main id="conteudo" class="conteudo" tabindex="-1"></main>
+  </div>
+
+  <dialog id="dialogo" class="dialogo">
+    <form id="formulario" method="dialog" novalidate>
+      <header class="dialogo-topo">
+        <h2 id="dialogo-titulo"></h2>
+        <button type="button" id="dialogo-fechar" class="botao secundario" aria-label="Fechar">Fechar</button>
+      </header>
+      <div id="dialogo-corpo" class="dialogo-corpo"></div>
+      <p id="dialogo-aviso" class="aviso" role="status"></p>
+      <footer id="dialogo-rodape" class="dialogo-rodape"></footer>
+    </form>
+  </dialog>
+
+  <div id="recado" class="recado" role="status" aria-live="polite" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

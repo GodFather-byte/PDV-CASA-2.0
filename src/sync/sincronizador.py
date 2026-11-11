@@ -145,6 +145,7 @@ class Sincronizador:
         self._enviar_cardapio()
         painel = self._enviar_painel(forcar)
         self._buscar_notas()
+        self._retaguarda()
         return painel and sucesso
 
     def _ponte(self) -> None:
@@ -188,6 +189,15 @@ class Sincronizador:
         except Exception:
             log.exception("Falha ao enviar os dados do painel do dono.")
             return False
+
+    def _retaguarda(self) -> None:
+        """Retaguarda na nuvem: aplica as alterações do dono e do fornecedor e sobe o espelho que mudou.
+        Desligada (o padrão) não usa a rede. Falha aqui não segura o resto: a próxima rodada tenta de novo."""
+        try:
+            from src.sync import retaguarda
+            retaguarda.sincronizar(self.banco, self._http)
+        except Exception:
+            log.exception("Falha na retaguarda na nuvem.")
 
     def _buscar_notas(self) -> None:
         """Notas de compra que o dono subiu pelo painel. Só usa a rede quando o envio do painel avisou que há nota

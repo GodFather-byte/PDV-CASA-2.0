@@ -123,6 +123,7 @@ CONFIG_PADRAO = {
     "whatsapp_alerta_estoque": "S",
     # Painel do dono no celular: desligado até o dono pedir (as vendas só saem da loja com isto ligado).
     "painel_dono": "N",
+    "retaguarda_nuvem": "N",
     # Cardápio digital no celular (QR da mesa): desligado até o dono publicar o catálogo na nuvem.
     "cozinha_web_ativo": "N", "cozinha_web_porta": "8766",
     "cozinha_web_pin_hash": "", "cozinha_web_operador_id": "",

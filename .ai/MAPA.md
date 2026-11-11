@@ -84,6 +84,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Entrega | `entrega_controller.py` |
 | Preparação de iFood e NFC-e SP (sem operação) | `integracoes_controller.py`; campos em `config_controller.py`, padrões em `sementes.py`; pendências em Configurações Qt |
 | Módulos de operação configuráveis (Configurações > Módulos: liga/desliga por tipo de negócio) | convenção em `config_controller.py` (`MODULOS_OPCIONAIS`); ver `docs/ESPECIFICACAO.md` |
+| Retaguarda na nuvem (dono e fornecedor alteram cadastros, estoque, contas e configurações; o caixa aplica) | caixa `retaguarda_controller.py`, `src/sync/retaguarda.py`; nuvem `backend/retaguarda.py`; página `backend/retaguarda_web/` em `/retaguarda/`; guia `docs/RETAGUARDA.md` |
 | Dono com várias lojas no mesmo painel (grupo de lojas) | nuvem `backend/painel_lojas.py` (tabela `painel_grupos`); página `backend/painel_web` (bloco "Minhas lojas" na aba Hoje); `tests/test_painel_varias_lojas.py` |
 | Notas de compra enviadas pelo dono (painel -> nuvem -> caixa) | nuvem `backend/notas_dono.py`; caixa `src/sync/notas_dono.py`, `notas_dono_controller.py`, `ui_qt/notas_dono.py`; página `backend/painel_web` (aba Produtos) |
 | Senha de gerente esquecida (pedido do caixa, liberação assinada pelo fornecedor) | `src/core/recuperacao_senha.py`; nuvem `backend/recuperacao_senha.py` e rota em `central_fornecedor.py`; tela `ui_qt/esqueci_senha.py`; `tools/gerar_licenca.py recuperar-senha` |
@@ -128,7 +129,7 @@ implantação da adega), `IMPORTAR_PRODUTOS.md`, `PILOTO.md`,
 `COORDENACAO.md` (histórico de pedidos entre agentes).
 `BACKUP_EXTERNO.md` (pasta sincronizada, senha e recuperação), `AUDITORIA.md`,
 `CENTRAL_TELEGRAM.md` (configuração dos dois painéis Telegram e central local com API como ponte; sem cobrança),
-`INTERFACE_QT.md` (prévia e homologação), `QUARTOS.md` (controle de quartos e campainha), `TERCEIROS_QT.md` (licenças das dependências).
+`RETAGUARDA.md` (retaguarda na nuvem), `INTERFACE_QT.md` (prévia e homologação), `QUARTOS.md` (controle de quartos e campainha), `TERCEIROS_QT.md` (licenças das dependências).
 
 ## Dados
 
