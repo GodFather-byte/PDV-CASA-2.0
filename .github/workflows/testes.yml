@@ -72,6 +72,15 @@ jobs:
         if: runner.os == 'Linux'
         # 24 bits de cor: com a tela padrão do xvfb-run (8 bits) o Tk (gerador de licenças) cai com segmentation fault.
         run: |
-          sudo apt-get update -q && sudo apt-get install -y -q xvfb python3-tk libegl1 libopengl0
+          instalar() { sudo apt-get update -q && sudo apt-get install -y -q xvfb python3-tk libegl1 libopengl0; }
+          # Os servidores do Ubuntu às vezes somem para o runner ("Temporary failure resolving archive.ubuntu.com").
+          # Nesse caso troca para o espelho do kernel.org e tenta mais uma vez, em vez de falhar sem rodar teste nenhum.
+          instalar || {
+            echo "::warning::Servidores de pacotes do Ubuntu fora do ar; usando o espelho mirrors.edge.kernel.org."
+            echo "https://mirrors.edge.kernel.org/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
+            sudo sed -i -E 's#https?://(security|archive|azure\.archive)\.ubuntu\.com/ubuntu/?#https://mirrors.edge.kernel.org/ubuntu/#g' \
+              /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
+            instalar
+          }
           # -X faulthandler: se o Tk/Qt cair, o log mostra em qual teste (sem isso só aparece "Segmentation fault")
           xvfb-run -a -s "-screen 0 1920x1080x24" python -X faulthandler -m unittest discover -s tests
