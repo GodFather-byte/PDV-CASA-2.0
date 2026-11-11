@@ -47,6 +47,7 @@
     carregando: false,
     ultimaAtualizacao: 0,
     eventoInstalacao: null,
+    lojas: null,           // lojas do dono (null = ainda não consultado)
   };
 
   // ------------------------------------------------------------------
@@ -311,6 +312,7 @@
     if ((opcoes.metodo || "GET") === "GET") cabecalhos["X-PDV-Leitura"] = "1";
     if (opcoes.corpo !== undefined) cabecalhos["Content-Type"] = "application/json";
     if (estado.token && !opcoes.semToken) cabecalhos.Authorization = "Bearer " + estado.token;
+    const tokenUsado = estado.token;
 
     let resposta;
     try {
@@ -329,6 +331,8 @@
     try { dados = await resposta.json(); } catch (_) { dados = null; }
 
     if (resposta.status === 401 && !opcoes.semToken) {
+      // Resposta atrasada de uma sessão que já foi trocada (outra loja) não derruba a sessão nova.
+      if (tokenUsado !== estado.token) throw new ErroApi(401, "Sessão trocada.");
       encerrarSessao(false);
       throw new ErroApi(401, "Sessão expirada. Entre novamente.");
     }
@@ -389,6 +393,7 @@
     }
     estado.token = null;
     estado.loja = null;
+    estado.lojas = null;
     estado.resumo = null;
     estado.historico = null;
     estado.vendas = null;
@@ -418,12 +423,8 @@
     botao.textContent = "Entrando…";
     try {
       const dados = await chamarApi("/login", { metodo: "POST", corpo: { loja, senha }, semToken: true });
-      estado.token = dados.token;
-      estado.loja = dados.loja || { chave: loja, nome: loja };
-      gravarArmazenamento(CHAVE_TOKEN, estado.token);
-      gravarArmazenamento(CHAVE_LOJA, JSON.stringify(estado.loja));
-      gravarArmazenamento(CHAVE_LOJA + ".chave", estado.loja.chave || loja);
-      if (dados.expira_em) gravarArmazenamento(CHAVE_EXPIRA, dados.expira_em);
+      guardarSessao(dados, loja);
+      estado.lojas = null;
       estado.dia = null;
       estado.paginaVendas = 1;
       mostrarApp();
@@ -620,6 +621,133 @@
       "): " + formatarCentavos(ant.faturamento_cent) + " · diferença " + formatarCentavos(mes.variacao_cent);
     if (mes.parcial) texto += ". A nuvem guarda cerca de 120 dias; o mês anterior pode estar incompleto.";
     $("mes-comparacao").textContent = texto;
+  }
+
+  // ------------------------------------------------------------------
+  // Minhas lojas: dono com várias lojas no mesmo painel
+  // ------------------------------------------------------------------
+
+  function avisar(id, texto, erro) {
+    const aviso = $(id);
+    aviso.textContent = texto || "";
+    aviso.hidden = !texto;
+    aviso.classList.toggle("erro", !!erro);
+  }
+
+  function situacaoDaLoja(loja) {
+    if (!loja.atualizado_em) return "o caixa ainda não enviou dados";
+    if (loja.atraso_min !== null && loja.atraso_min !== undefined && Number(loja.atraso_min) > LIMITE_ATRASO_MIN) {
+      return "sem enviar há " + formatarAtraso(loja.atraso_min);
+    }
+    return loja.vendas_hoje + (loja.vendas_hoje === 1 ? " venda hoje" : " vendas hoje");
+  }
+
+  function linhaDaLoja(loja) {
+    const corpo = el("button", { type: "button", class: "loja-botao", "aria-current": loja.atual ? "true" : null },
+      el("span", { class: "loja-nome" }, el("strong", { text: loja.nome || loja.chave }),
+        loja.atual ? el("span", { class: "etiqueta-nota lancada", text: "Vendo agora" }) : null),
+      el("span", { class: "loja-numeros" },
+        el("span", {}, el("span", { class: "sec", text: "Hoje " }), el("strong", { class: "valor", text: formatarCentavos(loja.hoje_cent) })),
+        el("span", {}, el("span", { class: "sec", text: "Mês " }), el("strong", { class: "valor", text: formatarCentavos(loja.mes_cent) }))),
+      el("span", { class: "sec", text: situacaoDaLoja(loja) }));
+    if (!loja.atual) corpo.addEventListener("click", () => trocarLoja(loja, corpo));
+    const item = el("li", { class: "loja" + (loja.atual ? " atual" : "") }, corpo);
+    if (!loja.atual) {
+      const remover = el("button", { type: "button", class: "botao-link perigo", text: "Remover" });
+      remover.addEventListener("click", async () => {
+        if (remover.dataset.confirma !== "1") {              // dois toques: o primeiro só pede a confirmação
+          remover.dataset.confirma = "1";
+          remover.textContent = "Remover do painel?";
+          return;
+        }
+        remover.disabled = true;
+        try {
+          renderizarLojas(await chamarApi("/lojas/" + encodeURIComponent(loja.chave), { metodo: "DELETE" }));
+          avisar("aviso-lojas", (loja.nome || loja.chave) + " saiu do seu painel. Os dados dela continuam na loja.");
+        } catch (e) {
+          avisar("aviso-lojas", e.message || "Não consegui remover a loja.", true);
+          remover.disabled = false;
+        }
+      });
+      item.append(remover);
+    }
+    return item;
+  }
+
+  function renderizarLojas(dados) {
+    const lojas = (dados && dados.lojas) || [];
+    estado.lojas = lojas;
+    $("bloco-lojas").hidden = lojas.length < 2;
+    const lista = $("lista-lojas");
+    limpar(lista);
+    lojas.forEach((loja) => lista.append(linhaDaLoja(loja)));
+    const total = (dados && dados.total) || {};
+    $("lojas-total").textContent = lojas.length + " lojas · hoje " + formatarCentavos(total.hoje_cent || 0) +
+      " · mês " + formatarCentavos(total.mes_cent || 0);
+  }
+
+  async function carregarLojas() {
+    if (!estado.token) return;
+    try {
+      renderizarLojas(await chamarApi("/lojas"));
+    } catch (e) {
+      if (e instanceof ErroApi && e.status === 404) {       // nuvem antiga: sem o recurso, nada aparece
+        estado.lojas = [];
+        $("bloco-lojas").hidden = true;
+        $("adicionar-loja").hidden = true;
+      }
+    }
+  }
+
+  // Guarda a sessão recebida no login ou na troca de loja.
+  function guardarSessao(dados, chavePadrao) {
+    estado.token = dados.token;
+    estado.loja = dados.loja || { chave: chavePadrao, nome: chavePadrao };
+    gravarArmazenamento(CHAVE_TOKEN, estado.token);
+    gravarArmazenamento(CHAVE_LOJA, JSON.stringify(estado.loja));
+    gravarArmazenamento(CHAVE_LOJA + ".chave", estado.loja.chave || chavePadrao);
+    if (dados.expira_em) gravarArmazenamento(CHAVE_EXPIRA, dados.expira_em);
+  }
+
+  async function trocarLoja(loja, botao) {
+    if (botao) botao.disabled = true;
+    try {
+      const dados = await chamarApi("/lojas/trocar", { metodo: "POST", corpo: { loja: loja.chave } });
+      // O que está guardado no aparelho é da loja anterior: sai tudo antes de entrar a sessão nova.
+      apagarTudoLocal();
+      Object.assign(estado, { resumo: null, historico: null, ranking: null, periodo: null, vendas: null, dia: null,
+        paginaVendas: 1, lojas: null, mesAtual: null, carregando: false });
+      guardarSessao(dados, loja.chave);
+      mostrarApp();
+      trocarAba("hoje");
+      await atualizarTudo();
+    } catch (e) {
+      avisar("aviso-lojas", e.message || "Não consegui trocar de loja.", true);
+      if (botao) botao.disabled = false;
+    }
+  }
+
+  function configurarLojas() {
+    $("form-adicionar-loja").addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+      const botao = $("botao-adicionar-loja");
+      botao.disabled = true;
+      avisar("aviso-adicionar-loja", "");
+      try {
+        const dados = await chamarApi("/lojas/vincular", { metodo: "POST",
+          corpo: { loja: $("outra-loja").value.trim(), senha: $("outra-senha").value } });
+        renderizarLojas(dados);
+        $("outra-loja").value = "";
+        $("outra-senha").value = "";
+        $("adicionar-loja").open = false;
+        avisar("aviso-lojas", "Loja adicionada. Toque nela para ver os números.");
+        $("bloco-lojas").scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (e) {
+        avisar("aviso-adicionar-loja", e instanceof ErroRede ? "Sem conexão com o servidor." : e.message, true);
+      } finally {
+        botao.disabled = false;
+      }
+    });
   }
 
   // ------------------------------------------------------------------
@@ -1059,6 +1187,8 @@
       await carregarResumo();
       sincronizarDatasDoAtalho();
       const tarefas = [carregarHistorico(), carregarRanking()];
+      // Dono de uma loja só consulta "Minhas lojas" uma vez; com duas ou mais, os números acompanham cada atualização.
+      if (estado.lojas === null || estado.lojas.length > 1) tarefas.push(carregarLojas());
       if (estado.aba === "vendas") tarefas.push(carregarVendas());
       if (estado.aba === "periodo") tarefas.push(carregarPeriodo());
       if (estado.aba === "lucro") tarefas.push(carregarLucro());
@@ -1912,6 +2042,7 @@
     $("botao-atualizar").addEventListener("click", () => atualizarAgora());
     configurarMeta();
     configurarNotas();
+    configurarLojas();
     configurarOcultarValores();
     const botaoResumo = $("botao-resumo-whatsapp");
     if (botaoResumo) botaoResumo.addEventListener("click", () => compartilharWhatsapp(""));

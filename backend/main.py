@@ -412,6 +412,11 @@ _painel.instalar(app, Loja, autenticar)
 from backend import notas_dono as _notas_dono  # noqa: E402
 
 _notas_dono.instalar(app, Loja, autenticar)
+
+# Dono com várias lojas: vincular, ver o resumo de todas e trocar de loja no mesmo painel (backend/painel_lojas.py).
+from backend import painel_lojas as _painel_lojas  # noqa: E402
+
+_painel_lojas.instalar(app, Loja)
 _ponte.instalar(app, Loja, hash_token)
 
 # Porteiro no celular pelo 4G: retrato das comandas abertas e a mesma página em /porteiro/.

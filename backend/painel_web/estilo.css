@@ -905,3 +905,43 @@ body.valores-ocultos .sec { filter: blur(7px); user-select: none; }
 .botao-link.perigo { color: var(--vermelho); }
 @media (min-width: 1000px) { .aba > #bloco-notas { column-span: all; } }
 #aviso-notas { margin-bottom: .6rem; }
+
+/* ---------- Minhas lojas ---------- */
+.lista-lojas { display: grid; gap: .5rem; }
+.lista-lojas .loja { display: flex; align-items: center; gap: .5rem; border-radius: 12px; background: var(--fundo); border: 1px solid transparent; }
+.lista-lojas .loja.atual { border-color: var(--barra); }
+.loja-botao {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: .25rem;
+  padding: .75rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 12px;
+}
+.loja-botao[aria-current="true"] { cursor: default; }
+.loja-botao:disabled { opacity: .6; }
+.loja-botao:not([aria-current]):active { background: var(--verde-claro); }
+.loja-nome { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.loja-numeros { display: flex; gap: 1.1rem; flex-wrap: wrap; }
+.lista-lojas .botao-link { padding: .75rem; }
+#adicionar-loja summary { font-weight: 700; cursor: pointer; }
+#adicionar-loja[open] summary { margin-bottom: .5rem; }
+.form-loja { display: grid; gap: .4rem; margin-top: .5rem; }
+.form-loja label { font-size: .85rem; font-weight: 600; margin-top: .3rem; }
+.form-loja input {
+  padding: .7rem .8rem;
+  border-radius: 10px;
+  border: 1px solid var(--borda);
+  background: var(--superficie);
+  color: var(--texto);
+  font-size: 1rem;
+}
+.form-loja button { margin-top: .5rem; }
+#aviso-lojas { margin-top: .6rem; }
+@media (min-width: 1000px) { .aba > #bloco-lojas, .aba > #adicionar-loja { column-span: all; } }

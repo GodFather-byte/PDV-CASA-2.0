@@ -73,6 +73,13 @@
 
       <!-- Aba Hoje -->
       <section id="aba-hoje" class="aba" role="tabpanel" aria-labelledby="tab-hoje">
+        <section class="bloco" id="bloco-lojas" hidden>
+          <h2>Minhas lojas</h2>
+          <p id="lojas-total" class="legenda"></p>
+          <ul id="lista-lojas" class="lista lista-lojas"></ul>
+          <p id="aviso-lojas" class="aviso" role="status" hidden></p>
+        </section>
+
         <article class="cartao destaque cartao-mes" id="cartao-mes">
           <span class="rotulo">Faturamento do mês até agora</span>
           <strong id="mes-faturamento" class="valor-grande">R$ 0,00</strong>
@@ -234,6 +241,20 @@
           <p id="detalhe-meses" class="detalhe-grafico"></p>
           <p id="vazio-meses" class="vazio" hidden>Sem faturamento mensal ainda.</p>
         </section>
+
+        <details class="bloco" id="adicionar-loja">
+          <summary>Tem outra loja? Veja todas neste painel</summary>
+          <p class="legenda">Informe o código e a senha do painel da outra loja. Ela passa a aparecer em "Minhas lojas",
+            com o faturamento de cada uma e o total, e você troca de loja com um toque.</p>
+          <form id="form-adicionar-loja" class="form-loja">
+            <label for="outra-loja">Código da outra loja</label>
+            <input id="outra-loja" type="text" autocomplete="off" autocapitalize="characters" maxlength="64" required>
+            <label for="outra-senha">Senha do painel dessa loja</label>
+            <input id="outra-senha" type="password" autocomplete="off" maxlength="128" required>
+            <button type="submit" class="botao-principal" id="botao-adicionar-loja">Adicionar ao painel</button>
+          </form>
+          <p id="aviso-adicionar-loja" class="aviso" role="status" hidden></p>
+        </details>
       </section>
 
       <!-- Aba Período -->

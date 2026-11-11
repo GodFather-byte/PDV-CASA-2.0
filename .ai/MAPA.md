@@ -84,6 +84,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Entrega | `entrega_controller.py` |
 | Preparação de iFood e NFC-e SP (sem operação) | `integracoes_controller.py`; campos em `config_controller.py`, padrões em `sementes.py`; pendências em Configurações Qt |
 | Módulos de operação configuráveis (Configurações > Módulos: liga/desliga por tipo de negócio) | convenção em `config_controller.py` (`MODULOS_OPCIONAIS`); ver `docs/ESPECIFICACAO.md` |
+| Dono com várias lojas no mesmo painel (grupo de lojas) | nuvem `backend/painel_lojas.py` (tabela `painel_grupos`); página `backend/painel_web` (bloco "Minhas lojas" na aba Hoje); `tests/test_painel_varias_lojas.py` |
 | Notas de compra enviadas pelo dono (painel -> nuvem -> caixa) | nuvem `backend/notas_dono.py`; caixa `src/sync/notas_dono.py`, `notas_dono_controller.py`, `ui_qt/notas_dono.py`; página `backend/painel_web` (aba Produtos) |
 | Papel econômico (cupom e fechamento compactos, linhas mais juntas na térmica) | `src/core/fita.py`, `impressao_controller.enviar`, `hardware/impressora_termica.py` (`espacamento`) |
 | Logotipo como papel de parede do caixa e selo no topo | `ui_qt/marca_dagua.py`; `ui_qt/caixa.py` (`_atualizar_marca_dagua`) |
