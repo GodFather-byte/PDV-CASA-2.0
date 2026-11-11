@@ -624,7 +624,6 @@
   }
 
   // ------------------------------------------------------------------
-<<<<<<< HEAD
   // Minhas lojas: dono com várias lojas no mesmo painel
   // ------------------------------------------------------------------
 
@@ -752,8 +751,6 @@
   }
 
   // ------------------------------------------------------------------
-=======
->>>>>>> origin/main
   // Notas de compra: o dono envia o XML e o caixa da loja busca e confere
   // ------------------------------------------------------------------
 
@@ -2045,10 +2042,7 @@
     $("botao-atualizar").addEventListener("click", () => atualizarAgora());
     configurarMeta();
     configurarNotas();
-<<<<<<< HEAD
     configurarLojas();
-=======
->>>>>>> origin/main
     configurarOcultarValores();
     const botaoResumo = $("botao-resumo-whatsapp");
     if (botaoResumo) botaoResumo.addEventListener("click", () => compartilharWhatsapp(""));

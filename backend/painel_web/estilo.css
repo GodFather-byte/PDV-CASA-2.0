@@ -905,7 +905,6 @@ body.valores-ocultos .sec { filter: blur(7px); user-select: none; }
 .botao-link.perigo { color: var(--vermelho); }
 @media (min-width: 1000px) { .aba > #bloco-notas { column-span: all; } }
 #aviso-notas { margin-bottom: .6rem; }
-<<<<<<< HEAD
 
 /* ---------- Minhas lojas ---------- */
 .lista-lojas { display: grid; gap: .5rem; }
@@ -946,5 +945,3 @@ body.valores-ocultos .sec { filter: blur(7px); user-select: none; }
 .form-loja button { margin-top: .5rem; }
 #aviso-lojas { margin-top: .6rem; }
 @media (min-width: 1000px) { .aba > #bloco-lojas, .aba > #adicionar-loja { column-span: all; } }
-=======
->>>>>>> origin/main
