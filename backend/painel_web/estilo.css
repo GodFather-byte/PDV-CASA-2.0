@@ -945,3 +945,4 @@ body.valores-ocultos .sec { filter: blur(7px); user-select: none; }
 .form-loja button { margin-top: .5rem; }
 #aviso-lojas { margin-top: .6rem; }
 @media (min-width: 1000px) { .aba > #bloco-lojas, .aba > #adicionar-loja { column-span: all; } }
+a.botao-arquivo { text-decoration: none; }

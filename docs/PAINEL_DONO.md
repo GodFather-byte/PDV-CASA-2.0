@@ -67,6 +67,11 @@ pelo código e senha dela). Até 20 lojas por grupo. Com uma loja só, o bloco n
 Ligar uma loja a outra junta os dois grupos: quem entrar por qualquer uma vê todas. Trocar a senha do
 painel de uma loja não desfaz o grupo; para tirar o acesso de alguém, remova a loja do grupo.
 
+### Retaguarda
+
+Na aba **Produtos**, **Abrir a retaguarda** leva à página onde o dono altera de longe produtos e preços,
+estoque, operadores, contas a pagar e configurações. Guia completo em `docs/RETAGUARDA.md`.
+
 ### Notas de compra
 
 Na aba **Produtos**, **Enviar XML da nota** manda para a loja a nota de compra do fornecedor (o arquivo

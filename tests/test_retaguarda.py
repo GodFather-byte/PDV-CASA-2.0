@@ -294,6 +294,21 @@ class TestePontaAPonta(BaseNuvem):
         ruim = self.http.post("/v1/retaguarda/espelho", json={"secao": "../../etc", "digital": "x", "dados": {}}, headers=cabecalho())
         self.assertEqual(ruim.status_code, 422)
 
+    def test_pagina_e_servida_e_os_atalhos_existem(self):
+        pagina = self.http.get("/retaguarda/")
+        self.assertEqual(pagina.status_code, 200)
+        self.assertIn("WillPDV Retaguarda", pagina.text)
+        for arquivo in ("app.js", "estilo.css"):
+            self.assertEqual(self.http.get(f"/retaguarda/{arquivo}").status_code, 200)
+        self.assertNotIn("<script>", pagina.text)                                   # sem script embutido na página
+        self.assertIn('href="/retaguarda/"', self.http.get("/painel/").text)
+        self.assertIn("abrirRetaguarda", self.http.get("/central/").text)
+
+    def test_envio_do_painel_so_avisa_quando_ha_alteracao(self):
+        self.rodada()
+        self.assertNotIn("retaguarda_pendentes", painel_envio.enviar(self.banco, self.ponte) or {})
+        self.assertNotEqual(self.banco.cfg(retaguarda.CHAVE_AVISO), "S")
+
     def test_financeiro_sobe_e_o_dono_quita_a_conta(self):
         self.banco.cfg_set("usar_contas", "S")
         from src.controllers.contas_controller import ContasController

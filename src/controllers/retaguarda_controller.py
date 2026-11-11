@@ -106,6 +106,9 @@ class RetaguardaController:
                     lookups[c.lookup] = [[i, str(r)] for i, r in cadastro.opcoes(c.lookup)]
             entidades.append({"chave": ent.chave, "titulo": ent.titulo, "grupo": GRUPOS.get(ent.chave, "outros"),
                               "tem_ativo": bool(ent.tem_ativo), "busca": list(ent.busca), "campos": campos})
+        if self.banco.cfg_bool("usar_contas", False):      # a tela de contas a pagar usa estas listas
+            for nome in ("subplanos", "tipos_pagamento", "fornecedores"):
+                lookups.setdefault(nome, [[i, str(r)] for i, r in cadastro.opcoes(nome)])
         config = [{"chave": c[0], "rotulo": c[1], "tipo": c[2], "secao": c[3],
                    "opcoes": [list(o) for o in c[4]] if len(c) > 4 else None} for c in self._config_publica()]
         ed = edicao.atual()

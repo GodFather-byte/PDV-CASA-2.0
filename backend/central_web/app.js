@@ -41,7 +41,7 @@ setInterval(()=>{if(csrf&&!$('view-lojas').hidden&&!document.hidden&&!document.q
 for(const b of document.querySelectorAll('[data-view]'))b.onclick=()=>executar(b,()=>vista(b.dataset.view));
 for(const b of document.querySelectorAll('[data-tab]'))b.onclick=()=>tab(b.dataset.tab);
 for(const b of document.querySelectorAll('[data-close]'))b.onclick=()=>$(b.dataset.close).close();
-$('detalhe').addEventListener('close',()=>{selecionada=null;});$('cadastro').addEventListener('close',()=>{$('tokenGerado').value='';$('codigoGerado').value='';mostrarQr($('qrNovo'),'');});
+$('detalhe').addEventListener('close',()=>{selecionada=null;});$('abrirRetaguarda').onclick=()=>{if(selecionada)window.open('/retaguarda/?loja='+encodeURIComponent(selecionada.chave),'_blank','noopener');};$('cadastro').addEventListener('close',()=>{$('tokenGerado').value='';$('codigoGerado').value='';mostrarQr($('qrNovo'),'');});
 $('kit').addEventListener('close',()=>{$('kitTexto').textContent='';mostrarQr($('kitQr'),'');});
 $('nova').onclick=()=>{$('criar').reset();preencherProgramas($('programaNovo'),'willpdv');$('criar').hidden=false;$('tokenNovo').hidden=true;$('cadastro').showModal();};
 $('criar').onsubmit=e=>{e.preventDefault();executar(e.submitter,async()=>{const r=await api('/lojas',{chave:$('chave').value,nome:$('nome').value,edicao:$('programaNovo').value,motivo:$('motivoCriar').value});$('criar').hidden=true;$('tokenNovo').hidden=false;$('tokenGerado').value=r.token;$('codigoGerado').value=r.codigo_instalacao||'Use o token avulso abaixo (endereço da nuvem fora do padrão).';mostrarQr($('qrNovo'),r.qr_instalacao);await atualizar();aviso('Loja cadastrada. Guarde o código de instalação.');});};
