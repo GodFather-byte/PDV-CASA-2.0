@@ -85,6 +85,24 @@ aparece como **Desatualizada**. Nenhum valor de venda chega à central.
 - **Baixar planilha (CSV):** a carteira inteira, para abrir no Excel.
 - **Versões em uso:** em Correções e atualizações, quantas lojas estão em cada versão.
 
+### Gerente esqueceu a senha do caixa
+
+1. No caixa, na tela de entrada, **Esqueci a senha** mostra um pedido de 8 letras e números (ex.: `K7QF-3MZD`),
+   válido por 24 horas. Nada é apagado.
+2. O dono envia o pedido. Confirme que é ele por um contato que você já conhece.
+3. Na central, abra a loja > **Suporte e caixas** > **Gerente esqueceu a senha do caixa**, digite o pedido e o motivo.
+4. Com internet, o caixa clica em **Buscar liberação na nuvem**. Sem internet, envie o código (`PDVR1...`) para
+   colarem na tela.
+5. O caixa escolhe o gerente (o ADM vem primeiro) e cadastra a senha nova.
+
+A liberação é assinada com a chave das licenças: vale só para aquela loja e aquele pedido, por 24 horas, uma vez.
+Fica no histórico de ações da central e no log do caixa. Quem tem o código-fonte ou acesso ao banco da loja não
+consegue gerar a liberação. Sem a chave de emissão na nuvem, use no seu computador:
+
+```
+python -m tools.gerar_licenca recuperar-senha --loja CHAVE --pedido K7QF-3MZD
+```
+
 ## Transferir lojas da central local
 
 1. Fazer backup externo da chave privada e dos dados locais do licenciador/central.

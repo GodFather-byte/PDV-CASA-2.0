@@ -1,5 +1,19 @@
 # Handoff — Will Restaurante (10/11/2026)
 
+## Esqueci a senha do gerente (11/11/2026, branch `esqueci-a-senha`)
+Pedido do dono: recuperar a senha do ADM sem zerar o banco. Regra em `src/core/recuperacao_senha.py`: o caixa
+gera um pedido aleatório (8 caracteres, 24 h, em `config`), o fornecedor assina uma liberação `PDVR1...` com a
+chave privada das licenças (loja + pedido + prazo) e o caixa confere com a chave pública antes de gravar a senha
+nova de um gerente ativo (nível 4). Uma liberação, uma troca; o bloqueio por senha errada some junto.
+- Central: `POST /v1/fornecedor/lojas/{chave}/recuperar-senha` (auditada) e formulário em Suporte e caixas.
+- Nuvem: `backend/recuperacao_senha.py` guarda a última liberação da loja; o caixa busca em
+  `GET /v1/recuperacao-senha?pedido=` com o token da loja. Sem internet, cola o código.
+- Ferramenta local: `python -m tools.gerar_licenca recuperar-senha --loja X --pedido Y`.
+- Tela: `ui_qt/esqueci_senha.py`, botão "Esqueci a senha" em `ui_qt/login.py`.
+- Testes: `tests/test_recuperacao_senha.py` (17). Licença/segurança: revisar o diff antes de publicar.
+- Limite: o caixa secundário (rede) usa o banco do principal; não testado nesse arranjo.
+
+
 ## Recibo de acerto conta comissões, não lançamentos (11/11/2026)
 Pedido do dono (Casa Verde): o papel mostrava `COMISSÃO (19)` para R$ 440,00, o que parecia R$ 23 por comissão.
 `ImpressaoController.recibo_comissao` agora imprime `COMISSÕES: 88 x 5,00` (total ÷ `comissao_valor_ponto`).
