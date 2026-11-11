@@ -286,6 +286,11 @@ class JanelaPrincipal(QMainWindow):
         self.btn_pedidos_online.setVisible(False)
         self.btn_pedidos_online.clicked.connect(self.abrir_pedidos_online)
         grupos["Operação"].addWidget(self.btn_pedidos_online)
+        self.btn_notas_dono = QPushButton("Notas do dono")      # só aparece com nota esperando conferência
+        self.btn_notas_dono.setObjectName("primario")
+        self.btn_notas_dono.setVisible(False)
+        self.btn_notas_dono.clicked.connect(self.abrir_notas_dono)
+        grupos["Produtos e estoque"].addWidget(self.btn_notas_dono)
         for grade in grupos.values():
             grade.addStretch(1)
         self.busca_modulos.textChanged.connect(self.filtrar_modulos)
@@ -376,6 +381,19 @@ class JanelaPrincipal(QMainWindow):
         """O pedido online avisa aqui quando a janela do caixa está fechada."""
         self.mensagem.setText(texto)
 
+    def abrir_notas_dono(self):
+        """Notas de compra que o dono enviou pelo painel: confere e lança (ou recusa)."""
+        if self.ctx.operador is None or not self.ctx.pode("lanc_estoque"):
+            self.mensagem.setText("Seu acesso não permite conferir notas de compra.")
+            return None
+        from src.ui_qt.notas_dono import JanelaNotasDono
+        return self._unica("notas_dono", lambda: JanelaNotasDono(self.ctx, self))
+
+    def _avisar_notas_dono(self) -> None:
+        quantidade = self.ctx.notas_dono.quantidade() if self.ctx.pode("lanc_estoque") else 0
+        self.btn_notas_dono.setText(f"Notas do dono ({quantidade})")
+        self.btn_notas_dono.setVisible(quantidade > 0)
+
     def abrir_pedidos_online(self) -> None:
         caixa = self.abrir_caixa()
         if caixa is None:
@@ -461,6 +479,7 @@ class JanelaPrincipal(QMainWindow):
         self.botoes["mais_cadastros"].setEnabled(bool(self._cadastros_disponiveis()))
         self.botoes["estoque"].setEnabled(self.ctx.pode("lanc_estoque"))
         self.botoes["retornaveis"].setEnabled(self.ctx.pode("lanc_estoque"))
+        self._avisar_notas_dono()
         self.botoes["promocoes"].setEnabled(
             "cad_produtos" not in desligados and self.ctx.pode("cad_produtos"))
         self.botoes["alertas"].setEnabled(
