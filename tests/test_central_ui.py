@@ -1,13 +1,37 @@
 """A janela configura e opera somente o banco isolado da central."""
 from __future__ import annotations
 
+import gc
 import os
 import tempfile
+import threading
 import time
 import tkinter as tk
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+
+def _tk_so_na_thread_principal() -> None:
+    """O TestClient do Starlette coleta lixo numa thread auxiliar. No Python 3.12 isso aborta o
+    processo se um Variable do Tk for destruído fora da thread que criou a janela."""
+    original = tk.Variable.__del__
+    if getattr(original, "_pdv_seguro", False):
+        return
+
+    def _del(self):
+        if threading.current_thread() is not threading.main_thread():
+            return
+        try:
+            original(self)
+        except Exception:
+            return
+
+    _del._pdv_seguro = True
+    tk.Variable.__del__ = _del
+
+
+_tk_so_na_thread_principal()
 
 from licenciador.central import Central
 from licenciador.central_tela import JanelaCentral
@@ -45,3 +69,5 @@ class TesteCentralTela(unittest.TestCase):
                 if janela is not None and janela.winfo_exists():
                     janela.destroy()
                 root.destroy()
+                del janela, root
+                gc.collect()

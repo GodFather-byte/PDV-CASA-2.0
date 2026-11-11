@@ -60,6 +60,7 @@ _COLUNAS_NOVAS = {
         "bairro": "VARCHAR",
         "cidade": "VARCHAR",
         "uf": "VARCHAR",
+        "grupo_id": "INTEGER",
     },
     "cobrancas_mercadopago": {
         "boleto_id": "VARCHAR",
@@ -113,6 +114,7 @@ class Plano(Base):
     bairro = Column(String, nullable=True)
     cidade = Column(String, nullable=True)
     uf = Column(String, nullable=True)
+    grupo_id = Column(Integer, nullable=True)     # preenchido: a mensalidade é da rede, não de uma loja só
 
 
 class Cobranca(Base):
@@ -856,8 +858,13 @@ def recalcular(db: Session, plano: Plano) -> None:
         cobranca.consultada_em = agora()
         if cobranca.licenca_ate:
             datas.append(cobranca.licenca_ate)
+    fim = max(datas) if datas else None
+    if plano.grupo_id:
+        for loja in db.query(Loja).filter_by(grupo_id=plano.grupo_id):
+            loja.licenca_ate = fim
+        return
     loja = db.query(Loja).filter_by(chave_loja=plano.chave_loja).one()
-    loja.licenca_ate = max(datas) if datas else None
+    loja.licenca_ate = fim
 
 
 def _aplicar_dados(db: Session, dados: dict, evento_id: str | None, cobranca: Cobranca,
@@ -1225,8 +1232,12 @@ def gerar_recorrencias(db: Session, hoje: date | None = None, chave: str | None 
     consulta = db.query(Plano).filter(Plano.dia_vencimento.isnot(None))
     if chave:
         consulta = consulta.filter_by(chave_loja=chave)
+    from backend.main import Loja
+    em_rede = {loja.chave_loja for loja in db.query(Loja).filter(Loja.grupo_id.isnot(None))}
     emitidas = 0
     for plano in consulta.all():
+        if not plano.grupo_id and plano.chave_loja in em_rede:
+            continue
         if not dados_boleto_completos(plano):
             log.error("Assinatura %s sem dados do pagador; boleto não gerado.", plano.chave_loja)
             continue

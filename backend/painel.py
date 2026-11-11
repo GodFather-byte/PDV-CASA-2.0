@@ -86,6 +86,7 @@ class PainelSessao(Base):
     criada_em = Column(String, nullable=False)
     expira_em = Column(String, nullable=False)
     ultimo_uso = Column(String)
+    grupo_id = Column(Integer, nullable=True)     # sessão da rede; vazio = sessão de uma loja só
 
 
 class PainelVenda(Base):
@@ -237,10 +238,11 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def abrir_sessao(db: Session, chave_loja: str) -> tuple[str, str]:
+def abrir_sessao(db: Session, chave_loja: str, grupo_id: int | None = None) -> tuple[str, str]:
     token = secrets.token_urlsafe(32)
     expira = (datetime.now() + timedelta(days=DIAS_SESSAO)).strftime("%Y-%m-%d %H:%M:%S")
-    db.add(PainelSessao(chave_loja=chave_loja, token_hash=_hash(token), criada_em=_agora(), expira_em=expira))
+    db.add(PainelSessao(chave_loja=chave_loja, grupo_id=grupo_id, token_hash=_hash(token),
+                        criada_em=_agora(), expira_em=expira))
     db.commit()
     return token, expira
 
@@ -1097,6 +1099,15 @@ def limpeza_periodica() -> dict[str, int] | None:
     return removidas
 
 
+def _coluna_grupo_na_sessao() -> None:
+    if not inspect(engine).has_table("painel_sessoes"):
+        return
+    nomes = {c["name"] for c in inspect(engine).get_columns("painel_sessoes")}
+    if "grupo_id" not in nomes:
+        with engine.begin() as con:
+            con.execute(text("ALTER TABLE painel_sessoes ADD COLUMN grupo_id INTEGER"))
+
+
 def _descartar_retratos_antigos() -> None:
     """`painel_retratos` (um retrato por loja) virou `painel_caixas` (um por caixa). O retrato é só o último "momento" e cada
     PDV o refaz na próxima rodada de envio (cerca de 1 minuto), então nada é copiado: a tabela antiga apenas sai do caminho."""
@@ -1113,6 +1124,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
     """Cria as tabelas, registra as rotas e serve o app web. `autenticar` é a dependência do backend.main (token da loja
     ou do administrador) e `Loja` o modelo das lojas."""
     Base.metadata.create_all(bind=engine)
+    _coluna_grupo_na_sessao()
     _descartar_retratos_antigos()
     router = APIRouter()
 
@@ -1123,6 +1135,13 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         return loja
 
     def sessao_ativa(sessao: PainelSessao = Depends(sessao_do_dono), db: Session = Depends(get_db)):
+        if sessao.grupo_id:
+            from backend.grupos import Grupo
+            if db.get(Grupo, sessao.grupo_id) is None:
+                db.query(PainelSessao).filter_by(id=sessao.id).delete(synchronize_session=False)
+                db.commit()
+                raise HTTPException(status_code=401, detail="Sessão inválida ou vencida. Entre de novo.")
+            return sessao
         loja = db.query(Loja).filter(Loja.chave_loja == sessao.chave_loja).first()
         if loja is None or not loja.ativa:
             db.query(PainelSessao).filter_by(chave_loja=sessao.chave_loja).delete(synchronize_session=False)
@@ -1221,15 +1240,26 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         if tentativas.bloqueada(chave):
             raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde alguns minutos.")
         loja = db.query(Loja).filter(Loja.chave_loja == chave).first()
-        acesso = db.query(PainelAcesso).filter_by(chave_loja=chave).first()
-        if loja is None or not loja.ativa or acesso is None or not conferir_senha(senha, acesso.senha_hash):
+        if loja is not None:
+            acesso = db.query(PainelAcesso).filter_by(chave_loja=chave).first()
+            if not loja.ativa or acesso is None or not conferir_senha(senha, acesso.senha_hash):
+                tentativas.falhou(chave)
+                raise HTTPException(status_code=401, detail="Loja ou senha inválida.")
+            tentativas.acertou(chave)
+            token, expira = abrir_sessao(db, chave)
+            from backend.memoria_nuvem import memoria
+            memoria.lembrar_sessao(token, chave)
+            return {"token": token, "loja": {"chave": loja.chave_loja, "nome": loja.nome}, "expira_em": expira}
+        from backend.grupos import por_identificador
+        grupo = por_identificador(db, chave)
+        if grupo is None or not conferir_senha(senha, grupo.senha_hash):
             tentativas.falhou(chave)
             raise HTTPException(status_code=401, detail="Loja ou senha inválida.")
         tentativas.acertou(chave)
-        token, expira = abrir_sessao(db, chave)
-        from backend.memoria_nuvem import memoria
-        memoria.lembrar_sessao(token, chave)
-        return {"token": token, "loja": {"chave": loja.chave_loja, "nome": loja.nome}, "expira_em": expira}
+        token, expira = abrir_sessao(db, grupo.chave, grupo.id)
+        return {"token": token, "grupo": {"id": grupo.id, "chave": grupo.chave, "nome": grupo.nome},
+                "deve_trocar_senha": bool(grupo.deve_trocar_senha), "expira_em": expira,
+                "link": f"/painel/?grupo={grupo.chave}"}
 
     @router.post("/v1/painel/sair")
     def sair(sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
@@ -1238,6 +1268,60 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         from backend.cache_leitura import limpar
         limpar()
         return {"ok": True}
+
+    def _rede(sessao: PainelSessao, db: Session):
+        from backend.grupos import Grupo
+        if not sessao.grupo_id:
+            raise HTTPException(status_code=404, detail="Esta sessão não é de uma rede.")
+        grupo = db.get(Grupo, sessao.grupo_id)
+        if grupo is None:
+            raise HTTPException(status_code=401, detail="Sessão inválida ou vencida. Entre de novo.")
+        if grupo.deve_trocar_senha:
+            raise HTTPException(status_code=403, detail="Troque a senha temporária antes de continuar.")
+        return grupo
+
+    @router.post("/v1/painel/grupo/senha")
+    def trocar_senha_rede(dados: dict = Body(...), sessao: PainelSessao = Depends(sessao_ativa),
+                          db: Session = Depends(get_db)):
+        from backend.grupos import ErroGrupo, Grupo, trocar_senha
+        if not sessao.grupo_id:
+            raise HTTPException(status_code=404, detail="Esta sessão não é de uma rede.")
+        grupo = db.get(Grupo, sessao.grupo_id)
+        if grupo is None:
+            raise HTTPException(status_code=401, detail="Sessão inválida ou vencida. Entre de novo.")
+        try:
+            trocar_senha(db, grupo, str(dados.get("senha_atual") or ""), str(dados.get("senha_nova") or ""))
+        except ErroGrupo as erro:
+            raise HTTPException(status_code=422, detail=str(erro)) from None
+        return {"deve_trocar_senha": False}
+
+    @router.get("/v1/painel/rede")
+    def rede(de: str = Query(..., max_length=10), ate: str = Query(..., max_length=10),
+             sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
+        from backend.grupos import consolidado
+        grupo = _rede(sessao, db)
+        inicio, fim = _data_segura(de, None), _data_segura(ate, None)
+        if inicio is None or fim is None or str(de)[:10] != inicio.isoformat() or str(ate)[:10] != fim.isoformat():
+            raise HTTPException(status_code=422, detail="Informe as datas como AAAA-MM-DD.")
+        if fim < inicio:
+            raise HTTPException(status_code=422, detail="A data final é anterior à inicial.")
+        if (fim - inicio).days > 400:
+            raise HTTPException(status_code=422, detail="O intervalo pode ter no máximo 400 dias.")
+        return consolidado(db, grupo, inicio, fim)
+
+    @router.post("/v1/painel/grupo/entrar")
+    def entrar_loja(dados: dict = Body(...), sessao: PainelSessao = Depends(sessao_ativa),
+                    db: Session = Depends(get_db)):
+        """Abre o painel de uma loja da rede. A sessão da rede continua valendo."""
+        grupo = _rede(sessao, db)
+        chave = str((dados or {}).get("loja") or "").strip()
+        loja = db.query(Loja).filter(Loja.chave_loja == chave, Loja.grupo_id == grupo.id, Loja.ativa.is_(True)).first()
+        if loja is None:
+            raise HTTPException(status_code=404, detail="Esta loja não está na sua rede.")
+        token, expira = abrir_sessao(db, loja.chave_loja)
+        from backend.memoria_nuvem import memoria
+        memoria.lembrar_sessao(token, loja.chave_loja)
+        return {"token": token, "loja": {"chave": loja.chave_loja, "nome": loja.nome}, "expira_em": expira}
 
     # ---- consultas do dono
     @router.get("/v1/painel/resumo")

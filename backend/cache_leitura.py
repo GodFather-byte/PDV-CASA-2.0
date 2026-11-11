@@ -20,6 +20,7 @@ CAMINHOS = {
     "/v1/painel/produtos",
     "/v1/painel/vendas",
     "/v1/painel/historico",
+    "/v1/painel/rede",
     "/v1/cardapio",
     "/v1/porteiro/abertas",
     "/porteiro/api/abertas",

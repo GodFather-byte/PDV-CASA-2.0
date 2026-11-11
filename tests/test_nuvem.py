@@ -15,6 +15,33 @@ from unittest import mock
 from src.sync.sincronizador import ServicoSincronizacao, Sincronizador, proxima_espera
 from tests.base import BaseTeste
 
+
+def _tk_so_na_thread_principal() -> None:
+    """O TestClient coleta lixo numa thread auxiliar. No Python 3.12 o Tk aborta o processo
+    se um Variable for destruído fora da thread que criou a janela."""
+    try:
+        import tkinter as tk
+    except ImportError:
+        return
+    import threading
+    original = tk.Variable.__del__
+    if getattr(original, "_pdv_seguro", False):
+        return
+
+    def _del(self):
+        if threading.current_thread() is not threading.main_thread():
+            return
+        try:
+            original(self)
+        except Exception:
+            return
+
+    _del._pdv_seguro = True
+    tk.Variable.__del__ = _del
+
+
+_tk_so_na_thread_principal()
+
 # O backend lê o banco e o token do ambiente quando é importado: aponta para uma pasta temporária.
 _PASTA = tempfile.mkdtemp(prefix="pdv_nuvem_")
 # PDV_TESTE_NUVEM_DB_URL roda os mesmos testes contra outro banco (ex.: um PostgreSQL de teste, como o Neon/Render).

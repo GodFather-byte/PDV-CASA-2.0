@@ -393,6 +393,14 @@
     }
     estado.token = null;
     estado.loja = null;
+    estado.grupo = null;
+    estado.modo = null;
+    sessionStorage.removeItem("willpdv.painel.redeToken");
+    try { localStorage.removeItem(PREFIXO + "grupo"); } catch (_) { /* navegador privado */ }
+    const telaRede = $("tela-rede");
+    if (telaRede) telaRede.hidden = true;
+    const formSenha = $("form-senha-rede");
+    if (formSenha) formSenha.hidden = true;
     estado.lojas = null;
     estado.resumo = null;
     estado.historico = null;
@@ -423,6 +431,11 @@
     botao.textContent = "Entrando…";
     try {
       const dados = await chamarApi("/login", { metodo: "POST", corpo: { loja, senha }, semToken: true });
+      if (dados.grupo) {
+        entrarNaRede(dados);
+        return;
+      }
+      estado.modo = "loja";
       guardarSessao(dados, loja);
       estado.lojas = null;
       estado.dia = null;
@@ -1173,9 +1186,97 @@
     status.append(textoUltimaAtualizacao());
   }
 
+  function entrarNaRede(dados) {
+    estado.modo = "rede";
+    estado.token = dados.token;
+    estado.grupo = dados.grupo;
+    estado.loja = null;
+    gravarArmazenamento(CHAVE_TOKEN, dados.token);
+    gravarArmazenamento(PREFIXO + "grupo", JSON.stringify(dados.grupo));
+    if (dados.expira_em) gravarArmazenamento(CHAVE_EXPIRA, dados.expira_em);
+    if (dados.deve_trocar_senha) {
+      $("tela-login").hidden = false;
+      $("form-login").hidden = true;
+      $("form-senha-rede").hidden = false;
+      $("tela-app").hidden = true;
+      $("tela-rede").hidden = true;
+      return;
+    }
+    mostrarRede();
+  }
+
+  function mostrarRede() {
+    estado.modo = "rede";
+    $("tela-login").hidden = true;
+    $("form-login").hidden = false;
+    $("form-senha-rede").hidden = true;
+    $("tela-app").hidden = true;
+    $("tela-rede").hidden = false;
+    $("nome-rede").textContent = (estado.grupo && estado.grupo.nome) || "Rede";
+    carregarRede();
+  }
+
+  async function carregarRede() {
+    const base = new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    const hoje = base.getFullYear() + "-" + p(base.getMonth() + 1) + "-" + p(base.getDate());
+    const atalho = estado.atalhoRede || "hoje";
+    let de = estado.redeDe;
+    let ate = estado.redeAte;
+    if (atalho !== "personalizado") {
+      const faixa = datasDoLucro(hoje, atalho === "hoje" ? "dia" : atalho);
+      de = faixa[0];
+      ate = faixa[1];
+      estado.redeDe = de;
+      estado.redeAte = ate;
+      if ($("rede-de")) $("rede-de").value = de;
+      if ($("rede-ate")) $("rede-ate").value = ate;
+    }
+    if (!de || !ate) return;
+    const dados = await chamarApi("/rede?de=" + encodeURIComponent(de) + "&ate=" + encodeURIComponent(ate));
+    $("rede-faturamento").textContent = formatarCentavos(dados.faturamento_cent);
+    $("rede-custo").textContent = dados.cmv_sincronizado ? formatarCentavos(dados.custo_cent) : "—";
+    $("rede-lucro").textContent = dados.cmv_sincronizado ? formatarCentavos(dados.lucro_cent) : "—";
+    $("rede-margem").textContent = dados.cmv_sincronizado ? "Margem " + (dados.margem || "—") : "";
+    const lojas = $("lista-rede-lojas");
+    limpar(lojas);
+    (dados.por_loja || []).forEach((loja) => {
+      const item = el("li", null,
+        el("span", { text: loja.nome + " · " + formatarCentavos(loja.faturamento_cent) }),
+        el("button", { type: "button", text: "Abrir" }));
+      item.querySelector("button").addEventListener("click", () => abrirLojaDaRede(loja.chave));
+      lojas.append(item);
+    });
+    const formas = $("lista-rede-formas");
+    limpar(formas);
+    (dados.formas || []).forEach((forma) => {
+      formas.append(el("li", null, el("span", { text: forma.tipo }),
+        el("span", { class: "total", text: formatarCentavos(forma.lucro_cent) })));
+    });
+  }
+
+  async function abrirLojaDaRede(chave) {
+    const dados = await chamarApi("/grupo/entrar", { metodo: "POST", corpo: { loja: chave } });
+    sessionStorage.setItem("willpdv.painel.redeToken", estado.token);
+    sessionStorage.setItem("willpdv.painel.redeGrupo", JSON.stringify(estado.grupo));
+    estado.modo = "loja";
+    $("tela-rede").hidden = true;
+    guardarSessao(dados, chave);
+    $("botao-voltar-rede").hidden = false;
+    mostrarApp();
+    atualizarTudo();
+  }
+
   async function atualizarTudo() {
     if (!sessaoValida()) {
       encerrarSessao(false);
+      return;
+    }
+    if (estado.modo === "rede") {
+      if (estado.carregando) return;
+      estado.carregando = true;
+      try { await carregarRede(); estado.ultimaAtualizacao = Date.now(); }
+      finally { estado.carregando = false; }
       return;
     }
     if (estado.carregando) return;
@@ -2148,7 +2249,60 @@
     configurarInstalacao();
     registrarServiceWorker();
 
-    if (sessaoValida()) {
+    const grupoUrl = new URLSearchParams(location.search).get("grupo");
+    if (grupoUrl && $("campo-loja") && !$("campo-loja").value) {
+      $("campo-loja").value = grupoUrl;
+      const rotulo = document.querySelector("label[for=campo-loja]");
+      if (rotulo) rotulo.textContent = "Rede";
+    }
+    try { estado.grupo = JSON.parse(lerArmazenamento(PREFIXO + "grupo") || "null"); } catch (_) { estado.grupo = null; }
+    if (estado.grupo && estado.token) estado.modo = "rede";
+    const formSenha = $("form-senha-rede");
+    if (formSenha) formSenha.addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+      const erro = $("erro-senha-rede");
+      erro.hidden = true;
+      try {
+        await chamarApi("/grupo/senha", { metodo: "POST", corpo: {
+          senha_atual: $("senha-atual").value, senha_nova: $("senha-nova").value } });
+        mostrarRede();
+      } catch (e) {
+        erro.textContent = e.message;
+        erro.hidden = false;
+      }
+    });
+    const botaoRede = $("botao-rede-ver");
+    if (botaoRede) botaoRede.addEventListener("click", () => {
+      estado.atalhoRede = "personalizado";
+      estado.redeDe = $("rede-de").value;
+      estado.redeAte = $("rede-ate").value;
+      document.querySelectorAll("[data-rede]").forEach((b) => b.classList.remove("ativa"));
+      carregarRede().catch((e) => { $("erro-rede").hidden = false; $("erro-rede").textContent = e.message; });
+    });
+    document.querySelectorAll("[data-rede]").forEach((b) => b.addEventListener("click", () => {
+      estado.atalhoRede = b.dataset.rede;
+      document.querySelectorAll("[data-rede]").forEach((x) => x.classList.toggle("ativa", x === b));
+      carregarRede().catch((e) => { $("erro-rede").hidden = false; $("erro-rede").textContent = e.message; });
+    }));
+    const sairRede = $("sair-rede");
+    if (sairRede) sairRede.addEventListener("click", () => encerrarSessao(true));
+    const voltar = $("botao-voltar-rede");
+    if (voltar) voltar.addEventListener("click", () => {
+      const token = sessionStorage.getItem("willpdv.painel.redeToken");
+      const grupo = sessionStorage.getItem("willpdv.painel.redeGrupo");
+      if (!token || !grupo) return;
+      estado.token = token;
+      estado.grupo = JSON.parse(grupo);
+      estado.modo = "rede";
+      estado.loja = null;
+      gravarArmazenamento(CHAVE_TOKEN, token);
+      gravarArmazenamento(PREFIXO + "grupo", grupo);
+      voltar.hidden = true;
+      mostrarRede();
+    });
+    if (sessaoValida() && estado.modo === "rede") {
+      mostrarRede();
+    } else if (sessaoValida()) {
       mostrarApp();
       atualizarTudo();
     } else {
