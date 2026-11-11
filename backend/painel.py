@@ -1180,6 +1180,10 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         notas = notas_dono.pendentes(db, acesso.loja)    # o dono subiu nota de compra: o caixa busca em /v1/notas-dono
         if notas:
             resposta["notas_pendentes"] = notas
+        from backend import retaguarda
+        comandos = retaguarda.pendentes(db, acesso.loja)  # alteração da retaguarda esperando: o caixa busca em /v1/retaguarda/comandos
+        if comandos:
+            resposta["retaguarda_pendentes"] = comandos
         return resposta
 
     # ---- senha do painel (administrador ou o próprio PDV da loja)

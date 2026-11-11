@@ -78,6 +78,7 @@ MODULOS = [
     "src.ui_qt.devolucoes", "src.ui_qt.fechamento", "src.ui_qt.painel_mesas", "src.ui_qt.relogio", "src.core.edicao", "src.controllers.mesas_modelo", "src.ui_qt.fechamento_turno",
     "src.controllers.primeiros_passos", "src.ui_qt.primeiros_passos", "src.core.fita", "src.ui_qt.marca_dagua",
     "src.controllers.notas_dono_controller", "src.sync.notas_dono", "src.ui_qt.notas_dono",
+    "src.controllers.retaguarda_controller", "src.sync.retaguarda",
     "src.core.recuperacao_senha", "src.sync.recuperacao_senha", "src.ui_qt.esqueci_senha",
     "src.porteiro.consulta", "src.porteiro.servidor", "src.porteiro.servico", "src.porteiro.nuvem_envio", "src.ui_qt.porteiro",
 ]

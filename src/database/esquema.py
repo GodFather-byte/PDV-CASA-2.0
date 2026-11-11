@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 50
+VERSAO_ESQUEMA = 51
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -164,6 +164,20 @@ MAQUINAS_DDL = """CREATE TABLE IF NOT EXISTS maquinas (
 )"""
 
 TABELAS = [
+    # Comandos da retaguarda na nuvem já aplicados neste caixa (src/controllers/retaguarda_controller.py). `id` é o do
+    # comando na nuvem: garante que cada um é aplicado uma vez. `aviso_ok = 0` é resultado que a nuvem ainda não confirmou.
+    """CREATE TABLE IF NOT EXISTS retaguarda_comandos (
+        id INTEGER PRIMARY KEY,
+        tipo TEXT NOT NULL,
+        resumo TEXT NOT NULL DEFAULT '',
+        autor TEXT NOT NULL DEFAULT '',
+        criado_em TEXT,
+        aplicado_em TEXT NOT NULL,
+        situacao TEXT NOT NULL CHECK (situacao IN ('aplicado','recusado')),
+        detalhe TEXT NOT NULL DEFAULT '',
+        novo_id INTEGER,
+        aviso_ok INTEGER NOT NULL DEFAULT 0
+    )""",
     # Notas de compra que o dono subiu pelo painel (src/sync/notas_dono.py). `id` é o da nota na nuvem. O XML fica
     # aqui até a conferência; `aviso_ok = 0` é desfecho (lançada ou recusada) que a nuvem ainda não confirmou.
     """CREATE TABLE IF NOT EXISTS notas_dono (
@@ -1099,6 +1113,7 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    51: [],  # tabela aditiva dos comandos da retaguarda na nuvem
     50: [],  # tabela aditiva das notas de compra enviadas pelo painel do dono
     49: [],  # tabela aditiva de deduplicação e confirmação dos pedidos de mesa
     48: [("coluna", "itens_venda", "opcoes_json", "TEXT NOT NULL DEFAULT '[]'"),

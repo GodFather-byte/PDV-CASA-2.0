@@ -470,6 +470,8 @@ def _postar(banco, corpo: dict, http=None) -> dict:
             raise ValueError("Resposta do painel inválida.")
         from src.sync import notas_dono
         notas_dono.anotar_resposta(banco, dados)          # o dono subiu nota de compra: a próxima rodada busca
+        from src.sync import retaguarda
+        retaguarda.anotar_resposta(banco, dados)          # há alteração da retaguarda esperando este caixa
         return dados
     except Exception:
         # Mensagem persistida sem URL, token ou conteúdo da exceção de rede.

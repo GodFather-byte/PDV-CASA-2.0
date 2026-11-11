@@ -723,3 +723,7 @@ def instalar(app, Loja):
     def auditoria(_=Depends(sessao), db=Depends(get_db)):
         return {"eventos": [{"id": a.id, "acao": a.acao, "loja": a.loja, "motivo": a.motivo, "criada_em": a.criada_em}
                 for a in db.query(AuditoriaFornecedor).order_by(AuditoriaFornecedor.id.desc()).limit(100)]}
+
+    # Retaguarda da loja pela central: as mesmas telas do dono, com a sessão do fornecedor (backend/retaguarda.py).
+    from backend import retaguarda
+    retaguarda.instalar_fornecedor(app, sessao, obter, auditar)

@@ -417,6 +417,11 @@ _notas_dono.instalar(app, Loja, autenticar)
 from backend import painel_lojas as _painel_lojas  # noqa: E402
 
 _painel_lojas.instalar(app, Loja)
+
+# Retaguarda na nuvem: espelho dos cadastros e fila de alterações que o caixa aplica (backend/retaguarda.py).
+from backend import retaguarda as _retaguarda  # noqa: E402
+
+_retaguarda.instalar(app, Loja, autenticar)
 _ponte.instalar(app, Loja, hash_token)
 
 # Porteiro no celular pelo 4G: retrato das comandas abertas e a mesma página em /porteiro/.

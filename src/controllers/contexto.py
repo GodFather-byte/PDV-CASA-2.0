@@ -77,6 +77,11 @@ class Contexto:
         return NotasDonoController(self.banco, self.operador_id)
 
     @property
+    def retaguarda(self):
+        from src.controllers.retaguarda_controller import RetaguardaController
+        return RetaguardaController(self.banco, self.operador_id)
+
+    @property
     def estoque(self) -> EstoqueController:
         return EstoqueController(self.banco, self.operador_id)
 
