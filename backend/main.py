@@ -428,6 +428,11 @@ from backend import central_fornecedor as _central_fornecedor  # noqa: E402
 
 _central_fornecedor.instalar(app, Loja)
 
+# Senha de gerente esquecida: o caixa busca a liberação que a central assinou (backend/recuperacao_senha.py).
+from backend import recuperacao_senha as _recuperacao_senha  # noqa: E402
+
+_recuperacao_senha.instalar(app, autenticar)
+
 # Site de vendas na mesma API: / e /site. Rotas explícitas, sem montar arquivo na raiz.
 from backend import site as _site  # noqa: E402
 
