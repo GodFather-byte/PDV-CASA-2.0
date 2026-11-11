@@ -1,5 +1,12 @@
 # Handoff — Will Restaurante (10/11/2026)
 
+## Recibo de acerto conta comissões, não lançamentos (11/11/2026)
+Pedido do dono (Casa Verde): o papel mostrava `COMISSÃO (19)` para R$ 440,00, o que parecia R$ 23 por comissão.
+`ImpressaoController.recibo_comissao` agora imprime `COMISSÕES: 88 x 5,00` (total ÷ `comissao_valor_ponto`).
+Com a comissão em reais, ou total que não fecha em comissões inteiras, continua a quantidade de lançamentos.
+Só o papel mudou; valores, banco e telas ficaram iguais. Testes em `test_acerto_garota_shows.py`.
+
+
 ## Branch e escopo
 Branch feat/willrestaurante, PR #70, base main 98a873fe (1.13.0).
 Pedido do dono: edição restaurante, adicionais, QR da mesa e cozinha web.
