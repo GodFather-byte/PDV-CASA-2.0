@@ -267,7 +267,7 @@ def disparar_instalacao(arquivo: Path) -> Path:
         else:
             backup.mkdir(parents=True, exist_ok=True)
     script = arquivo.parent / "aplicar.cmd"
-    script.write_text(script_aplicar(arquivo, programa, backup, exe, esperada), encoding="utf-8")
+    script.write_text(script_aplicar(arquivo, programa, backup, exe, esperada), encoding="utf-8", newline="")
     if congelado and os.name == "nt":
         subprocess.Popen(["cmd", "/c", str(script)], creationflags=getattr(subprocess, "DETACHED_PROCESS", 0), close_fds=True)
     return script

@@ -44,7 +44,7 @@ class Simulador {
   }
   if (args.Length > 0 && args[0] == "--confirmar-atualizacao") {
    if (Environment.GetEnvironmentVariable("PDV_TESTE_LEGADO") != "1")
-    File.WriteAllText(args[2], args[1] + "\n");
+    File.WriteAllText(args[2], args[1] + "\r\n", new System.Text.UTF8Encoding(false));
    return 0;
   }
   return 0;
@@ -69,7 +69,7 @@ class Simulador {
         self.instalador = self.raiz / 'instalador.exe'
         shutil.copyfile(self.simulador, self.instalador)
         self.script = self.raiz / 'aplicar.cmd'
-        self.script.write_text(script_aplicar(self.instalador, self.programa, self.backup, self.nome, '1.14.2'), encoding='utf-8')
+        self.script.write_text(script_aplicar(self.instalador, self.programa, self.backup, self.nome, '1.14.2'), encoding='utf-8', newline='')
         self.ambiente = dict(os.environ, PDV_TESTE_CODIGO='0', PDV_TESTE_LEGADO='0', PDV_TESTE_ENCERRAR='')
 
     def tearDown(self):
@@ -81,7 +81,7 @@ class Simulador {
 
     def test_instalacao_confirmada_reinicia(self):
         resultado = self.executar()
-        self.assertEqual(resultado.returncode, 0, resultado.stdout)
+        self.assertEqual(resultado.returncode, 0, (resultado.stdout, resultado.stderr, (self.raiz / "confirmacao.txt").read_bytes() if (self.raiz / "confirmacao.txt").exists() else None))
         self.assertEqual((self.raiz / 'resultado.txt').read_text().strip(), 'instalada')
 
     def test_instalador_falha_restaura(self):

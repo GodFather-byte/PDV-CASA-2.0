@@ -38,6 +38,14 @@ class TesteRetomada(TestCase):
         with self.assertRaisesRegex(RuntimeError, 'não encontrado'):
             cliente.disparar_instalacao(Path('/instalador-ausente.exe'))
 
+    def test_script_gravado_nao_duplica_retorno_de_carro(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / 'willpdv-99.0.0.exe'
+            arquivo.write_bytes(b'instalador')
+            script = cliente.disparar_instalacao(arquivo)
+            self.assertNotIn(b'\r\r\n', script.read_bytes())
+            self.assertIn(b'\r\n', script.read_bytes())
+
     def test_versao_errada_nao_cria_comprovante(self):
         with tempfile.TemporaryDirectory() as pasta:
             prova = Path(pasta) / 'confirmacao.txt'
