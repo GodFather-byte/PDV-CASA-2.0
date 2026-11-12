@@ -61,6 +61,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Custo congelado e rateio analítico de devoluções | `custos_venda.py`; fila imutável em `src/sync/devolucoes_envio.py` |
 | Envio por mudança, batimento leve e estado da fila | `src/sync/painel_ritmo.py`, `painel_status.py`; indicador em `ui_qt/estado_nuvem.py` |
 | Ledger e resumo de devoluções na nuvem | `backend/painel_devolucoes.py` |
+| Publicação de atualização assinada das três edições | `.github/workflows/publicar-pacote.yml`, `tools/publicar_atualizacao.py`, `src/atualizacao/manifesto.py`, `backend/atualizacao_remota.py`; guia `docs/ATUALIZACAO.md` |
 | Verificação do commit publicado | `tools/verificar_nuvem.py`, rota pública `/v1/versao`; guia `docs/ENTREGA_1_10.md` |
 | Cartões de mesas, comandas, garotas e balcão no caixa (visual da boate) | modelo `mesas_modelo.py` (`montar_tiles`); desenho e teclado em `ui_qt/painel_mesas.py`; ligação em `ui_qt/caixa.py` (`carregar_mesas`) |
 | Turno, numeração de cupom, fechamento | `turno_controller.py`, `conferencia_turno.py` |

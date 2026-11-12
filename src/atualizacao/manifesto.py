@@ -11,7 +11,7 @@ from src.core import ed25519
 
 # Troque este valor só junto com a semente privada, e só antes do último instalador manual.
 CHAVE_PUBLICA_HEX = "2dbf1db570be8be3ecdb591f3025db2c7742269a817f79b1e99ab4e973f9409e"
-EDICOES = ("willpdv", "willadega", "bar")
+EDICOES = ("willpdv", "willadega", "willrestaurante", "bar")
 CANAIS = ("estavel",)
 CAMPOS = ("canal", "edicao", "minima", "notas", "obrigatoria", "sha256", "tamanho", "url", "versao")
 

@@ -1,64 +1,75 @@
-# Handoff — Tutorial guiado de produto (12/11/2026)
+# Handoff — Correção da publicação de atualizações (12/11/2026)
 
-Branch `tutorial-guiado`, criada de `origin/main`. Pedido do dono: abrir PR e parar,
-sem merge. Não houve alteração em backend/ nem em src/sync/sincronizador.py.
+Branch `corrigir-atualizacoes`, criada de `origin/main`. Inclui o tutorial integrado pelo PR #78. O dono autorizou merge e publicação
+em 12/11/2026; correção da atualização no PR #79. Pedido do dono:
+parar de depender de visitas às lojas para atualizar.
 
-## Pronto
+## Diagnóstico comprovado (sem alterar produção)
 
-- Roteiro de oito passos sem Qt em `src/controllers/tutoriais.py`: lista, Novo,
-  nome, preço, código de barras opcional, estoque inicial opcional, conferência
-  do código/subgrupo/unidade e Salvar. Não cria exemplo fictício.
-- Conclusão em config por operador; refazer sempre disponível. Pular/Esc não
-  concluem. Texto comum às três edições, sem migração.
-- `src/ui_qt/tutorial.py`: sombra transparente a cliques com recorte e balão
-  não modal. Alvos por objectName; condições liberam Próximo; erro de alvo
-  encerra com aviso. Reposiciona durante o uso, seleciona aba e rola ao campo.
-- Primeiros passos > Produtos > Me mostre como; Ajuda > Tutoriais para refazer.
-- Integração pontual com cadastro existente; estoque opcional usa o controller
-  de estoque com validação/permissão de gerente. Produto, lançamento e marca
-  são transacionais. Sem estoque informado, preserva o cadastro normal.
-- Voltar dentro do formulário não desfaz dados. Ao entrar em Novo não volta à
-  lista pelo balão, para não descartar o formulário; Pular continua disponível.
-- Novos módulos incluídos no autoteste/build.
+- Último build main `ff93bf2`, job 130939306742, gerou 1.14.0 e saiu com sucesso
+  mesmo informando chave ausente. A versão não foi publicada aos caixas.
+- API em willpdv-nuvem-6sp0.onrender.com oferecia apenas 1.12.0 em PDV/Adega.
+  Assinaturas conferidas com a chave pública do código; HEAD dos instaladores
+  R2 retornou 200 e tamanho igual ao manifesto.
+- Will Restaurante recebia 422 (edição não aceita).
+- Render: serviço srv-dbf5untg1s2s73ejihdg, workspace tea-d3ekasbuibrs73caqdog
+  previamente confirmado pelo dono; principal main com auto-deploy por commit.
+  Não houve alteração de variáveis, deploy manual ou troca de chaves.
+
+## Pronto para publicação
+
+- Publicação falha sem chave/token/URL; verifica a compatibilidade da assinatura
+  e confere bytes/hash do instalador público antes de anunciar.
+- Workflow reutilizável publica downloads permanentes em Releases públicos,
+  por edição e commit. Não substitui instalador já anunciado. Jobs PDV/Adega e
+  Restaurante chamam esse workflow. Continua havendo instalador manual separado.
+- Manifesto JSON disponível em artefato/Release depois da conferência. `--saida`
+  também permite guardar o JSON durante publicação pelo terminal.
+- Restaurante aceito no protocolo/CLI. Versão 1.14.1.
+- A API preserva os campos assinados quando a versão está abaixo da mínima;
+  a exigência de instalar continua sendo calculada pelo cliente.
+- Guia ATUALIZACAO.md atualizado; não altera src/sync/sincronizador.py.
 
 ## Validação
 
-- `QT_QPA_PLATFORM=offscreen python -m unittest tests.test_tutorial_guiado`:
-  10 testes passaram, incluindo alvos nas três edições, gravação real, rollback,
-  condições, operador, Esc/Pular e geometria dos balões em 1024x600.
-- Tutorial + primeiros passos + autoteste: 19 testes passaram.
-- Suíte completa: 2.751 testes em 428 s, 24 pulados; duas falhas em
-  test_licenciador e um erro em test_central_ui por falta de display Tk
-  (sem $DISPLAY). Nenhuma outra falha no relatório final. A primeira execução
-  revelou dependências de backend ausentes; instaladas antes da execução final.
-- Não houve homologação visual no Windows, com leitor físico, fonte ampliada,
-  nem em monitor físico 1024x600. Testes de geometria são Qt offscreen.
-
-## Teste manual
-
-1. Entrar com operador autorizado a cadastrar produtos. Em Primeiros passos,
-   clicar Me mostre como no cartão Produtos; escolher Cadastrar um produto.
-2. Avançar, clicar Novo, preencher nome e preço; conferir bloqueio de Próximo
-   com nome vazio/preço inválido. Usar Voltar sem perder os valores.
-3. Informar ou deixar vazio o código de barras. Estoque opcional: vazio não
-   lança; quantidade informada requer permissão de gerente. Conferir código
-   interno, subgrupo e unidade obrigatórios. Clicar Salvar.
-4. Conferir produto e saldo; reabrir Ajuda > Tutoriais, verificar concluído e
-   refazer. Outro operador mantém sua própria marca.
-5. Repetir e apertar Esc/Pular: formulário permanece operável; não marca
-   conclusão. Repetir em 1024x600 nas três edições.
+- 57 testes focados passaram: publicação, atualização automática, tela Qt,
+  empacotamento e integração do build. O contrato de permissões do workflow
+  foi ajustado para o novo job de publicação (build continua só leitura).
+- actionlint 1.7.7 passou nos três workflows alterados/criados.
+- Suíte completa executada: 2.746 testes, 24 pulados; duas falhas do
+  licenciador e um erro da central por falta de display Tk. Houve também
+  falha no contrato antigo que contava três jobs com escrita; ele foi
+  atualizado para quatro (novo publicador assinado). Reexecução focada de
+  57 testes incluindo esse contrato passou; a suíte completa não foi
+  repetida depois desse ajuste do teste.
+- Não houve build/instalação física Windows nem atualização de loja real nesta
+  sessão. Não afirmar que as lojas já receberam 1.14.1.
 
 ## Correção antes do merge
 
-O CI Windows apontou 7 px de rolagem no menu com a nova categoria Ajuda.
-Reduzido o espaçamento vertical da lateral para manter todas as categorias.
-Incluído job Windows rápido de tutorial e telas mínimas além da matriz completa.
+O CI Windows detectou leitura do JSON UTF-8 pelo encoding padrão do sistema
+no teste. Corrigido o teste para ler UTF-8 explicitamente, como a gravação.
+Incluído job Windows rápido de publicação além da matriz completa; passou
+com 57 testes. A matriz completa foi reiniciada com os ajustes e ainda estava
+em andamento antes do merge. Execução Windows anterior teve apenas essa
+falha de encoding do teste; o tutorial teve apenas a rolagem corrigida.
 
-## Pendências
+## Pendências e continuidade
 
-- Próximos tutoriais, nesta ordem: grupo e subgrupo; operador com senha;
-  cliente (caderneta).
-- Homologação visual/física descrita acima e revisão do PR; não fazer merge.
-- Pendências anteriores continuam fora deste escopo: homologar térmica do
-  Will Restaurante; checkout do site por WhatsApp; segredos PDV_ATUALIZACAO_*;
-  revisão da rede de lojas pelo dono da área e aplicação em várias lojas.
+- O dono foi perguntado sobre a chave privada usada na 1.12.0. Não solicitar o
+  valor em chat. Configurar no segredo PDV_ATUALIZACAO_CHAVE do GitHub, juntamente
+  com PDV_NUVEM_URL e PDV_API_TOKEN, somente pelo cofre de segredos.
+- Não gerar outra chave e substituir a pública: isso rompe a confiança dos
+  caixas já instalados. Sem a original, não é possível assinar novas versões
+  compatíveis com a confiança antiga; planejar migração explicitamente.
+- Depois de revisão/merge e configuração: verificar job de publicação, API
+  pública por edição, assinatura, download/hash e a versão relatada por cada
+  loja. Publicação não confirma instalação. Caixas sem o atualizador exigem
+  instalação inicial; confirmar versões das lojas (pergunta enviada).
+- O repositório precisa continuar público para estes URLs de Release. Se for
+  privado, o workflow falha e será necessário HTTPS público, como o R2 anterior.
+- Tutorial de produto integrado (#78), oito passos, conclusão por operador
+  e estoque inicial opcional. Entradas em Primeiros passos e Ajuda > Tutoriais.
+  CI Windows detectou rolagem de 7 px no menu: corrigido o espaçamento lateral.
+  Job rápido de tutorial/telas mínimas passou no Windows (30 testes).
+  Próximos tutoriais: grupo/subgrupo; operador com senha; cliente/caderneta.

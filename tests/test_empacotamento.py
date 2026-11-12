@@ -48,7 +48,7 @@ class TesteWorkflowDeBuild(unittest.TestCase):
 
     def test_so_a_publicacao_na_release_escreve_no_repositorio(self):
         self.assertIn("permissions:\n  contents: read", self.texto)
-        self.assertEqual(self.texto.count("contents: write"), 3)             # publicação: tag v*, "última versão" e a da adega
+        self.assertEqual(self.texto.count("contents: write"), 4)             # Releases manuais e publicação do pacote assinado
         antes_da_publicacao = self.texto[:self.texto.index("  publicar:")]      # build e licenciador só leem o repositório
         self.assertNotIn("contents: write", antes_da_publicacao)
 

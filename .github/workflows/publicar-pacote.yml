@@ -1,0 +1,89 @@
+name: Publicar pacote assinado para os caixas
+on:
+  workflow_call:
+    inputs:
+      edicao:
+        type: string
+        required: true
+      artefato:
+        type: string
+        required: true
+      mascara:
+        type: string
+        required: true
+      versao:
+        type: string
+        required: true
+    secrets:
+      PDV_ATUALIZACAO_CHAVE:
+        required: true
+      PDV_NUVEM_URL:
+        required: true
+      PDV_API_TOKEN:
+        required: true
+permissions:
+  contents: write
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ inputs.artefato }}
+          merge-multiple: true
+          path: instaladores
+      - name: Publicar arquivo permanente e manifesto assinado
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EDICAO: ${{ inputs.edicao }}
+          MASCARA: ${{ inputs.mascara }}
+          VERSAO: ${{ inputs.versao }}
+          PDV_ATUALIZACAO_CHAVE: ${{ secrets.PDV_ATUALIZACAO_CHAVE }}
+          PDV_NUVEM_URL: ${{ secrets.PDV_NUVEM_URL }}
+          PDV_API_TOKEN: ${{ secrets.PDV_API_TOKEN }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, subprocess, sys
+          from pathlib import Path
+          from src.atualizacao.manifesto import CHAVE_PUBLICA_HEX
+          from src.core.ed25519 import chave_publica
+          for nome in ('PDV_ATUALIZACAO_CHAVE', 'PDV_NUVEM_URL', 'PDV_API_TOKEN'):
+              if not os.environ.get(nome, '').strip():
+                  sys.exit(f'Publicação interrompida: configure o segredo {nome}. O instalador não foi anunciado aos caixas.')
+          try:
+              correta = chave_publica(bytes.fromhex(os.environ['PDV_ATUALIZACAO_CHAVE'])).hex() == CHAVE_PUBLICA_HEX
+          except ValueError:
+              correta = False
+          if not correta:
+              sys.exit('A chave privada não corresponde à chave pública dos caixas. Não trocar a chave pública para contornar este erro.')
+          privado = subprocess.check_output(['gh', 'api', 'repos/' + os.environ['GH_REPO'], '--jq', '.private'], text=True).strip()
+          if privado != 'false':
+              sys.exit('Este fluxo requer downloads públicos. Configure hospedagem pública antes de publicar em repositório privado.')
+          arquivos = list(Path('instaladores').rglob(os.environ['MASCARA']))
+          if len(arquivos) != 1:
+              sys.exit('Esperado exatamente um instalador para esta edição.')
+          arquivo = arquivos[0]
+          tag = 'atualizacao-' + os.environ['EDICAO'] + '-' + os.environ['GITHUB_SHA']
+          if subprocess.run(['gh', 'release', 'view', tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
+              subprocess.run(['gh', 'release', 'create', tag, '--target', os.environ['GITHUB_SHA'], '--title', 'Pacote ' + os.environ['EDICAO'] + ' ' + os.environ['VERSAO'], '--notes', 'Pacote permanente de atualização dos caixas. Não substituir o instalador desta publicação.', '--latest=false'], check=True)
+          # Sem --clobber: o arquivo anunciado nunca pode ser substituído por outro build.
+          nomes = subprocess.check_output(['gh', 'release', 'view', tag, '--json', 'assets', '--jq', '.assets[].name'], text=True).splitlines()
+          if arquivo.name not in nomes:
+              subprocess.run(['gh', 'release', 'upload', tag, str(arquivo)], check=True)
+          url = 'https://github.com/' + os.environ['GH_REPO'] + '/releases/download/' + tag + '/' + arquivo.name
+          subprocess.run([sys.executable, '-m', 'tools.publicar_atualizacao', str(arquivo), '--edicao', os.environ['EDICAO'], '--versao', os.environ['VERSAO'], '--notas', 'Versão ' + os.environ['VERSAO'], '--url', url, '--saida', 'manifesto.json'], check=True)
+          subprocess.run(['gh', 'release', 'upload', tag, 'manifesto.json', '--clobber'], check=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manifesto-${{ inputs.edicao }}
+          path: manifesto.json
+          if-no-files-found: ignore
