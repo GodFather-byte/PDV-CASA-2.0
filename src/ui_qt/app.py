@@ -586,7 +586,8 @@ class JanelaPrincipal(QMainWindow):
         busca = normalizar(texto.strip())
         usa_mesas = self.ctx.banco.cfg_bool("usar_mesas", True)
         for chave, botao in self.botoes.items():
-            visivel = chave not in self.edicao.menu_oculto and (not busca or busca in normalizar(botao.text()))
+            rotulo = ("Tutoriais " if chave == "tutoriais" else "") + botao.text()
+            visivel = chave not in self.edicao.menu_oculto and (not busca or busca in normalizar(rotulo))
             if chave == "porteiro" and not usa_mesas:
                 visivel = False
             botao.setVisible(visivel)
