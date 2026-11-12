@@ -43,7 +43,7 @@ MODULOS = [
     'src.ui_qt.cardapio_qr',
     'src.ui_qt.estado_nuvem',
     "src.autoteste", "src.autoteste_qt", "src.atualizacao.cliente", "src.atualizacao.manifesto", "src.atualizacao.tarefa",
-    "src.fiscal.nfce", "src.fiscal.focus", "src.fiscal.danfe", "src.fiscal.servico",
+    "src.fiscal.nfce", "src.fiscal.ncm", "src.fiscal.focus", "src.fiscal.danfe", "src.fiscal.servico",
     "src.controllers.fiscal_controller", "src.versao",
     "src.controllers.auditoria_controller",
     "src.controllers.acesso_controller", "src.controllers.cadastro_controller", "src.controllers.caderneta_controller",

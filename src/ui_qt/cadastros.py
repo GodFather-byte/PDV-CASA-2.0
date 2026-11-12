@@ -1,4 +1,5 @@
 """Cadastros Qt dirigidos pelas entidades e pelo CadastroController existentes."""
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
@@ -42,7 +43,11 @@ class FormularioCadastro(QDialog):
         layout = QVBoxLayout(self)
         abas = QTabWidget()
         secoes = {}
+        # Com a NFC-e ligada o NCM é obrigatório no produto vendido: sai da aba Fiscal e vem para a primeira.
+        self.ncm_obrigatorio = chave == "produtos" and ctx.banco.cfg("nfce_emissao") in ("homologacao", "producao")
         for campo in self.entidade.campos:
+            if campo.nome == "ncm" and self.ncm_obrigatorio:
+                campo = replace(campo, secao="Geral", rotulo="Código NCM (nota fiscal)", obrigatorio=True)
             if campo.secao not in secoes:
                 pagina = QWidget()
                 formulario = QFormLayout(pagina)
@@ -81,7 +86,17 @@ class FormularioCadastro(QDialog):
             editor.setObjectName("produto_" + campo.nome)
             self.campos[campo.nome] = editor
             secoes[campo.secao].addRow(campo.rotulo + (" *" if campo.obrigatorio else ""), editor)
+            if chave == "produtos" and campo.nome == "ncm":
+                editor.setPlaceholderText("8 números. Ex.: 2203.00.00")
+                self.btn_sugerir_ncm = QPushButton()
+                self.btn_sugerir_ncm.setObjectName("produto_sugerir_ncm")
+                self.btn_sugerir_ncm.clicked.connect(self.usar_ncm_sugerido)
+                secoes[campo.secao].addRow("", self.btn_sugerir_ncm)
         self.editor_foto = None
+        if hasattr(self, "btn_sugerir_ncm"):
+            self.campos["nome"].textChanged.connect(self._atualizar_sugestao_ncm)
+            self.campos["ncm"].textChanged.connect(self._atualizar_sugestao_ncm)
+            self._atualizar_sugestao_ncm()
         if chave == "produtos" and "custo_medio_cent" in self.campos:
             from src.core import custo_lucro
             self.lbl_lucro = texto("", "aviso")
@@ -164,9 +179,41 @@ class FormularioCadastro(QDialog):
             raise ErroPermissao("A sessão mudou. Abra o formulário novamente.")
         return exigir_acesso(self.ctx, self.chave)
 
+    # ------------------------------------------------------------ NCM
+    def _sugestao_ncm(self):
+        from src.fiscal import ncm
+        return ncm.sugerir(self.campos["nome"].text())
+
+    def _atualizar_sugestao_ncm(self, *_):
+        from src.fiscal import ncm
+        sugestao = self._sugestao_ncm()
+        mostrar = sugestao is not None and ncm.limpar(self.campos["ncm"].text()) != sugestao[0]
+        if mostrar:
+            self.btn_sugerir_ncm.setText(f"Usar NCM sugerido: {ncm.formatar(sugestao[0])} ({sugestao[1]})")
+        self.btn_sugerir_ncm.setVisible(mostrar)
+
+    def usar_ncm_sugerido(self):
+        from src.fiscal import ncm
+        sugestao = self._sugestao_ncm()
+        if sugestao:
+            self.campos["ncm"].setText(ncm.formatar(sugestao[0]))
+            self.mensagem.setText("NCM sugerido pelo nome. Confira; na dúvida, pergunte ao contador.")
+
+    def _exigir_ncm(self):
+        if not self.ncm_obrigatorio or "ncm" not in self.campos:
+            return
+        vendido = self.campos.get("venda")
+        if self.campos["ncm"].text().strip() or (vendido is not None and not vendido.isChecked()):
+            return
+        from src.fiscal import ncm
+        sugestao = self._sugestao_ncm()
+        dica = f" Sugestão pelo nome: {ncm.formatar(sugestao[0])} ({sugestao[1]})." if sugestao else ""
+        raise ErroNegocio("A NFC-e está ligada: produto vendido precisa do NCM para sair na nota." + dica)
+
     def salvar(self):
         try:
             self.exigir_acesso()
+            self._exigir_ncm()
             if hasattr(self, "regra_tutorial") and self.id_ is None:
                 self.id_ = self.regra_tutorial.cadastrar(
                     self.ctx.cadastros, self.valores(), self.estoque_tutorial.text(),

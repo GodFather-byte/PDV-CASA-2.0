@@ -12,6 +12,9 @@ não sabido: padrões do Simples, tudo configurável. Guia: `docs/NFCE.md`.
 - `src/fiscal/focus.py` cliente HTTP (Basic com o token); `src/fiscal/danfe.py` cupom ESC/POS com QR Code.
 - `src/controllers/fiscal_controller.py` fila, reenvio com espera, cancelamento (15–255 letras, 30 min), cancelamento
   automático de venda cancelada, impressão. `src/fiscal/servico.py` roda em segundo plano (iniciado em `ui_qt/app.py`).
+- NCM no cadastro de produto: `src/fiscal/ncm.py` (limpa, valida 8 números, sugere pelo nome). Com a NFC-e ligada o
+  campo vai para a aba Geral e é obrigatório no formulário para produto vendido (outros caminhos, como importação e
+  quartos, não exigem; a nota só fica com erro até corrigir). Testes `tests/test_ncm.py`.
 - Tela `src/ui_qt/notas_fiscais.py`, menu Gestão > Notas fiscais (NFC-e), permissão `fiscal_nfce` (nível 3).
 - Testes: `tests/test_nfce.py` (22) e `test_qt_app` (menu e ligar).
 

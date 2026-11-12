@@ -22,7 +22,9 @@ reimprimir, cancelar com motivo e ligar/desligar a emissão.
 1. Criar a conta na Focus NFe e cadastrar a empresa lá. **O certificado A1 (.pfx), a senha e o CSC (token do QR
    Code, pego no site da SEFAZ-SP) vão no painel da Focus**, não no PDV e nunca por chat.
 2. PDV: Cadastros da loja com razão social, CNPJ, IE e endereço. Produtos com **NCM** (8 dígitos); CFOP, CEST e
-   origem só se forem diferentes do padrão. Tipos de pagamento: "Forma na nota fiscal" só se o nome não disser.
+   origem só se forem diferentes do padrão. Com a NFC-e ligada, o NCM vai para a primeira aba do cadastro, é
+   obrigatório no produto vendido e o botão "Usar NCM sugerido" preenche pelo nome (`src/fiscal/ncm.py`: cerveja,
+   refrigerante, água, energético, destilados, vinho, cigarro, gelo, salgadinho, doces). Sugestão: confira. Tipos de pagamento: "Forma na nota fiscal" só se o nome não disser.
 3. Configurações > Integrações: token de homologação, regime, CFOP/CST padrão (combinar com o contador).
 4. Notas fiscais > Ligar / desligar > Homologação. Fazer vendas de teste: dinheiro, cartão, Pix, desconto, taxa,
    CPF na nota, cancelamento.

@@ -137,6 +137,12 @@ def _antes_produto(banco, d, id_):
             EstoqueController(banco, operador)._gravar_custo(
                 id_, anterior, d["custo_medio_cent"],
                 banco.valor("SELECT qt_atual FROM produtos WHERE id = ?", (id_,), 0), "cadastro")
+    if d.get("ncm") is not None:
+        from src.fiscal import ncm
+        try:
+            d["ncm"] = ncm.validar(d["ncm"]) or None
+        except ErroNegocio as erro:
+            raise ErroValidacao(str(erro), {"ncm": "inválido"}) from None
     if d.get("cbarra") is not None and not re.fullmatch(r"\d{1,14}", d["cbarra"]):
         raise ErroValidacao("Código de barras deve conter apenas números.", {"cbarra": "inválido"})
     if "partes" in d and not (1 <= d["partes"] <= 55):
@@ -421,7 +427,7 @@ _ENTIDADES = [
         Campo("hora_fim", "Hora final", "hora", secao="Promoções", na_grade=False),
         Campo("hora_preco_cent", "Preço (horário)", "dinheiro", padrao=0, secao="Promoções", na_grade=False),
         Campo("hora_gelada_cent", "Preço gelada (horário; 0 = sem)", "dinheiro", padrao=0, secao="Promoções", na_grade=False),
-        Campo("ncm", "Código NCM", tamanho=8, secao="Fiscal", na_grade=False),
+        Campo("ncm", "Código NCM", tamanho=10, secao="Fiscal", na_grade=False),
         Campo("desc_aliq_icms", "Desc. Aliq. ICMS", tamanho=10, secao="Fiscal", na_grade=False),
         Campo("situacao_tributaria", "Situação tributária", tamanho=4, secao="Fiscal", na_grade=False),
         Campo("aliquota_ipi", "Alíquota IPI %", "decimal", padrao=0, secao="Fiscal", na_grade=False),
