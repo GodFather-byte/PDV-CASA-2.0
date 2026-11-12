@@ -17,6 +17,24 @@ class TesteRetomada(TestCase):
         self.pendente = {'versao': '99.0.0', 'arquivo': '/pacote.exe'}
         cliente._gravar_estado(self.banco, self.pendente)
 
+    def test_sincronizacao_sem_http_injetado_consulta_pela_internet(self):
+        self.banco.cfg_set(cliente.CHAVE_CONSULTA, "")
+        with patch('requests.get') as obter:
+            obter.return_value.status_code = 200
+            obter.return_value.json.return_value = {"disponivel": False, "pacote": None}
+            cliente.rodada(self.banco)
+            obter.assert_called_once()
+            self.assertTrue(obter.call_args.args[0].endswith('/v1/atualizacao/ultima'))
+
+    def test_retomada_local_nao_acessa_a_internet(self):
+        self.banco.cfg_set(cliente.CHAVE_CONSULTA, "")
+        chamadas = []
+        with patch('requests.get') as obter:
+            resultado = cliente.rodada(self.banco, somente_local=True, instalar=chamadas.append)
+            obter.assert_not_called()
+        self.assertEqual(resultado['acao'], 'instalar')
+        self.assertEqual(len(chamadas), 1)
+
     def test_consumir_pendente_antes_de_fechar_impede_repeticao(self):
         chamadas = []
         def instalar(arquivo):

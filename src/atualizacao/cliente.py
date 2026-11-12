@@ -194,14 +194,20 @@ def precisa_consultar(banco) -> bool:
     return not ultima or fmt.minutos_entre(ultima) >= INTERVALO_HORAS * 60 or fmt.minutos_entre(ultima) < 0
 
 
-def rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: str | None = None) -> dict:
+def rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: str | None = None,
+           somente_local: bool = False) -> dict:
     """Consulta, baixa e, se o caixa estiver livre, dispara a instalação. Devolve o que fez."""
     if not banco.cfg("api_url").strip():
         return {"acao": "sem_nuvem"}
     tentativa = banco.cfg(CHAVE_TENTATIVA)
     if tentativa and not forcar:
         return {"acao": "requer_conferencia", "versao": tentativa}
-    if forcar or precisa_consultar(banco):
+    if not somente_local and (forcar or precisa_consultar(banco)):
+        if http is None:
+            try:
+                import requests as http
+            except ImportError:
+                return {"acao": "sem_cliente_http"}
         dados = consultar(banco.cfg("api_url"), http)
         banco.cfg_set(CHAVE_CONSULTA, fmt.agora())
         if dados is None or not pacote_valido(dados, publica_hex):
@@ -286,7 +292,7 @@ def ao_iniciar() -> None:
         if banco.remoto:                 # caixa adicional: o pacote baixado está no computador do caixa principal
             return
         if estado(banco).get("arquivo"):
-            rodada(banco, http=None, instalar=disparar_instalacao)
+            rodada(banco, instalar=disparar_instalacao, somente_local=True)
     except Exception:
         log.exception("Não consegui retomar a atualização na abertura.")
     finally:
