@@ -113,6 +113,15 @@ jobs:
           $senha = "Pd#" + [guid]::NewGuid().ToString("N").Substring(0, 10)    # até 14 caracteres: o net user não pergunta nada
           net user pdvcomum $senha /add /Y | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "Não consegui criar o usuário comum do teste." }
+          # Só para o teste: o usuário roda por tarefa agendada, que pede o direito "fazer logon como trabalho em lotes".
+          $sid = (New-Object System.Security.Principal.NTAccount("pdvcomum")).Translate([System.Security.Principal.SecurityIdentifier]).Value
+          $inf = Join-Path $env:RUNNER_TEMP "direitos.inf"
+          secedit /export /cfg $inf /areas USER_RIGHTS | Out-Null
+          $linhas = Get-Content $inf
+          if ($linhas -match "^SeBatchLogonRight") { $linhas = $linhas -replace "^(SeBatchLogonRight\s*=.*)$", "`$1,*$sid" }
+          else { $linhas = $linhas -replace "^\[Privilege Rights\]$", "[Privilege Rights]`r`nSeBatchLogonRight = *$sid" }
+          Set-Content -Path $inf -Value $linhas -Encoding Unicode
+          secedit /configure /db (Join-Path $env:RUNNER_TEMP "direitos.sdb") /cfg $inf /areas USER_RIGHTS | Out-Null
           $iniciar = "C:\Users\Public\iniciar-atualizacao.cmd"
           Set-Content -Encoding ascii $iniciar ('schtasks /Run /TN "WillPDV Atualizacao" > "C:\Users\Public\iniciar-atualizacao.txt" 2>&1')
           schtasks /Create /TN "PDV usuario comum" /TR $iniciar /SC ONCE /ST 23:59 /RU pdvcomum /RP $senha /F | Out-Null
