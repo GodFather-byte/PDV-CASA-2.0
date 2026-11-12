@@ -222,7 +222,7 @@ class JanelaPrincipal(QMainWindow):
         self.menu_grupos = QToolBox()
         lateral.addWidget(self.menu_grupos, 1)
         grupos = {}
-        for nome in ("Operação", "Produtos e estoque", "Gestão", "Cadastros", "Configuração", "Manutenção", "Ajuda"):
+        for nome in ("Tutoriais", "Operação", "Produtos e estoque", "Gestão", "Cadastros", "Configuração", "Manutenção"):
             pagina = QWidget()
             grade = QVBoxLayout(pagina)
             grade.setContentsMargins(2, 2, 2, 2)
@@ -230,7 +230,7 @@ class JanelaPrincipal(QMainWindow):
             grupos[nome] = grade
             self.menu_grupos.addItem(pagina, nome)
         categorias = {
-            "Ajuda": {"tutoriais"},
+            "Tutoriais": {"tutoriais"},
             "Operação": {"inicio", "caixa", "porteiro", "quartos", "cozinha", "alertas"},
             "Produtos e estoque": {"produtos", "estoque", "contagem", "retornaveis", "promocoes", "importar_produtos", "composicao"},
             "Gestão": {"relatorio_vendas", "relatorios", "contas", "devolucoes", "whatsapp", "auditoria"},
@@ -241,7 +241,7 @@ class JanelaPrincipal(QMainWindow):
         }
         self.botoes = {}
         for chave, titulo, acao in (
-            ("tutoriais", "Tutoriais", self.abrir_tutoriais),
+            ("tutoriais", "Cadastrar um produto", self.abrir_tutoriais),
             ("inicio", "Visão geral", self.atualizar),
             ("caixa", "Abrir caixa", self.abrir_caixa),
             ("porteiro", "Porteiro no celular", self.abrir_porteiro),
@@ -767,17 +767,11 @@ class JanelaPrincipal(QMainWindow):
             self.mensagem.setText(str(erro))
 
     def abrir_tutoriais(self):
-        from PySide6.QtWidgets import QInputDialog
-        from src.controllers.tutoriais import Tutoriais
         from src.ui_qt.tutorial import iniciar_produto
         if not self.ctx.pode("cad_produtos"):
             self.mensagem.setText("Seu acesso não permite cadastrar produtos.")
             return
-        feito = Tutoriais(self.ctx.banco, self.ctx.operador_id).concluido()
-        _, aceito = QInputDialog.getItem(self, "Tutoriais", "Escolha para iniciar ou refazer:",
-                                       ["Cadastrar um produto" + (" — concluído" if feito else "")], 0, False)
-        if aceito:
-            iniciar_produto(self)
+        iniciar_produto(self)
 
     def abrir_primeiros_passos(self):
         """Lista de conferência da instalação: abre sozinha na primeira entrada e fica no menu Configuração."""

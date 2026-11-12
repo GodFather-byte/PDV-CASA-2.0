@@ -12,6 +12,21 @@ class TestTutorial(BaseQt):
         super().setUp()
         self.admin()
 
+    def test_menu_tutoriais_fica_antes_de_operacao_e_abre_o_guia(self):
+        from src.ui_qt.app import JanelaPrincipal
+        app = self.app()
+        app.ctx.operador = self.ctx.operador
+        principal = self.janela(JanelaPrincipal(app))
+        principal._fechamento_autorizado = True
+        principal.show()
+        self.assertEqual(principal.menu_grupos.itemText(0), "Tutoriais")
+        self.assertEqual(principal.menu_grupos.itemText(1), "Operação")
+        self.assertEqual(principal.botoes["tutoriais"].text(), "Cadastrar um produto")
+        principal.botoes["tutoriais"].click()
+        self.assertTrue(principal.tutorial.ativo)
+        self.assertTrue(principal.janelas["produtos"].isVisible())
+        principal.tutorial.encerrar()
+
     def test_todos_os_alvos_existem_nas_telas_reais(self):
         lista = self.janela(JanelaCadastro(self.ctx, "produtos"))
         formulario = self.janela(FormularioCadastro(self.ctx, "produtos"))
