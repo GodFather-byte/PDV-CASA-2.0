@@ -200,6 +200,7 @@ class JanelaPrincipal(QMainWindow):
         self.setCentralWidget(central)
         layout = QHBoxLayout(central)
         lateral = QVBoxLayout()
+        lateral.setSpacing(3)  # Mantém as sete categorias visíveis também com as métricas do Windows.
         self.logo_edicao = QLabel()
         if self.edicao.logotipo:
             imagem = QPixmap(str(edicao.pasta_recursos() / self.edicao.logotipo))

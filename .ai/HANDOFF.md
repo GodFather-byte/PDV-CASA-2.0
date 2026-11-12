@@ -48,6 +48,12 @@ sem merge. Não houve alteração em backend/ nem em src/sync/sincronizador.py.
 5. Repetir e apertar Esc/Pular: formulário permanece operável; não marca
    conclusão. Repetir em 1024x600 nas três edições.
 
+## Correção antes do merge
+
+O CI Windows apontou 7 px de rolagem no menu com a nova categoria Ajuda.
+Reduzido o espaçamento vertical da lateral para manter todas as categorias.
+Incluído job Windows rápido de tutorial e telas mínimas além da matriz completa.
+
 ## Pendências
 
 - Próximos tutoriais, nesta ordem: grupo e subgrupo; operador com senha;
