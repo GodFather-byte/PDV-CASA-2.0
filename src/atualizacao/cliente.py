@@ -153,7 +153,9 @@ def script_aplicar(instalador: Path, programa: Path, backup: Path, exe: str,
     log_instalador = instalador.parent / "instalador.log"
     return "\r\n".join([
         "@echo off", "setlocal DisableDelayedExpansion",
-        f'del /Q "{q(confirmacao)}" 2>nul',
+        f'if exist "{q(confirmacao)}" del /Q "{q(confirmacao)}"',
+        f'if exist "{q(confirmacao)}" goto falha',
+        "cmd /d /c exit 0",
         f'start /wait "" "{q(instalador)}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR="{q(programa)}" /LOG="{q(log_instalador)}"',
         "if errorlevel 1 goto restaurar",
         f'"{q(programa / exe)}" --confirmar-atualizacao "{esperada}" "{q(confirmacao)}"',
