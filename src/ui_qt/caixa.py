@@ -2518,15 +2518,19 @@ class JanelaCaixa(QMainWindow):
         self.ent_pos.setCursorPosition(len(self.ent_pos.text()))
 
     def eventFilter(self, obj, ev):
-        if ev.type() == QEvent.KeyPress and self.com_mesas:
+        if ev.type() == QEvent.KeyPress:
             tecla = ev.key()
-            if obj is getattr(self, "ent_pos", None) and tecla == Qt.Key_Down:
-                self.cartoes.focar(self._chave_atual())
-                return True
+            # Pagamento só no teclado vale com ou sem mesas (adega e restaurante no balcão também):
+            # forma -> Enter -> valor -> Enter -> Enter fecha.
             if obj is getattr(self, "cmb_forma", None) and self._tecla_forma(ev):
                 return True
             if obj is getattr(self, "btn_fechar_venda", None) and tecla in (Qt.Key_Return, Qt.Key_Enter):
                 self.fechar_venda()                                          # no botão de fechar, Enter fecha
+                return True
+        if ev.type() == QEvent.KeyPress and self.com_mesas:
+            tecla = ev.key()
+            if obj is getattr(self, "ent_pos", None) and tecla == Qt.Key_Down:
+                self.cartoes.focar(self._chave_atual())
                 return True
             if obj is getattr(self, "ent_codigo", None) and tecla in (Qt.Key_Left, Qt.Key_Right) \
                     and not self.ent_codigo.text() and not self.modo_comissao and not ev.modifiers():

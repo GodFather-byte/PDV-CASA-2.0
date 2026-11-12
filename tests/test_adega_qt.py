@@ -43,6 +43,35 @@ class TestAdegaQt(BaseCaixaQt):
         self.j.dialogos.escolhas = [self.subgrupo]
         self.lancar(self.j, codigo)
 
+    def test_venda_inteira_so_no_enter_como_na_boate(self):
+        """Balcão sem mesas: código, Enter, Enter (quantidade), Enter vazio, forma pela inicial, Enter, Enter no valor,
+        Enter fecha. Antes o Enter na forma e no botão de fechar só funcionava com mesas (era preciso o mouse)."""
+        self.j.activateWindow()
+        self.aplicacao.processEvents()
+        self.j.ent_codigo.setFocus()
+
+        def enter():
+            self.aplicacao.processEvents()
+            QTest.keyClick(self.aplicacao.focusWidget(), Qt.Key_Return)
+
+        QTest.keyClicks(self.j.ent_codigo, "10")
+        enter()                                           # código -> quantidade
+        enter()                                           # quantidade -> lança
+        self.assertEqual(len(self.itens()), 1)
+        enter()                                           # código vazio -> forma de pagamento
+        self.aplicacao.processEvents()
+        self.assertIs(self.aplicacao.focusWidget(), self.j.cmb_forma)
+        QTest.keyClick(self.j.cmb_forma, Qt.Key_P)        # P = Pix, pela inicial
+        self.assertEqual(self.j.cmb_forma.currentText(), "Pix")
+        enter()                                           # Enter na forma -> valor (já com o total sugerido)
+        self.assertIs(self.aplicacao.focusWidget(), self.j.ent_valor)
+        self.assertEqual(self.j.ent_valor.text(), "8,00")
+        enter()                                           # Enter no valor -> recebe
+        enter()                                           # Enter no botão -> fecha
+        self.assertEqual(self.banco.valor("SELECT status FROM vendas ORDER BY id DESC LIMIT 1"), "fechada")
+        self.assertEqual(self.banco.valor("SELECT t.tipo FROM pagamentos_venda p JOIN tipos_pagamento t "
+                                          "ON t.id = p.tipo_pagamento_id ORDER BY p.id DESC LIMIT 1"), "Pix")
+
     def test_sem_painel_posicao_e_acoes_de_mesa(self):
         self.assertFalse(self.j.com_mesas)
         for widget in (self.j.painel_mesas, self.j.ent_pos, self.j.btn_chamar, self.j.cartoes):
