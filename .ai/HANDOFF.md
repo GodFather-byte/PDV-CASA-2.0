@@ -1,36 +1,55 @@
-# Handoff — Tutoriais no topo do menu (12/11/2026)
+# Handoff — Consulta automática e novo assistente de produtos (12/11/2026)
 
-Pedido do dono: colocar um menu Tutoriais bem no topo, antes de Operação.
-Branch `tutoriais-no-topo`, criada de origin/main (1.14.2).
+## Atualizações: falha identificada
 
-## Pronto
+Sincronizador e serviço interno usam http=None por padrão. O cliente de
+atualização retornava sem consultar nessa condição; a publicação do manifesto
+não bastava para os caixas buscarem o pacote automaticamente.
 
-- `src/ui_qt/app.py`: Tutoriais é a primeira categoria do menu lateral,
-  seguida de Operação. Reutiliza a antiga categoria Ajuda, mantendo sete
-  categorias e o espaçamento compacto que passou no Windows.
-- Botão Cadastrar um produto inicia o guia diretamente, sem seletor repetido.
-  Mantém verificação de acesso, repetição do guia e entrada Primeiros passos.
-- Texto comum às três edições. Próximos guias ainda não implementados:
-  grupo/subgrupo; operador com senha; cliente/caderneta.
-- Versão preparada 1.14.3 e MAPA atualizado.
+Branch corrigir-consulta-automatica: rodada agora carrega requests quando não
+há cliente injetado. Retomada na abertura usa somente_local=True, preservando
+abertura sem rede e sem download síncrono. Versão 1.14.4 preparada.
+66 testes focados passaram (retomada, atualização, Qt e rede de caixas).
+Também havia dependência de sync_quase_tempo_real=N (padrão): serviço interno
+nem rodava a busca. Criado ServicoAtualizacao independente, iniciado pelo App
+no caixa principal com banco em arquivo, a cada 30 s (consulta HTTP respeita
+intervalo de 6 h do cliente). Trava por banco serializa App e --sync para não
+baixar/instalar duas vezes. Novos módulos registrados no autoteste.
+70 testes focados passaram. Homologação nova no CI abre o executável instalado
+com banco/nuvem fictícios e sync_quase_tempo_real=N, exigindo consulta real
+HTTP automática sem fechar o programa, nas três edições.
+A instalação automática agora espera turno fechado e nenhuma venda aberta;
+o operador pode iniciar manualmente com o caixa livre. Downloads podem ocorrer
+em segundo plano durante o trabalho.
+71 testes focados passaram após proteção do turno. Geração, instalação,
+autoteste e consulta HTTP real do executável instalado passaram nas três edições
+(revisão e26204f). Ajustes posteriores preservaram Operação aberta por padrão
+com Tutoriais no topo (46 testes de regressão passaram) e proteção de turno.
+Suíte completa inicial: 2.773 testes, 28 pulados; falhas Tk conhecidas e três
+expectativas de menu, corrigidas pelo padrão Operação e reexecutadas com sucesso.
+Não houve nova suíte completa após esses ajustes. src/sync/sincronizador.py
+não foi alterado. Falta publicação final e reativação com mínimo 1.14.4.
 
-## Validação
+## Produção
 
-31 testes de tutorial, primeiros passos e operação responsiva passaram em
-QT_QPA_PLATFORM=offscreen. Novo caso confere ordem das categorias e abertura
-real do guia pelo botão. diff --check passou. CI Windows e build final ainda
-precisam ser conferidos antes de disponibilizar o instalador.
+Casa Verde recuperada manualmente em 1.14.1; 1.14.2 corrigiu instalação e
+1.14.3 colocou Tutoriais no topo. Render ainda tem pausa global e mínimo
+1.14.2. Não remover proteção para mecanismos antigos sem validar o caminho.
+Uma primeira atualização de clientes antigos poderá precisar ser executada
+pelo operador com link ou acesso remoto, sem visita do fornecedor. Não
+prometer atualização remota de código que ainda não faz a consulta HTTP.
 
-## Produção e pendências preservadas
+## Novo escopo pedido pelo dono (ainda não implementado)
 
-Casa Verde foi recuperada pelo instalador manual 1.14.1. Correção de retomada
-1.14.2 foi integrada pelo PR #81 e publicada. A causa local não foi confirmada
-por logs. Render continua com PDV_ATUALIZACAO_PAUSADA=1 e
-PDV_ATUALIZACAO_CLIENTE_MINIMO=1.14.2; NÃO reativar automaticamente por causa
-desta alteração visual. Não houve alteração em backend, sincronizador, banco,
-licença, assinatura ou variáveis da nuvem neste trabalho.
+Assistente com Gemini (preferência pela cota gratuita do Google AI Studio):
+ler fotos/PDF de notas de fornecedor, preparar cadastro de produtos e custos,
+e procurar fotos na internet para a adega. Para produtos existentes manter
+preço de venda e alertar quando a margem cair. Produtos novos: preço definido
+pelo operador. Conferência antes de gravar. Chave só na nuvem, nunca nos caixas.
 
-A primeira correção de clientes antigos pode exigir instalador completo manual.
-Ainda falta confirmação da instalação da correção na Casa Verde e homologação
-de UAC/antivírus/reboot nas lojas antes de retirar a pausa. Publicação do pacote
-não comprova instalação em cada caixa. Não expor segredos nem apagar dados.
+Já existem importação XML e NotasDonoController; fotos via Open Food Facts,
+inclusive busca em lote com aprovação. Reutilizar essas regras e evitar
+cadastros duplicados/associação automática de embalagem errada. Necessária
+configuração segura da chave Gemini para validar chamada real; não pedir valor
+em chat. Preservar uso offline do caixa. Próximos tutoriais: grupo/subgrupo,
+operador com senha, cliente/caderneta.

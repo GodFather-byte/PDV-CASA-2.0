@@ -57,6 +57,15 @@ def caixa_ocupado(banco) -> str | None:
     return None
 
 
+def motivo_automatico(banco) -> str | None:
+    motivo = caixa_ocupado(banco)
+    if motivo:
+        return motivo
+    if banco.valor("SELECT COUNT(*) FROM turnos WHERE status = 'aberto'", (), 0):
+        return "há turno aberto; a atualização automática aguarda o fechamento"
+    return None
+
+
 def abaixo_da_minima(instalada: str, minima: str) -> bool:
     if not (minima or "").strip():
         return False
@@ -194,14 +203,37 @@ def precisa_consultar(banco) -> bool:
     return not ultima or fmt.minutos_entre(ultima) >= INTERVALO_HORAS * 60 or fmt.minutos_entre(ultima) < 0
 
 
-def rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: str | None = None) -> dict:
+def rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: str | None = None,
+           somente_local: bool = False) -> dict:
+    """Serializa a atualização por banco, inclusive entre o aplicativo e o --sync."""
+    from src.core.instancia import InstanciaUnica
+    if getattr(banco, "remoto", False):
+        return {"acao": "caixa_adicional"}
+    caminho = getattr(banco, "caminho", ":memory:")
+    trava = InstanciaUnica(str(caminho) + ".atualizacao") if caminho != ":memory:" else None
+    if trava is not None and not trava.adquirir():
+        return {"acao": "em_andamento"}
+    try:
+        return _rodada(banco, http, forcar, instalar, publica_hex, somente_local)
+    finally:
+        if trava is not None:
+            trava.liberar()
+
+
+def _rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: str | None = None,
+           somente_local: bool = False) -> dict:
     """Consulta, baixa e, se o caixa estiver livre, dispara a instalação. Devolve o que fez."""
     if not banco.cfg("api_url").strip():
         return {"acao": "sem_nuvem"}
     tentativa = banco.cfg(CHAVE_TENTATIVA)
     if tentativa and not forcar:
         return {"acao": "requer_conferencia", "versao": tentativa}
-    if forcar or precisa_consultar(banco):
+    if not somente_local and (forcar or precisa_consultar(banco)):
+        if http is None:
+            try:
+                import requests as http
+            except ImportError:
+                return {"acao": "sem_cliente_http"}
         dados = consultar(banco.cfg("api_url"), http)
         banco.cfg_set(CHAVE_CONSULTA, fmt.agora())
         if dados is None or not pacote_valido(dados, publica_hex):
@@ -226,7 +258,7 @@ def rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: s
     forcada = bool(atual.get("obrigatoria")) or abaixo_da_minima(VERSAO, atual.get("minima") or "")
     if not forcada and adiada(banco, atual["versao"]):
         return {"acao": "adiada", "versao": atual["versao"]}
-    motivo = caixa_ocupado(banco)
+    motivo = caixa_ocupado(banco) if forcar else motivo_automatico(banco)
     if motivo:
         return {"acao": "esperar", "versao": atual["versao"], "motivo": motivo}
     if instalar is not None:
@@ -248,7 +280,7 @@ def aviso(banco) -> dict | None:
         return None
     forcada = bool(atual.get("obrigatoria")) or abaixo_da_minima(VERSAO, atual.get("minima") or "")
     return {"ultima": atual["versao"], "notas": atual.get("notas") or "", "obrigatoria": forcada,
-            "adiavel": not forcada, "motivo": caixa_ocupado(banco)}
+            "adiavel": not forcada, "motivo": motivo_automatico(banco)}
 
 
 def disparar_instalacao(arquivo: Path) -> Path:
@@ -286,7 +318,7 @@ def ao_iniciar() -> None:
         if banco.remoto:                 # caixa adicional: o pacote baixado está no computador do caixa principal
             return
         if estado(banco).get("arquivo"):
-            rodada(banco, http=None, instalar=disparar_instalacao)
+            rodada(banco, instalar=disparar_instalacao, somente_local=True)
     except Exception:
         log.exception("Não consegui retomar a atualização na abertura.")
     finally:

@@ -74,6 +74,8 @@ jobs:
           if (-not $p.WaitForExit(240000)) { $p.Kill(); throw "Autoteste instalado não terminou" }
           if (Test-Path $relatorio) { Get-Content $relatorio }
           if ($p.ExitCode -ne 0) { throw "Autoteste do instalado falhou" }
+      - name: Consulta automática real do programa instalado
+        run: python -m tools.homologar_consulta_atualizacao --programa "$env:RUNNER_TEMP\WillRestaurante-instalado\WillRestaurante.exe"
       - name: Pacote portátil
         run: Compress-Archive -Path "dist\WillRestaurante\*" -DestinationPath "instalador\saida\WillRestaurante-Portatil.zip"
       - uses: actions/upload-artifact@v4
