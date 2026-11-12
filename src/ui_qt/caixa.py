@@ -2700,6 +2700,21 @@ class JanelaCaixa(QMainWindow):
                 raise ErroNegocio(f"{nome} não dá troco: o valor não pode passar do que falta "
                                   f"({fmt.fmt_brl(max(total - pago_antes, 0))}).") from None
 
+    @property
+    def pix(self):
+        from src.controllers.pix_controller import PixController
+        return PixController(self.ctx.banco, self.ctx.operador_id)
+
+    def _cobrar_pix(self, venda_id: int, cent: int) -> int | None:
+        """Pix integrado ligado: abre o QR Code e espera o banco. Devolve a cobrança aprovada ou None."""
+        from src.ui_qt.pix import cobrar
+        pix = self.pix
+        try:
+            return cobrar(pix, venda_id, cent, self, imprimir=pix.imprimir_qr)
+        except ErroNegocio as erro:
+            self.dialogos.aviso("Pix", str(erro))
+            return None
+
     def receber(self) -> None:
         if not self._pronto() or self._ocupado or self._fechando_venda:
             return
@@ -2729,11 +2744,23 @@ class JanelaCaixa(QMainWindow):
             ok, _ = self._executar(self.ctx.caixa.adicionar_pagamento, v["id"], int(forma), cent)
             self.recarregar()
             return
+        cobranca_pix = None
+        if self.pix.usar_no_recebimento(int(forma)):
+            cobranca_pix = self._cobrar_pix(v["id"], cent)
+            if cobranca_pix is None:
+                self.recarregar()
+                self.cmb_forma.setFocus()
+                return
         ok, r = self._executar(self._receber, v["id"], int(forma), cent)
         if not ok:
+            if cobranca_pix is not None:
+                self.dialogos.erro("Pix pago", f"O Pix de {fmt.fmt_brl(cent)} foi confirmado pelo banco, mas não entrou na "
+                                               "venda. Lance o pagamento em Pix com esse valor (o dinheiro já está na conta).")
             self.recarregar()
             return
         pid, liq = r
+        if cobranca_pix is not None:
+            self._executar(self.pix.vincular, cobranca_pix, pid)
         if liq.get("troco", 0) > LIMITE_TROCO_CENT and not self.dialogos.confirmar(
                 "Troco alto", f"O troco será de {fmt.fmt_brl(liq['troco'])} (recebido: {fmt.fmt_brl(cent)}).\n"
                               "O valor recebido está certo?", padrao_sim=False):

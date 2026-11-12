@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 52
+VERSAO_ESQUEMA = 53
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -186,6 +186,24 @@ TABELAS = [
         impressa INTEGER NOT NULL DEFAULT 0
     )""",
     "CREATE INDEX IF NOT EXISTS ix_nfce_situacao ON nfce_notas(situacao)",
+    # Pix integrado (Mercado Pago): cada QR Code gerado no caixa. O pagamento só entra na venda depois que o banco
+    # confirma; `pagamento_id` liga a cobrança ao pagamento lançado. `referencia` é a chave de idempotência enviada.
+    """CREATE TABLE IF NOT EXISTS pix_cobrancas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        venda_id INTEGER NOT NULL REFERENCES vendas(id),
+        valor_cent INTEGER NOT NULL CHECK (valor_cent > 0),
+        referencia TEXT NOT NULL UNIQUE,
+        provedor_id TEXT,
+        situacao TEXT NOT NULL DEFAULT 'pendente'
+            CHECK (situacao IN ('pendente','aprovado','cancelado','expirado','erro')),
+        copia_cola TEXT,
+        mensagem TEXT NOT NULL DEFAULT '',
+        pagamento_id INTEGER REFERENCES pagamentos_venda(id) ON DELETE SET NULL,
+        operador_id INTEGER,
+        criada_em TEXT NOT NULL,
+        aprovada_em TEXT
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_pix_venda ON pix_cobrancas(venda_id)",
     # Comandos da retaguarda na nuvem já aplicados neste caixa (src/controllers/retaguarda_controller.py). `id` é o do
     # comando na nuvem: garante que cada um é aplicado uma vez. `aviso_ok = 0` é resultado que a nuvem ainda não confirmou.
     """CREATE TABLE IF NOT EXISTS retaguarda_comandos (
@@ -1138,6 +1156,7 @@ AUDITORIA = [
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
     # v52: NFC-e (Will Fiscal). Dados fiscais do produto e da forma de pagamento; a tabela nfce_notas nasce em TABELAS.
+    53: [],  # tabela aditiva pix_cobrancas (Pix integrado)
     52: [
         ("coluna", "produtos", "cfop", "TEXT"),
         ("coluna", "produtos", "cest", "TEXT"),

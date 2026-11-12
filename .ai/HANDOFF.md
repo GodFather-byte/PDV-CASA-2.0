@@ -1,36 +1,31 @@
-# Handoff — NFC-e de São Paulo (Will Fiscal, via Focus NFe) (12/11/2026)
+# Handoff — Pix integrado no caixa (12/11/2026)
 
-Branch `will-fiscal`, criada da main depois do #85 (atualização sem UAC). Pedido do dono: NFC-e para SP, primeiro
-cliente é um empório. Provedor escolhido: Focus NFe, plano Varejo (~R$ 63/mês, 500 notas). Regime do cliente ainda
-não sabido: padrões do Simples, tudo configurável. Guia: `docs/NFCE.md`.
+Branch `pix-integrado`, criada da main depois do #86 (NFC-e) e do #87 (Enter no pagamento sem mesas).
+Pedido do dono: Pix integrado, desligado por padrão; liga quando o cliente pedir. Guia: `docs/PIX.md`.
 
 ## O que foi feito
 
-- Esquema v52: tabela `nfce_notas`; `produtos` ganha cfop, cest, origem_mercadoria, ibscbs_cst, ibscbs_class;
-  `tipos_pagamento` ganha forma_fiscal. Configs `nfce_*` em Integrações (tokens como segredo).
-- `src/fiscal/nfce.py` monta a nota (rateio de desconto e taxa, pagamento líquido por tPag, homologação no item 1).
-- `src/fiscal/focus.py` cliente HTTP (Basic com o token); `src/fiscal/danfe.py` cupom ESC/POS com QR Code.
-- `src/controllers/fiscal_controller.py` fila, reenvio com espera, cancelamento (15–255 letras, 30 min), cancelamento
-  automático de venda cancelada, impressão. `src/fiscal/servico.py` roda em segundo plano (iniciado em `ui_qt/app.py`).
-- NCM no cadastro de produto: `src/fiscal/ncm.py` (limpa, valida 8 números, sugere pelo nome). Com a NFC-e ligada o
-  campo vai para a aba Geral e é obrigatório no formulário para produto vendido (outros caminhos, como importação e
-  quartos, não exigem; a nota só fica com erro até corrigir). Testes `tests/test_ncm.py`.
-- Tela `src/ui_qt/notas_fiscais.py`, menu Gestão > Notas fiscais (NFC-e), permissão `fiscal_nfce` (nível 3).
-- Testes: `tests/test_nfce.py` (22) e `test_qt_app` (menu e ligar).
+- Esquema v53: tabela `pix_cobrancas`. Configs `pix_integrado` (N), `pix_mp_token` (segredo), `pix_email_pagador`,
+  `pix_expira_min` em Integrações.
+- `src/pagamentos/mercadopago_pix.py`: cria, consulta e cancela pelo `/v1/payments` do Mercado Pago (Bearer, chave de
+  idempotência).
+- `PixController`: só forma Pix (fiscal 17) com a integração ligada; Pix não dá troco; cancelamento confere se já foi
+  pago; vincula a cobrança ao pagamento; imprime o QR na fila do caixa.
+- `src/ui_qt/pix.py`: janela do QR com consulta em thread a cada 2,5 s. `receber` no caixa só grava o pagamento
+  depois de "aprovado".
 
-## Não testado (precisa da conta Focus em homologação)
+## Não testado
 
-- Envio real. Campos sem confirmação: troco, grupo do cartão, GTIN (ver "A conferir" em `docs/NFCE.md`).
-- Impressão do QR Code na impressora real do cliente (`GS ( k`, modelo 2).
+- Mercado Pago de verdade (precisa do Access Token de uma loja). Teste: Pix de R$ 0,01.
+- Impressão do QR na impressora real.
 
-## Próximos passos
+## Decidido com o dono
 
-1. Dono cria a conta Focus, cadastra a empresa e sobe certificado + CSC no painel deles.
-2. Token de homologação em Configurações > Integrações; ligar em Homologação; vendas de teste.
-3. Ajustar o que a SEFAZ rejeitar. Depois: contingência offline.
+- NFC-e em contingência quando a internet da loja cai: fica para depois do teste do empório em homologação.
+  A Focus já cobre a queda da SEFAZ. A contingência completa exige assinar a nota no caixa, com o certificado no PC.
 
 ## Pendências
 
-- Antigravity: a nuvem ainda não recebe `nfce_notas` (só local). Se o dono quiser ver notas na retaguarda, entra no lote.
-- Atualização sem UAC (#85): roteiro de teste em PC real ainda pendente; Render segue com PDV_ATUALIZACAO_PAUSADA=1.
-- Tutoriais seguintes (grupo e subgrupo, operador com senha, cliente) continuam pendentes.
+- Empório: conta Focus, certificado e CSC no painel da Focus, token de homologação (ver `docs/NFCE.md`).
+- Atualização sem UAC (#85): teste em PC real ainda pendente; Render segue com PDV_ATUALIZACAO_PAUSADA=1.
+- Antigravity: a nuvem não recebe `nfce_notas` nem `pix_cobrancas` (só locais).
