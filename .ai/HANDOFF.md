@@ -1,41 +1,58 @@
-# Handoff — Rede de lojas (11/11/2026)
+# Handoff — Tutorial guiado de produto (12/11/2026)
 
-Uma rede (`grupos`) tem um login no painel e pode ter uma mensalidade só. Cada loja
-guarda o próprio caixa. `lojas.grupo_id` vazio = loja avulsa, com a cobrança de
-antes. Guia: `docs/REDE_LOJAS.md`.
+Branch `tutorial-guiado`, criada de `origin/main`. Pedido do dono: abrir PR e parar,
+sem merge. Não houve alteração em backend/ nem em src/sync/sincronizador.py.
 
-Link: `/painel/?grupo=CHAVE` (a chave também aceita o id numérico). A senha criada
-pelo administrador nasce temporária (`deve_trocar_senha`): o dono troca em
-`POST /v1/painel/grupo/senha` antes de ver os números.
+## Pronto
 
-API do administrador: `POST /v1/admin/grupos`, `.../lojas`, `.../senha`,
-`.../assinatura`. A central tem a aba Redes (`/v1/fornecedor/grupos`).
+- Roteiro de oito passos sem Qt em `src/controllers/tutoriais.py`: lista, Novo,
+  nome, preço, código de barras opcional, estoque inicial opcional, conferência
+  do código/subgrupo/unidade e Salvar. Não cria exemplo fictício.
+- Conclusão em config por operador; refazer sempre disponível. Pular/Esc não
+  concluem. Texto comum às três edições, sem migração.
+- `src/ui_qt/tutorial.py`: sombra transparente a cliques com recorte e balão
+  não modal. Alvos por objectName; condições liberam Próximo; erro de alvo
+  encerra com aviso. Reposiciona durante o uso, seleciona aba e rola ao campo.
+- Primeiros passos > Produtos > Me mostre como; Ajuda > Tutoriais para refazer.
+- Integração pontual com cadastro existente; estoque opcional usa o controller
+  de estoque com validação/permissão de gerente. Produto, lançamento e marca
+  são transacionais. Sem estoque informado, preserva o cadastro normal.
+- Voltar dentro do formulário não desfaz dados. Ao entrar em Novo não volta à
+  lista pelo balão, para não descartar o formulário; Pular continua disponível.
+- Novos módulos incluídos no autoteste/build.
 
-Pagamento aprovado da rede grava `licenca_ate` em todas as lojas do grupo.
-`gerar_recorrencias` não emite a cobrança individual de loja que está numa rede.
+## Validação
 
-## Central da rede no painel (branch `rede-de-lojas`, 11/11/2026)
+- `QT_QPA_PLATFORM=offscreen python -m unittest tests.test_tutorial_guiado`:
+  10 testes passaram, incluindo alvos nas três edições, gravação real, rollback,
+  condições, operador, Esc/Pular e geometria dos balões em 1024x600.
+- Tutorial + primeiros passos + autoteste: 19 testes passaram.
+- Suíte completa: 2.751 testes em 428 s, 24 pulados; duas falhas em
+  test_licenciador e um erro em test_central_ui por falta de display Tk
+  (sem $DISPLAY). Nenhuma outra falha no relatório final. A primeira execução
+  revelou dependências de backend ausentes; instaladas antes da execução final.
+- Não houve homologação visual no Windows, com leitor físico, fonte ampliada,
+  nem em monitor físico 1024x600. Testes de geometria são Qt offscreen.
 
-Pedido do dono (rede EA Superações): ao entrar numa loja não dava para voltar à lista de lojas.
-Causa: a página guardava a sessão da rede em `sessionStorage` e deixava `willpdv.painel.grupo` gravado com o
-token da loja; ao recarregar ou reabrir o app, abria a tela da rede com o token da loja (404) e o botão
-"Rede" sumia.
+## Teste manual
 
-- `backend/painel_web/app.js`: sessão da rede em `willpdv.rede.*` (localStorage, fora do prefixo que a troca de
-  loja apaga); `voltarParaRede()` encerra a sessão da loja e reabre a central; sessão de loja vencida dentro
-  da rede volta para a central; "Sair" encerra as duas. Migra quem estava logado na versão anterior.
-- `index.html`/`estilo.css`: faixa fixa "‹ Todas as lojas" no topo da loja; tela da rede com cartão por loja
-  (parte na rede, vendas, lucro, situação do envio) e botão Atualizar. `sw.js` subiu de versão.
-- `backend/grupos.py` (`consolidado`): cada loja ganhou `vendas`, `atualizado_em` e `atraso_min`.
-- `tests/test_rede_painel.py` (5 casos). Conferido no navegador: abrir loja, recarregar, trocar de aba,
-  voltar, reabrir o app, sair. Não testado com a rede de produção.
-
-A retaguarda na nuvem já está na main (`docs/RETAGUARDA.md`). Aplicar a mesma
-alteração em várias lojas de uma vez continua pendente.
+1. Entrar com operador autorizado a cadastrar produtos. Em Primeiros passos,
+   clicar Me mostre como no cartão Produtos; escolher Cadastrar um produto.
+2. Avançar, clicar Novo, preencher nome e preço; conferir bloqueio de Próximo
+   com nome vazio/preço inválido. Usar Voltar sem perder os valores.
+3. Informar ou deixar vazio o código de barras. Estoque opcional: vazio não
+   lança; quantidade informada requer permissão de gerente. Conferir código
+   interno, subgrupo e unidade obrigatórios. Clicar Salvar.
+4. Conferir produto e saldo; reabrir Ajuda > Tutoriais, verificar concluído e
+   refazer. Outro operador mantém sua própria marca.
+5. Repetir e apertar Esc/Pular: formulário permanece operável; não marca
+   conclusão. Repetir em 1024x600 nas três edições.
 
 ## Pendências
 
-- Antigravity: revisar `backend/grupos.py`, a cobrança da rede e o painel.
-- Homologação do Will Restaurante e impressão em térmica de verdade.
-- Checkout do site de vendas ainda é só WhatsApp.
-- Atualização automática segue sem os segredos `PDV_ATUALIZACAO_*`.
+- Próximos tutoriais, nesta ordem: grupo e subgrupo; operador com senha;
+  cliente (caderneta).
+- Homologação visual/física descrita acima e revisão do PR; não fazer merge.
+- Pendências anteriores continuam fora deste escopo: homologar térmica do
+  Will Restaurante; checkout do site por WhatsApp; segredos PDV_ATUALIZACAO_*;
+  revisão da rede de lojas pelo dono da área e aplicação em várias lojas.

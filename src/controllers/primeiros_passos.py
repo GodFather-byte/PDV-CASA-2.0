@@ -78,7 +78,7 @@ class PrimeirosPassos:
         quantidade = self.banco.valor("SELECT COUNT(*) FROM produtos WHERE ativo = 1") or 0
         return self._passo("produtos", "Produtos", quantidade > 0,
                            f"{quantidade} produto(s) cadastrado(s)." if quantidade
-                           else "Importe a planilha da loja ou cadastre os primeiros produtos.")
+                           else "Importe a planilha ou use Me mostre como para cadastrar um produto real.")
 
     def _nuvem(self) -> dict:
         ligada = bool(self.banco.cfg("api_url").strip() and self.banco.cfg("api_token").strip())

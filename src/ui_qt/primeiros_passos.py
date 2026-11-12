@@ -162,6 +162,14 @@ class JanelaPrimeirosPassos(QDialog):
             botao.clicked.connect(lambda _=False, chave=passo["chave"]: self.abrir(chave))
             linha.addWidget(botao, 0, Qt.AlignmentFlag.AlignVCenter)
             self.botoes[passo["chave"]] = botao
+        if passo["chave"] == "produtos":
+            mostrar = QPushButton("Me mostre como")
+            mostrar.setEnabled(self.principal is not None and self.ctx.pode("cad_produtos"))
+            def iniciar():
+                self.close()
+                self.principal.abrir_tutoriais()
+            mostrar.clicked.connect(iniciar)
+            linha.addWidget(mostrar)
         return cartao
 
     def abrir(self, chave):
