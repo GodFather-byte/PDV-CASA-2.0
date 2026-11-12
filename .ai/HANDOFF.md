@@ -1,42 +1,49 @@
-# Handoff — Incidente Casa Verde e contenção (12/11/2026)
+# Handoff — Retomada da atualização e Casa Verde (12/11/2026)
 
-Após publicar 1.14.1 nas três edições, o dono relatou que o caixa da Casa
-Verde abre e fecha rapidamente. Causa local ainda NÃO confirmada; sem acesso
-ao Windows ou log da loja. Pedido de recuperação em andamento.
+## Incidente e produção
 
-## Contenção
+Casa Verde informou abre/fecha rapidamente após atualização; voltou a abrir
+normalmente após executar manualmente o instalador 1.14.1 do GitHub. A causa
+local não foi confirmada por logs. Não atribuir o incidente definitivamente
+a uma hipótese de código.
 
-- Variável Render PDV_ATUALIZACAO_PAUSADA=1 adicionada por merge, preservando
-  as demais variáveis do serviço srv-dbf5untg1s2s73ejihdg, workspace confirmado
-  tea-d3ekasbuibrs73caqdog.
-- Esta alteração faz GET /v1/atualizacao/ultima responder indisponível e sem
-  pacote quando pausada. Não exclui manifestos, vendas ou licenças.
-- Sete testes de atualização automática passaram localmente, incluindo pausa
-  nas três edições. Falta confirmar pausa na API após deploy.
-- A pausa na nuvem não desfaz downloads já guardados nos computadores.
+PR #80 integrado e Render PDV_ATUALIZACAO_PAUSADA=1: API conferida com cache
+busting, retorna pausada=true e sem pacote nas três edições. A pausa não
+reverte downloads já locais. Não alterar vendas, licença ou apagar banco.
 
-## Recuperação orientada
+## Correção neste branch (`corrigir-retomada-atualizacao`)
 
-Dono orientado a executar o instalador completo WillPDV 1.14.1 pelo navegador,
-na mesma pasta do programa, sem desinstalar/apagar dados. Aguardar resultado.
-Se persistir, coletar logs/pdv.log em %LOCALAPPDATA%/WILL-PDV e a mensagem
-ou diagnóstico do executável. Não afirmar que o caixa foi recuperado.
+- Instaladores encerram o PDV sem /T, preservando cmd/instalador descendentes.
+- Script verifica saída do instalador, usa a pasta de instalação original,
+  registra log e exige comprovante da versão nova (retorno zero de executável
+  antigo não basta). Em falha tenta restaurar a cópia e registra resultado.
+- O pendente é consumido antes de disparar; uma tentativa não confirmada
+  exige conferência, sem repetir instalação a cada abertura. Backup preservado
+  por versão; arquivo ausente/versão inválida não disparam instalador.
+- Confirmação verifica versão esperada e dependências Qt; comprovante novo só
+  nasce depois de conferir. Botão Instalar passa o callback real (antes podia
+  anunciar instalação sem executá-la).
+- PDV_ATUALIZACAO_CLIENTE_MINIMO permite impedir oferta automática a clientes
+  com o mecanismo antigo. Configurar 1.14.2 antes de retirar a pausa: a primeira
+  correção pode exigir instalador manual, que o cliente pode executar remotamente
+  orientado, sem visita. Não prometer que a versão antiga conserta a si própria.
+- Versão preparada 1.14.2. Não reativar oferta sem homologar o fluxo completo.
 
-## Falhas encontradas para correção do atualizador
+## Validação
 
-- aplicar.cmd não confere o código de saída do instalador e confirma sem
-  passar a versão esperada: uma versão antiga pode ser confundida com nova.
-- PrepareToInstall usa taskkill /F /T, podendo encerrar descendentes do PDV,
-  incluindo o cmd/instalador disparado pelo próprio processo. Hipótese, não
-  prova da causa da Casa Verde.
-- Retomada no início pode repetir tentativa pendente. Evitar novas instalações
-  automáticas antes de corrigir e homologar no Windows com processo real.
-- Não retirar PDV_ATUALIZACAO_PAUSADA até validação da correção e recuperação.
+- 68 testes focados passaram em offscreen; quatro casos exclusivos Windows
+  pulados localmente. Incluem regras de tentativa, confirmação e versão mínima.
+- Casos Windows executam cmd real com executáveis controlados compilados em C#:
+  sucesso; instalador falha; executável antigo retorna zero; instalador encerra
+  o pai sem matar cmd/filhos. O comando taskkill vem do .iss real.
+- actionlint e diff --check; resultado de CI Windows/build ainda a conferir.
+- Suíte completa iniciada nesta revisão, aguarda relatório. Tk sem display é
+  limitação conhecida. Não confundir processos controlados com UAC/antivírus/
+  reboot homologados em todas as lojas.
 
-## Estado anterior preservado
+## Próximos passos
 
-PRs #78/#79 integrados, versão 1.14.1 publicada; assinaturas e hashes dos três
-instaladores verificados. 88 testes focados de integração passaram; jobs
-Windows específicos passaram. Chave de atualização original, URL e token
-foram configurados pelo dono no GitHub. Não expor valores.
+Conferir CI e instalar/autotestar os executáveis no Windows antes de publicação.
+Manter a oferta automática pausada até validar; preservar chave pública e privada
+existentes. Não expor segredos. Estado de Casa Verde: recuperado, segundo o dono.
 Próximos tutoriais: grupo/subgrupo, operador com senha, cliente/caderneta.

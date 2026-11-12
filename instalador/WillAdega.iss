@@ -103,6 +103,6 @@ begin
       Result := 'Feche o {#Nome} (ou finalize o {#Exe} no Gerenciador de Tarefas) e rode o instalador de novo.';
       Exit;
     end;
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM {#Exe}', '', SW_HIDE, ewWaitUntilTerminated, Codigo);
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#Exe}', '', SW_HIDE, ewWaitUntilTerminated, Codigo);
   Sleep(1500);
 end;

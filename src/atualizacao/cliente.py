@@ -25,6 +25,7 @@ CHAVE_CONSULTA = "atualizacao_pacote_em"
 CHAVE_ESTADO = "atualizacao_pacote"
 CHAVE_ADIADA = "atualizacao_adiada"
 CHAVE_ADIADA_ATE = "atualizacao_adiada_ate"
+CHAVE_TENTATIVA = "atualizacao_tentativa"
 
 
 def url_ultima(api_url: str) -> str:
@@ -142,21 +143,35 @@ def copiar_instalacao(origem: Path, backup: Path) -> None:
     shutil.copytree(origem, backup)
 
 
-def script_aplicar(instalador: Path, programa: Path, backup: Path, exe: str) -> str:
-    """Script que o Windows roda depois que este processo sai: instala, confirma e restaura se falhar."""
+def script_aplicar(instalador: Path, programa: Path, backup: Path, exe: str,
+                   esperada: str = VERSAO) -> str:
+    """Confere saída e confirmação nova antes de reiniciar; não aceita confirmação de executável antigo."""
     def q(caminho: Path) -> str:
-        return str(caminho).replace('"', "")
+        return str(caminho).replace('"', "").replace("%", "%%")
+    confirmacao = instalador.parent / "confirmacao.txt"
+    resultado = instalador.parent / "resultado.txt"
+    log_instalador = instalador.parent / "instalador.log"
     return "\r\n".join([
-        "@echo off",
-        f'start /wait "" "{q(instalador)}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
-        f'"{q(programa / exe)}" --confirmar-atualizacao',
-        "if errorlevel 1 (",
-        f'  xcopy /E /Y /I "{q(backup)}\\*" "{q(programa)}\\"',
-        f'  start "" "{q(programa / exe)}"',
-        ") else (",
-        f'  start "" "{q(programa / exe)}"',
-        f'  start "" "{q(programa / exe)}" --sync',
-        ")",
+        "@echo off", "setlocal DisableDelayedExpansion",
+        f'del /Q "{q(confirmacao)}" 2>nul',
+        f'start /wait "" "{q(instalador)}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR="{q(programa)}" /LOG="{q(log_instalador)}"',
+        "if errorlevel 1 goto restaurar",
+        f'"{q(programa / exe)}" --confirmar-atualizacao "{esperada}" "{q(confirmacao)}"',
+        "if errorlevel 1 goto restaurar",
+        f'if not exist "{q(confirmacao)}" goto restaurar',
+        f'findstr /X /L /C:"{esperada}" "{q(confirmacao)}" >nul',
+        "if errorlevel 1 goto restaurar",
+        f'echo instalada>"{q(resultado)}"',
+        f'start "" "{q(programa / exe)}"',
+        f'start "" "{q(programa / exe)}" --sync',
+        "exit /b 0", ":restaurar",
+        f'xcopy /E /Y /I "{q(backup)}\\*" "{q(programa)}\\"',
+        "if errorlevel 1 goto falha",
+        f'echo restaurada>"{q(resultado)}"',
+        f'start "" "{q(programa / exe)}"',
+        "exit /b 1", ":falha",
+        f'echo falha_na_restauracao>"{q(resultado)}"',
+        "exit /b 2",
     ]) + "\r\n"
 
 
@@ -181,6 +196,9 @@ def rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: s
     """Consulta, baixa e, se o caixa estiver livre, dispara a instalação. Devolve o que fez."""
     if not banco.cfg("api_url").strip():
         return {"acao": "sem_nuvem"}
+    tentativa = banco.cfg(CHAVE_TENTATIVA)
+    if tentativa and not forcar:
+        return {"acao": "requer_conferencia", "versao": tentativa}
     if forcar or precisa_consultar(banco):
         dados = consultar(banco.cfg("api_url"), http)
         banco.cfg_set(CHAVE_CONSULTA, fmt.agora())
@@ -210,7 +228,15 @@ def rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: s
     if motivo:
         return {"acao": "esperar", "versao": atual["versao"], "motivo": motivo}
     if instalar is not None:
-        instalar(Path(atual["arquivo"]))
+        # Consome o pendente antes de fechar o processo. Uma cópia restaurada não pode repetir a instalação na abertura.
+        with banco.transacao():
+            banco.cfg_set(CHAVE_TENTATIVA, atual["versao"])
+            _gravar_estado(banco, {})
+        try:
+            instalar(Path(atual["arquivo"]))
+        except Exception:
+            _gravar_estado(banco, atual)
+            raise
     return {"acao": "instalar", "versao": atual["versao"], "arquivo": atual["arquivo"]}
 
 
@@ -226,16 +252,22 @@ def aviso(banco) -> dict | None:
 def disparar_instalacao(arquivo: Path) -> Path:
     """Grava o script e, no programa instalado (Windows), deixa ele rodar depois que este processo sai."""
     import sys
+    if not arquivo.is_file():
+        raise RuntimeError("Instalador não encontrado. Baixe o pacote novamente.")
+    esperada = arquivo.stem.rsplit("-", 1)[-1]
+    if not valida(esperada):
+        raise RuntimeError("Nome do instalador não identifica a versão esperada.")
     congelado = bool(getattr(sys, "frozen", False))
     programa = Path(sys.executable).resolve().parent if congelado else Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "WillPDV"
     exe = Path(sys.executable).name if congelado else "WillPDV.exe"
-    backup = arquivo.parent / "anterior"
-    if congelado and programa.is_dir():
-        copiar_instalacao(programa, backup)
-    else:
-        backup.mkdir(parents=True, exist_ok=True)
+    backup = arquivo.parent / ("anterior-" + esperada)
+    if not backup.exists():
+        if congelado and programa.is_dir():
+            copiar_instalacao(programa, backup)
+        else:
+            backup.mkdir(parents=True, exist_ok=True)
     script = arquivo.parent / "aplicar.cmd"
-    script.write_text(script_aplicar(arquivo, programa, backup, exe), encoding="utf-8")
+    script.write_text(script_aplicar(arquivo, programa, backup, exe, esperada), encoding="utf-8")
     if congelado and os.name == "nt":
         subprocess.Popen(["cmd", "/c", str(script)], creationflags=getattr(subprocess, "DETACHED_PROCESS", 0), close_fds=True)
     return script
@@ -259,17 +291,24 @@ def ao_iniciar() -> None:
         banco.fechar()
 
 
-def confirmar_atualizacao(esperada: str | None = None) -> int:
+def confirmar_atualizacao(esperada: str | None = None, comprovante: Path | None = None) -> int:
     """A versão nova confirma que subiu. Código 1 pede ao script para restaurar a cópia anterior."""
     from src.database.conexao import BancoDados
+    if esperada and esperada != VERSAO:
+        return 1
+    banco = None
     try:
+        from PySide6 import QtWidgets  # Não confirma uma instalação sem as dependências da interface.
         banco = BancoDados()
         banco.valor("SELECT 1")
-        if esperada and esperada != VERSAO:
-            return 1
         banco.cfg_set("atualizacao_confirmada", VERSAO)
-        banco.fechar()
+        banco.cfg_set(CHAVE_TENTATIVA, "")
+        if comprovante is not None:
+            comprovante.write_text(VERSAO + "\n", encoding="utf-8")
     except Exception:
         log.exception("A versão nova não confirmou a subida.")
         return 1
+    finally:
+        if banco is not None:
+            banco.fechar()
     return 0

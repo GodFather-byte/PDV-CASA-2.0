@@ -120,6 +120,10 @@ def instalar_no_app(app: FastAPI, autenticar) -> None:
             raise HTTPException(status_code=422, detail="Edição ou canal inválido.")
         if os.environ.get("PDV_ATUALIZACAO_PAUSADA", "").strip().lower() in ("1", "s", "true", "sim"):
             return {"disponivel": False, "pacote": None, "pausada": True}
+        cliente_minimo = os.environ.get("PDV_ATUALIZACAO_CLIENTE_MINIMO", "").strip()
+        if cliente_minimo and (not valida(cliente_minimo) or not valida(versao)
+                               or chave(versao) < chave(cliente_minimo)):
+            return {"disponivel": False, "pacote": None, "instalacao_manual_necessaria": True}
         linha = ultima(db, edicao, canal)
         if linha is None:
             return {"disponivel": False, "pacote": None}

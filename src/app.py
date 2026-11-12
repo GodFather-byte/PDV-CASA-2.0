@@ -45,7 +45,11 @@ if __name__ == "__main__":
         sys.exit(executar(resto[0] if resto else None, rede="--rede" in sys.argv[1:]))
     if "--confirmar-atualizacao" in sys.argv[1:]:
         from src.atualizacao.cliente import confirmar_atualizacao
-        sys.exit(confirmar_atualizacao())
+        from pathlib import Path
+        indice = sys.argv.index("--confirmar-atualizacao")
+        argumentos = sys.argv[indice + 1:]
+        sys.exit(confirmar_atualizacao(argumentos[0] if argumentos else None,
+                                      Path(argumentos[1]) if len(argumentos) > 1 else None))
     if "--sync" in sys.argv[1:]:
         from src.sync.sincronizador import main as sincronizar
         sincronizar()

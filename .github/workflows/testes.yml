@@ -39,7 +39,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install --require-hashes -r requirements.txt -r backend/requirements.txt -r requirements-test.txt
-      - run: python -m unittest tests.test_publicar_atualizacao tests.test_atualizacao_automatica tests.test_qt_atualizacoes tests.test_empacotamento tests.test_modernizacao_integracao
+      - run: python -m unittest tests.test_retomada_atualizacao tests.test_atualizacao_cmd_windows tests.test_publicar_atualizacao tests.test_atualizacao_automatica tests.test_qt_atualizacoes tests.test_empacotamento tests.test_modernizacao_integracao
 
   cobrancas-postgres:
     name: Mercado Pago / PostgreSQL 16

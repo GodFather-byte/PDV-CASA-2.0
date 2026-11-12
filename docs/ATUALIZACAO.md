@@ -92,3 +92,24 @@ comprova que a loja instalou: confira a versão efetivamente informada por cada 
 
 Se o repositório voltar a ser privado, este fluxo falha antes de anunciar um download inacessível.
 Será necessário configurar hospedagem HTTPS pública novamente. Não remover a verificação de assinatura.
+
+
+## Contenção e recuperação de instalação
+
+`PDV_ATUALIZACAO_PAUSADA=1` no Render impede a rota de oferecer novos pacotes.
+Isso não desfaz pacotes já baixados nas máquinas. Em 12/11/2026 a Casa Verde
+voltou a funcionar após executar manualmente o instalador 1.14.1; a causa local
+não foi comprovada por logs. A oferta ficou pausada durante a correção.
+
+A retomada corrigida consome o pendente antes de disparar e registra a tentativa;
+uma tentativa não confirmada exige conferência em vez de repetir na abertura.
+O script confere o código do instalador e um comprovante da versão nova, usa a
+pasta original explicitamente e grava instalador.log/resultado.txt junto ao pacote.
+A cópia anterior é preservada por versão. O instalador encerra processos do PDV
+sem `/T`, para não matar os próprios processos filhos de instalação/recuperação.
+
+O teste Windows executa o cmd real com instalador/executável controlados: sucesso,
+falha de instalação, executável antigo retornando zero e encerramento do processo
+pai. Não equivale a homologação de UAC/antivírus/reinício em cada loja. Só reativar
+a oferta após validar a instalação completa no Windows. Máquinas com atualizador
+antigo podem precisar receber a primeira correção pelo instalador manual.
