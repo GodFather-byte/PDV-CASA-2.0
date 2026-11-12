@@ -18,7 +18,17 @@ baixar/instalar duas vezes. Novos módulos registrados no autoteste.
 70 testes focados passaram. Homologação nova no CI abre o executável instalado
 com banco/nuvem fictícios e sync_quase_tempo_real=N, exigindo consulta real
 HTTP automática sem fechar o programa, nas três edições.
-Não foi alterado src/sync/sincronizador.py. Falta CI/build/publicação.
+A instalação automática agora espera turno fechado e nenhuma venda aberta;
+o operador pode iniciar manualmente com o caixa livre. Downloads podem ocorrer
+em segundo plano durante o trabalho.
+71 testes focados passaram após proteção do turno. Geração, instalação,
+autoteste e consulta HTTP real do executável instalado passaram nas três edições
+(revisão e26204f). Ajustes posteriores preservaram Operação aberta por padrão
+com Tutoriais no topo (46 testes de regressão passaram) e proteção de turno.
+Suíte completa inicial: 2.773 testes, 28 pulados; falhas Tk conhecidas e três
+expectativas de menu, corrigidas pelo padrão Operação e reexecutadas com sucesso.
+Não houve nova suíte completa após esses ajustes. src/sync/sincronizador.py
+não foi alterado. Falta publicação final e reativação com mínimo 1.14.4.
 
 ## Produção
 

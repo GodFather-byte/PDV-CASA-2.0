@@ -62,6 +62,21 @@ class TesteCaixa(BaseCaixa):
         self.pagar(venda["id"], "Dinheiro", total)
         return self.caixa.fechar(venda["id"])
 
+    def test_automatica_aguarda_fechar_turno_mesmo_sem_venda(self):
+        from unittest.mock import Mock
+        from src.core import formatacao as fmt
+        self.banco.cfg_set('api_url', 'https://nuvem.exemplo')
+        self.banco.cfg_set(cliente.CHAVE_CONSULTA, fmt.agora())
+        cliente._gravar_estado(self.banco, {'versao': '99.0.0', 'arquivo': '/pacote.exe'})
+        instalar = Mock()
+        resultado = cliente.rodada(self.banco, instalar=instalar)
+        self.assertEqual(resultado['acao'], 'esperar')
+        self.assertIn('turno aberto', resultado['motivo'])
+        instalar.assert_not_called()
+        self.banco.executar("UPDATE turnos SET status = 'fechado' WHERE status = 'aberto'")
+        self.assertEqual(cliente.rodada(self.banco, instalar=instalar)['acao'], 'instalar')
+        instalar.assert_called_once()
+
     def test_download_recusa_arquivo_trocado(self):
         class Http:
             def get(self, url, timeout=None):

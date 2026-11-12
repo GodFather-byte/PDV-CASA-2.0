@@ -1,8 +1,8 @@
 # Atualização automática do caixa (Windows)
 
-O caixa que já tem esta versão consulta a nuvem ao abrir e a cada 6 horas (`--sync` e o PDV aberto).
+A partir da 1.14.4, o PDV aberto mantém verificador próprio, independente de sync_quase_tempo_real. Ele consulta a nuvem a cada 6 horas; o --sync também pode verificar. A abertura só retoma arquivo já baixado, sem esperar a rede.
 Se houver pacote mais novo, **assinado** e com o SHA-256 certo, ele baixa em segundo plano e instala com o
-Inno Setup em silêncio (`/VERYSILENT`) **só quando não há venda, mesa ou comanda aberta**. Se o caixa
+Inno Setup em silêncio (`/VERYSILENT`) **só com turno fechado e sem venda, mesa ou comanda aberta**. Se o caixa
 estiver ocupado, fica para a próxima abertura. Dá para adiar um dia, salvo atualização obrigatória ou
 versão abaixo da mínima. Os dados continuam em `%LOCALAPPDATA%` (não vão na pasta do programa). Se a
 versão nova não confirmar que subiu, o script copia a pasta anterior de volta e abre o programa de novo.
@@ -113,3 +113,22 @@ falha de instalação, executável antigo retornando zero e encerramento do proc
 pai. Não equivale a homologação de UAC/antivírus/reinício em cada loja. Só reativar
 a oferta após validar a instalação completa no Windows. Máquinas com atualizador
 antigo podem precisar receber a primeira correção pelo instalador manual.
+
+
+## Correção inicial da consulta automática (1.14.4)
+
+Nas versões até 1.14.3, o caminho padrão sem cliente HTTP injetado não consultava
+os pacotes, e o serviço interno dependia da opção de envio quase em tempo real.
+A correção resolve o HTTP padrão e mantém serviço dedicado à atualização no
+aplicativo, mesmo com o envio de vendas desligado. Uma trava por banco evita
+competição com --sync. A instalação automática aguarda o turno fechado; iniciar
+manualmente continua possível com o caixa livre.
+
+A primeira instalação da 1.14.4 nesses clientes deve ser feita pelo operador
+com o instalador completo, ou por acesso remoto, sem exigir visita do fornecedor.
+Não é possível corrigir pelo servidor um programa antigo que não faz a busca.
+Depois disso, as próximas versões usam o mecanismo automático corrigido.
+
+O CI abre cada executável instalado com banco e servidor HTTP fictícios, envio
+quase em tempo real desligado, e exige consulta real automática sem fechar o PDV.
+O teste não usa credenciais, licença ou banco de uma loja real.

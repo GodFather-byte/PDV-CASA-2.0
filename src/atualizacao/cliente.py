@@ -57,6 +57,15 @@ def caixa_ocupado(banco) -> str | None:
     return None
 
 
+def motivo_automatico(banco) -> str | None:
+    motivo = caixa_ocupado(banco)
+    if motivo:
+        return motivo
+    if banco.valor("SELECT COUNT(*) FROM turnos WHERE status = 'aberto'", (), 0):
+        return "há turno aberto; a atualização automática aguarda o fechamento"
+    return None
+
+
 def abaixo_da_minima(instalada: str, minima: str) -> bool:
     if not (minima or "").strip():
         return False
@@ -249,7 +258,7 @@ def _rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: 
     forcada = bool(atual.get("obrigatoria")) or abaixo_da_minima(VERSAO, atual.get("minima") or "")
     if not forcada and adiada(banco, atual["versao"]):
         return {"acao": "adiada", "versao": atual["versao"]}
-    motivo = caixa_ocupado(banco)
+    motivo = caixa_ocupado(banco) if forcar else motivo_automatico(banco)
     if motivo:
         return {"acao": "esperar", "versao": atual["versao"], "motivo": motivo}
     if instalar is not None:
@@ -271,7 +280,7 @@ def aviso(banco) -> dict | None:
         return None
     forcada = bool(atual.get("obrigatoria")) or abaixo_da_minima(VERSAO, atual.get("minima") or "")
     return {"ultima": atual["versao"], "notas": atual.get("notas") or "", "obrigatoria": forcada,
-            "adiavel": not forcada, "motivo": caixa_ocupado(banco)}
+            "adiavel": not forcada, "motivo": motivo_automatico(banco)}
 
 
 def disparar_instalacao(arquivo: Path) -> Path:
