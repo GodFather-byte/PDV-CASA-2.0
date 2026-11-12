@@ -520,6 +520,7 @@ class TestAppQt(BaseQt):
                     patch("src.ui_qt.app.ServicoPorteiro") as porteiro, \
                     patch("src.ui_qt.app.ServicoSincronizacao") as sincronizacao, \
                     patch("src.ui_qt.app.ServicoAtualizacao") as atualizacao, \
+                    patch("src.ui_qt.app.ServicoFiscal") as fiscal, \
                     patch("src.controllers.utilitario_controller.UtilitarioController.idade_backup_horas",
                           return_value=None), \
                     patch("src.controllers.utilitario_controller.UtilitarioController.backup_automatico") as backup:
@@ -529,12 +530,14 @@ class TestAppQt(BaseQt):
                 porteiro.return_value.iniciar.assert_called_once()
                 sincronizacao.return_value.iniciar.assert_called_once()
                 atualizacao.return_value.iniciar.assert_called_once()
+                fiscal.return_value.iniciar.assert_called_once()
                 app.finalizar()
                 impressao.return_value.parar.assert_called_once()
                 ponte.return_value.parar.assert_called_once()
                 porteiro.return_value.parar.assert_called_once()
                 sincronizacao.return_value.parar.assert_called_once()
                 atualizacao.return_value.parar.assert_called_once()
+                fiscal.return_value.parar.assert_called_once()
                 self.assertEqual(backup.call_count, 2)
                 backup.assert_any_call("início")
                 backup.assert_any_call("saída", minimo_min=60)
@@ -892,6 +895,28 @@ class TestAuditoriaQt(BaseQt):
         self.assertTrue(app.encerrar_sessao())
         self.assertFalse(fila.isVisible())
         self.assertFalse(composicao.isVisible())
+
+    def test_menu_abre_notas_fiscais_e_liga_a_emissao(self):
+        from src.ui_qt.notas_fiscais import JanelaNotasFiscais
+        app = self.app()
+        app.ctx.operador = app.ctx.acesso.autenticar("ADM", "ADM")
+        app.principal = JanelaPrincipal(app)
+        self.assertTrue(app.principal.botoes["notas_fiscais"].isEnabled())
+        janela = app.principal.abrir_notas_fiscais()
+        self.assertIsInstance(janela, JanelaNotasFiscais)
+        self.assertIn("Desligada", janela.estado.text())
+        with patch("src.ui_qt.notas_fiscais.QInputDialog.getItem", return_value=(
+                "Homologação (teste, sem valor fiscal)", True)), \
+             patch("src.ui_qt.notas_fiscais.QMessageBox.warning") as aviso:
+            janela.ligar()                                     # sem token: avisa e continua desligada
+            self.assertIn("token", aviso.call_args[0][2])
+            self.banco.cfg_set("nfce_token_homologacao", "token-de-teste")
+            janela.ligar()
+        self.assertEqual(self.banco.cfg("nfce_emissao"), "homologacao")
+        self.assertIn("Homologação", janela.estado.text())
+        with patch("src.ui_qt.notas_fiscais.QMessageBox.warning") as aviso:
+            janela.cancelar()                                  # nada selecionado
+            self.assertTrue(aviso.called)
 
     def test_menu_importacao_revalida_permissao_na_reabertura(self):
         app = self.app()

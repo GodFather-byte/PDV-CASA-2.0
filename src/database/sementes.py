@@ -55,6 +55,7 @@ ACESSOS = [
     ("util_comunicacao", "Programa de comunicação", "Utilitários", 2),
     ("util_backup", "Backup de dados", "Utilitários", 2),
     ("util_fila_impressao", "Fila de impressão", "Utilitários", 2),
+    ("fiscal_nfce", "Notas fiscais (NFC-e)", "Utilitários", 3),
     ("util_cozinha", "Painel da Cozinha/Bar", "Utilitários", 2),
     ("util_quartos", "Controle de quartos (tempo)", "Utilitários", 1),
     ("cfg_acessos", "Configurar níveis de acesso", "Configurações", 4),
@@ -88,6 +89,9 @@ CONFIG_PADRAO = {
     "usar_delivery": "N", "usar_caderneta": "N", "usar_contas": "N",
     "integracao_ifood_estado": "desativado", "integracao_nfce_estado": "desativado",
     "nfce_regime_tributario": "nao_definido",
+    "nfce_emissao": "desligada", "nfce_ativada_em": "", "nfce_token_homologacao": "", "nfce_token_producao": "",
+    "nfce_cfop_padrao": "5102", "nfce_icms_padrao": "102", "nfce_pis_cofins_padrao": "49", "nfce_imprimir": "S",
+    "nfce_ibscbs_enviar": "N", "nfce_ibscbs_cst_padrao": "000", "nfce_ibscbs_class_padrao": "000001",
     # Módulo de operação Cozinha/Bar: impressoras nomeadas por setor e status de preparo por item.
     "usar_cozinha_bar": "N",
     # Módulo de operação Rodízio: cobrança fixa por pessoa, por mesa/comanda (opt-in por mesa).

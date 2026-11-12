@@ -24,6 +24,7 @@ from src.database.conexao import BancoDados, caminho_padrao
 from src.porteiro.servico import ServicoPorteiro, descrever as descrever_porteiro
 from src.cozinha.servico import ServicoCozinha
 from src.atualizacao.servico import ServicoAtualizacao
+from src.fiscal.servico import ServicoFiscal
 from src.sync.ponte import ServicoPonte
 from src.sync.sincronizador import ServicoSincronizacao
 from src.controllers.contexto import Contexto
@@ -234,7 +235,7 @@ class JanelaPrincipal(QMainWindow):
             "Tutoriais": {"tutoriais"},
             "Operação": {"inicio", "caixa", "porteiro", "quartos", "cozinha", "alertas"},
             "Produtos e estoque": {"produtos", "estoque", "contagem", "retornaveis", "promocoes", "importar_produtos", "composicao"},
-            "Gestão": {"relatorio_vendas", "relatorios", "contas", "devolucoes", "whatsapp", "auditoria"},
+            "Gestão": {"relatorio_vendas", "relatorios", "contas", "devolucoes", "notas_fiscais", "whatsapp", "auditoria"},
             "Cadastros": {"operadores", "mais_cadastros"},
             # "caixas_loja" fica em Manutenção: um oitavo botão aqui faz o menu rolar na tela mínima (Windows).
             "Configuração": {"primeiros_passos", "configuracoes", "maquinas", "acessos", "atualizacoes", "diagnostico",
@@ -258,6 +259,7 @@ class JanelaPrincipal(QMainWindow):
             ("relatorios", "Mais relatórios", self.abrir_relatorios),
             ("contas", "Contas a pagar / receber", self.abrir_contas),
             ("devolucoes", "Devoluções e trocas por cupom", self.abrir_devolucoes),
+            ("notas_fiscais", "Notas fiscais (NFC-e)", self.abrir_notas_fiscais),
             ("operadores", "Operadores", lambda: self.abrir_cadastro("operadores")),
             ("mais_cadastros", "Mais cadastros", self.escolher_cadastro_adicional),
             ("primeiros_passos", "Primeiros passos da loja", self.abrir_primeiros_passos),
@@ -514,6 +516,7 @@ class JanelaPrincipal(QMainWindow):
         self.botoes["diagnostico"].setEnabled(self.ctx.pode("cfg_maquinas"))
         self.botoes["impressora"].setEnabled(self.ctx.pode("cfg_maquinas"))
         self.botoes["fila_impressao"].setEnabled(self.ctx.pode("util_fila_impressao"))
+        self.botoes["notas_fiscais"].setEnabled(self.ctx.pode("fiscal_nfce"))
         self.botoes["composicao"].setEnabled(
             "cad_composicao" not in desligados and self.ctx.pode("cad_composicao"))
         self.botoes["auditoria"].setEnabled(
@@ -977,6 +980,13 @@ class JanelaPrincipal(QMainWindow):
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
 
+    def abrir_notas_fiscais(self):
+        try:
+            from src.ui_qt.notas_fiscais import JanelaNotasFiscais
+            return self._unica("notas_fiscais", lambda: JanelaNotasFiscais(self.ctx, self))
+        except ErroNegocio as erro:
+            self.mensagem.setText(str(erro))
+
     def abrir_composicao(self):
         try:
             from src.ui_qt.composicao import JanelaComposicao
@@ -1068,6 +1078,7 @@ class App:
                            (ServicoPonte, "Ponte de licenças"), (ServicoPorteiro, "Porteiro"),
                            (ServicoCozinha, "Cozinha web"),
                            (ServicoAtualizacao, "Atualização do programa"),
+                           (ServicoFiscal, "NFC-e (cupom fiscal)"),
                            (ServicoSincronizacao, "Sincronização da nuvem"),
                            (rede.ServicoRedeCaixas, "Caixas da loja"))
             for classe, nome in classes:
