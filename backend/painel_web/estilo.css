@@ -946,3 +946,30 @@ body.valores-ocultos .sec { filter: blur(7px); user-select: none; }
 #aviso-lojas { margin-top: .6rem; }
 @media (min-width: 1000px) { .aba > #bloco-lojas, .aba > #adicionar-loja { column-span: all; } }
 a.botao-arquivo { text-decoration: none; }
+
+/* ---- Rede de lojas ---- */
+.faixa-rede { display: flex; align-items: center; gap: .6rem; padding: .35rem .75rem; background: #0b3b31;
+  color: #fff; position: sticky; top: 0; z-index: 11; height: 48px; box-sizing: border-box; }
+/* Com a faixa da rede à vista, o cabeçalho da loja gruda logo abaixo dela. */
+.faixa-rede:not([hidden]) + .cabecalho { top: 48px; }
+.botao-voltar-rede { appearance: none; border: 1px solid rgba(255, 255, 255, .35); background: rgba(255, 255, 255, .14);
+  color: #fff; font: inherit; font-weight: 700; border-radius: 999px; padding: .4rem .85rem; min-height: 38px; cursor: pointer; }
+.botao-voltar-rede:active { background: rgba(255, 255, 255, .28); }
+.faixa-rede-nome { font-size: .85rem; opacity: .9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acoes-cabecalho { display: flex; gap: .4rem; align-items: center; }
+.cabeca-bloco { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
+.cabeca-bloco h2 { margin: 0; }
+.lista-rede { list-style: none; margin: .6rem 0 0; padding: 0; display: grid; gap: .55rem; }
+@media (min-width: 760px) { .lista-rede { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); } }
+.lista-rede .vazio { color: var(--texto-suave); padding: .5rem 0; }
+.rede-loja { width: 100%; display: grid; gap: .4rem; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: var(--fundo); border: 1px solid var(--borda, transparent); border-radius: 12px; padding: .8rem .85rem; }
+.rede-loja:active { background: var(--verde-claro); }
+.rede-loja:disabled { opacity: .6; }
+.rede-loja-topo, .rede-loja-rodape { display: flex; justify-content: space-between; align-items: baseline; gap: .6rem; }
+.rede-loja-topo strong:first-child { min-width: 0; overflow-wrap: anywhere; }
+.rede-loja-topo .valor { font-size: 1.1rem; white-space: nowrap; }
+.rede-barra { display: block; height: 6px; border-radius: 999px; background: rgba(127, 127, 127, .22); overflow: hidden; }
+.rede-barra > span { display: block; height: 100%; border-radius: 999px; background: var(--barra); min-width: 2px; }
+.rede-abrir { font-weight: 700; color: var(--verde-medio, var(--barra)); white-space: nowrap; }
+.rede-alerta { color: var(--ambar, #b26a00); font-weight: 600; }

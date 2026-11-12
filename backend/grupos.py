@@ -271,14 +271,20 @@ def consolidado(db: Session, grupo: Grupo, inicio, fim) -> dict:
         for loja in lojas(db, grupo.id):
             if not loja.ativa:
                 continue
-            bloco = painel.montar_lucro(por_chave.get(loja.chave_loja, []), [])
+            da_loja = por_chave.get(loja.chave_loja, [])
+            bloco = painel.montar_lucro(da_loja, [])
+            pares = painel._ler_caixas(db, loja.chave_loja)
+            _, momento, recebido_em = painel._mais_recente(pares)
             por_loja.append({
                 "chave": loja.chave_loja, "nome": loja.nome,
                 "faturamento_cent": bloco["faturamento_cent"],
                 "custo_cent": bloco["custo_cent"], "lucro_cent": bloco["lucro_cent"],
                 "margem": bloco["margem"],
+                # Para a tela da rede: quantas vendas no período e se o caixa da loja está enviando.
+                "vendas": sum(1 for v in da_loja if v.get("status") == "fechada"),
+                "atualizado_em": recebido_em, "atraso_min": painel._atraso_min(momento, recebido_em),
             })
-            retratos.extend(dados for _, dados in painel._ler_caixas(db, loja.chave_loja))
+            retratos.extend(dados for _, dados in pares)
     corpo = painel.montar_lucro(vendas, retratos)
     por_loja.sort(key=lambda item: (-(item["lucro_cent"] or 0), item["nome"]))
     corpo.update({

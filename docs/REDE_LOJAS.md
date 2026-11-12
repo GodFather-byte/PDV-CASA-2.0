@@ -17,6 +17,19 @@ Exemplo, se a nuvem está em `https://exemplo.com` e a chave é `REDE-EXEMPLO`:
 A senha criada pelo administrador é temporária. No primeiro acesso o dono é obrigado
 a trocar.
 
+## Como o dono usa
+
+Depois de entrar com o login da rede, o dono vê a **central da rede**: faturamento, custo e lucro de todas
+as lojas no período (Hoje, Semana, Mês ou datas escolhidas) e um cartão por loja, com o faturamento, a
+parte dela na rede, quantas vendas, o lucro e se o caixa está enviando.
+
+Tocar num cartão abre o painel daquela loja, sem pedir senha. Dentro da loja aparece no topo, em todas
+as abas, a faixa **‹ Todas as lojas**: é por ela que se volta para a central da rede. A volta continua
+funcionando depois de recarregar a página ou de fechar e abrir o app. **Sair** encerra a loja e a rede.
+
+Na página, a sessão da rede fica guardada em `willpdv.rede.*` (fora do prefixo do painel, que é apagado
+a cada troca de loja). A sessão da loja aberta pela rede é encerrada na volta.
+
 ## Criar pela API (token de administrador)
 
 ```http
