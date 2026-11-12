@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 51
+VERSAO_ESQUEMA = 52
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -164,6 +164,28 @@ MAQUINAS_DDL = """CREATE TABLE IF NOT EXISTS maquinas (
 )"""
 
 TABELAS = [
+    # NFC-e (Will Fiscal, src/fiscal/): uma linha por venda enviada à SEFAZ pelo provedor. `ref` é a referência no
+    # provedor (o uuid da venda). Situações: pendente → autorizada | rejeitada | erro; autorizada → cancelada.
+    """CREATE TABLE IF NOT EXISTS nfce_notas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        venda_id INTEGER NOT NULL UNIQUE REFERENCES vendas(id),
+        ref TEXT NOT NULL UNIQUE,
+        ambiente TEXT NOT NULL CHECK (ambiente IN ('homologacao','producao')),
+        situacao TEXT NOT NULL DEFAULT 'pendente'
+            CHECK (situacao IN ('pendente','processando','autorizada','rejeitada','erro','cancelada')),
+        cpf TEXT,
+        numero TEXT, serie TEXT, chave TEXT,
+        qrcode_url TEXT, url_consulta TEXT, caminho_xml TEXT, caminho_danfe TEXT,
+        status_sefaz TEXT, mensagem TEXT NOT NULL DEFAULT '',
+        tentativas INTEGER NOT NULL DEFAULT 0,
+        proxima_tentativa TEXT,
+        criada_em TEXT NOT NULL,
+        autorizada_em TEXT,
+        cancelada_em TEXT,
+        justificativa TEXT,
+        impressa INTEGER NOT NULL DEFAULT 0
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_nfce_situacao ON nfce_notas(situacao)",
     # Comandos da retaguarda na nuvem já aplicados neste caixa (src/controllers/retaguarda_controller.py). `id` é o do
     # comando na nuvem: garante que cada um é aplicado uma vez. `aviso_ok = 0` é resultado que a nuvem ainda não confirmou.
     """CREATE TABLE IF NOT EXISTS retaguarda_comandos (
@@ -329,6 +351,7 @@ TABELAS = [
         texto_sugestao TEXT,
         ncm TEXT, desc_aliq_icms TEXT, situacao_tributaria TEXT,
         aliquota_ipi REAL NOT NULL DEFAULT 0, reducao_base REAL NOT NULL DEFAULT 0,
+        cfop TEXT, cest TEXT, origem_mercadoria TEXT, ibscbs_cst TEXT, ibscbs_class TEXT,
         mostrar_no_cardapio INTEGER NOT NULL DEFAULT 1,
         custo_medio_cent INTEGER NOT NULL DEFAULT 0,
         ativo INTEGER NOT NULL DEFAULT 1
@@ -406,6 +429,7 @@ TABELAS = [
         aciona_tef INTEGER NOT NULL DEFAULT 0,
         cheque_tef INTEGER NOT NULL DEFAULT 0,
         mais_info INTEGER NOT NULL DEFAULT 0,
+        forma_fiscal TEXT,
         acrescimo_cent INTEGER NOT NULL DEFAULT 0,
         ativo INTEGER NOT NULL DEFAULT 1
     )""",
@@ -1113,6 +1137,15 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v52: NFC-e (Will Fiscal). Dados fiscais do produto e da forma de pagamento; a tabela nfce_notas nasce em TABELAS.
+    52: [
+        ("coluna", "produtos", "cfop", "TEXT"),
+        ("coluna", "produtos", "cest", "TEXT"),
+        ("coluna", "produtos", "origem_mercadoria", "TEXT"),
+        ("coluna", "produtos", "ibscbs_cst", "TEXT"),
+        ("coluna", "produtos", "ibscbs_class", "TEXT"),
+        ("coluna", "tipos_pagamento", "forma_fiscal", "TEXT"),
+    ],
     51: [],  # tabela aditiva dos comandos da retaguarda na nuvem
     50: [],  # tabela aditiva das notas de compra enviadas pelo painel do dono
     49: [],  # tabela aditiva de deduplicação e confirmação dos pedidos de mesa

@@ -137,6 +137,12 @@ def _antes_produto(banco, d, id_):
             EstoqueController(banco, operador)._gravar_custo(
                 id_, anterior, d["custo_medio_cent"],
                 banco.valor("SELECT qt_atual FROM produtos WHERE id = ?", (id_,), 0), "cadastro")
+    if d.get("ncm") is not None:
+        from src.fiscal import ncm
+        try:
+            d["ncm"] = ncm.validar(d["ncm"]) or None
+        except ErroNegocio as erro:
+            raise ErroValidacao(str(erro), {"ncm": "inválido"}) from None
     if d.get("cbarra") is not None and not re.fullmatch(r"\d{1,14}", d["cbarra"]):
         raise ErroValidacao("Código de barras deve conter apenas números.", {"cbarra": "inválido"})
     if "partes" in d and not (1 <= d["partes"] <= 55):
@@ -421,11 +427,21 @@ _ENTIDADES = [
         Campo("hora_fim", "Hora final", "hora", secao="Promoções", na_grade=False),
         Campo("hora_preco_cent", "Preço (horário)", "dinheiro", padrao=0, secao="Promoções", na_grade=False),
         Campo("hora_gelada_cent", "Preço gelada (horário; 0 = sem)", "dinheiro", padrao=0, secao="Promoções", na_grade=False),
-        Campo("ncm", "Código NCM", tamanho=8, secao="Fiscal", na_grade=False),
+        Campo("ncm", "Código NCM", tamanho=10, secao="Fiscal", na_grade=False),
         Campo("desc_aliq_icms", "Desc. Aliq. ICMS", tamanho=10, secao="Fiscal", na_grade=False),
         Campo("situacao_tributaria", "Situação tributária", tamanho=4, secao="Fiscal", na_grade=False),
         Campo("aliquota_ipi", "Alíquota IPI %", "decimal", padrao=0, secao="Fiscal", na_grade=False),
         Campo("reducao_base", "Redução base cálc. subst. trib. %", "decimal", padrao=0, secao="Fiscal", na_grade=False),
+        Campo("cfop", "CFOP (vazio = padrão da NFC-e)", tamanho=4, secao="Fiscal", na_grade=False),
+        Campo("cest", "CEST", tamanho=7, secao="Fiscal", na_grade=False),
+        Campo("origem_mercadoria", "Origem da mercadoria", "escolha", secao="Fiscal", na_grade=False, padrao="0",
+              opcoes=[("0", "0 - Nacional"), ("1", "1 - Estrangeira, importação direta"),
+                      ("2", "2 - Estrangeira, mercado interno"), ("3", "3 - Nacional, conteúdo importado > 40%"),
+                      ("4", "4 - Nacional, processos básicos"), ("5", "5 - Nacional, conteúdo importado <= 40%"),
+                      ("6", "6 - Estrangeira, importação direta, sem similar"),
+                      ("7", "7 - Estrangeira, mercado interno, sem similar"), ("8", "8 - Nacional, importado > 70%")]),
+        Campo("ibscbs_cst", "CST do IBS/CBS (vazio = padrão)", tamanho=3, secao="Fiscal", na_grade=False),
+        Campo("ibscbs_class", "Classificação tributária IBS/CBS (vazio = padrão)", tamanho=6, secao="Fiscal", na_grade=False),
     ], ordem="nome", busca=("nome", "codigo", "cbarra", "atalho"), antes_salvar=_antes_produto,
         excluir_fn=_excluir_produto, msg_em_uso="Este produto já foi vendido, movimentado ou usado em composição. "
                    "Desmarque 'Ativo' em vez de excluir.", tem_ativo=True),
@@ -523,6 +539,13 @@ _ENTIDADES = [
         _sn("aciona_tef", "Aciona módulo TEF"),
         _sn("cheque_tef", "Cheque TEF"),
         _sn("mais_info", "Mais informações"),
+        Campo("forma_fiscal", "Forma na NFC-e (vazio = pelo nome)", "escolha", na_grade=False, padrao="",
+              opcoes=[("", "Pelo nome do tipo"), ("01", "01 - Dinheiro"), ("02", "02 - Cheque"),
+                      ("03", "03 - Cartão de crédito"), ("04", "04 - Cartão de débito"), ("05", "05 - Crédito loja"),
+                      ("10", "10 - Vale alimentação"), ("11", "11 - Vale refeição"), ("12", "12 - Vale presente"),
+                      ("13", "13 - Vale combustível"), ("15", "15 - Boleto"), ("16", "16 - Depósito"),
+                      ("17", "17 - PIX dinâmico"), ("18", "18 - Transferência / carteira digital"),
+                      ("20", "20 - PIX estático"), ("99", "99 - Outros")]),
         _sn("ativo", "Ativo", 1, na_grade=True),
     ], ordem="ordem, tipo", busca=("tipo",), tem_ativo=True,
         msg_em_uso="Esta forma de pagamento já foi usada. Desmarque 'Ativo' em vez de excluir."),

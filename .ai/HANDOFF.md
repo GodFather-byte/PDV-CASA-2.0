@@ -1,50 +1,36 @@
-# Handoff — Atualização automática sem a janela de administrador (12/11/2026)
+# Handoff — NFC-e de São Paulo (Will Fiscal, via Focus NFe) (12/11/2026)
 
-Branch `atualizacao-sem-uac`, criada da main depois do merge do #83 (consulta automática) e do #84 (menu).
-Pedido do dono: "as atualizações automáticas estão erradas". Guia atualizado: `docs/ATUALIZACAO.md`.
+Branch `will-fiscal`, criada da main depois do #85 (atualização sem UAC). Pedido do dono: NFC-e para SP, primeiro
+cliente é um empório. Provedor escolhido: Focus NFe, plano Varejo (~R$ 63/mês, 500 notas). Regime do cliente ainda
+não sabido: padrões do Simples, tudo configurável. Guia: `docs/NFCE.md`.
 
-## O que estava errado e o que mudou
+## O que foi feito
 
-1. **Pedia administrador.** O instalador tem `PrivilegesRequired=admin`; o PDV roda sem. A automática abria a janela
-   do UAC e falhava sem alguém para clicar em Sim (a restauração em Arquivos de Programas também). O CI não pegava:
-   o runner do GitHub já é administrador.
-   - `instalador/tarefa_atualizacao.ps1` + os três `.iss`: criam a tarefa `<Programa> Atualizacao` (SISTEMA,
-     usuários autenticados só podem iniciar: ACE `(A;;GRGX;;;AU)`), a pasta `{commonappdata}\<Programa>\atualizacao`
-     (users-modify) e apagam a tarefa ao desinstalar.
-   - `src/atualizacao/tarefa.py`: lado do operador (`preparar_pedido`, `script_espera`, `pedir_ao_windows`) e lado do
-     SISTEMA (`ler_pedido` confere assinatura, edição, versão mais nova, tamanho e SHA-256; `preparar_aplicacao`
-     copia para pasta do SISTEMA, guarda o programa, grava o `aplicar.cmd`; `aplicar_como_sistema`).
-   - `src/app.py`: `--aplicar-atualizacao`; `--confirmar-atualizacao ... --sem-banco` (o SISTEMA não abre o banco do
-     operador; a abertura seguinte confirma em `conferir_tentativa`).
-   - `cliente.disparar_instalacao`: tenta a tarefa; sem ela, caminho antigo (`_disparar_com_administrador`).
-     O pacote assinado vai ao lado do .exe baixado (`<arquivo>.json`).
-2. **Tentativa falha parava tudo em silêncio.** `CHAVE_RESULTADO` guarda o que houve; `conferir_tentativa` (abertura),
-   `falha_pendente`, `aviso()` com `falha`; menu e janela de Atualizações mostram; `painel_envio` manda
-   `atualizacao_travada`; a central (`saude_das_lojas`, `central_web/app.js`) mostra o selo "Atualização travada".
-3. **Fechava o PDV em uso.** `motivo_automatico`: também espera fila de impressão vazia e 10 min após o fechamento do
-   turno. Abertura com instalação disparada não abre a tela (`ui_qt/aviso_atualizando.py`).
-4. **Render dormindo.** Timeout de leitura 60 s; sem resposta, `CHAVE_FALHA_CONSULTA` e nova tentativa em 15 min.
-5. Pacote de outra edição recusado (`pacote_valido`); `sem_pacote()` dá o motivo certo (antes "assinatura_invalida"
-   quando a nuvem só dizia "em dia" ou "pausada").
+- Esquema v52: tabela `nfce_notas`; `produtos` ganha cfop, cest, origem_mercadoria, ibscbs_cst, ibscbs_class;
+  `tipos_pagamento` ganha forma_fiscal. Configs `nfce_*` em Integrações (tokens como segredo).
+- `src/fiscal/nfce.py` monta a nota (rateio de desconto e taxa, pagamento líquido por tPag, homologação no item 1).
+- `src/fiscal/focus.py` cliente HTTP (Basic com o token); `src/fiscal/danfe.py` cupom ESC/POS com QR Code.
+- `src/controllers/fiscal_controller.py` fila, reenvio com espera, cancelamento (15–255 letras, 30 min), cancelamento
+  automático de venda cancelada, impressão. `src/fiscal/servico.py` roda em segundo plano (iniciado em `ui_qt/app.py`).
+- NCM no cadastro de produto: `src/fiscal/ncm.py` (limpa, valida 8 números, sugere pelo nome). Com a NFC-e ligada o
+  campo vai para a aba Geral e é obrigatório no formulário para produto vendido (outros caminhos, como importação e
+  quartos, não exigem; a nota só fica com erro até corrigir). Testes `tests/test_ncm.py`.
+- Tela `src/ui_qt/notas_fiscais.py`, menu Gestão > Notas fiscais (NFC-e), permissão `fiscal_nfce` (nível 3).
+- Testes: `tests/test_nfce.py` (22) e `test_qt_app` (menu e ligar).
 
-## Validação
+## Não testado (precisa da conta Focus em homologação)
 
-- `tests/test_atualizacao_tarefa.py` (24 casos) e os testes de atualização existentes; central com o selo.
-- CI do Windows (`build-windows.yml`, job do WillPDV): depois de instalar, confere que a tarefa existe, aponta
-  para o programa instalado, aceita usuário comum e recusa um pedido sem assinatura (roda de verdade como SISTEMA).
-- **Não testado:** atualização real num PC sem administrador, com antivírus e UAC padrão. Roteiro abaixo.
+- Envio real. Campos sem confirmação: troco, grupo do cartão, GTIN (ver "A conferir" em `docs/NFCE.md`).
+- Impressão do QR Code na impressora real do cliente (`GS ( k`, modelo 2).
 
-## Antes de reativar a oferta (Render: PDV_ATUALIZACAO_PAUSADA=1 continua)
+## Próximos passos
 
-1. Instalar esta versão à mão num caixa de teste (cria a tarefa). Conferir no Agendador de Tarefas.
-2. Publicar uma versão de teste maior, tirar a pausa só para esse teste e deixar o caixa sem turno aberto 10 min.
-3. Confirmar: sem janela de administrador, o programa fecha, instala, reabre na versão nova, e
-   `%ProgramData%\WillPDV\atualizacao\resultado-*.txt` diz `instalada`.
-4. Repetir com o instalador corrompido (deve sair `recusada`) e ver o selo na central.
-5. Só então tirar a pausa e subir `PDV_ATUALIZACAO_CLIENTE_MINIMO` para esta versão.
+1. Dono cria a conta Focus, cadastra a empresa e sobe certificado + CSC no painel deles.
+2. Token de homologação em Configurações > Integrações; ligar em Homologação; vendas de teste.
+3. Ajustar o que a SEFAZ rejeitar. Depois: contingência offline.
 
 ## Pendências
 
-- Antigravity: revisar a linha nova em `backend/central_fornecedor.py` e `central_web/app.js`.
-- Caixas instalados antes desta versão precisam do instalador manual uma última vez.
+- Antigravity: a nuvem ainda não recebe `nfce_notas` (só local). Se o dono quiser ver notas na retaguarda, entra no lote.
+- Atualização sem UAC (#85): roteiro de teste em PC real ainda pendente; Render segue com PDV_ATUALIZACAO_PAUSADA=1.
 - Tutoriais seguintes (grupo e subgrupo, operador com senha, cliente) continuam pendentes.
