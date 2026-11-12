@@ -105,18 +105,27 @@ jobs:
           if ($xml -notmatch "--aplicar-atualizacao" -or $xml -notmatch [regex]::Escape("$destino\WillPDV.exe")) { $xml; throw "A tarefa de atualização não aponta para o programa instalado." }
           $agenda = New-Object -ComObject Schedule.Service; $agenda.Connect()
           $acesso = $agenda.GetFolder("\").GetTask("WillPDV Atualizacao").GetSecurityDescriptor(4)
-          if ($acesso -notmatch [regex]::Escape("(A;;GRGX;;;AU)")) { $acesso; throw "Usuários comuns não conseguem iniciar a tarefa de atualização." }
+          if ($acesso -notmatch "\(A;;(GRGX|FRFX|0x1200a9);;;AU\)") { $acesso; throw "Usuários comuns não conseguem iniciar a tarefa de atualização." }
           $pedidos = "$env:ProgramData\WillPDV\atualizacao"
           '{"id":"0123456789abcdef","edicao":"willpdv","canal":"estavel","versao":"99.0.0","sha256":"00","tamanho":1,"url":"https://x","notas":"","obrigatoria":0,"minima":"","assinatura":"00"}' | Set-Content -Encoding utf8 "$pedidos\pedido.json"
           Set-Content -Value "x" "$pedidos\pacote.exe"
-          schtasks /Run /TN "WillPDV Atualizacao" | Out-Null
+          # Quem inicia é um usuário COMUM, como o PDV na loja (o runner do GitHub é administrador e não provaria nada).
+          $senha = "Pdv#" + [guid]::NewGuid().ToString("N").Substring(0, 12)
+          net user pdvcomum $senha /add | Out-Null
+          $iniciar = "C:\Users\Public\iniciar-atualizacao.cmd"
+          Set-Content -Encoding ascii $iniciar ('schtasks /Run /TN "WillPDV Atualizacao" > "C:\Users\Public\iniciar-atualizacao.txt" 2>&1')
+          schtasks /Create /TN "PDV usuario comum" /TR $iniciar /SC ONCE /ST 23:59 /RU pdvcomum /RP $senha /F | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Não consegui preparar o usuário comum do teste." }
+          schtasks /Run /TN "PDV usuario comum" | Out-Null
           $resultado = "$pedidos\resultado-0123456789abcdef.txt"
           for ($i = 0; $i -lt 60 -and -not (Test-Path $resultado); $i++) { Start-Sleep -Seconds 2 }
-          if (-not (Test-Path $resultado)) { throw "A tarefa de atualização não respondeu ao pedido." }
+          if (-not (Test-Path $resultado)) { Get-Content "C:\Users\Public\iniciar-atualizacao.txt" -ErrorAction SilentlyContinue; throw "A tarefa de atualização não respondeu ao pedido do usuário comum." }
           $texto = Get-Content $resultado -Raw
           if ($texto -notmatch "^recusada: assinatura") { $texto; throw "A tarefa aceitou um pedido sem assinatura válida." }
           if (-not (Test-Path "$destino\WillPDV.exe")) { throw "A tarefa mexeu no programa instalado ao recusar o pedido." }
           Remove-Item "$pedidos\pedido.json", "$pedidos\pacote.exe", $resultado -ErrorAction SilentlyContinue
+          schtasks /Delete /TN "PDV usuario comum" /F | Out-Null
+          net user pdvcomum /delete | Out-Null
           $saida = Join-Path $env:RUNNER_TEMP "autoteste-instalado.txt"
           $t = Start-Process -FilePath "$destino\WillPDV.exe" -ArgumentList "--autoteste", "`"$saida`"" -PassThru
           if (-not $t.WaitForExit(240000)) { $t.Kill(); throw "O autoteste do programa instalado travou." }

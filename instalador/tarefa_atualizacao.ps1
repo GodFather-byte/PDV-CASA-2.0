@@ -25,7 +25,8 @@ try {
     $agenda.Connect()
     $tarefa = $agenda.GetFolder("\").GetTask($Nome)
     $acesso = $tarefa.GetSecurityDescriptor(4)          # 4 = só a DACL
-    if ($acesso -notmatch [regex]::Escape("(A;;GRGX;;;AU)")) {
+    # O Windows guarda o GRGX já traduzido (0x1200a9): procura qualquer permissão dada a AU antes de acrescentar.
+    if ($acesso -notmatch ";;;AU\)") {
         $tarefa.SetSecurityDescriptor($acesso + "(A;;GRGX;;;AU)", 0)
     }
     Anotar "Tarefa '$Nome' pronta."
