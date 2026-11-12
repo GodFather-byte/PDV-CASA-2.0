@@ -110,8 +110,9 @@ jobs:
           '{"id":"0123456789abcdef","edicao":"willpdv","canal":"estavel","versao":"99.0.0","sha256":"00","tamanho":1,"url":"https://x","notas":"","obrigatoria":0,"minima":"","assinatura":"00"}' | Set-Content -Encoding utf8 "$pedidos\pedido.json"
           Set-Content -Value "x" "$pedidos\pacote.exe"
           # Quem inicia é um usuário COMUM, como o PDV na loja (o runner do GitHub é administrador e não provaria nada).
-          $senha = "Pdv#" + [guid]::NewGuid().ToString("N").Substring(0, 12)
-          net user pdvcomum $senha /add | Out-Null
+          $senha = "Pd#" + [guid]::NewGuid().ToString("N").Substring(0, 10)    # até 14 caracteres: o net user não pergunta nada
+          net user pdvcomum $senha /add /Y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Não consegui criar o usuário comum do teste." }
           $iniciar = "C:\Users\Public\iniciar-atualizacao.cmd"
           Set-Content -Encoding ascii $iniciar ('schtasks /Run /TN "WillPDV Atualizacao" > "C:\Users\Public\iniciar-atualizacao.txt" 2>&1')
           schtasks /Create /TN "PDV usuario comum" /TR $iniciar /SC ONCE /ST 23:59 /RU pdvcomum /RP $senha /F | Out-Null
