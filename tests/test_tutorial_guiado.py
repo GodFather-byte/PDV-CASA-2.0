@@ -21,6 +21,7 @@ class TestTutorial(BaseQt):
         principal.show()
         self.assertEqual(principal.menu_grupos.itemText(0), "Tutoriais")
         self.assertEqual(principal.menu_grupos.itemText(1), "Operação")
+        self.assertEqual(principal.menu_grupos.currentIndex(), 1)
         self.assertEqual(principal.botoes["tutoriais"].text(), "Cadastrar um produto")
         principal.busca_modulos.setText("tutoriais")
         self.assertTrue(principal.botoes["tutoriais"].isVisible())
