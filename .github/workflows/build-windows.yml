@@ -98,6 +98,25 @@ jobs:
           if (-not $p.WaitForExit(300000)) { $p.Kill(); throw "O instalador travou (mais de 5 minutos)." }
           if ($p.ExitCode -ne 0) { if (Test-Path $log) { Get-Content $log -Tail 40 }; throw "O instalador terminou com erro (código $($p.ExitCode))." }
           if (-not (Test-Path "$destino\WillPDV.exe")) { throw "O instalador não colocou o WillPDV.exe em $destino." }
+          # Tarefa do SISTEMA que instala as atualizações sem a janela de administrador (src/atualizacao/tarefa.py):
+          # existe, aponta para o programa instalado, qualquer usuário pode iniciar e ela recusa um pedido sem assinatura.
+          $xml = (schtasks /Query /TN "WillPDV Atualizacao" /XML) -join "`n"
+          if ($LASTEXITCODE -ne 0) { Get-Content "$env:ProgramData\WillPDV\atualizacao\tarefa.log" -ErrorAction SilentlyContinue; throw "O instalador não criou a tarefa de atualização." }
+          if ($xml -notmatch "--aplicar-atualizacao" -or $xml -notmatch [regex]::Escape("$destino\WillPDV.exe")) { $xml; throw "A tarefa de atualização não aponta para o programa instalado." }
+          $agenda = New-Object -ComObject Schedule.Service; $agenda.Connect()
+          $acesso = $agenda.GetFolder("\").GetTask("WillPDV Atualizacao").GetSecurityDescriptor(4)
+          if ($acesso -notmatch [regex]::Escape("(A;;GRGX;;;AU)")) { $acesso; throw "Usuários comuns não conseguem iniciar a tarefa de atualização." }
+          $pedidos = "$env:ProgramData\WillPDV\atualizacao"
+          '{"id":"0123456789abcdef","edicao":"willpdv","canal":"estavel","versao":"99.0.0","sha256":"00","tamanho":1,"url":"https://x","notas":"","obrigatoria":0,"minima":"","assinatura":"00"}' | Set-Content -Encoding utf8 "$pedidos\pedido.json"
+          Set-Content -Value "x" "$pedidos\pacote.exe"
+          schtasks /Run /TN "WillPDV Atualizacao" | Out-Null
+          $resultado = "$pedidos\resultado-0123456789abcdef.txt"
+          for ($i = 0; $i -lt 60 -and -not (Test-Path $resultado); $i++) { Start-Sleep -Seconds 2 }
+          if (-not (Test-Path $resultado)) { throw "A tarefa de atualização não respondeu ao pedido." }
+          $texto = Get-Content $resultado -Raw
+          if ($texto -notmatch "^recusada: assinatura") { $texto; throw "A tarefa aceitou um pedido sem assinatura válida." }
+          if (-not (Test-Path "$destino\WillPDV.exe")) { throw "A tarefa mexeu no programa instalado ao recusar o pedido." }
+          Remove-Item "$pedidos\pedido.json", "$pedidos\pacote.exe", $resultado -ErrorAction SilentlyContinue
           $saida = Join-Path $env:RUNNER_TEMP "autoteste-instalado.txt"
           $t = Start-Process -FilePath "$destino\WillPDV.exe" -ArgumentList "--autoteste", "`"$saida`"" -PassThru
           if (-not $t.WaitForExit(240000)) { $t.Kill(); throw "O autoteste do programa instalado travou." }

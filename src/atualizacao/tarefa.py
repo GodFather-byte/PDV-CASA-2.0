@@ -125,7 +125,7 @@ def pedir_ao_windows(executar=subprocess.run, programa: str | None = None) -> bo
 def ler_pedido(pasta: Path, versao_instalada: str, edicao: str, publica_hex: str | None = None) -> dict:
     """Confere tudo o que veio da pasta aberta ao usuário. Lança PedidoRecusado com o motivo."""
     try:
-        pedido = json.loads((pasta / PEDIDO).read_text(encoding="utf-8"))
+        pedido = json.loads((pasta / PEDIDO).read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
         raise PedidoRecusado("sem pedido válido") from None
     if not isinstance(pedido, dict) or not _ID.match(str(pedido.get("id") or "")):
@@ -149,7 +149,7 @@ def preparar_aplicacao(pasta: Path, programa: Path, exe: str, versao_instalada: 
     Devolve (script, id). Lança PedidoRecusado (o resultado já fica gravado com o motivo)."""
     ident = "recusado"
     try:
-        bruto = json.loads((pasta / PEDIDO).read_text(encoding="utf-8"))
+        bruto = json.loads((pasta / PEDIDO).read_text(encoding="utf-8-sig"))
         if isinstance(bruto, dict) and _ID.match(str(bruto.get("id") or "")):
             ident = bruto["id"]
     except (OSError, ValueError):
