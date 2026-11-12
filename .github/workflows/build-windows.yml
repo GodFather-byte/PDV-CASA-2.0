@@ -109,6 +109,9 @@ jobs:
           if (Test-Path $saidaQt) { Get-Content $saidaQt }
           if ($qt.ExitCode -ne 0) { throw "Autoteste Qt instalado falhou." }
 
+      - name: Consulta automática real do programa instalado (envio de vendas desligado)
+        run: python -m tools.homologar_consulta_atualizacao --programa "$env:RUNNER_TEMP\WillPDV-instalado\WillPDV.exe"
+
       # O caso do PC da boate: o WillPDV continua rodando (tela de entrada aberta e o processo de segundo plano --sync, que nem
       # janela tem) quando se roda o instalador de novo. O Restart Manager não fecha o que não tem janela e a instalação travava em
       # "os aplicativos a seguir estão usando arquivos que precisam ser atualizados". Aqui reproduzimos isso e exigimos que passe.
@@ -371,6 +374,7 @@ jobs:
           if (-not $t.WaitForExit(240000)) { $t.Kill(); throw "O autoteste do programa instalado travou." }
           if (Test-Path $saida) { Get-Content $saida }
           if ($t.ExitCode -ne 0) { throw "Autoteste do programa instalado falhou (código $($t.ExitCode))." }
+          python -m tools.homologar_consulta_atualizacao --programa "$destino\WillAdega.exe"
           $gui = Start-Process -FilePath "$destino\WillAdega.exe" -PassThru
           $bg = Start-Process -FilePath "$destino\WillAdega.exe" -ArgumentList "--sync" -PassThru
           Start-Sleep -Seconds 8

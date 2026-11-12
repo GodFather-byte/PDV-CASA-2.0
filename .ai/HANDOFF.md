@@ -15,6 +15,9 @@ nem rodava a busca. Criado ServicoAtualizacao independente, iniciado pelo App
 no caixa principal com banco em arquivo, a cada 30 s (consulta HTTP respeita
 intervalo de 6 h do cliente). Trava por banco serializa App e --sync para não
 baixar/instalar duas vezes. Novos módulos registrados no autoteste.
+70 testes focados passaram. Homologação nova no CI abre o executável instalado
+com banco/nuvem fictícios e sync_quase_tempo_real=N, exigindo consulta real
+HTTP automática sem fechar o programa, nas três edições.
 Não foi alterado src/sync/sincronizador.py. Falta CI/build/publicação.
 
 ## Produção
