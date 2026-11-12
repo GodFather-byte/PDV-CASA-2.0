@@ -1,59 +1,36 @@
-# Handoff — Retomada da atualização e Casa Verde (12/11/2026)
+# Handoff — Tutoriais no topo do menu (12/11/2026)
 
-## Incidente e produção
+Pedido do dono: colocar um menu Tutoriais bem no topo, antes de Operação.
+Branch `tutoriais-no-topo`, criada de origin/main (1.14.2).
 
-Casa Verde informou abre/fecha rapidamente após atualização; voltou a abrir
-normalmente após executar manualmente o instalador 1.14.1 do GitHub. A causa
-local não foi confirmada por logs. Não atribuir o incidente definitivamente
-a uma hipótese de código.
+## Pronto
 
-PR #80 integrado e Render PDV_ATUALIZACAO_PAUSADA=1: API conferida com cache
-busting, retorna pausada=true e sem pacote nas três edições. A pausa não
-reverte downloads já locais. Não alterar vendas, licença ou apagar banco.
-
-## Correção neste branch (`corrigir-retomada-atualizacao`)
-
-- Instaladores encerram o PDV sem /T, preservando cmd/instalador descendentes.
-- Script verifica saída do instalador, usa a pasta de instalação original,
-  registra log e exige comprovante da versão nova (retorno zero de executável
-  antigo não basta). Em falha tenta restaurar a cópia e registra resultado.
-- O pendente é consumido antes de disparar; uma tentativa não confirmada
-  exige conferência, sem repetir instalação a cada abertura. Backup preservado
-  por versão; arquivo ausente/versão inválida não disparam instalador.
-- Confirmação verifica versão esperada e dependências Qt; comprovante novo só
-  nasce depois de conferir. Botão Instalar passa o callback real (antes podia
-  anunciar instalação sem executá-la).
-- PDV_ATUALIZACAO_CLIENTE_MINIMO permite impedir oferta automática a clientes
-  com o mecanismo antigo. Configurar 1.14.2 antes de retirar a pausa: a primeira
-  correção pode exigir instalador manual, que o cliente pode executar remotamente
-  orientado, sem visita. Não prometer que a versão antiga conserta a si própria.
-- Versão preparada 1.14.2. Não reativar oferta sem homologar o fluxo completo.
+- `src/ui_qt/app.py`: Tutoriais é a primeira categoria do menu lateral,
+  seguida de Operação. Reutiliza a antiga categoria Ajuda, mantendo sete
+  categorias e o espaçamento compacto que passou no Windows.
+- Botão Cadastrar um produto inicia o guia diretamente, sem seletor repetido.
+  Mantém verificação de acesso, repetição do guia e entrada Primeiros passos.
+- Texto comum às três edições. Próximos guias ainda não implementados:
+  grupo/subgrupo; operador com senha; cliente/caderneta.
+- Versão preparada 1.14.3 e MAPA atualizado.
 
 ## Validação
 
-- 68 testes focados passaram em offscreen; quatro casos exclusivos Windows
-  pulados localmente. Incluem regras de tentativa, confirmação e versão mínima.
-- Casos Windows executam cmd real com executáveis controlados compilados em C#:
-  sucesso; instalador falha; executável antigo retorna zero; instalador encerra
-  o pai sem matar cmd/filhos. O comando taskkill vem do .iss real.
-- 69 testes focados passaram no Windows na revisão b346d3d, incluindo quatro
-  execuções reais de cmd com caminhos contendo espaços e acentos. CRLF duplicado
-  e leitura de nomes acentuados no findstr foram corrigidos durante a validação.
-- Geração, autoteste e instalação Windows das três edições passaram na revisão
-  02385a0; ajustes posteriores no script foram cobertos pelo cmd real. Builds
-  finais devem passar novamente na main antes de disponibilizar instaladores.
-- Suíte completa local executou 2.767 testes na revisão inicial: dois failures
-  do licenciador e um erro da central por ausência de display Tk; 28 pulados
-  (incluindo quatro exclusivos Windows). Regressões focadas repetidas após
-  ajustes. actionlint e diff --check passaram.
-- Não confundir processos controlados com UAC/antivírus/reboot homologados
-  em todas as lojas.
+31 testes de tutorial, primeiros passos e operação responsiva passaram em
+QT_QPA_PLATFORM=offscreen. Novo caso confere ordem das categorias e abertura
+real do guia pelo botão. diff --check passou. CI Windows e build final ainda
+precisam ser conferidos antes de disponibilizar o instalador.
 
-## Próximos passos
+## Produção e pendências preservadas
 
-Conferir CI e instalar/autotestar os executáveis no Windows antes de publicação.
-PDV_ATUALIZACAO_CLIENTE_MINIMO=1.14.2 já foi configurada no Render, preservando
-a pausa global. Manter a oferta automática pausada até confirmar a primeira
-instalação manual da correção e o fluxo completo. Preservar chave pública e privada
-existentes. Não expor segredos. Estado de Casa Verde: recuperado, segundo o dono.
-Próximos tutoriais: grupo/subgrupo, operador com senha, cliente/caderneta.
+Casa Verde foi recuperada pelo instalador manual 1.14.1. Correção de retomada
+1.14.2 foi integrada pelo PR #81 e publicada. A causa local não foi confirmada
+por logs. Render continua com PDV_ATUALIZACAO_PAUSADA=1 e
+PDV_ATUALIZACAO_CLIENTE_MINIMO=1.14.2; NÃO reativar automaticamente por causa
+desta alteração visual. Não houve alteração em backend, sincronizador, banco,
+licença, assinatura ou variáveis da nuvem neste trabalho.
+
+A primeira correção de clientes antigos pode exigir instalador completo manual.
+Ainda falta confirmação da instalação da correção na Casa Verde e homologação
+de UAC/antivírus/reboot nas lojas antes de retirar a pausa. Publicação do pacote
+não comprova instalação em cada caixa. Não expor segredos nem apagar dados.
