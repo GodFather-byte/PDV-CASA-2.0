@@ -45,6 +45,12 @@ parar de depender de visitas às lojas para atualizar.
 - Não houve build/instalação física Windows nem atualização de loja real nesta
   sessão. Não afirmar que as lojas já receberam 1.14.1.
 
+## Correção antes do merge
+
+O CI Windows detectou leitura do JSON UTF-8 pelo encoding padrão do sistema
+no teste. Corrigido o teste para ler UTF-8 explicitamente, como a gravação.
+Incluído job Windows rápido de publicação além da matriz completa.
+
 ## Pendências e continuidade
 
 - O dono foi perguntado sobre a chave privada usada na 1.12.0. Não solicitar o

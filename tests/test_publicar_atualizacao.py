@@ -50,7 +50,7 @@ class TestePublicacao(unittest.TestCase):
             dados = json.loads(abrir.call_args.args[0].data)
             self.assertTrue(conferir(dados, PUBLICA))
             self.assertEqual(dados['edicao'], 'willrestaurante')
-            self.assertEqual(json.loads(self.saida.read_text()), dados)
+            self.assertEqual(json.loads(self.saida.read_text(encoding="utf-8")), dados)
 
     def test_minima_nao_invalida_assinatura_da_resposta(self):
         from backend.atualizacao_remota import resposta_publica
