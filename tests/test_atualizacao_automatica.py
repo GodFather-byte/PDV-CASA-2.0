@@ -122,6 +122,16 @@ class TesteNuvem(unittest.TestCase):
                 self.assertIsNone(resposta["pacote"])
                 self.assertTrue(resposta["pausada"])
 
+    def test_cliente_antigo_nao_recebe_instalacao_automatica(self):
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"PDV_ATUALIZACAO_CLIENTE_MINIMO": "1.14.2"}):
+            resposta = self.http.get("/v1/atualizacao/ultima", params={"edicao": "willpdv", "versao": "1.14.1"}).json()
+            self.assertFalse(resposta["disponivel"])
+            self.assertTrue(resposta["instalacao_manual_necessaria"])
+            self.assertIsNone(resposta["pacote"])
+            resposta = self.http.get("/v1/atualizacao/ultima", params={"edicao": "willpdv", "versao": "1.14.2"}).json()
+            self.assertNotIn("instalacao_manual_necessaria", resposta)
+
     def test_arquivo_local_so_sai_se_o_hash_conferir(self):
         import tempfile
         from backend.atualizacao_remota import publicar

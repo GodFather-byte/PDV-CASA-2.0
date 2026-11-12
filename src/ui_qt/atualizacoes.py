@@ -226,7 +226,7 @@ class JanelaAtualizacoes(QDialog):
         return True
 
     def instalar_se_livre(self):
-        from src.atualizacao.cliente import caixa_ocupado, rodada
+        from src.atualizacao.cliente import caixa_ocupado, rodada, disparar_instalacao
         try:
             self.exigir_acesso()
         except ErroPermissao as erro:
@@ -240,7 +240,7 @@ class JanelaAtualizacoes(QDialog):
             import requests
         except ImportError:
             requests = None
-        resultado = rodada(self.ctx.banco, requests, forcar=True)
+        resultado = rodada(self.ctx.banco, requests, forcar=True, instalar=disparar_instalacao)
         if resultado.get("acao") == "instalar":
             self.mensagem.setText(f"Instalando a versão {resultado['versao']}. O programa vai fechar e abrir de novo.")
             return True
