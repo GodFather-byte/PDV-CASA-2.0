@@ -61,6 +61,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Custo congelado e rateio analítico de devoluções | `custos_venda.py`; fila imutável em `src/sync/devolucoes_envio.py` |
 | Envio por mudança, batimento leve e estado da fila | `src/sync/painel_ritmo.py`, `painel_status.py`; indicador em `ui_qt/estado_nuvem.py` |
 | Ledger e resumo de devoluções na nuvem | `backend/painel_devolucoes.py` |
+| Verificador automático independente da sincronização | `src/atualizacao/servico.py`, iniciado por `ui_qt/app.py`; consulta HTTP padrão e trava por banco em `atualizacao/cliente.py`; testes `test_servico_atualizacao.py` |
 | Retomada e recuperação da atualização | `src/atualizacao/cliente.py`, `src/app.py`, `instalador/*.iss`; regressão em `tests/test_retomada_atualizacao.py` e execução real de cmd/descendentes no Windows em `tests/test_atualizacao_cmd_windows.py` |
 | Publicação de atualização assinada das três edições | `.github/workflows/publicar-pacote.yml`, `tools/publicar_atualizacao.py`, `src/atualizacao/manifesto.py`, `backend/atualizacao_remota.py`; guia `docs/ATUALIZACAO.md` |
 | Verificação do commit publicado | `tools/verificar_nuvem.py`, rota pública `/v1/versao`; guia `docs/ENTREGA_1_10.md` |

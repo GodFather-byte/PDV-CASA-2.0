@@ -10,6 +10,11 @@ Branch corrigir-consulta-automatica: rodada agora carrega requests quando não
 há cliente injetado. Retomada na abertura usa somente_local=True, preservando
 abertura sem rede e sem download síncrono. Versão 1.14.4 preparada.
 66 testes focados passaram (retomada, atualização, Qt e rede de caixas).
+Também havia dependência de sync_quase_tempo_real=N (padrão): serviço interno
+nem rodava a busca. Criado ServicoAtualizacao independente, iniciado pelo App
+no caixa principal com banco em arquivo, a cada 30 s (consulta HTTP respeita
+intervalo de 6 h do cliente). Trava por banco serializa App e --sync para não
+baixar/instalar duas vezes. Novos módulos registrados no autoteste.
 Não foi alterado src/sync/sincronizador.py. Falta CI/build/publicação.
 
 ## Produção

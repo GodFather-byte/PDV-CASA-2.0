@@ -519,6 +519,7 @@ class TestAppQt(BaseQt):
                     patch("src.ui_qt.app.ServicoPonte") as ponte, \
                     patch("src.ui_qt.app.ServicoPorteiro") as porteiro, \
                     patch("src.ui_qt.app.ServicoSincronizacao") as sincronizacao, \
+                    patch("src.ui_qt.app.ServicoAtualizacao") as atualizacao, \
                     patch("src.controllers.utilitario_controller.UtilitarioController.idade_backup_horas",
                           return_value=None), \
                     patch("src.controllers.utilitario_controller.UtilitarioController.backup_automatico") as backup:
@@ -527,11 +528,13 @@ class TestAppQt(BaseQt):
                 ponte.return_value.iniciar.assert_called_once()
                 porteiro.return_value.iniciar.assert_called_once()
                 sincronizacao.return_value.iniciar.assert_called_once()
+                atualizacao.return_value.iniciar.assert_called_once()
                 app.finalizar()
                 impressao.return_value.parar.assert_called_once()
                 ponte.return_value.parar.assert_called_once()
                 porteiro.return_value.parar.assert_called_once()
                 sincronizacao.return_value.parar.assert_called_once()
+                atualizacao.return_value.parar.assert_called_once()
                 self.assertEqual(backup.call_count, 2)
                 backup.assert_any_call("início")
                 backup.assert_any_call("saída", minimo_min=60)

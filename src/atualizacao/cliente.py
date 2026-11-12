@@ -196,6 +196,23 @@ def precisa_consultar(banco) -> bool:
 
 def rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: str | None = None,
            somente_local: bool = False) -> dict:
+    """Serializa a atualização por banco, inclusive entre o aplicativo e o --sync."""
+    from src.core.instancia import InstanciaUnica
+    if getattr(banco, "remoto", False):
+        return {"acao": "caixa_adicional"}
+    caminho = getattr(banco, "caminho", ":memory:")
+    trava = InstanciaUnica(str(caminho) + ".atualizacao") if caminho != ":memory:" else None
+    if trava is not None and not trava.adquirir():
+        return {"acao": "em_andamento"}
+    try:
+        return _rodada(banco, http, forcar, instalar, publica_hex, somente_local)
+    finally:
+        if trava is not None:
+            trava.liberar()
+
+
+def _rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: str | None = None,
+           somente_local: bool = False) -> dict:
     """Consulta, baixa e, se o caixa estiver livre, dispara a instalação. Devolve o que fez."""
     if not banco.cfg("api_url").strip():
         return {"acao": "sem_nuvem"}
