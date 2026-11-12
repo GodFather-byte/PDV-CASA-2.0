@@ -1,55 +1,50 @@
-# Handoff — Consulta automática e novo assistente de produtos (12/11/2026)
+# Handoff — Atualização automática sem a janela de administrador (12/11/2026)
 
-## Atualizações: falha identificada
+Branch `atualizacao-sem-uac`, criada da main depois do merge do #83 (consulta automática) e do #84 (menu).
+Pedido do dono: "as atualizações automáticas estão erradas". Guia atualizado: `docs/ATUALIZACAO.md`.
 
-Sincronizador e serviço interno usam http=None por padrão. O cliente de
-atualização retornava sem consultar nessa condição; a publicação do manifesto
-não bastava para os caixas buscarem o pacote automaticamente.
+## O que estava errado e o que mudou
 
-Branch corrigir-consulta-automatica: rodada agora carrega requests quando não
-há cliente injetado. Retomada na abertura usa somente_local=True, preservando
-abertura sem rede e sem download síncrono. Versão 1.14.4 preparada.
-66 testes focados passaram (retomada, atualização, Qt e rede de caixas).
-Também havia dependência de sync_quase_tempo_real=N (padrão): serviço interno
-nem rodava a busca. Criado ServicoAtualizacao independente, iniciado pelo App
-no caixa principal com banco em arquivo, a cada 30 s (consulta HTTP respeita
-intervalo de 6 h do cliente). Trava por banco serializa App e --sync para não
-baixar/instalar duas vezes. Novos módulos registrados no autoteste.
-70 testes focados passaram. Homologação nova no CI abre o executável instalado
-com banco/nuvem fictícios e sync_quase_tempo_real=N, exigindo consulta real
-HTTP automática sem fechar o programa, nas três edições.
-A instalação automática agora espera turno fechado e nenhuma venda aberta;
-o operador pode iniciar manualmente com o caixa livre. Downloads podem ocorrer
-em segundo plano durante o trabalho.
-71 testes focados passaram após proteção do turno. Geração, instalação,
-autoteste e consulta HTTP real do executável instalado passaram nas três edições
-(revisão e26204f). Ajustes posteriores preservaram Operação aberta por padrão
-com Tutoriais no topo (46 testes de regressão passaram) e proteção de turno.
-Suíte completa inicial: 2.773 testes, 28 pulados; falhas Tk conhecidas e três
-expectativas de menu, corrigidas pelo padrão Operação e reexecutadas com sucesso.
-Não houve nova suíte completa após esses ajustes. src/sync/sincronizador.py
-não foi alterado. Falta publicação final e reativação com mínimo 1.14.4.
+1. **Pedia administrador.** O instalador tem `PrivilegesRequired=admin`; o PDV roda sem. A automática abria a janela
+   do UAC e falhava sem alguém para clicar em Sim (a restauração em Arquivos de Programas também). O CI não pegava:
+   o runner do GitHub já é administrador.
+   - `instalador/tarefa_atualizacao.ps1` + os três `.iss`: criam a tarefa `<Programa> Atualizacao` (SISTEMA,
+     usuários autenticados só podem iniciar: ACE `(A;;GRGX;;;AU)`), a pasta `{commonappdata}\<Programa>\atualizacao`
+     (users-modify) e apagam a tarefa ao desinstalar.
+   - `src/atualizacao/tarefa.py`: lado do operador (`preparar_pedido`, `script_espera`, `pedir_ao_windows`) e lado do
+     SISTEMA (`ler_pedido` confere assinatura, edição, versão mais nova, tamanho e SHA-256; `preparar_aplicacao`
+     copia para pasta do SISTEMA, guarda o programa, grava o `aplicar.cmd`; `aplicar_como_sistema`).
+   - `src/app.py`: `--aplicar-atualizacao`; `--confirmar-atualizacao ... --sem-banco` (o SISTEMA não abre o banco do
+     operador; a abertura seguinte confirma em `conferir_tentativa`).
+   - `cliente.disparar_instalacao`: tenta a tarefa; sem ela, caminho antigo (`_disparar_com_administrador`).
+     O pacote assinado vai ao lado do .exe baixado (`<arquivo>.json`).
+2. **Tentativa falha parava tudo em silêncio.** `CHAVE_RESULTADO` guarda o que houve; `conferir_tentativa` (abertura),
+   `falha_pendente`, `aviso()` com `falha`; menu e janela de Atualizações mostram; `painel_envio` manda
+   `atualizacao_travada`; a central (`saude_das_lojas`, `central_web/app.js`) mostra o selo "Atualização travada".
+3. **Fechava o PDV em uso.** `motivo_automatico`: também espera fila de impressão vazia e 10 min após o fechamento do
+   turno. Abertura com instalação disparada não abre a tela (`ui_qt/aviso_atualizando.py`).
+4. **Render dormindo.** Timeout de leitura 60 s; sem resposta, `CHAVE_FALHA_CONSULTA` e nova tentativa em 15 min.
+5. Pacote de outra edição recusado (`pacote_valido`); `sem_pacote()` dá o motivo certo (antes "assinatura_invalida"
+   quando a nuvem só dizia "em dia" ou "pausada").
 
-## Produção
+## Validação
 
-Casa Verde recuperada manualmente em 1.14.1; 1.14.2 corrigiu instalação e
-1.14.3 colocou Tutoriais no topo. Render ainda tem pausa global e mínimo
-1.14.2. Não remover proteção para mecanismos antigos sem validar o caminho.
-Uma primeira atualização de clientes antigos poderá precisar ser executada
-pelo operador com link ou acesso remoto, sem visita do fornecedor. Não
-prometer atualização remota de código que ainda não faz a consulta HTTP.
+- `tests/test_atualizacao_tarefa.py` (24 casos) e os testes de atualização existentes; central com o selo.
+- CI do Windows (`build-windows.yml`, job do WillPDV): depois de instalar, confere que a tarefa existe, aponta
+  para o programa instalado, aceita usuário comum e recusa um pedido sem assinatura (roda de verdade como SISTEMA).
+- **Não testado:** atualização real num PC sem administrador, com antivírus e UAC padrão. Roteiro abaixo.
 
-## Novo escopo pedido pelo dono (ainda não implementado)
+## Antes de reativar a oferta (Render: PDV_ATUALIZACAO_PAUSADA=1 continua)
 
-Assistente com Gemini (preferência pela cota gratuita do Google AI Studio):
-ler fotos/PDF de notas de fornecedor, preparar cadastro de produtos e custos,
-e procurar fotos na internet para a adega. Para produtos existentes manter
-preço de venda e alertar quando a margem cair. Produtos novos: preço definido
-pelo operador. Conferência antes de gravar. Chave só na nuvem, nunca nos caixas.
+1. Instalar esta versão à mão num caixa de teste (cria a tarefa). Conferir no Agendador de Tarefas.
+2. Publicar uma versão de teste maior, tirar a pausa só para esse teste e deixar o caixa sem turno aberto 10 min.
+3. Confirmar: sem janela de administrador, o programa fecha, instala, reabre na versão nova, e
+   `%ProgramData%\WillPDV\atualizacao\resultado-*.txt` diz `instalada`.
+4. Repetir com o instalador corrompido (deve sair `recusada`) e ver o selo na central.
+5. Só então tirar a pausa e subir `PDV_ATUALIZACAO_CLIENTE_MINIMO` para esta versão.
 
-Já existem importação XML e NotasDonoController; fotos via Open Food Facts,
-inclusive busca em lote com aprovação. Reutilizar essas regras e evitar
-cadastros duplicados/associação automática de embalagem errada. Necessária
-configuração segura da chave Gemini para validar chamada real; não pedir valor
-em chat. Preservar uso offline do caixa. Próximos tutoriais: grupo/subgrupo,
-operador com senha, cliente/caderneta.
+## Pendências
+
+- Antigravity: revisar a linha nova em `backend/central_fornecedor.py` e `central_web/app.js`.
+- Caixas instalados antes desta versão precisam do instalador manual uma última vez.
+- Tutoriais seguintes (grupo e subgrupo, operador com senha, cliente) continuam pendentes.
