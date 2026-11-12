@@ -52,9 +52,14 @@
     <header class="cabecalho">
       <div>
         <strong id="nome-rede">Rede</strong>
-        <span class="status-atualizacao">Todas as lojas juntas. Cada caixa continua o seu.</span>
+        <span class="status-atualizacao" id="rede-atualizado">Todas as lojas juntas. Cada caixa continua o seu.</span>
       </div>
-      <button type="button" id="sair-rede" class="botao-icone">Sair</button>
+      <div class="acoes-cabecalho">
+        <button type="button" id="botao-atualizar-rede" class="botao-icone" title="Atualizar agora" aria-label="Atualizar agora">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg><span class="rot">Atualizar</span>
+        </button>
+        <button type="button" id="sair-rede" class="botao-icone">Sair</button>
+      </div>
     </header>
     <main class="conteudo">
       <div class="filtros filtros-quebra" role="group" aria-label="Período da rede">
@@ -69,25 +74,34 @@
         <input id="rede-ate" type="date">
         <button type="button" id="botao-rede-ver" class="botao-secundario">Ver</button>
       </div>
+      <p id="erro-rede" class="erro" role="alert" hidden></p>
       <div class="grade-cartoes">
-        <article class="cartao destaque"><span class="rotulo">Faturamento</span><strong id="rede-faturamento" class="valor-grande">R$ 0,00</strong></article>
+        <article class="cartao destaque"><span class="rotulo">Faturamento da rede</span><strong id="rede-faturamento" class="valor-grande">R$ 0,00</strong></article>
         <article class="cartao"><span class="rotulo">Custo</span><strong id="rede-custo" class="valor-grande">—</strong></article>
         <article class="cartao"><span class="rotulo">Lucro</span><strong id="rede-lucro" class="valor-grande">—</strong><span id="rede-margem" class="detalhe"></span></article>
       </div>
       <section class="bloco">
-        <h2>Por loja</h2>
-        <ul id="lista-rede-lojas" class="lista"></ul>
+        <div class="cabeca-bloco">
+          <h2>Lojas</h2>
+          <span id="rede-resumo-lojas" class="legenda"></span>
+        </div>
+        <p class="legenda">Toque numa loja para abrir o painel dela. Para voltar, use <strong>Todas as lojas</strong> no topo.</p>
+        <ul id="lista-rede-lojas" class="lista-rede"></ul>
       </section>
-      <section class="bloco">
-        <h2>Por forma de pagamento</h2>
+      <section class="bloco" id="bloco-rede-formas" hidden>
+        <h2>Lucro por forma de pagamento</h2>
         <ul id="lista-rede-formas" class="lista"></ul>
       </section>
-      <p id="erro-rede" class="erro" hidden></p>
     </main>
   </section>
 
   <!-- Aplicação -->
   <div id="tela-app" hidden>
+    <!-- Loja aberta pela rede: a volta para a lista de lojas fica sempre à vista, em qualquer aba. -->
+    <div id="faixa-rede" class="faixa-rede" hidden>
+      <button type="button" id="botao-voltar-rede" class="botao-voltar-rede">‹ Todas as lojas</button>
+      <span id="faixa-rede-nome" class="faixa-rede-nome"></span>
+    </div>
     <header class="cabecalho">
       <div class="cabecalho-titulo">
         <img src="icones/icone-192.png" alt="" width="28" height="28">
@@ -104,7 +118,6 @@
         <button type="button" id="botao-ocultar" class="botao-icone" aria-pressed="false" title="Ocultar valores" aria-label="Ocultar valores">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
-        <button type="button" id="botao-voltar-rede" class="botao-icone" hidden>Rede</button>
         <button type="button" id="botao-atualizar" class="botao-icone" title="Atualizar agora" aria-label="Atualizar agora">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg><span class="rot">Atualizar</span>
         </button>
