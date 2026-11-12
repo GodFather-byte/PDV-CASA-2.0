@@ -13,6 +13,20 @@ permissions:
   contents: read
 
 jobs:
+  tutorial-windows:
+    name: Tutorial e telas mínimas / Windows
+    runs-on: windows-latest
+    timeout-minutes: 10
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r requirements.txt -r backend/requirements.txt -r requirements-test.txt
+      - run: python -m unittest tests.test_tutorial_guiado tests.test_operacao_responsiva tests.test_primeiros_passos
+
   publicacao-windows:
     name: Publicação assinada / Windows
     runs-on: windows-latest

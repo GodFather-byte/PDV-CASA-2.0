@@ -1,7 +1,7 @@
 # Handoff — Correção da publicação de atualizações (12/11/2026)
 
-Branch `corrigir-atualizacoes`, criada de `origin/main`. Separada do tutorial
-(`tutorial-guiado`, PR próprio). Não fazer merge sem revisão. Pedido do dono:
+Branch `corrigir-atualizacoes`, criada de `origin/main`. Inclui o tutorial integrado pelo PR #78. O dono autorizou merge e publicação
+em 12/11/2026; correção da atualização no PR #79. Pedido do dono:
 parar de depender de visitas às lojas para atualizar.
 
 ## Diagnóstico comprovado (sem alterar produção)
@@ -16,7 +16,7 @@ parar de depender de visitas às lojas para atualizar.
   previamente confirmado pelo dono; principal main com auto-deploy por commit.
   Não houve alteração de variáveis, deploy manual ou troca de chaves.
 
-## Pronto no branch
+## Pronto para publicação
 
 - Publicação falha sem chave/token/URL; verifica a compatibilidade da assinatura
   e confere bytes/hash do instalador público antes de anunciar.
@@ -49,7 +49,10 @@ parar de depender de visitas às lojas para atualizar.
 
 O CI Windows detectou leitura do JSON UTF-8 pelo encoding padrão do sistema
 no teste. Corrigido o teste para ler UTF-8 explicitamente, como a gravação.
-Incluído job Windows rápido de publicação além da matriz completa.
+Incluído job Windows rápido de publicação além da matriz completa; passou
+com 57 testes. A matriz completa foi reiniciada com os ajustes e ainda estava
+em andamento antes do merge. Execução Windows anterior teve apenas essa
+falha de encoding do teste; o tutorial teve apenas a rolagem corrigida.
 
 ## Pendências e continuidade
 
@@ -65,5 +68,8 @@ Incluído job Windows rápido de publicação além da matriz completa.
   instalação inicial; confirmar versões das lojas (pergunta enviada).
 - O repositório precisa continuar público para estes URLs de Release. Se for
   privado, o workflow falha e será necessário HTTPS público, como o R2 anterior.
-- Tutorial pendente de revisão no outro branch; próximos tutoriais: grupo e
-  subgrupo; operador com senha; cliente/caderneta.
+- Tutorial de produto integrado (#78), oito passos, conclusão por operador
+  e estoque inicial opcional. Entradas em Primeiros passos e Ajuda > Tutoriais.
+  CI Windows detectou rolagem de 7 px no menu: corrigido o espaçamento lateral.
+  Job rápido de tutorial/telas mínimas passou no Windows (30 testes).
+  Próximos tutoriais: grupo/subgrupo; operador com senha; cliente/caderneta.

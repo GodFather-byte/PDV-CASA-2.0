@@ -1,7 +1,7 @@
 """Cadastros Qt dirigidos pelas entidades e pelo CadastroController existentes."""
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
     QFileDialog, QFormLayout, QHBoxLayout, QHeaderView, QLineEdit, QMessageBox,
@@ -78,6 +78,7 @@ class FormularioCadastro(QDialog):
             if campo.nome in ("custo_medio_cent", "ult_preco_cent") and not ctx.pode("rel_custo"):
                 continue
             editor.setEnabled(not campo.somente_leitura)
+            editor.setObjectName("produto_" + campo.nome)
             self.campos[campo.nome] = editor
             secoes[campo.secao].addRow(campo.rotulo + (" *" if campo.obrigatorio else ""), editor)
         self.editor_foto = None
@@ -110,11 +111,19 @@ class FormularioCadastro(QDialog):
         self.mensagem = texto("", "aviso")
         layout.addWidget(self.mensagem)
         botoes = QDialogButtonBox()
-        botoes.addButton("Salvar", QDialogButtonBox.ButtonRole.AcceptRole)
+        botoes.addButton("Salvar", QDialogButtonBox.ButtonRole.AcceptRole).setObjectName("tutorial_salvar")
         botoes.addButton("Cancelar", QDialogButtonBox.ButtonRole.RejectRole)
         botoes.accepted.connect(self.salvar)
         botoes.rejected.connect(self.reject)
         layout.addWidget(botoes)
+
+    def preparar_tutorial(self):
+        from src.controllers.tutoriais import Tutoriais
+        self.regra_tutorial = Tutoriais(self.ctx.banco, self.ctx.operador_id)
+        self.estoque_tutorial = QLineEdit()
+        self.estoque_tutorial.setObjectName("tutorial_estoque")
+        self.estoque_tutorial.setPlaceholderText("Quantidade inicial (opcional)")
+        self.layout().insertWidget(0, self.estoque_tutorial)
 
     def preencher_pela_internet(self, http=None) -> bool:
         """Produto novo: o nome (se ainda vazio) e a foto pelo código de barras. Nada é gravado até Salvar."""
@@ -158,7 +167,12 @@ class FormularioCadastro(QDialog):
     def salvar(self):
         try:
             self.exigir_acesso()
-            self.id_ = self.ctx.cadastros.salvar(self.chave, self.valores(), self.id_)
+            if hasattr(self, "regra_tutorial") and self.id_ is None:
+                self.id_ = self.regra_tutorial.cadastrar(
+                    self.ctx.cadastros, self.valores(), self.estoque_tutorial.text(),
+                    concluir=getattr(self, "tutorial_ativo", lambda: True)())
+            else:
+                self.id_ = self.ctx.cadastros.salvar(self.chave, self.valores(), self.id_)
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
             return
@@ -380,6 +394,8 @@ class FormularioCombo(QDialog):
 
 
 class JanelaCadastro(QDialog):
+    formulario_aberto = Signal(object)
+
     def __init__(self, ctx, chave, parent=None):
         super().__init__(parent)
         self.ctx, self.chave = ctx, chave
@@ -394,12 +410,15 @@ class JanelaCadastro(QDialog):
         layout.addWidget(texto(self.entidade.titulo, "titulo"))
         barra = QHBoxLayout()
         self.busca = QLineEdit()
+        self.busca.setObjectName("tutorial_busca")
         self.busca.setPlaceholderText("Pesquisar e pressionar Enter")
         self.busca.returnPressed.connect(self.atualizar)
         barra.addWidget(self.busca, 1)
         for titulo, acao in (("Pesquisar", self.atualizar), ("Novo", self.novo),
                              ("Editar", self.editar), ("Excluir", self.excluir)):
             botao = QPushButton(titulo)
+            if titulo == "Novo":
+                botao.setObjectName("tutorial_novo")
             botao.clicked.connect(acao)
             barra.addWidget(botao)
         if chave == "produtos":
@@ -663,6 +682,7 @@ class JanelaCadastro(QDialog):
         try:
             self.exigir_acesso()
             dialogo = FormularioCadastro(self.ctx, self.chave, id_, self)
+            self.formulario_aberto.emit(dialogo)
             dialogo.exec()
             dialogo.deleteLater()
             self.atualizar()
