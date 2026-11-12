@@ -296,6 +296,7 @@ class JanelaPrincipal(QMainWindow):
         grupos["Produtos e estoque"].addWidget(self.btn_notas_dono)
         for grade in grupos.values():
             grade.addStretch(1)
+        self.menu_grupos.setCurrentIndex(1)  # Operação aberta por padrão; Tutoriais continua no topo.
         self.busca_modulos.textChanged.connect(self.filtrar_modulos)
         self.sessao = tema.texto("", "suave")
         lateral.addWidget(self.sessao)
