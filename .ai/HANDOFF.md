@@ -36,14 +36,24 @@ reverte downloads já locais. Não alterar vendas, licença ou apagar banco.
 - Casos Windows executam cmd real com executáveis controlados compilados em C#:
   sucesso; instalador falha; executável antigo retorna zero; instalador encerra
   o pai sem matar cmd/filhos. O comando taskkill vem do .iss real.
-- actionlint e diff --check; resultado de CI Windows/build ainda a conferir.
-- Suíte completa iniciada nesta revisão, aguarda relatório. Tk sem display é
-  limitação conhecida. Não confundir processos controlados com UAC/antivírus/
-  reboot homologados em todas as lojas.
+- 69 testes focados passaram no Windows na revisão b346d3d, incluindo quatro
+  execuções reais de cmd com caminhos contendo espaços e acentos. CRLF duplicado
+  e leitura de nomes acentuados no findstr foram corrigidos durante a validação.
+- Geração, autoteste e instalação Windows das três edições passaram na revisão
+  02385a0; ajustes posteriores no script foram cobertos pelo cmd real. Builds
+  finais devem passar novamente na main antes de disponibilizar instaladores.
+- Suíte completa local executou 2.767 testes na revisão inicial: dois failures
+  do licenciador e um erro da central por ausência de display Tk; 28 pulados
+  (incluindo quatro exclusivos Windows). Regressões focadas repetidas após
+  ajustes. actionlint e diff --check passaram.
+- Não confundir processos controlados com UAC/antivírus/reboot homologados
+  em todas as lojas.
 
 ## Próximos passos
 
 Conferir CI e instalar/autotestar os executáveis no Windows antes de publicação.
-Manter a oferta automática pausada até validar; preservar chave pública e privada
+PDV_ATUALIZACAO_CLIENTE_MINIMO=1.14.2 já foi configurada no Render, preservando
+a pausa global. Manter a oferta automática pausada até confirmar a primeira
+instalação manual da correção e o fluxo completo. Preservar chave pública e privada
 existentes. Não expor segredos. Estado de Casa Verde: recuperado, segundo o dono.
 Próximos tutoriais: grupo/subgrupo, operador com senha, cliente/caderneta.
