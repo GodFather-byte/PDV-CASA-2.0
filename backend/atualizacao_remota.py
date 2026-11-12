@@ -105,9 +105,7 @@ def resposta_publica(linha: PacoteAtualizacao, versao_instalada: str | None) -> 
         "obrigatoria": int(linha.obrigatoria or 0), "minima": linha.minima or "",
         "assinatura": linha.assinatura,
     }
-    if (versao_instalada and valida(versao_instalada) and pacote["minima"] and valida(pacote["minima"])
-            and chave(versao_instalada) < chave(pacote["minima"])):
-        pacote["obrigatoria"] = 1
+    # Campos assinados não podem mudar conforme a versão de quem consulta.
     disponivel = not versao_instalada or not valida(versao_instalada) or mais_nova(linha.versao, versao_instalada)
     return {"disponivel": disponivel, "pacote": pacote}
 

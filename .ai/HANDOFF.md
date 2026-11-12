@@ -1,41 +1,63 @@
-# Handoff — Rede de lojas (11/11/2026)
+# Handoff — Correção da publicação de atualizações (12/11/2026)
 
-Uma rede (`grupos`) tem um login no painel e pode ter uma mensalidade só. Cada loja
-guarda o próprio caixa. `lojas.grupo_id` vazio = loja avulsa, com a cobrança de
-antes. Guia: `docs/REDE_LOJAS.md`.
+Branch `corrigir-atualizacoes`, criada de `origin/main`. Separada do tutorial
+(`tutorial-guiado`, PR próprio). Não fazer merge sem revisão. Pedido do dono:
+parar de depender de visitas às lojas para atualizar.
 
-Link: `/painel/?grupo=CHAVE` (a chave também aceita o id numérico). A senha criada
-pelo administrador nasce temporária (`deve_trocar_senha`): o dono troca em
-`POST /v1/painel/grupo/senha` antes de ver os números.
+## Diagnóstico comprovado (sem alterar produção)
 
-API do administrador: `POST /v1/admin/grupos`, `.../lojas`, `.../senha`,
-`.../assinatura`. A central tem a aba Redes (`/v1/fornecedor/grupos`).
+- Último build main `ff93bf2`, job 130939306742, gerou 1.14.0 e saiu com sucesso
+  mesmo informando chave ausente. A versão não foi publicada aos caixas.
+- API em willpdv-nuvem-6sp0.onrender.com oferecia apenas 1.12.0 em PDV/Adega.
+  Assinaturas conferidas com a chave pública do código; HEAD dos instaladores
+  R2 retornou 200 e tamanho igual ao manifesto.
+- Will Restaurante recebia 422 (edição não aceita).
+- Render: serviço srv-dbf5untg1s2s73ejihdg, workspace tea-d3ekasbuibrs73caqdog
+  previamente confirmado pelo dono; principal main com auto-deploy por commit.
+  Não houve alteração de variáveis, deploy manual ou troca de chaves.
 
-Pagamento aprovado da rede grava `licenca_ate` em todas as lojas do grupo.
-`gerar_recorrencias` não emite a cobrança individual de loja que está numa rede.
+## Pronto no branch
 
-## Central da rede no painel (branch `rede-de-lojas`, 11/11/2026)
+- Publicação falha sem chave/token/URL; verifica a compatibilidade da assinatura
+  e confere bytes/hash do instalador público antes de anunciar.
+- Workflow reutilizável publica downloads permanentes em Releases públicos,
+  por edição e commit. Não substitui instalador já anunciado. Jobs PDV/Adega e
+  Restaurante chamam esse workflow. Continua havendo instalador manual separado.
+- Manifesto JSON disponível em artefato/Release depois da conferência. `--saida`
+  também permite guardar o JSON durante publicação pelo terminal.
+- Restaurante aceito no protocolo/CLI. Versão 1.14.1.
+- A API preserva os campos assinados quando a versão está abaixo da mínima;
+  a exigência de instalar continua sendo calculada pelo cliente.
+- Guia ATUALIZACAO.md atualizado; não altera src/sync/sincronizador.py.
 
-Pedido do dono (rede EA Superações): ao entrar numa loja não dava para voltar à lista de lojas.
-Causa: a página guardava a sessão da rede em `sessionStorage` e deixava `willpdv.painel.grupo` gravado com o
-token da loja; ao recarregar ou reabrir o app, abria a tela da rede com o token da loja (404) e o botão
-"Rede" sumia.
+## Validação
 
-- `backend/painel_web/app.js`: sessão da rede em `willpdv.rede.*` (localStorage, fora do prefixo que a troca de
-  loja apaga); `voltarParaRede()` encerra a sessão da loja e reabre a central; sessão de loja vencida dentro
-  da rede volta para a central; "Sair" encerra as duas. Migra quem estava logado na versão anterior.
-- `index.html`/`estilo.css`: faixa fixa "‹ Todas as lojas" no topo da loja; tela da rede com cartão por loja
-  (parte na rede, vendas, lucro, situação do envio) e botão Atualizar. `sw.js` subiu de versão.
-- `backend/grupos.py` (`consolidado`): cada loja ganhou `vendas`, `atualizado_em` e `atraso_min`.
-- `tests/test_rede_painel.py` (5 casos). Conferido no navegador: abrir loja, recarregar, trocar de aba,
-  voltar, reabrir o app, sair. Não testado com a rede de produção.
+- 57 testes focados passaram: publicação, atualização automática, tela Qt,
+  empacotamento e integração do build. O contrato de permissões do workflow
+  foi ajustado para o novo job de publicação (build continua só leitura).
+- actionlint 1.7.7 passou nos três workflows alterados/criados.
+- Suíte completa executada: 2.746 testes, 24 pulados; duas falhas do
+  licenciador e um erro da central por falta de display Tk. Houve também
+  falha no contrato antigo que contava três jobs com escrita; ele foi
+  atualizado para quatro (novo publicador assinado). Reexecução focada de
+  57 testes incluindo esse contrato passou; a suíte completa não foi
+  repetida depois desse ajuste do teste.
+- Não houve build/instalação física Windows nem atualização de loja real nesta
+  sessão. Não afirmar que as lojas já receberam 1.14.1.
 
-A retaguarda na nuvem já está na main (`docs/RETAGUARDA.md`). Aplicar a mesma
-alteração em várias lojas de uma vez continua pendente.
+## Pendências e continuidade
 
-## Pendências
-
-- Antigravity: revisar `backend/grupos.py`, a cobrança da rede e o painel.
-- Homologação do Will Restaurante e impressão em térmica de verdade.
-- Checkout do site de vendas ainda é só WhatsApp.
-- Atualização automática segue sem os segredos `PDV_ATUALIZACAO_*`.
+- O dono foi perguntado sobre a chave privada usada na 1.12.0. Não solicitar o
+  valor em chat. Configurar no segredo PDV_ATUALIZACAO_CHAVE do GitHub, juntamente
+  com PDV_NUVEM_URL e PDV_API_TOKEN, somente pelo cofre de segredos.
+- Não gerar outra chave e substituir a pública: isso rompe a confiança dos
+  caixas já instalados. Sem a original, não é possível assinar novas versões
+  compatíveis com a confiança antiga; planejar migração explicitamente.
+- Depois de revisão/merge e configuração: verificar job de publicação, API
+  pública por edição, assinatura, download/hash e a versão relatada por cada
+  loja. Publicação não confirma instalação. Caixas sem o atualizador exigem
+  instalação inicial; confirmar versões das lojas (pergunta enviada).
+- O repositório precisa continuar público para estes URLs de Release. Se for
+  privado, o workflow falha e será necessário HTTPS público, como o R2 anterior.
+- Tutorial pendente de revisão no outro branch; próximos tutoriais: grupo e
+  subgrupo; operador com senha; cliente/caderneta.

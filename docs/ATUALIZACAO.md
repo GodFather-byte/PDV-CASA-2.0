@@ -10,11 +10,11 @@ O PDV e o `--sync` são iniciados outra vez.
 
 **Os caixas que ainda não têm esta versão precisam de um instalador manual, uma última vez.**
 
-Edições: `willpdv`, `willadega`, `bar` (a edição bar usa o mesmo mecanismo quando existir).
+Edições: `willpdv`, `willadega`, `willrestaurante`, `bar` (a edição bar usa o mesmo mecanismo quando existir).
 
 ## Onde fica o arquivo
 
-O repositório é privado: o caixa não baixa o Release do GitHub. O Render também não deve guardar o
+O repositório está público. O fluxo automático publica instaladores em Releases permanentes por edição e commit, antes de registrar o manifesto. Os links de “última versão” continuam para instalação manual; não servem de pacote assinado porque são substituídos. O Render não deve guardar o
 instalador (disco efêmero e o pedido estoura o tempo). O caminho barato é um **bucket HTTPS público**:
 
 1. Conta gratuita no [Cloudflare R2](https://developers.cloudflare.com/r2/) (10 GB).
@@ -39,21 +39,19 @@ python -c "import secrets; from src.core.ed25519 import chave_publica; s=secrets
 - A primeira linha (64 hex) vai no segredo do GitHub `PDV_ATUALIZACAO_CHAVE` e em lugar nenhum do código.
 - A segunda linha substitui `CHAVE_PUBLICA_HEX` em `src/atualizacao/manifesto.py`.
 
-A chave pública que este repositório já traz corresponde à semente entregue junto com o PR. Guarde-a
-no segredo antes de publicar. Se gerar outra, troque a pública e gere de novo o instalador que os
-caixas vão receber na mão.
+Para caixas já instalados, recupere a semente correspondente à chave pública que eles reconhecem e guarde-a no segredo. Não gere outra só para preencher o segredo ausente. Uma chave diferente exige um plano de migração da confiança e pode exigir instalação manual.
 
 ## Publicar uma versão
 
 1. Suba `VERSAO` em `src/versao.py` e faça merge na `main`. O Actions gera os instaladores.
-2. Envie o `.exe` de cada edição para o bucket (ou para `PDV_ATUALIZACAO_DIR`).
-3. No GitHub, segredos do Actions (Environment ou repositório):
+2. O fluxo automático envia o `.exe` de cada edição ao Release permanente. No fluxo manual, hospede-o antes em um HTTPS público.
+3. No GitHub, segredos do Actions (repositório, para ambos os workflows):
    - `PDV_ATUALIZACAO_CHAVE` — a semente
    - `PDV_NUVEM_URL` — a raiz da API, sem `/v1/...` (ex.: `https://seu-app.onrender.com`)
    - `PDV_API_TOKEN` — o token de administrador da nuvem
-   - `PDV_ATUALIZACAO_BASE` — a URL pública do bucket, sem barra no fim
-4. O job `Registrar manifesto da atualização` assina e chama `POST /v1/admin/atualizacao`.
-   Sem os segredos ele só imprime o SHA-256 e não falha o build.
+   - `PDV_ATUALIZACAO_BASE` não é mais exigido pelo fluxo automático; a hospedagem é o Release público permanente. O bucket existente pode continuar para pacotes manuais.
+4. O workflow reutilizável `publicar-pacote.yml`, chamado pelos builds PDV/Adega/Restaurante, valida a chave, publica o instalador, confere o download público byte a byte, assina e chama `POST /v1/admin/atualizacao`.
+   Sem segredos, com chave incompatível, erro de download ou hash diferente, a publicação falha explicitamente. Os instaladores manuais continuam disponíveis nos jobs separados.
 
 Na mão, a mesma coisa:
 
@@ -77,3 +75,20 @@ Republicar a mesma versão substitui o manifesto. O caixa confere a assinatura e
 
 Menu **Atualizações do programa**: **Verificar atualizações**, **Adiar um dia**, **Instalar com o caixa livre**.
 O aviso pequeno fica no menu principal. Atualização obrigatória não tem adiar.
+
+
+## Diagnóstico de publicação parada
+
+Em 12/11/2026 a API oferecia 1.12.0 para PDV/Adega, com assinatura e downloads válidos,
+enquanto o build 1.14.0 passava sem publicar por falta de `PDV_ATUALIZACAO_CHAVE`.
+O Restaurante era recusado na rota de manifestos. A correção não recupera a chave privada.
+Reutilize a chave que gerou o pacote 1.12.0: trocar a chave pública do código impede os caixas
+instalados de confiar nas novas versões. Não envie a chave em chat nem em arquivo do repositório.
+
+O arquivo `manifesto.json` assinado fica nos artefatos e no Release do pacote; pode ser importado
+em Atualizações na central. Pelo terminal, acrescente `--saida manifesto.json` ao comando de
+publicação. A central não assina texto JSON digitado à mão. Um build ou deploy aprovado não
+comprova que a loja instalou: confira a versão efetivamente informada por cada caixa.
+
+Se o repositório voltar a ser privado, este fluxo falha antes de anunciar um download inacessível.
+Será necessário configurar hospedagem HTTPS pública novamente. Não remover a verificação de assinatura.

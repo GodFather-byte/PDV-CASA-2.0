@@ -117,3 +117,17 @@ jobs:
             gh release create ultima-versao-restaurante --title "Will Restaurante $VERSAO" --notes "Instalador e portátil do commit $GITHUB_SHA, com autoteste do executável e da instalação no Windows." --latest=false
           fi
           gh release upload ultima-versao-restaurante release/WillRestaurante-Instalador.exe release/WillRestaurante-Portatil.zip --clobber
+
+  atualizar_caixas:
+    name: Publicar atualização assinada do restaurante
+    needs: instalador
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publicar-pacote.yml
+    with:
+      edicao: willrestaurante
+      artefato: WillRestaurante-instalador
+      mascara: WillRestaurante-Setup-*.exe
+      versao: ${{ needs.instalador.outputs.versao }}
+    secrets: inherit
