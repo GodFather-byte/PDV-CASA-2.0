@@ -863,6 +863,10 @@ class JanelaPrincipal(QMainWindow):
             pacote = aviso_pacote(self.ctx.banco)
         except Exception:
             pacote = None
+        if pacote and pacote.get("falha"):
+            self.aviso_atualizacao.setText(f"Atualização {pacote['ultima']} não foi concluída. "
+                                           "Abra Atualizações do programa para tentar de novo.")
+            return
         if pacote:
             espera = f" Ainda não instala: {pacote['motivo']}." if pacote.get("motivo") else " O caixa está livre para instalar."
             if pacote["obrigatoria"]:

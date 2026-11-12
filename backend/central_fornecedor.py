@@ -84,7 +84,7 @@ def saude_das_lojas(db, momento: datetime | None = None) -> dict:
     from backend.painel import PainelCaixa
     momento = momento or datetime.now()
     lojas: dict = defaultdict(lambda: {"ultimo_contato": None, "caixas": 0, "versao": None, "edicao_caixa": None,
-                                       "erros_7d": 0, "chamados_abertos": 0})
+                                       "erros_7d": 0, "chamados_abertos": 0, "atualizacao_travada": None})
     mais_nova: tuple = ()                           # a versão mais nova vista em qualquer caixa de qualquer loja
     for c in db.query(PainelCaixa):
         s = lojas[c.chave_loja]
@@ -98,6 +98,9 @@ def saude_das_lojas(db, momento: datetime | None = None) -> dict:
         versao = foto.get("versao_programa") if isinstance(foto, dict) else None
         if versao:
             mais_nova = max(mais_nova, numero_versao(versao))
+        travada = foto.get("atualizacao_travada") if isinstance(foto, dict) else None
+        if isinstance(travada, dict) and travada.get("versao"):   # o caixa tentou atualizar e não subiu
+            s["atualizacao_travada"] = {k: str(travada.get(k) or "")[:200] for k in ("versao", "situacao", "detalhe", "em")}
         if versao and (s["versao"] is None or numero_versao(versao) < numero_versao(s["versao"])):
             s["versao"] = str(versao)[:20]
             s["edicao_caixa"] = str(foto.get("edicao_programa") or "")[:20] or None

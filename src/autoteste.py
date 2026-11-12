@@ -22,7 +22,7 @@ from pathlib import Path
 # `src.app` fica de fora de propósito: no executável ele é o próprio script de entrada (`__main__`), não um módulo importável.
 MODULOS = [
     "src.atualizacao.servico",
-    "src.controllers.tutoriais", "src.ui_qt.tutorial",
+    "src.controllers.tutoriais", "src.ui_qt.tutorial", "src.ui_qt.aviso_atualizando",
     "src.cozinha.servidor", "src.cozinha.servico", "src.ui_qt.cozinha_web",
     "src.controllers.pedido_mesa_controller",
     "src.core.opcoes_produto", "src.controllers.opcoes_produto_controller", "src.ui_qt.opcoes_produto",
@@ -42,7 +42,7 @@ MODULOS = [
     'src.sync.painel_status',
     'src.ui_qt.cardapio_qr',
     'src.ui_qt.estado_nuvem',
-    "src.autoteste", "src.autoteste_qt", "src.atualizacao.cliente", "src.atualizacao.manifesto", "src.versao",
+    "src.autoteste", "src.autoteste_qt", "src.atualizacao.cliente", "src.atualizacao.manifesto", "src.atualizacao.tarefa", "src.versao",
     "src.controllers.auditoria_controller",
     "src.controllers.acesso_controller", "src.controllers.cadastro_controller", "src.controllers.caderneta_controller",
     "src.controllers.caixa_controller", "src.controllers.ficha_sangria", "src.controllers.comissao_controller", "src.controllers.conferencia_turno",

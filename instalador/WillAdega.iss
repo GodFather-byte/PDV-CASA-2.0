@@ -63,6 +63,12 @@ Name: "nuvem"; Description: "Verificar licença e atualizações na nuvem em seg
 [Files]
 ; Toda a pasta gerada pelo PyInstaller (o .exe e as bibliotecas ao lado dele).
 Source: "..\dist\{#Pasta}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Tarefa do Windows que instala as atualizações sem pedir administrador ao operador (src/atualizacao/tarefa.py).
+Source: "tarefa_atualizacao.ps1"; DestDir: "{app}"; Flags: ignoreversion
+
+[Dirs]
+; Pedidos de atualização: o programa (sem administrador) grava aqui; a tarefa (SISTEMA) confere tudo antes de instalar.
+Name: "{commonappdata}\{#Pasta}\atualizacao"; Permissions: users-modify
 
 [Icons]
 Name: "{autoprograms}\{#Nome}"; Filename: "{app}\{#Exe}"
@@ -71,8 +77,12 @@ Name: "{autostartup}\{#Nome}"; Filename: "{app}\{#Exe}"; Tasks: iniciarcomwindow
 Name: "{autostartup}\{#Nome} - envio para a nuvem"; Filename: "{app}\{#Exe}"; Parameters: "--sync"; Tasks: nuvem
 
 [Run]
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\tarefa_atualizacao.ps1"" -Nome ""{#Pasta} Atualizacao"" -Exe ""{app}\{#Exe}"" -Registro ""{commonappdata}\{#Pasta}\atualizacao\tarefa.log"""; Flags: runhidden waituntilterminated; StatusMsg: "Preparando as atualizações automáticas..."
 ; Abre como o usuário que instalou (não como administrador): os dados ficam no %LOCALAPPDATA% dele.
 Filename: "{app}\{#Exe}"; Description: "Abrir o {#Nome} agora"; Flags: nowait postinstall skipifsilent runasoriginaluser
+
+[UninstallRun]
+Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""{#Pasta} Atualizacao"" /F"; Flags: runhidden; RunOnceId: "ApagarTarefaAtualizacao"
 
 [Code]
 // WillAdega.exe esquecido rodando (a tela de entrada aberta atrás de outras janelas, ou o processo de segundo plano --sync, que nem

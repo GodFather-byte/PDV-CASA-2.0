@@ -115,6 +115,15 @@ class JanelaAtualizacoes(QDialog):
     def _mostrar_pendente(self):
         self.aviso = atualizacoes.pendente(self.ctx.banco)
         aviso = self.aviso
+        try:
+            from src.atualizacao.cliente import falha_pendente
+            falha = falha_pendente(self.ctx.banco)
+        except Exception:
+            falha = None
+        if falha:                                   # a última tentativa não subiu: a automática está parada
+            self.mensagem.setText(
+                f"A atualização para a {falha['versao']} não foi concluída ({falha.get('detalhe') or falha.get('situacao')}). "
+                "Com o caixa livre, use Instalar com o caixa livre para tentar de novo.")
         self.btn_baixar.setEnabled(bool(aviso and aviso.get("url_download")))
         self.btn_dispensar.setEnabled(bool(aviso and not aviso["critica"]))
         if aviso is None:

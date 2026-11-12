@@ -12,6 +12,48 @@ O PDV e o `--sync` são iniciados outra vez.
 
 Edições: `willpdv`, `willadega`, `willrestaurante`, `bar` (a edição bar usa o mesmo mecanismo quando existir).
 
+## Sem a janela de administrador (tarefa do Windows)
+
+O programa fica em Arquivos de Programas e o instalador exige administrador; o PDV roda sem esse poder. Antes,
+a instalação automática abria a janela "Deseja permitir que este app faça alterações?" e, sem ninguém para
+clicar em Sim, falhava (a restauração também). Agora:
+
+1. O instalador (que já roda como administrador) cria a tarefa agendada **`<Programa> Atualizacao`**
+   (`WillPDV Atualizacao`, `WillAdega Atualizacao`, `WillRestaurante Atualizacao`), que roda como SISTEMA.
+   Qualquer usuário pode iniciá-la, ninguém sem administrador pode alterá-la (`instalador/tarefa_atualizacao.ps1`).
+   Também cria `%ProgramData%\<Programa>\atualizacao`, onde o PDV deixa o pedido.
+2. O PDV baixa e confere o pacote, copia o instalador e o pacote assinado para essa pasta, inicia a tarefa e
+   deixa rodando um script de espera (sem administrador) que reabre o programa quando sai o resultado.
+3. A tarefa roda `<Programa>.exe --aplicar-atualizacao`, que **confere tudo de novo** (assinatura, edição, versão
+   mais nova, tamanho e SHA-256), copia o instalador para uma pasta só do SISTEMA, guarda a cópia do programa e
+   instala com o `aplicar.cmd` (confirma a versão nova sem tocar no banco; se falhar, restaura).
+4. O resultado fica em `resultado-<id>.txt` na mesma pasta: `instalada`, `restaurada`, `falha_na_restauracao`
+   ou `recusada: <motivo>`. Na abertura seguinte o PDV lê e registra.
+
+Instalação antiga, sem a tarefa (ou tarefa recusada pelo Windows): cai no caminho de antes, que pede administrador.
+**Por isso cada caixa precisa receber esta versão pelo instalador manual uma vez.** Código: `src/atualizacao/tarefa.py`.
+
+## Quando instala sozinho
+
+Sem o operador pedir, só com a loja parada: sem venda, mesa ou comanda aberta, sem turno aberto, sem impressão
+na fila e com o último turno fechado há pelo menos 10 minutos (o fechamento ainda imprime). Se a instalação foi
+disparada na abertura do programa, a tela não abre (o instalador a fecharia): aparece um aviso e o programa reabre
+sozinho. Pelo botão **Instalar com o caixa livre**, basta não haver venda aberta.
+
+A nuvem no Render pode levar perto de um minuto para acordar: a consulta espera até 60 s e, sem resposta, tenta de
+novo em 15 minutos (antes esperava 6 horas). Pacote de outra edição é recusado antes do download.
+
+## Tentativa que não subiu
+
+Uma tentativa que não confirma (instalador falhou, restaurou, recusou o pacote ou nem começou) **para a
+atualização automática daquele caixa**, para não fechar o programa em repetição. Agora isso aparece:
+
+- no menu do PDV ("Atualização X não foi concluída") e em **Atualizações do programa**, com o motivo;
+- na central do fornecedor, selo **Atualização travada** e o detalhe na ficha da loja (o caixa manda junto com o
+  envio do painel, campo `atualizacao_travada`).
+
+Para tentar de novo: no caixa, **Atualizações do programa > Instalar com o caixa livre**.
+
 ## Onde fica o arquivo
 
 O repositório está público. O fluxo automático publica instaladores em Releases permanentes por edição e commit, antes de registrar o manifesto. Os links de “última versão” continuam para instalação manual; não servem de pacote assinado porque são substituídos. O Render não deve guardar o
