@@ -118,6 +118,8 @@ def instalar_no_app(app: FastAPI, autenticar) -> None:
                    versao: str = Query("", max_length=20), db: Session = Depends(get_db)):
         if edicao not in EDICOES or canal not in CANAIS:
             raise HTTPException(status_code=422, detail="Edição ou canal inválido.")
+        if os.environ.get("PDV_ATUALIZACAO_PAUSADA", "").strip().lower() in ("1", "s", "true", "sim"):
+            return {"disponivel": False, "pacote": None, "pausada": True}
         linha = ultima(db, edicao, canal)
         if linha is None:
             return {"disponivel": False, "pacote": None}

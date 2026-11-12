@@ -113,6 +113,15 @@ class TesteNuvem(unittest.TestCase):
         self.assertEqual(adega["pacote"]["url"], "https://arquivos.exemplo/adega.exe")
         self.assertEqual(self.http.get("/v1/atualizacao/ultima", params={"edicao": "bar"}).json()["disponivel"], False)
 
+    def test_pausa_na_nuvem_nao_oferece_pacotes(self):
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"PDV_ATUALIZACAO_PAUSADA": "1"}):
+            for edicao in ("willpdv", "willadega", "willrestaurante"):
+                resposta = self.http.get("/v1/atualizacao/ultima", params={"edicao": edicao}).json()
+                self.assertFalse(resposta["disponivel"])
+                self.assertIsNone(resposta["pacote"])
+                self.assertTrue(resposta["pausada"])
+
     def test_arquivo_local_so_sai_se_o_hash_conferir(self):
         import tempfile
         from backend.atualizacao_remota import publicar
