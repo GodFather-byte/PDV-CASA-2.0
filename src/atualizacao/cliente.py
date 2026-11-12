@@ -152,7 +152,7 @@ def script_aplicar(instalador: Path, programa: Path, backup: Path, exe: str,
     resultado = instalador.parent / "resultado.txt"
     log_instalador = instalador.parent / "instalador.log"
     return "\r\n".join([
-        "@echo off", "setlocal DisableDelayedExpansion",
+        "@echo off", "chcp 65001 >nul", "setlocal DisableDelayedExpansion",
         f'if exist "{q(confirmacao)}" del /Q "{q(confirmacao)}"',
         f'if exist "{q(confirmacao)}" goto falha',
         "cmd /d /c exit 0",

@@ -59,7 +59,7 @@ class Simulador {
         cls.pasta_compilada.cleanup()
 
     def setUp(self):
-        self.pasta = tempfile.TemporaryDirectory(prefix='pdv retomada ')
+        self.pasta = tempfile.TemporaryDirectory(prefix='pdv retomada ação ')
         self.raiz = Path(self.pasta.name)
         self.programa = self.raiz / 'programa'
         self.backup = self.raiz / 'anterior'
