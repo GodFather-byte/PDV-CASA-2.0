@@ -101,7 +101,9 @@ class TesteCentralFornecedor(unittest.TestCase):
             db.add(PainelCaixa(chave_loja="LOJA-1", terminal_id="a", terminal=1, recebido_em=marca(minutes=5),
                                dados=json.dumps({"versao_programa": "1.12.0", "faturamento_cent": 99999})))
             db.add(PainelCaixa(chave_loja="LOJA-1", terminal_id="b", terminal=2, recebido_em=marca(hours=3),
-                               dados=json.dumps({"versao_programa": "1.11.0"})))
+                               dados=json.dumps({"versao_programa": "1.11.0", "atualizacao_travada": {
+                                   "versao": "1.15.0", "situacao": "restaurada", "detalhe": "o instalador falhou",
+                                   "em": "2026-11-12 03:00:00"}})))
             db.add(PainelCaixa(chave_loja="LOJA-2", terminal_id="a", terminal=1, recebido_em=marca(days=2), dados="quebrado"))
             db.add(erros_caixa.ErroCaixa(chave_loja="LOJA-2", assinatura="e" * 64, nivel="error", modulo="caixa",
                                          mensagem="falha", traceback="", contexto="", vezes=3,
@@ -119,6 +121,9 @@ class TesteCentralFornecedor(unittest.TestCase):
         self.assertLessEqual(a1["minutos_sem_contato"], 6)
         self.assertEqual((a2["conexao"], a2["versao"], a2["erros_7d"], a2["chamados_abertos"]), ("parada", None, 1, 1))
         self.assertFalse(a2["desatualizada"])                             # sem versão informada não há o que comparar
+        self.assertEqual(a1["atualizacao_travada"]["versao"], "1.15.0")    # o caixa b tentou atualizar e não subiu
+        self.assertEqual(a1["atualizacao_travada"]["situacao"], "restaurada")
+        self.assertIsNone(a2["atualizacao_travada"])
         resumo = r["resumo"]
         self.assertEqual((resumo["online"], resumo["paradas"], resumo["com_erros"], resumo["desatualizadas"],
                           resumo["chamados_abertos"]), (1, 1, 1, 1, 1))

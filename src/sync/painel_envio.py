@@ -87,6 +87,19 @@ def id_do_caixa(banco) -> str:
     return atual
 
 
+def _atualizacao_travada(banco) -> dict | None:
+    """Tentativa de atualização que não subiu: a automática para até alguém conferir. Vai para a central do fornecedor."""
+    try:
+        from src.atualizacao.cliente import falha_pendente
+        falha = falha_pendente(banco)
+    except Exception:
+        return None
+    if not falha:
+        return None
+    return {"versao": str(falha.get("versao") or "")[:20], "situacao": str(falha.get("situacao") or "")[:30],
+            "detalhe": str(falha.get("detalhe") or "")[:200], "em": str(falha.get("em") or "")[:19]}
+
+
 def _virada(banco) -> int:
     return min(max(banco.cfg_int("virada_dia_hora", 6), 0), 23)
 
@@ -415,6 +428,7 @@ def retrato(banco) -> dict:
     return {
         "loja_nome": config.nome_loja(), "virada_dia_hora": virada,
         "versao_programa": VERSAO,
+        "atualizacao_travada": _atualizacao_travada(banco),
         "edicao_programa": edicao.atual().chave,
         "terminal_id": id_do_caixa(banco), "terminal": turnos.terminal,
         "terminal_rotulo": (maquina.get("descricao") or "").strip() or f"Caixa {turnos.terminal}",

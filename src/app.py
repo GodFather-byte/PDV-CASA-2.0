@@ -43,18 +43,26 @@ if __name__ == "__main__":
         from src.autoteste import executar
         resto = [a for a in sys.argv[1:] if not a.startswith("--")]
         sys.exit(executar(resto[0] if resto else None, rede="--rede" in sys.argv[1:]))
+    if "--aplicar-atualizacao" in sys.argv[1:]:
+        # Chamado pela tarefa agendada do Windows (como SISTEMA): confere o pedido e instala, sem banco nem janela.
+        from src.atualizacao.tarefa import aplicar_como_sistema
+        sys.exit(aplicar_como_sistema())
     if "--confirmar-atualizacao" in sys.argv[1:]:
         from src.atualizacao.cliente import confirmar_atualizacao
         from pathlib import Path
         indice = sys.argv.index("--confirmar-atualizacao")
-        argumentos = sys.argv[indice + 1:]
+        argumentos = [a for a in sys.argv[indice + 1:] if not a.startswith("--")]
         sys.exit(confirmar_atualizacao(argumentos[0] if argumentos else None,
-                                      Path(argumentos[1]) if len(argumentos) > 1 else None))
+                                      Path(argumentos[1]) if len(argumentos) > 1 else None,
+                                      sem_banco="--sem-banco" in sys.argv[indice + 1:]))
     if "--sync" in sys.argv[1:]:
         from src.sync.sincronizador import main as sincronizar
         sincronizar()
     else:
         from src.atualizacao.cliente import ao_iniciar
-        ao_iniciar()
+        if ao_iniciar():
+            # A instalação começou: abrir a tela agora só para o instalador fechá-la. O programa reabre sozinho.
+            from src.ui_qt.aviso_atualizando import mostrar
+            sys.exit(mostrar())
         from src.ui_qt.app import main
         main()
