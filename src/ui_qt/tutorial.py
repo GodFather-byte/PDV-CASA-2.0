@@ -1,4 +1,5 @@
 """Camada visual não modal: a operação continua recebendo cliques normalmente."""
+import shiboken6
 from PySide6.QtCore import QObject, QTimer, Qt, QRect, QEvent
 from PySide6.QtGui import QColor, QPainter, QPainterPath
 from PySide6.QtWidgets import (QApplication, QComboBox, QWidget, QFrame, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
@@ -17,6 +18,7 @@ ESTILO_BALAO = (
     " QPushButton#tutorial_proximo:disabled {background: #c9d1d9; color: #57606a;}"
     " QPushButton:disabled {color: #8c959f;}"
 )
+DICA_TECLADO = "Faça no teclado o que está escrito. O tutorial segue sozinho."
 # O que falta fazer para o botão Próximo acender, dito em palavras simples.
 DICAS = {
     "formulario": "Clique no botão destacado para continuar.",
@@ -42,12 +44,16 @@ class Sombra(QWidget):
 
 class MotorTutorial(QObject):
     def __init__(self, janelas, passos=PRODUTO, aviso=None, fim="Produto cadastrado. Tutorial concluído!",
-                 ao_encerrar=None):
+                 ao_encerrar=None, avaliar=None, ao_concluir=None):
+        """`avaliar(condicao, janela)` responde condições que só a tela conhece (None = não é dela).
+        `ao_concluir` é chamado quando a pessoa passa do último passo (tutoriais que não terminam num Salvar)."""
         super().__init__()
         self.janelas, self.passos = janelas, passos
         self.aviso = aviso or (lambda mensagem: None)
         self.fim = fim
         self.ao_encerrar = ao_encerrar
+        self.avaliar = avaliar
+        self.ao_concluir = ao_concluir
         self.indice = 0
         self.ativo = True
         self.sombra = self.balao = None
@@ -72,7 +78,7 @@ class MotorTutorial(QObject):
 
     def _limpar(self):
         for janela in (self.sombra, self.balao):
-            if janela is not None:
+            if janela is not None and shiboken6.isValid(janela):
                 janela.hide()
                 janela.deleteLater()
         self.sombra = self.balao = None
@@ -80,6 +86,8 @@ class MotorTutorial(QObject):
 
     def eventFilter(self, objeto, evento):
         janela = self.janelas.get(self.passos[self.indice].janela)
+        if janela is not None and not shiboken6.isValid(janela):
+            return False
         if (evento.type() == QEvent.Type.KeyPress and evento.key() == Qt.Key.Key_Escape
                 and isinstance(objeto, QWidget) and objeto.window() is janela):
             self.encerrar()
@@ -94,7 +102,11 @@ class MotorTutorial(QObject):
         if novo < 0:
             return
         if novo >= len(self.passos):
-            self.encerrar()
+            if self.ao_concluir is not None:
+                self.ao_concluir()
+                self.encerrar(self.fim)
+            else:
+                self.encerrar()
             return
         if self.passos[novo].janela == "lista" and self.janelas.get("formulario"):
             return
@@ -107,10 +119,14 @@ class MotorTutorial(QObject):
             return
         passo = self.passos[self.indice]
         janela = self.janelas.get(passo.janela)
+        if janela is not None and not shiboken6.isValid(janela):     # a janela já foi destruída pelo Qt
+            janela = None
         if janela is None or not janela.isVisible():
             self.encerrar("Tutorial encerrado: a janela foi fechada.")
             return
-        alvo = janela.findChild(QWidget, passo.widget)
+        alvo = getattr(janela, passo.widget, None)            # o caixa expõe os campos como atributos
+        if not isinstance(alvo, QWidget):
+            alvo = janela.findChild(QWidget, passo.widget)
         if alvo is None:
             self.encerrar(f"Tutorial indisponível: campo {passo.widget} não encontrado.")
             return
@@ -144,13 +160,18 @@ class MotorTutorial(QObject):
             linha = QHBoxLayout()
             self.voltar = QPushButton("Voltar")
             self.voltar.clicked.connect(lambda: self.mover(-1))
-            self.proximo = QPushButton("Próximo")
+            ultimo = self.indice == len(self.passos) - 1
+            self.proximo = QPushButton("Concluir" if ultimo and self.ao_concluir is not None else "Próximo")
             self.proximo.setObjectName("tutorial_proximo")
             self.proximo.clicked.connect(lambda: self.mover(1))
             pular = QPushButton("Sair do tutorial")
             pular.clicked.connect(lambda: self.encerrar())
             for botao in (self.voltar, self.proximo, pular):
+                botao.setFocusPolicy(Qt.FocusPolicy.NoFocus)      # o cursor fica no campo que a pessoa está usando
                 linha.addWidget(botao)
+            if passo.avanca:                                      # passo feito no teclado: segue sozinho
+                self.voltar.hide()
+                self.proximo.hide()
             layout.addLayout(linha)
             self.balao.setFixedWidth(min(420, janela.width() - 16))
             self.balao.adjustSize()
@@ -160,14 +181,20 @@ class MotorTutorial(QObject):
             valor = "" if alvo.currentData() is None else "escolhido"
         else:
             valor = alvo.text() if hasattr(alvo, "text") else ""
-        liberado = Tutoriais.permite(passo, valor, bool(self.janelas.get("formulario")))
+        liberado = self.avaliar(passo.condicao, janela) if self.avaliar is not None and passo.condicao else None
+        if liberado is None:
+            liberado = Tutoriais.permite(passo, valor, bool(self.janelas.get("formulario")))
         self.proximo.setEnabled(liberado)
-        dica = "" if liberado else DICAS.get(passo.condicao, "")
+        if passo.avanca and liberado:
+            self.mover(1)
+            return
+        dica = "" if liberado else (DICA_TECLADO if passo.avanca else DICAS.get(passo.condicao, ""))
         if self.dica.text() != dica:
             self.dica.setText(dica)
             self.dica.setVisible(bool(dica))
             self.balao.adjustSize()
-        pode_voltar = self.indice > 0 and self.passos[self.indice - 1].janela == passo.janela
+        anterior = self.passos[self.indice - 1] if self.indice > 0 else None
+        pode_voltar = anterior is not None and anterior.janela == passo.janela and not anterior.avanca
         self.voltar.setEnabled(pode_voltar)
         self.sombra.setGeometry(janela.rect())
         recorte = QRect(alvo.mapTo(janela, alvo.rect().topLeft()), alvo.size()).adjusted(-3, -3, 3, 3)
@@ -193,6 +220,9 @@ class MotorTutorial(QObject):
 def iniciar(principal, chave="produto"):
     """Abre o cadastro do roteiro e guia a pessoa até salvar um registro de verdade."""
     roteiro = ROTEIROS[chave]
+    if roteiro.tipo == "treino":
+        from src.ui_qt.treino import iniciar_venda
+        return iniciar_venda(principal)
     anterior = getattr(principal, "tutorial", None)
     if anterior and anterior.ativo:
         anterior.encerrar()

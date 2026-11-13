@@ -1,4 +1,4 @@
-# Handoff — mais tutoriais guiados, para leigos e idosos (12/11/2026)
+# Handoff — tutoriais guiados e caixa de treino (13/11/2026)
 
 Branch `mais-tutoriais`, criada da main depois do #88 (Pix integrado). Pedido do dono: mais tutoriais para o sistema
 ficar fácil até para quem nunca usou computador.
@@ -14,15 +14,21 @@ ficar fácil até para quem nunca usou computador.
   usa o cadastro (ex.: clientes sem caderneta nem delivery) e fica apagado sem acesso.
 - Testes em `tests/test_tutorial_guiado.py` (alvos nas 3 edições, balões em 1024x600, fluxo do subgrupo inteiro).
 
+- Caixa de treino (branch `tutorial-venda-treino`, sobre a `mais-tutoriais`): `controllers/treino.py` cria um banco só
+  na memória (sementes, 3 produtos com códigos 1, 2 e 3, operador TREINO, turno aberto, mesmo jeito de vender da loja;
+  impressão, Pix e NFC-e desligados). `ui_qt/treino.py` abre o `JanelaCaixa` de verdade com esse banco e uma faixa
+  amarela "TREINO", e o tutorial "Fazer uma venda (treino)" guia a venda no teclado: os passos `avanca=True` seguem
+  sozinhos quando a condição acontece (comanda, código, item, forma, valor, pago, fechada).
+
 ## Para criar outro tutorial de cadastro
 
 Escreva os passos e registre em `ROTEIROS`. O alvo é o `objectName` do campo (`produto_<campo>` em qualquer cadastro).
 
 ## Próximos (ainda não feitos)
 
-- Tutoriais fora dos cadastros: abrir o caixa e fazer a primeira venda, fechar o caixa, entrada de estoque. O motor
-  hoje só conhece lista + formulário de cadastro; o caixa precisa de condições próprias (item lançado, pago, fechado)
-  e de decidir se a venda do tutorial é de verdade ou de treino. Combinar com o dono antes.
+- Próximos no treino: fechar o caixa (conferência e sangria), desconto e cancelar item. O caixa de treino já existe;
+  é escrever os passos e as condições em `ui_qt/treino.py`.
+- Entrada de estoque guiada (precisa decidir: treino ou de verdade).
 - "Me mostre como" nos outros passos de Primeiros passos.
 
 ## Pendências
