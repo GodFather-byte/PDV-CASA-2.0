@@ -45,6 +45,8 @@ class TestAtualizacoesQt(BaseTeste):
         self.rede = patch(
             "src.ui_qt.atualizacoes.atualizacoes.consultar", return_value=resposta())
         self.consulta = self.rede.start()
+        self.rede_pacote = patch("src.ui_qt.atualizacoes.consultar_pacote", return_value=None)
+        self.consulta_pacote = self.rede_pacote.start()
         self.navegador = patch("src.ui_qt.atualizacoes.webbrowser.open")
         self.abrir_url = self.navegador.start()
 
@@ -58,6 +60,7 @@ class TestAtualizacoesQt(BaseTeste):
         self.aplicacao.processEvents()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         self.rede.stop()
+        self.rede_pacote.stop()
         self.navegador.stop()
 
     def janela(self):
@@ -128,6 +131,38 @@ class TestAtualizacoesQt(BaseTeste):
         self.assertEqual(threads_banco, [gui, gui])
         self.assertEqual(janela.aviso["ultima"], "999.0.0")
         self.abrir_url.assert_not_called()
+
+    def test_verificar_mostra_a_versao_da_loja_piloto(self):
+        """O aviso antigo não conhece o piloto; o Verificar também consulta a rota do pacote, com a chave da loja."""
+        self.banco.cfg_set("chave_loja", "chave-da-casa")
+        self.consulta.return_value = {"url_download": "", "versoes": []}
+        self.consulta_pacote.return_value = {"disponivel": True, "pacote": {"versao": "999.1.0", "notas": "Teste piloto"}}
+        janela = self.janela()
+        with patch("src.atualizacao.cliente.pacote_valido", return_value=True):
+            janela.btn_consultar.click()
+            self.assertTrue(self.esperar(lambda: janela._solicitacao is None))
+        self.consulta_pacote.assert_called_once_with("https://exemplo.invalid/v1/sincronizar", "chave-da-casa")
+        self.assertIn("999.1.0", janela.titulo.text())
+        self.assertIn("Instalar com o caixa livre", janela.mensagem.text())
+
+    def test_verificar_ignora_pacote_invalido_ou_antigo(self):
+        self.consulta.return_value = {"url_download": "", "versoes": []}
+        janela = self.janela()
+        for dados, valido in (({"disponivel": True, "pacote": {"versao": "999.1.0"}}, False),
+                              ({"disponivel": True, "pacote": {"versao": "0.0.1"}}, True),
+                              ({"disponivel": False, "pacote": None, "pausada": True}, True)):
+            self.consulta_pacote.return_value = dados
+            with patch("src.atualizacao.cliente.pacote_valido", return_value=valido):
+                janela.btn_consultar.click()
+                self.assertTrue(self.esperar(lambda: janela._solicitacao is None))
+            self.assertEqual(janela.titulo.text(), "Nenhuma atualização pendente.")
+
+    def test_falha_na_consulta_do_pacote_nao_esconde_o_aviso(self):
+        self.consulta_pacote.side_effect = RuntimeError("rede")
+        janela = self.janela()
+        janela.btn_consultar.click()
+        self.assertTrue(self.esperar(lambda: janela._solicitacao is None))
+        self.assertIn("999.0.0", janela.titulo.text())
 
     def test_automatica_invisivel_respeita_intervalo_manual_forca(self):
         janela = self.janela()

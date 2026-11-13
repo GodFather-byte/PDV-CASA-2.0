@@ -1,15 +1,17 @@
 # Handoff — atualização com loja piloto + app da rede (13/11/2026)
 
-## Agora (versão 1.14.6 publicada pelo #94; branch `videos-tutoriais`)
+## Agora (branch `verificar-com-piloto`, versão 1.14.7)
 
-- 1.14.6 só sobe o número: é o pacote do teste da loja piloto (Casa Verde).
-- Roteiro (`docs/ATUALIZACAO.md`, "Loja piloto"): Casa Verde com a 1.14.5 instalada à mão; publicar a 1.14.6
-  (dispatch de `build-windows.yml`); no Render, manter `PDV_ATUALIZACAO_PAUSADA=1` e pôr
-  `PDV_ATUALIZACAO_PILOTO` = chave da Casa Verde (o dono passou a chave no chat, 13/11); verificar no caixa e na
-  central. Depois do teste: apagar o piloto e, se deu certo, tirar a pausa.
-- Vídeos de tutorial: `python -m tools.videos_tutoriais produto operador venda fechamento --saida videos/`
-  (telas reais num banco temporário, legenda + música gerada; `--so-quadros` para conferir as fotos). Precisa de
-  PySide6, Pillow, numpy, ffmpeg e a fonte Inter. Ideias seguintes: grupos/subgrupos, clientes, formas de pagamento.
+- Defeito visto na Casa Verde (13/11): em Atualizações do programa, o "Verificar" só consultava o aviso antigo
+  (`/v1/atualizacoes`, `src/sync/atualizacoes.py`), que não conhece a loja piloto, e dizia "Nenhuma atualização
+  pendente" com a 1.14.6 oferecida. Agora a consulta manual também chama a rota do pacote com `chave_loja`
+  (`consultar_pacote` em `src/ui_qt/atualizacoes.py`) e mostra a versão que o "Instalar com o caixa livre" instala.
+  Testes em `tests/test_qt_atualizacoes.py`. Roteiro do piloto corrigido em `docs/ATUALIZACAO.md`.
+- Teste da loja piloto em andamento: 1.14.6 publicada (#94); Render com `PDV_ATUALIZACAO_PAUSADA=1` e
+  `PDV_ATUALIZACAO_PILOTO` = chave da Casa Verde. Falta o dono confirmar a versão no caixa; depois, com o OK dele,
+  apagar o piloto e tirar a pausa.
+- Vídeos de tutorial: `python -m tools.videos_tutoriais produto operador venda fechamento --saida videos/` (#95).
+- Próximos: deixar o repositório privado (conferir Render antes), rede EA Superações na central.
 
 ---
 
