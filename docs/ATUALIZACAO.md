@@ -149,8 +149,10 @@ Roteiro na loja piloto:
 2. Instalar à mão a 1.14.5 (ou mais nova), que cria a tarefa `<Programa> Atualizacao`. Conferir no Prompt:
    `schtasks /Query /TN "WillPDV Atualizacao"`.
 3. Publicar uma versão maior (ex.: 1.14.6) e pôr a chave da loja em `PDV_ATUALIZACAO_PILOTO`.
-4. No caixa: Atualizações do programa > Verificar > Instalar com o caixa livre. Esperar: sem a janela "Deseja
-   permitir..." do Windows, o programa fecha, instala e reabre na versão nova. Ou deixar sozinho com o turno fechado.
+4. No caixa: Atualizações do programa > Instalar com o caixa livre (o Verificar mostra a versão desde a 1.14.7; antes
+   dela só mostrava o aviso antigo, que não conhece o piloto). Esperar: sem a janela "Deseja permitir..." do Windows, o
+   programa fecha, instala e reabre na versão nova. Ou deixar sozinho: com o turno fechado há 10 minutos e nada na fila
+   de impressão, a consulta (de 6 em 6 horas) instala sem ninguém clicar.
 5. Conferir a versão nova no caixa e na central (sem selo "Atualização travada").
 
 ## Contenção e recuperação de instalação

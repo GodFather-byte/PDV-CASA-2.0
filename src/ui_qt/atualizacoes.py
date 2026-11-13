@@ -20,18 +20,30 @@ from PySide6.QtWidgets import (
 from src.core.erros import ErroPermissao
 from src.sync import atualizacoes
 from src.ui_qt.tema import texto
+from src.versao import VERSAO, mais_nova
 
 
 class _Sinais(QObject):
     concluida = Signal(int, object, object)
 
 
+def consultar_pacote(url: str, loja: str) -> dict | None:
+    """A mesma consulta da instalação (rota do pacote assinado, com a chave da loja). Assim o Verificar mostra a versão que
+    o Instalar com o caixa livre vai instalar, inclusive na loja piloto, quando as outras lojas ainda esperam."""
+    try:
+        import requests
+    except ImportError:
+        return None
+    from src.atualizacao.cliente import consultar
+    return consultar(url, requests, loja=loja)
+
+
 class _Consulta(QRunnable):
     """Recebe apenas cópias da configuração e o canal de retorno."""
 
-    def __init__(self, numero, url, token, sinais):
+    def __init__(self, numero, url, token, sinais, loja=""):
         super().__init__()
-        self.numero, self.url, self.token, self.sinais = numero, url, token, sinais
+        self.numero, self.url, self.token, self.sinais, self.loja = numero, url, token, sinais, loja
 
     def run(self):
         try:
@@ -40,8 +52,12 @@ class _Consulta(QRunnable):
             self.sinais.concluida.emit(
                 self.numero, None,
                 "Erro inesperado ao consultar atualizações. Tente novamente.")
-        else:
-            self.sinais.concluida.emit(self.numero, dados, None)
+            return
+        try:
+            pacote = consultar_pacote(self.url, self.loja)
+        except Exception:                           # a consulta do pacote é um extra: falhar nela não esconde o aviso
+            pacote = None
+        self.sinais.concluida.emit(self.numero, (dados, pacote), None)
 
 
 class JanelaAtualizacoes(QDialog):
@@ -54,6 +70,7 @@ class JanelaAtualizacoes(QDialog):
         self._solicitacao = None
         self._fechado = False
         self.aviso = None
+        self.pacote = None                          # versão que a instalação enxerga (rota do pacote), da última consulta
         self.exigir_acesso()
         self.setWindowTitle("Atualizações do PDV")
         self.resize(660, 480)
@@ -126,7 +143,13 @@ class JanelaAtualizacoes(QDialog):
                 "Com o caixa livre, use Instalar com o caixa livre para tentar de novo.")
         self.btn_baixar.setEnabled(bool(aviso and aviso.get("url_download")))
         self.btn_dispensar.setEnabled(bool(aviso and not aviso["critica"]))
-        if aviso is None:
+        if aviso is None and self.pacote is not None:
+            self.titulo.setText(f"Versão {self.pacote['versao']} disponível. Você usa a {VERSAO}.")
+            self.notas.setPlainText(f"Versão {self.pacote['versao']}\n{self.pacote.get('notas') or ''}")
+            if not falha:
+                self.mensagem.setText("Para instalar agora, use Instalar com o caixa livre (sem venda, mesa ou comanda "
+                                      "aberta). Com o turno fechado, o programa também instala sozinho.")
+        elif aviso is None:
             self.titulo.setText("Nenhuma atualização pendente.")
             self.notas.clear()
         else:
@@ -170,7 +193,7 @@ class JanelaAtualizacoes(QDialog):
         self.mensagem.setText("Consultando atualizações…")
         self._limite.start()
         QThreadPool.globalInstance().start(
-            _Consulta(self._sequencia, url, token, self._sinais))
+            _Consulta(self._sequencia, url, token, self._sinais, (banco.cfg("chave_loja") or "").strip()))
         return True
 
     @Slot(int, object, object)
@@ -191,11 +214,24 @@ class JanelaAtualizacoes(QDialog):
         if erro is not None:
             self.mensagem.setText(erro)
             return
+        dados, pacote = dados if isinstance(dados, tuple) else (dados, None)
         atualizacoes.gravar(banco, dados)
-        self._mostrar_pendente()
+        self.pacote = self._pacote_novo(pacote)
         self.mensagem.setText(
-            "Consulta concluída." if dados is not None else
+            "Consulta concluída." if dados is not None or self.pacote is not None else
             "Não foi possível consultar a nuvem. O aviso anterior foi preservado.")
+        self._mostrar_pendente()
+
+    @staticmethod
+    def _pacote_novo(dados) -> dict | None:
+        """O pacote oferecido, se for válido (assinado, desta edição) e mais novo que a versão instalada."""
+        from src.atualizacao.cliente import pacote_valido
+        try:
+            if dados and pacote_valido(dados) and mais_nova(dados["pacote"]["versao"], VERSAO):
+                return dados["pacote"]
+        except Exception:                           # resposta estranha da nuvem: só não mostra
+            return None
+        return None
 
     def cancelar_consulta(self):
         """Invalida o retorno, sem aguardar a rede (timeout HTTP permanece 3/10 s)."""
