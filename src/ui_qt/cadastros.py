@@ -219,7 +219,12 @@ class FormularioCadastro(QDialog):
                     self.ctx.cadastros, self.valores(), self.estoque_tutorial.text(),
                     concluir=getattr(self, "tutorial_ativo", lambda: True)())
             else:
+                novo = self.id_ is None
                 self.id_ = self.ctx.cadastros.salvar(self.chave, self.valores(), self.id_)
+                tutorial = getattr(self, "tutorial_chave", None)      # tutorial guiado deste cadastro
+                if tutorial and novo and getattr(self, "tutorial_ativo", lambda: False)():
+                    from src.controllers.tutoriais import Tutoriais
+                    Tutoriais(self.ctx.banco, self.ctx.operador_id).concluir(tutorial)
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
             return

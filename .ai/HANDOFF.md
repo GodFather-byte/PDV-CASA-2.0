@@ -1,31 +1,33 @@
-# Handoff — Pix integrado no caixa (12/11/2026)
+# Handoff — mais tutoriais guiados, para leigos e idosos (12/11/2026)
 
-Branch `pix-integrado`, criada da main depois do #86 (NFC-e) e do #87 (Enter no pagamento sem mesas).
-Pedido do dono: Pix integrado, desligado por padrão; liga quando o cliente pedir. Guia: `docs/PIX.md`.
+Branch `mais-tutoriais`, criada da main depois do #88 (Pix integrado). Pedido do dono: mais tutoriais para o sistema
+ficar fácil até para quem nunca usou computador.
 
 ## O que foi feito
 
-- Esquema v53: tabela `pix_cobrancas`. Configs `pix_integrado` (N), `pix_mp_token` (segredo), `pix_email_pagador`,
-  `pix_expira_min` em Integrações.
-- `src/pagamentos/mercadopago_pix.py`: cria, consulta e cancela pelo `/v1/payments` do Mercado Pago (Bearer, chave de
-  idempotência).
-- `PixController`: só forma Pix (fiscal 17) com a integração ligada; Pix não dá troco; cancelamento confere se já foi
-  pago; vincula a cobrança ao pagamento; imprime o QR na fila do caixa.
-- `src/ui_qt/pix.py`: janela do QR com consulta em thread a cada 2,5 s. `receber` no caixa só grava o pagamento
-  depois de "aprovado".
+- `controllers/tutoriais.py`: `ROTEIROS` com 7 tutoriais (produto, grupo, subgrupo, operador, cliente, forma de
+  pagamento, fornecedor), textos em linguagem simples, condição nova `escolhido` (lista de opções).
+- `ui_qt/tutorial.py`: motor geral `iniciar(principal, chave)`; balão com letra grande, contraste alto, "Passo X de N",
+  botão Próximo destacado e uma dica dizendo o que falta quando ele está apagado.
+- `ui_qt/cadastros.py`: tutorial que não é de produto conclui ao salvar um registro novo (`tutorial_chave`).
+- `ui_qt/app.py`: um botão por tutorial no grupo Tutoriais, com ✓ no que o operador já concluiu. Some se a casa não
+  usa o cadastro (ex.: clientes sem caderneta nem delivery) e fica apagado sem acesso.
+- Testes em `tests/test_tutorial_guiado.py` (alvos nas 3 edições, balões em 1024x600, fluxo do subgrupo inteiro).
 
-## Não testado
+## Para criar outro tutorial de cadastro
 
-- Mercado Pago de verdade (precisa do Access Token de uma loja). Teste: Pix de R$ 0,01.
-- Impressão do QR na impressora real.
+Escreva os passos e registre em `ROTEIROS`. O alvo é o `objectName` do campo (`produto_<campo>` em qualquer cadastro).
 
-## Decidido com o dono
+## Próximos (ainda não feitos)
 
-- NFC-e em contingência quando a internet da loja cai: fica para depois do teste do empório em homologação.
-  A Focus já cobre a queda da SEFAZ. A contingência completa exige assinar a nota no caixa, com o certificado no PC.
+- Tutoriais fora dos cadastros: abrir o caixa e fazer a primeira venda, fechar o caixa, entrada de estoque. O motor
+  hoje só conhece lista + formulário de cadastro; o caixa precisa de condições próprias (item lançado, pago, fechado)
+  e de decidir se a venda do tutorial é de verdade ou de treino. Combinar com o dono antes.
+- "Me mostre como" nos outros passos de Primeiros passos.
 
 ## Pendências
 
-- Empório: conta Focus, certificado e CSC no painel da Focus, token de homologação (ver `docs/NFCE.md`).
-- Atualização sem UAC (#85): teste em PC real ainda pendente; Render segue com PDV_ATUALIZACAO_PAUSADA=1.
+- Empório: conta Focus, certificado e CSC no painel da Focus, token de homologação (`docs/NFCE.md`).
+- Pix integrado: testar com o Mercado Pago real (Pix de R$ 0,01), ver `docs/PIX.md`.
+- Atualização sem UAC (#85): teste em PC real pendente; Render segue com PDV_ATUALIZACAO_PAUSADA=1.
 - Antigravity: a nuvem não recebe `nfce_notas` nem `pix_cobrancas` (só locais).

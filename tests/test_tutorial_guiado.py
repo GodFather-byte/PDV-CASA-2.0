@@ -3,7 +3,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QWidget
 from tests.test_qt_app import BaseQt
-from src.controllers.tutoriais import PRODUTO, Tutoriais
+from src.controllers.tutoriais import PRODUTO, ROTEIROS, Tutoriais
 from src.ui_qt.cadastros import FormularioCadastro, JanelaCadastro
 from src.ui_qt.tutorial import MotorTutorial
 
@@ -144,3 +144,135 @@ class TestTutorial(BaseQt):
         motor = MotorTutorial({"lista": janela})
         motor.encerrar()
         self.assertFalse(motor.ativo)
+
+
+class TestOutrosTutoriais(BaseQt):
+    """Grupo, subgrupo, operador, cliente, forma de pagamento e fornecedor: o mesmo motor em outros cadastros."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin()
+        self.banco.cfg_set("usar_caderneta", "S")        # clientes só existem com caderneta ou delivery
+
+    def principal(self):
+        from src.ui_qt.app import JanelaPrincipal
+        app = self.app()
+        app.ctx.operador = self.ctx.operador
+        principal = self.janela(JanelaPrincipal(app))
+        principal._fechamento_autorizado = True
+        principal.show()
+        return principal
+
+    def test_todos_os_alvos_existem_nas_tres_edicoes(self):
+        import os
+        from unittest.mock import patch
+        from src.core import edicao
+        for chave in ("willpdv", "willadega", "willrestaurante"):
+            with patch.dict(os.environ, {"PDV_EDICAO": chave}):
+                edicao.preparar(self.banco)
+                for roteiro in ROTEIROS.values():
+                    lista = self.janela(JanelaCadastro(self.ctx, roteiro.cadastro))
+                    formulario = self.janela(FormularioCadastro(self.ctx, roteiro.cadastro))
+                    if roteiro.chave == "produto":
+                        formulario.preparar_tutorial()
+                    for passo in roteiro.passos:
+                        alvo = {"lista": lista, "formulario": formulario}[passo.janela].findChild(QWidget, passo.widget)
+                        self.assertIsNotNone(alvo, f"{chave}/{roteiro.chave}/{passo.widget}")
+
+    def test_baloes_cabem_em_1024x600_com_a_letra_grande(self):
+        for roteiro in ROTEIROS.values():
+            formulario = self.janela(FormularioCadastro(self.ctx, roteiro.cadastro))
+            if roteiro.chave == "produto":
+                formulario.preparar_tutorial()
+            formulario.resize(1024, 600)
+            formulario.show()
+            self.aplicacao.processEvents()
+            passos = tuple(p for p in roteiro.passos if p.janela == "formulario")
+            motor = MotorTutorial({"formulario": formulario}, passos=passos)
+            for indice in range(len(passos)):
+                motor.indice = indice
+                motor._limpar()
+                motor.atualizar()
+                self.aplicacao.processEvents()
+                motor.atualizar()
+                onde = f"{roteiro.chave}/{indice}"
+                self.assertFalse(motor.balao.geometry().intersects(motor.sombra.recorte), onde)
+                self.assertTrue(formulario.rect().contains(motor.balao.geometry()), onde)
+            motor.encerrar()
+            formulario.hide()
+
+    def test_menu_tem_um_botao_por_tutorial_e_marca_o_concluido(self):
+        principal = self.principal()
+        self.assertEqual(principal.botoes["tutorial_cliente"].text(), "Cadastrar um cliente")
+        principal.busca_modulos.setText("tutoriais")
+        for roteiro in ROTEIROS.values():
+            chave = "tutoriais" if roteiro.chave == "produto" else f"tutorial_{roteiro.chave}"
+            self.assertTrue(principal.botoes[chave].isVisible(), chave)
+        principal.busca_modulos.clear()
+        Tutoriais(self.banco, self.ctx.operador_id).concluir("cliente")
+        principal.marcar_tutoriais()
+        self.assertEqual(principal.botoes["tutorial_cliente"].text(), "✓ Cadastrar um cliente")
+        self.assertEqual(principal.botoes["tutorial_grupo"].text(), "Criar um grupo")
+
+    def test_subgrupo_do_comeco_ao_fim(self):
+        """Clica em Novo, o Próximo só acende com o nome e o grupo, e salvar conclui e marca no menu."""
+        from unittest.mock import patch
+        principal = self.principal()
+        vistos = {}
+
+        def usar(formulario):
+            motor = principal.tutorial
+            formulario.show()
+            self.aplicacao.processEvents()
+            motor.atualizar()
+            self.assertEqual(motor.passos[motor.indice].widget, "produto_nome")
+            self.assertFalse(motor.proximo.isEnabled())
+            self.assertIn("Escreva", motor.dica.text())
+            formulario.campos["nome"].setText("Cervejas especiais")
+            motor.atualizar()
+            self.assertTrue(motor.proximo.isEnabled())
+            motor.mover(1)
+            motor.atualizar()
+            self.assertEqual(motor.passos[motor.indice].widget, "produto_grupo_id")
+            self.assertFalse(motor.proximo.isEnabled())           # ainda em "Selecione…"
+            formulario.campos["grupo_id"].setCurrentIndex(1)
+            motor.atualizar()
+            self.assertTrue(motor.proximo.isEnabled())
+            motor.mover(1)
+            formulario.salvar()
+            vistos["id"] = formulario.id_
+            return formulario.result()
+
+        with patch.object(FormularioCadastro, "exec", usar):
+            principal.botoes["tutorial_subgrupo"].click()
+            self.assertTrue(principal.tutorial.ativo)
+            principal.janelas["subgrupos"].novo()
+        self.assertEqual(self.banco.valor("SELECT nome FROM subgrupos WHERE id = ?", (vistos["id"],)), "Cervejas especiais")
+        self.assertFalse(principal.tutorial.ativo)
+        self.assertTrue(Tutoriais(self.banco, self.ctx.operador_id).concluido("subgrupo"))
+        self.assertFalse(Tutoriais(self.banco, self.ctx.operador_id).concluido("grupo"))
+        self.assertEqual(principal.botoes["tutorial_subgrupo"].text(), "✓ Criar um subgrupo")
+        self.assertIn("Subgrupo criado", principal.mensagem.text())
+
+    def test_salvar_fora_do_tutorial_nao_conclui(self):
+        formulario = self.janela(FormularioCadastro(self.ctx, "grupos"))
+        formulario.campos["nome"].setText("Limpeza")
+        formulario.salvar()
+        self.assertIsNotNone(formulario.id_)
+        self.assertFalse(Tutoriais(self.banco, self.ctx.operador_id).concluido("grupo"))
+
+    def test_cadastro_desligado_esconde_o_tutorial(self):
+        self.banco.cfg_set("usar_caderneta", "N")
+        self.banco.cfg_set("usar_delivery", "N")
+        principal = self.principal()
+        principal.menu_grupos.setCurrentIndex(0)
+        principal.atualizar()
+        self.assertFalse(principal.botoes["tutorial_cliente"].isVisible())
+        self.assertTrue(principal.botoes["tutorial_grupo"].isVisible())
+
+    def test_sem_acesso_o_botao_fica_apagado(self):
+        self.banco.executar("UPDATE operadores SET nivel = 1 WHERE id = ?", (self.ctx.operador_id,))
+        self.ctx.operador = self.ctx.acesso.operador(self.ctx.operador_id)
+        principal = self.principal()
+        principal.atualizar()
+        self.assertFalse(principal.botoes["tutorial_operador"].isEnabled())
