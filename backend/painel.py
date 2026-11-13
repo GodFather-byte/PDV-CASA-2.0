@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Column, Integer, String, Text, UniqueConstraint, inspect, text
 from sqlalchemy.orm import Session
@@ -1555,6 +1555,17 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         @app.get("/painel/", include_in_schema=False)
         def painel_index():
             return FileResponse(PASTA_WEB / "index.html", headers={"Cache-Control": "no-cache"})
+
+        @app.get("/painel/rede.webmanifest", include_in_schema=False)
+        def painel_manifesto_rede(grupo: str = "", db: Session = Depends(get_db)):
+            """Aplicativo da rede: o mesmo painel, com o nome da rede na tela inicial e abrindo no login dela.
+            Rede desconhecida recebe o manifesto comum do painel (não revela quais redes existem)."""
+            from backend import grupos as _grupos
+            achado = _grupos.por_identificador(db, grupo[:64]) if grupo else None
+            if achado is None:
+                return FileResponse(PASTA_WEB / "manifest.webmanifest", media_type="application/manifest+json")
+            return JSONResponse(_grupos.manifesto(achado), media_type="application/manifest+json",
+                                headers={"Cache-Control": "no-cache"})
 
         app.mount("/painel", StaticFiles(directory=str(PASTA_WEB)), name="painel")
     return router

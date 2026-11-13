@@ -1261,6 +1261,7 @@
     $("tela-app").hidden = true;
     $("tela-rede").hidden = false;
     $("nome-rede").textContent = (estado.grupo && estado.grupo.nome) || "Rede";
+    if (estado.grupo) aplicarAppDaRede(estado.grupo.chave, estado.grupo.nome);
     window.scrollTo(0, 0);
     atualizarRede();
   }
@@ -2233,12 +2234,33 @@
   // Instalação (PWA) e Service Worker
   // ------------------------------------------------------------------
 
+  /** App da rede: a tela inicial do celular ganha o nome da rede e abre direto no login dela
+   *  (/painel/rede.webmanifest?grupo=CHAVE). Sem rede, fica o manifesto comum do painel. */
+  function aplicarAppDaRede(chave, nome) {
+    if (!chave) return;
+    const link = document.querySelector('link[rel="manifest"]');
+    if (link) link.setAttribute("href", "rede.webmanifest?grupo=" + encodeURIComponent(chave));
+    const titulo = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (titulo && nome) titulo.setAttribute("content", String(nome).slice(0, 30));
+    if (nome) document.title = nome;
+  }
+
   function configurarInstalacao() {
     const botao = $("botao-instalar");
+    const botaoRede = $("botao-instalar-rede");
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       estado.eventoInstalacao = e;
       botao.hidden = false;
+      if (botaoRede) botaoRede.hidden = false;
+    });
+    if (botaoRede) botaoRede.addEventListener("click", async () => {
+      const ev = estado.eventoInstalacao;
+      if (!ev) return;
+      botaoRede.hidden = true;
+      botao.hidden = true;
+      estado.eventoInstalacao = null;
+      try { await ev.prompt(); } catch (_) { /* usuário recusou ou navegador bloqueou */ }
     });
     botao.addEventListener("click", async () => {
       const ev = estado.eventoInstalacao;
@@ -2377,6 +2399,7 @@
     registrarServiceWorker();
 
     const grupoUrl = new URLSearchParams(location.search).get("grupo");
+    if (grupoUrl) aplicarAppDaRede(grupoUrl, null);
     if (grupoUrl && $("campo-loja") && !$("campo-loja").value) {
       $("campo-loja").value = grupoUrl;
       const rotulo = document.querySelector("label[for=campo-loja]");
@@ -2398,6 +2421,7 @@
       estado.modo = "rede";
       estado.token = redeNoAparelho.token;
       estado.grupo = redeNoAparelho.grupo;
+      aplicarAppDaRede(redeNoAparelho.grupo.chave, redeNoAparelho.grupo.nome);
       estado.loja = null;
       gravarArmazenamento(CHAVE_TOKEN, redeNoAparelho.token);
       if (redeNoAparelho.expira) gravarArmazenamento(CHAVE_EXPIRA, redeNoAparelho.expira);

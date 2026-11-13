@@ -30,6 +30,25 @@ funcionando depois de recarregar a página ou de fechar e abrir o app. **Sair** 
 Na página, a sessão da rede fica guardada em `willpdv.rede.*` (fora do prefixo do painel, que é apagado
 a cada troca de loja). A sessão da loja aberta pela rede é encerrada na volta.
 
+## App da rede no celular (sem loja de aplicativos)
+
+O painel da rede se instala como aplicativo (PWA), de graça, em iPhone e Android:
+
+- **iPhone (Safari):** abrir o link da rede, tocar em Compartilhar e em **Adicionar à Tela de Início**.
+- **Android (Chrome):** abrir o link da rede, menu ⋮ e **Instalar app** (ou o botão "Instalar agora" na tela da rede).
+
+O ícone aparece com o **nome da rede** e abre direto no login dela. Isso vem do manifesto
+`/painel/rede.webmanifest?grupo=CHAVE` (nome da rede, `start_url` `/painel/?grupo=CHAVE`); rede desconhecida recebe o
+manifesto comum do painel. Na tela da rede há o quadro "Ter o app da rede no celular" com essas instruções.
+
+## Mensalidade única pela central
+
+Na central do fornecedor, aba **Redes**, cada rede tem **Mensalidade da rede**: valor, dia do vencimento e dados do
+pagador (os mesmos do plano de uma loja). Ao salvar (com motivo, que fica na auditoria) a nuvem cria ou atualiza o plano
+da rede e gera as cobranças devidas. Quando o pagamento é aprovado, a licença de todas as lojas da rede avança junto; as
+cobranças próprias dessas lojas param enquanto elas estiverem na rede. Rota: `POST /v1/fornecedor/grupos/CHAVE/plano`
+com `{"plano": {...}, "motivo": "..."}`.
+
 ## Criar pela API (token de administrador)
 
 ```http

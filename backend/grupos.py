@@ -159,6 +159,31 @@ def remover_loja(db: Session, grupo: Grupo, chave_loja: str):
     return loja
 
 
+def plano(db: Session, grupo: Grupo) -> dict | None:
+    """Mensalidade única da rede (sem dados do pagador além do contato), ou None se ainda não foi cadastrada."""
+    from backend import cobranca_mercadopago as cobranca
+    p = db.query(cobranca.Plano).filter_by(chave_loja=grupo.chave, grupo_id=grupo.id).first()
+    if p is None:
+        return None
+    return {"valor_cent": p.valor_cent, "dia_vencimento": p.dia_vencimento, "email": p.email_pagador,
+            "whatsapp": p.whatsapp}
+
+
+def manifesto(grupo: Grupo) -> dict:
+    """Manifesto do aplicativo da rede: o painel do dono com o nome da rede na tela inicial do celular, abrindo
+    direto no login dela. Ícones e escopo são os do painel."""
+    nome = grupo.nome[:45]
+    icones = [{"src": f"/painel/icones/{arquivo}", "sizes": tamanho, "type": "image/png", "purpose": uso}
+              for arquivo, tamanho, uso in (("icone-192.png", "192x192", "any"), ("icone-512.png", "512x512", "any"),
+                                            ("icone-maskable-192.png", "192x192", "maskable"),
+                                            ("icone-maskable-512.png", "512x512", "maskable"))]
+    return {"id": f"/painel/?grupo={grupo.chave}", "name": nome, "short_name": nome[:12],
+            "description": f"Painel das lojas da rede {nome}: vendas, caixas, produtos e estoque.",
+            "lang": "pt-BR", "start_url": f"/painel/?grupo={grupo.chave}", "scope": "/painel/",
+            "display": "standalone", "orientation": "portrait", "background_color": "#14532d",
+            "theme_color": "#14532d", "icons": icones}
+
+
 def resumo(db: Session, grupo: Grupo) -> dict:
     return {
         "id": grupo.id,
@@ -168,6 +193,7 @@ def resumo(db: Session, grupo: Grupo) -> dict:
         "deve_trocar_senha": bool(grupo.deve_trocar_senha),
         "criado_em": grupo.criado_em,
         "link": f"/painel/?grupo={grupo.chave}",
+        "plano": plano(db, grupo),
         "lojas": [{"chave": loja.chave_loja, "nome": loja.nome, "ativa": bool(loja.ativa),
                    "licenca_ate": loja.licenca_ate} for loja in lojas(db, grupo.id)],
     }
