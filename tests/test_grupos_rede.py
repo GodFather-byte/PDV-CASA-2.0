@@ -146,6 +146,72 @@ class TesteRede(BaseNuvem):
         self.assertEqual(chamadas, [])
         db.close()
 
+    # ----------------------------------------------------------- app da rede (PWA) e mensalidade pela central
+    def test_app_da_rede_tem_o_nome_dela_e_abre_no_login_da_rede(self):
+        self._criar()
+        r = self.http.get("/painel/rede.webmanifest", params={"grupo": "rede-teste"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIn("manifest+json", r.headers["content-type"])
+        m = r.json()
+        self.assertEqual((m["name"], m["start_url"], m["scope"], m["display"]),
+                         ("Rede teste", "/painel/?grupo=REDE-TESTE", "/painel/", "standalone"))
+        self.assertTrue(all(i["src"].startswith("/painel/icones/") for i in m["icons"]))
+        # rede que não existe recebe o manifesto comum (não revela quais redes existem)
+        comum = self.http.get("/painel/rede.webmanifest", params={"grupo": "NAO-EXISTE"}).json()
+        self.assertEqual(comum["start_url"], "/painel/")
+        self.assertEqual(self.http.get("/painel/rede.webmanifest").json()["start_url"], "/painel/")
+
+    def test_central_cadastra_a_mensalidade_unica_da_rede(self):
+        from backend import central_fornecedor as central
+        from backend import cobranca_mercadopago as cobranca
+        self._criar()
+        for loja in ("ADEGA-1", "ADEGA-2"):
+            self.http.post("/v1/admin/grupos/REDE-TESTE/lojas", json={"chave_loja": loja}, headers=ADMIN)
+        with central._trava:
+            central._tentativas.clear()
+        fornecedor = TestClient(nuvem.app, base_url="https://testserver")
+        self.addCleanup(fornecedor.close)
+
+        def limpar_central():
+            with nuvem.SessionLocal() as db:
+                db.query(central.SessaoFornecedor).delete()
+                db.query(central.AuditoriaFornecedor).delete()
+                db.commit()
+        self.addCleanup(limpar_central)
+        login = fornecedor.post("/v1/fornecedor/login", json={"credencial": "token-de-teste"},
+                                headers={"X-Central-Login": "1"})
+        self.assertEqual(login.status_code, 200, login.text)
+        csrf = {"X-Central-CSRF": login.json()["csrf"]}
+        pedido = _pedido_rede("REDE-TESTE")
+        pedido.pop("chave_loja")
+        pedido["valor_cent"] = 39900
+        sem_motivo = fornecedor.post("/v1/fornecedor/grupos/REDE-TESTE/plano", json={"plano": pedido}, headers=csrf)
+        self.assertEqual(sem_motivo.status_code, 422)
+        with mock.patch.object(cobranca, "gerar_recorrencias", return_value=0):
+            r = fornecedor.post("/v1/fornecedor/grupos/REDE-TESTE/plano",
+                                json={"plano": pedido, "motivo": "Contrato das 4 lojas"}, headers=csrf)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["situacao"], "criada")
+        self.assertEqual(r.json()["plano"]["valor_cent"], 39900)
+        self.assertEqual(r.json()["plano"]["dia_vencimento"], 10)
+        lista = fornecedor.get("/v1/fornecedor/grupos").json()["grupos"]
+        self.assertEqual(lista[0]["plano"]["valor_cent"], 39900)
+        db = nuvem.SessionLocal()
+        try:
+            plano = db.query(cobranca.Plano).filter_by(chave_loja="REDE-TESTE").one()
+            self.assertIsNotNone(plano.grupo_id)
+            acoes = [a.acao for a in db.query(central.AuditoriaFornecedor).all()]
+            self.assertIn("rede_plano", acoes)
+        finally:
+            db.close()
+        # dado errado volta como erro de campo, sem gravar nada
+        pedido["uf"] = "SAO"
+        with mock.patch.object(cobranca, "gerar_recorrencias", return_value=0):
+            r = fornecedor.post("/v1/fornecedor/grupos/REDE-TESTE/plano",
+                                json={"plano": pedido, "motivo": "Teste"}, headers=csrf)
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("UF", r.json()["detail"])
+
 
 def grupos_modelo():
     from backend.grupos import Grupo

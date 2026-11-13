@@ -791,6 +791,31 @@ def instalar(app, Loja):
         return {"chave": grupo.chave, "senha": senha, "deve_trocar_senha": bool(grupo.deve_trocar_senha),
                 "link": f"/painel/?grupo={grupo.chave}"}
 
+    @app.post("/v1/fornecedor/grupos/{chave}/plano")
+    def rede_plano(chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
+        """Uma mensalidade para a rede inteira: paga, renova a licença de todas as lojas dela; as cobranças próprias
+        das lojas da rede param (backend/grupos.py, definir_assinatura)."""
+        from backend import grupos
+        from backend.grupos import ErroGrupo
+        grupo = _grupo_ou_erro(db, chave)
+        motivo = texto(dados, "motivo", 500)
+        pedido = dados.get("plano")
+        if not isinstance(pedido, dict):
+            raise HTTPException(422, "Informe os dados da mensalidade.")
+        try:
+            auditar(db, "rede_plano_solicitado", None, grupo.chave + " — " + motivo)
+            situacao = grupos.definir_assinatura(db, grupo, pedido)
+            emitidas = cobranca.gerar_recorrencias(db, chave=grupo.chave)
+        except ErroGrupo as erro:
+            db.rollback()
+            raise HTTPException(422, str(erro)) from None
+        except cobranca.ErroCobranca:
+            db.rollback()
+            raise HTTPException(422, "Confira os dados do pagador e a configuração do Mercado Pago.") from None
+        auditar(db, "rede_plano", None, grupo.chave + " — " + motivo)
+        db.commit()
+        return {"situacao": situacao, "emitidas": emitidas, **grupos.resumo(db, grupo)}
+
     # Retaguarda da loja pela central: as mesmas telas do dono, com a sessão do fornecedor (backend/retaguarda.py).
     from backend import retaguarda
     retaguarda.instalar_fornecedor(app, sessao, obter, auditar)
