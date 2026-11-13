@@ -83,9 +83,10 @@ Numa semana movimentada como a de 06 a 13/11 (48 execuções de testes, 21 de in
 perto de **1.300 minutos**: a cota de 2.000 do plano Free acabaria no meio do mês. Num ritmo mais calmo (uns 10 merges
 por semana) cabe. Se acabar, o GitHub **para** o CI até o mês virar (o limite de gasto vem em US$ 0); não chega cobrança.
 
-Se o ritmo continuar alto, o próximo passo é gerar o instalador também no seu PC, numa máquina virtual ou num usuário
-separado do Windows (ele cria usuário de teste e mexe em direitos do sistema, por isso hoje fica no GitHub), ou juntar
-vários PRs antes de cada merge na main.
+Se o ritmo continuar alto, o próximo passo é gerar o instalador também na sua máquina, mas **só num PC dedicado ou numa
+máquina virtual**: a geração instala o programa no Windows, cria a tarefa de atualização do SISTEMA, cria um usuário de
+teste e mexe nos direitos do sistema. Um usuário separado do Windows não isola isso (vale para o PC inteiro). Outra
+saída é juntar vários PRs antes de cada merge na main.
 
 ## O que isto não resolve
 
