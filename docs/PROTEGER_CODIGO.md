@@ -71,11 +71,21 @@ Depois confira:
 
 ## Custo de minutos
 
-Medido em 13/11/2026, por execução dos Testes: Windows ~21 min por versão do Python (conta em dobro no GitHub) e Linux
-~10 min. Com o Windows no seu PC e o Linux só no Python 3.12, cada execução gasta uns 11 minutos da cota. A geração
-dos instaladores (só na `main`) gasta uns 25. Numa semana movimentada como a de 06 a 13/11 (48 execuções de testes,
-21 de instalador), dá perto de 1.100 minutos; num mês normal deve caber nos 2.000. Se passar, o GitHub **para** o CI
-até o mês virar (o limite de gasto vem em US$ 0) — não chega cobrança.
+Medido em 13/11/2026 (o GitHub arredonda cada trabalho para cima, minuto a minuto):
+
+| Execução | Hoje (público) | Privado, com o Windows dos testes no seu PC |
+|------|------|------|
+| Testes (a cada PR e merge) | grátis | ~12 min (só Linux) |
+| Gerar instalador WillPDV + Adega (a cada merge na main) | grátis | ~27 min (Windows conta em dobro) |
+| Will Restaurante (a cada merge na main) | grátis | ~9 min |
+
+Numa semana movimentada como a de 06 a 13/11 (48 execuções de testes, 21 de instalador, 17 do restaurante) isso dá
+perto de **1.300 minutos**: a cota de 2.000 do plano Free acabaria no meio do mês. Num ritmo mais calmo (uns 10 merges
+por semana) cabe. Se acabar, o GitHub **para** o CI até o mês virar (o limite de gasto vem em US$ 0); não chega cobrança.
+
+Se o ritmo continuar alto, o próximo passo é gerar o instalador também no seu PC, numa máquina virtual ou num usuário
+separado do Windows (ele cria usuário de teste e mexe em direitos do sistema, por isso hoje fica no GitHub), ou juntar
+vários PRs antes de cada merge na main.
 
 ## O que isto não resolve
 
