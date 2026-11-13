@@ -1,6 +1,6 @@
 # Handoff — proteger o código (13/11/2026)
 
-Branch `proteger-codigo`, criada da main depois do #89 (tutoriais). O #90 (venda de treino) está aberto à parte.
+Branch `proteger-codigo`, criada da main depois do #89 (tutoriais); traz a main depois do #90 (venda de treino).
 Pedido do dono: proteger o código. O repositório `PDV-CASA-2.0` é público hoje (licença proprietária, mas visível).
 Guia passo a passo do dono: `docs/PROTEGER_CODIGO.md`.
 
@@ -34,7 +34,8 @@ Guia passo a passo do dono: `docs/PROTEGER_CODIGO.md`.
 
 ## Pendências
 
-- PR #90 (venda de treino) esperando OK do dono para merge.
+- Tutoriais: próximos no caixa de treino (fechar caixa, desconto, cancelar item) em `ui_qt/treino.py`; entrada de
+  estoque guiada (decidir treino ou de verdade).
 - Empório: conta Focus, certificado e CSC no painel da Focus, token de homologação (`docs/NFCE.md`).
 - Pix integrado: testar com o Mercado Pago real (Pix de R$ 0,01), `docs/PIX.md`.
 - Atualização sem UAC (#85): teste em PC real pendente; Render segue com PDV_ATUALIZACAO_PAUSADA=1.

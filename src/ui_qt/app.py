@@ -493,7 +493,7 @@ class JanelaPrincipal(QMainWindow):
         for roteiro in ROTEIROS.values():
             if roteiro.chave != "produto":      # o de produto fica sempre clicável e explica quando falta acesso
                 self.botoes[f"tutorial_{roteiro.chave}"].setEnabled(
-                    roteiro.modulo not in desligados and self.ctx.pode(roteiro.modulo))
+                    not roteiro.modulo or (roteiro.modulo not in desligados and self.ctx.pode(roteiro.modulo)))
         self.marcar_tutoriais()
         self.botoes["estoque"].setEnabled(self.ctx.pode("lanc_estoque"))
         self.botoes["retornaveis"].setEnabled(self.ctx.pode("lanc_estoque"))
@@ -789,7 +789,7 @@ class JanelaPrincipal(QMainWindow):
     def abrir_tutoriais(self, chave="produto"):
         from src.ui_qt.tutorial import iniciar
         roteiro = ROTEIROS[chave]
-        if not self.ctx.pode(roteiro.modulo):
+        if roteiro.modulo and not self.ctx.pode(roteiro.modulo):
             self.mensagem.setText("Seu acesso não permite este tutorial. Peça ao gerente.")
             return
         iniciar(self, chave)

@@ -170,7 +170,7 @@ class TestOutrosTutoriais(BaseQt):
         for chave in ("willpdv", "willadega", "willrestaurante"):
             with patch.dict(os.environ, {"PDV_EDICAO": chave}):
                 edicao.preparar(self.banco)
-                for roteiro in ROTEIROS.values():
+                for roteiro in (r for r in ROTEIROS.values() if r.tipo == "cadastro"):
                     lista = self.janela(JanelaCadastro(self.ctx, roteiro.cadastro))
                     formulario = self.janela(FormularioCadastro(self.ctx, roteiro.cadastro))
                     if roteiro.chave == "produto":
@@ -180,7 +180,7 @@ class TestOutrosTutoriais(BaseQt):
                         self.assertIsNotNone(alvo, f"{chave}/{roteiro.chave}/{passo.widget}")
 
     def test_baloes_cabem_em_1024x600_com_a_letra_grande(self):
-        for roteiro in ROTEIROS.values():
+        for roteiro in (r for r in ROTEIROS.values() if r.tipo == "cadastro"):
             formulario = self.janela(FormularioCadastro(self.ctx, roteiro.cadastro))
             if roteiro.chave == "produto":
                 formulario.preparar_tutorial()
@@ -276,3 +276,103 @@ class TestOutrosTutoriais(BaseQt):
         principal = self.principal()
         principal.atualizar()
         self.assertFalse(principal.botoes["tutorial_operador"].isEnabled())
+
+
+class TestVendaDeTreino(BaseQt):
+    """Tutorial "Fazer uma venda": caixa de verdade num banco só na memória, guiado no teclado."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin()
+
+    def principal(self):
+        from src.ui_qt.app import JanelaPrincipal
+        app = self.app()
+        app.ctx.operador = self.ctx.operador
+        principal = self.janela(JanelaPrincipal(app))
+        principal._fechamento_autorizado = True
+        principal.show()
+        return principal
+
+    def enter(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        self.aplicacao.processEvents()
+        QTest.keyClick(self.aplicacao.focusWidget(), Qt.Key.Key_Return)
+        self.aplicacao.processEvents()
+
+    def passo(self, motor):
+        motor.atualizar()
+        self.aplicacao.processEvents()
+        return motor.passos[motor.indice].widget if motor.ativo else None
+
+    def test_banco_de_treino_isola_a_loja(self):
+        from src.controllers import treino
+        self.banco.cfg_set("pix_integrado", "S")
+        self.banco.cfg_set("nfce_emissao", "producao")
+        banco, operador = treino.criar_banco(self.banco)
+        self.addCleanup(banco.fechar)
+        self.assertEqual(banco.caminho, ":memory:")
+        self.assertEqual((banco.cfg("pix_integrado"), banco.cfg("nfce_emissao"), banco.cfg("imprimir_cupom")),
+                         ("N", "desligada", "N"))
+        self.assertEqual(operador.nome, "TREINO")
+        self.assertIsNotNone(banco.um("SELECT id FROM turnos WHERE fechado_em IS NULL"))
+        self.assertEqual(banco.valor("SELECT preco_cent FROM produtos WHERE CAST(codigo AS INTEGER) = 1"), 300)
+
+    def test_venda_guiada_do_comeco_ao_fim_nas_tres_edicoes(self):
+        import os
+        from unittest.mock import patch
+        from src.core import edicao
+        for chave in ("willpdv", "willadega", "willrestaurante"):
+            with self.subTest(edicao=chave), patch.dict(os.environ, {"PDV_EDICAO": chave}):
+                edicao.preparar(self.banco)
+                vendas_loja = self.banco.valor("SELECT COUNT(*) FROM vendas")
+                principal = self.principal()
+                principal.botoes["tutorial_venda"].click()
+                motor = principal.tutorial
+                caixa = principal.janelas["treino"]
+                caixa.activateWindow()
+                self.assertTrue(motor.ativo)
+                if caixa.com_mesas:
+                    self.assertEqual(self.passo(motor), "ent_pos")
+                    caixa.ent_pos.setFocus()
+                    caixa.ent_pos.setText("1")
+                    self.enter()
+                self.assertEqual(self.passo(motor), "ent_codigo")
+                self.assertIn("treino", motor.passos[motor.indice].texto.lower() + motor.passos[0].texto.lower())
+                caixa.ent_codigo.setFocus()
+                caixa.ent_codigo.setText("1")
+                self.enter()
+                self.assertEqual(self.passo(motor), "ent_qtd")
+                self.enter()
+                self.assertEqual(self.passo(motor), "ent_codigo")        # "aperte Enter com o campo vazio"
+                self.enter()
+                self.assertEqual(self.passo(motor), "cmb_forma")
+                self.enter()
+                self.assertEqual(self.passo(motor), "ent_valor")
+                self.enter()
+                self.assertEqual(self.passo(motor), "btn_fechar_venda")
+                self.enter()
+                self.assertEqual(self.passo(motor), "lbl_troco")
+                self.assertEqual(motor.proximo.text(), "Concluir")
+                self.assertEqual(caixa.treino_banco.valor("SELECT COUNT(*) FROM vendas WHERE status = 'fechada'"), 1)
+                motor.mover(1)
+                self.assertFalse(motor.ativo)
+                self.assertTrue(Tutoriais(self.banco, self.ctx.operador_id).concluido("venda"))
+                self.assertEqual(principal.botoes["tutorial_venda"].text(), "✓ Fazer uma venda (treino)")
+                # nada chegou ao banco da loja
+                self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM vendas"), vendas_loja)
+                self.assertIsNone(self.banco.um("SELECT id FROM turnos WHERE fechado_em IS NULL"))
+                self.banco.cfg_set(Tutoriais(self.banco, self.ctx.operador_id)._chave("venda"), "N")
+                caixa.close()
+                principal.close()
+
+    def test_fechar_o_caixa_de_treino_encerra_o_tutorial(self):
+        principal = self.principal()
+        principal.abrir_tutoriais("venda")
+        motor = principal.tutorial
+        principal.janelas["treino"].close()
+        self.aplicacao.processEvents()
+        motor.atualizar()
+        self.assertFalse(motor.ativo)
+        self.assertFalse(Tutoriais(self.banco, self.ctx.operador_id).concluido("venda"))
