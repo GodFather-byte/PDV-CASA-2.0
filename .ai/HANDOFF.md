@@ -12,6 +12,8 @@ Guia passo a passo do dono: `docs/PROTEGER_CODIGO.md`.
 - `build-windows.yml`, `will-restaurante.yml`, `publicar-pacote.yml`: instaladores e pacotes de atualização vão para
   `vars.DOWNLOADS_REPO` com `secrets.DOWNLOADS_TOKEN` quando configurados; sem eles, tudo continua igual (este repo).
   No outro repositório a Release não aponta para o commit (ele não existe lá).
+- `build-windows.yml` e `will-restaurante.yml` sem gatilho de push: versão (instalador + atualização assinada) só sai
+  quando o dono manda (workflow_dispatch na main, ou o Claude dispara pela API). Vários PRs viram uma versão.
 - Geração de instalador continua sempre no GitHub: ela cria usuário do Windows e mexe em direitos (secedit) para
   testar a atualização; isso nunca pode rodar no PC do dono. `tests/test_ci_protecao.py` garante.
 

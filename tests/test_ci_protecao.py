@@ -33,6 +33,13 @@ class TestCiProtecao(unittest.TestCase):
             self.assertIn("secrets.DOWNLOADS_TOKEN || github.token", texto, arquivo)
             self.assertNotIn('--repo "$GITHUB_REPOSITORY" --target', texto, arquivo)
 
+    def test_versao_para_as_lojas_so_sai_quando_o_dono_manda(self):
+        for arquivo in ("build-windows.yml", "will-restaurante.yml"):
+            texto = (RAIZ / arquivo).read_text(encoding="utf-8")
+            gatilhos = texto.split("\non:", 1)[1].split("\npermissions:", 1)[0]
+            self.assertIn("workflow_dispatch", gatilhos, arquivo)
+            self.assertNotIn("push:", gatilhos, arquivo)
+
 
 if __name__ == "__main__":
     unittest.main()

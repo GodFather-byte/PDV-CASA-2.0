@@ -1,7 +1,7 @@
+# Instalador do Will Restaurante. Só roda quando o dono manda (Actions > Run workflow na main): vários PRs viram uma
+# versão só e nada chega às lojas sem decisão dele. Ver docs/PROTEGER_CODIGO.md.
 name: Will Restaurante
 on:
-  push:
-    branches: [feat/willrestaurante, main]
   workflow_dispatch:
 permissions:
   contents: read

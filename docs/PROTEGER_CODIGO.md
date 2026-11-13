@@ -69,6 +69,17 @@ Depois confira:
 - Actions > Testes: os trabalhos de Windows aparecem rodando no runner do seu PC.
 - Settings (da conta) > Billing > Usage: o consumo de minutos do mês.
 
+## Publicar versão (instaladores e atualização das lojas)
+
+Desde este PR o merge na `main` **não** gera instalador nem atualização sozinho. Os testes continuam a cada PR. Quando
+quiser soltar uma versão (pode juntar vários PRs), faça uma destas:
+
+- peça ao Claude: "publica a versão";
+- ou no GitHub: Actions > **Gerar instalador (Windows)** > Run workflow (branch `main`), e o mesmo em
+  **Will Restaurante**.
+
+Isso também é segurança: nenhum merge chega às lojas sem você decidir.
+
 ## Custo de minutos
 
 Medido em 13/11/2026 (o GitHub arredonda cada trabalho para cima, minuto a minuto):
@@ -79,9 +90,9 @@ Medido em 13/11/2026 (o GitHub arredonda cada trabalho para cima, minuto a minut
 | Gerar instalador WillPDV + Adega (a cada merge na main) | grátis | ~27 min (Windows conta em dobro) |
 | Will Restaurante (a cada merge na main) | grátis | ~9 min |
 
-Numa semana movimentada como a de 06 a 13/11 (48 execuções de testes, 21 de instalador, 17 do restaurante) isso dá
-perto de **1.300 minutos**: a cota de 2.000 do plano Free acabaria no meio do mês. Num ritmo mais calmo (uns 10 merges
-por semana) cabe. Se acabar, o GitHub **para** o CI até o mês virar (o limite de gasto vem em US$ 0); não chega cobrança.
+Numa semana movimentada como a de 06 a 13/11 (48 execuções de testes, 21 de instalador, 17 do restaurante) isso daria
+perto de **1.300 minutos**. Com o instalador só quando você manda (uma ou duas versões por semana), a mesma semana fica
+perto de **650**, e o mês cabe nos 2.000. Se acabar, o GitHub **para** o CI até o mês virar (o limite de gasto vem em US$ 0); não chega cobrança.
 
 Se o ritmo continuar alto, o próximo passo é gerar o instalador também na sua máquina, mas **só num PC dedicado ou numa
 máquina virtual**: a geração instala o programa no Windows, cria a tarefa de atualização do SISTEMA, cria um usuário de

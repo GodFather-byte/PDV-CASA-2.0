@@ -2,7 +2,8 @@
 # os arquivos para baixar. Guia de uso: docs/INSTALAR_E_TESTAR.md
 #
 #   * Manual: aba Actions > "Gerar instalador (Windows)" > Run workflow  (escolha a branch).
-#   * Automático: somente a cada push na main (incluindo merge).
+#   * NÃO roda sozinho a cada merge: o dono decide quando sai versão (vários PRs viram uma versão só). Na main, a
+#     execução manual publica a "última versão" e a atualização assinada das lojas. Ver docs/PROTEGER_CODIGO.md.
 #
 # Onde pegar (o mais fácil): aba Releases > "WillPDV - última versão". A cada push na main o instalador (WillPDV-Instalador.exe)
 # e a versão portátil (WillPDV-Portatil.zip) são republicados ali, com link fixo e sem .zip em volta. Também ficam nos
@@ -12,8 +13,6 @@ name: Gerar instalador (Windows)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 
 permissions:
   contents: read
