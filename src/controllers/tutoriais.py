@@ -14,6 +14,7 @@ class Passo:
     widget: str
     texto: str
     condicao: str = ""
+    avanca: bool = False     # passo de ação no teclado: o tutorial segue sozinho quando a condição acontece
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,7 @@ class Roteiro:
     modulo: str          # acesso exigido
     passos: tuple
     fim: str             # mensagem ao concluir
+    tipo: str = "cadastro"   # "cadastro" (lista + formulário) ou "treino" (caixa de treino, banco só na memória)
 
 PRODUTO = (
     Passo("lista", "tutorial_busca", "Aqui ficam os produtos. Vamos cadastrar um produto real."),
@@ -103,7 +105,40 @@ FORNECEDOR = (
     _SALVAR,
 )
 
+# ------------------------------------------------------------------ caixa de treino
+# Os alvos são atributos da janela do caixa. As condições ("comanda", "codigo", "item", "forma", "valor", "pago",
+# "fechada") são avaliadas em `ui_qt/treino.py` olhando o caixa de treino.
+_TREINO = "Este é um caixa de treino: pode errar à vontade, nada aqui vale de verdade. "
+_VENDA_MESA = Passo("caixa", "ent_pos", _TREINO + "Para começar, digite 1 (o número da comanda ou mesa do cliente) "
+                                                  "e aperte a tecla Enter.", "comanda", True)
+_VENDA = (
+    Passo("caixa", "ent_codigo", "Digite 1, que é o código da água de treino, e aperte Enter. No dia a dia você passa "
+                                 "o leitor no produto ou digita o nome dele.", "codigo", True),
+    Passo("caixa", "ent_qtd", "A quantidade já vem 1. Se o cliente levar mais, digite quantos. "
+                              "Aperte Enter para lançar.", "item", True),
+    Passo("caixa", "ent_codigo", "Pronto! O produto entrou na venda. Para lançar outro é só repetir. Quando acabar, "
+                                 "aperte Enter com este campo vazio para ir ao pagamento.", "forma", True),
+    Passo("caixa", "cmb_forma", "Escolha como o cliente vai pagar: use as setas para cima e para baixo do teclado. "
+                                "Vamos de Dinheiro. Aperte Enter.", "valor", True),
+    Passo("caixa", "ent_valor", "O valor da conta já vem escrito. Se o cliente der uma nota maior, digite quanto ele "
+                                "deu (exemplo: 10,00) e o sistema calcula o troco. Aperte Enter.", "pago", True),
+    Passo("caixa", "btn_fechar_venda", "Está pago. Aperte Enter mais uma vez para fechar a venda.", "fechada", True),
+    Passo("caixa", "lbl_troco", "Venda fechada! Aqui aparece o troco para devolver ao cliente. No caixa de verdade é "
+                                "igualzinho. Clique em Concluir."),
+)
+
+
+def passos_venda(com_mesas: bool) -> tuple:
+    """Com mesas e comandas o primeiro passo é chamar a comanda; no balcão a venda começa direto no produto."""
+    if com_mesas:
+        return (_VENDA_MESA,) + _VENDA
+    primeiro = _VENDA[0]
+    return (Passo(primeiro.janela, primeiro.widget, _TREINO + primeiro.texto, primeiro.condicao, True),) + _VENDA[1:]
+
+
 ROTEIROS = {r.chave: r for r in (
+    Roteiro("venda", "Fazer uma venda (treino)", "", "", passos_venda(True),
+            "Parabéns! Você fez uma venda completa. Pode continuar treinando ou clicar em Sair do treino.", "treino"),
     Roteiro("produto", "Cadastrar um produto", "produtos", "cad_produtos", PRODUTO,
             "Produto cadastrado. Tutorial concluído!"),
     Roteiro("grupo", "Criar um grupo", "grupos", "cad_grupos", GRUPO, "Grupo criado. Tutorial concluído!"),

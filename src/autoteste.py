@@ -22,7 +22,7 @@ from pathlib import Path
 # `src.app` fica de fora de propósito: no executável ele é o próprio script de entrada (`__main__`), não um módulo importável.
 MODULOS = [
     "src.atualizacao.servico",
-    "src.controllers.tutoriais", "src.ui_qt.tutorial", "src.ui_qt.aviso_atualizando",
+    "src.controllers.tutoriais", "src.controllers.treino", "src.ui_qt.tutorial", "src.ui_qt.treino", "src.ui_qt.aviso_atualizando",
     "src.cozinha.servidor", "src.cozinha.servico", "src.ui_qt.cozinha_web",
     "src.controllers.pedido_mesa_controller",
     "src.core.opcoes_produto", "src.controllers.opcoes_produto_controller", "src.ui_qt.opcoes_produto",
