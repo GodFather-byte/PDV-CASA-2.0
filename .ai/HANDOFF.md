@@ -1,11 +1,14 @@
 # Handoff — atualização com loja piloto + app da rede (13/11/2026)
 
-## Agora (branch `atualizacao-piloto`, versão 1.14.5)
+## Agora (branch `versao-1.14.6`, versão 1.14.6)
 
-- Caixa manda `loja` (chave_loja) em `/v1/atualizacao/ultima`; nuvem com `PDV_ATUALIZACAO_PAUSADA=1` +
-  `PDV_ATUALIZACAO_PILOTO=CHAVE` oferece só à loja piloto (`backend/atualizacao_remota.pausada_para`).
-- Teste em PC real na Casa Verde (roteiro em `docs/ATUALIZACAO.md`, "Loja piloto"): instalar 1.14.5 à mão,
-  publicar 1.14.6, piloto = chave da Casa Verde, conferir que atualiza sem a janela de administrador.
+- 1.14.6 só sobe o número: é o pacote do teste da loja piloto (Casa Verde).
+- Roteiro (`docs/ATUALIZACAO.md`, "Loja piloto"): Casa Verde com a 1.14.5 instalada à mão; publicar a 1.14.6
+  (dispatch de `build-windows.yml`); no Render, manter `PDV_ATUALIZACAO_PAUSADA=1` e pôr
+  `PDV_ATUALIZACAO_PILOTO` = chave da Casa Verde (o dono passou a chave no chat, 13/11); verificar no caixa e na
+  central. Depois do teste: apagar o piloto e, se deu certo, tirar a pausa.
+- Fora do git ainda: `tools/videos_tutoriais.py` (vídeos de tutorial com as telas reais; roteiros produto, operador,
+  venda e fechamento). Entra num PR próprio.
 
 ---
 
