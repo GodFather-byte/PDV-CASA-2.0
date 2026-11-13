@@ -21,6 +21,8 @@ on:
         required: true
       PDV_API_TOKEN:
         required: true
+      DOWNLOADS_TOKEN:          # token só de escrita no repositório público de downloads (opcional)
+        required: false
 permissions:
   contents: write
 jobs:
@@ -39,8 +41,9 @@ jobs:
           path: instaladores
       - name: Publicar arquivo permanente e manifesto assinado
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          GH_REPO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+          CODIGO_REPO: ${{ github.repository }}
           EDICAO: ${{ inputs.edicao }}
           MASCARA: ${{ inputs.mascara }}
           VERSAO: ${{ inputs.versao }}
@@ -65,14 +68,16 @@ jobs:
               sys.exit('A chave privada não corresponde à chave pública dos caixas. Não trocar a chave pública para contornar este erro.')
           privado = subprocess.check_output(['gh', 'api', 'repos/' + os.environ['GH_REPO'], '--jq', '.private'], text=True).strip()
           if privado != 'false':
-              sys.exit('Este fluxo requer downloads públicos. Configure hospedagem pública antes de publicar em repositório privado.')
+              sys.exit('Os caixas baixam o pacote sem senha: o repositório de downloads (' + os.environ['GH_REPO'] + ') precisa ser público.')
           arquivos = list(Path('instaladores').rglob(os.environ['MASCARA']))
           if len(arquivos) != 1:
               sys.exit('Esperado exatamente um instalador para esta edição.')
           arquivo = arquivos[0]
           tag = 'atualizacao-' + os.environ['EDICAO'] + '-' + os.environ['GITHUB_SHA']
           if subprocess.run(['gh', 'release', 'view', tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
-              subprocess.run(['gh', 'release', 'create', tag, '--target', os.environ['GITHUB_SHA'], '--title', 'Pacote ' + os.environ['EDICAO'] + ' ' + os.environ['VERSAO'], '--notes', 'Pacote permanente de atualização dos caixas. Não substituir o instalador desta publicação.', '--latest=false'], check=True)
+              # Só aponta para o commit quando a Release fica no próprio repositório do código.
+              alvo = ['--target', os.environ['GITHUB_SHA']] if os.environ['GH_REPO'] == os.environ['CODIGO_REPO'] else []
+              subprocess.run(['gh', 'release', 'create', tag, *alvo, '--title', 'Pacote ' + os.environ['EDICAO'] + ' ' + os.environ['VERSAO'], '--notes', 'Pacote permanente de atualização dos caixas. Não substituir o instalador desta publicação.', '--latest=false'], check=True)
           # Sem --clobber: o arquivo anunciado nunca pode ser substituído por outro build.
           nomes = subprocess.check_output(['gh', 'release', 'view', tag, '--json', 'assets', '--jq', '.assets[].name'], text=True).splitlines()
           if arquivo.name not in nomes:

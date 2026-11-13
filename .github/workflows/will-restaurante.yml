@@ -1,7 +1,7 @@
+# Instalador do Will Restaurante. Só roda quando o dono manda (Actions > Run workflow na main): vários PRs viram uma
+# versão só e nada chega às lojas sem decisão dele. Ver docs/PROTEGER_CODIGO.md.
 name: Will Restaurante
 on:
-  push:
-    branches: [feat/willrestaurante, main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -100,8 +100,8 @@ jobs:
           path: release
       - name: Publicar instalador e portátil
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          GH_REPO: ${{ vars.DOWNLOADS_REPO || github.repository }}
           VERSAO: ${{ needs.instalador.outputs.versao }}
         shell: bash
         run: |
@@ -111,8 +111,12 @@ jobs:
           origem = next(Path("release").rglob("WillRestaurante-Setup-*.exe"))
           shutil.copyfile(origem, Path("release") / "WillRestaurante-Instalador.exe")
           PY
-          gh api --method PATCH "repos/$GH_REPO/git/refs/tags/ultima-versao-restaurante" -f sha="$GITHUB_SHA" -F force=true > /dev/null ||
-            gh api --method POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/ultima-versao-restaurante -f sha="$GITHUB_SHA" > /dev/null
+          # A etiqueta só acompanha o commit quando a Release fica no próprio repositório do código; no repositório de
+          # downloads esse commit não existe e a Release é criada na ponta dele.
+          if [ "$GH_REPO" = "$GITHUB_REPOSITORY" ]; then
+            gh api --method PATCH "repos/$GH_REPO/git/refs/tags/ultima-versao-restaurante" -f sha="$GITHUB_SHA" -F force=true > /dev/null ||
+              gh api --method POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/ultima-versao-restaurante -f sha="$GITHUB_SHA" > /dev/null
+          fi
           if gh release view ultima-versao-restaurante --repo "$GH_REPO" > /dev/null 2>&1; then
             gh release edit ultima-versao-restaurante --title "Will Restaurante $VERSAO" --notes "Instalador e portátil do commit $GITHUB_SHA, com autoteste do executável e da instalação no Windows." --latest=false
           else

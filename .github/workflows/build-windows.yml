@@ -2,7 +2,8 @@
 # os arquivos para baixar. Guia de uso: docs/INSTALAR_E_TESTAR.md
 #
 #   * Manual: aba Actions > "Gerar instalador (Windows)" > Run workflow  (escolha a branch).
-#   * Automático: somente a cada push na main (incluindo merge).
+#   * NÃO roda sozinho a cada merge: o dono decide quando sai versão (vários PRs viram uma versão só). Na main, a
+#     execução manual publica a "última versão" e a atualização assinada das lojas. Ver docs/PROTEGER_CODIGO.md.
 #
 # Onde pegar (o mais fácil): aba Releases > "WillPDV - última versão". A cada push na main o instalador (WillPDV-Instalador.exe)
 # e a versão portátil (WillPDV-Portatil.zip) são republicados ali, com link fixo e sem .zip em volta. Também ficam nos
@@ -12,8 +13,6 @@ name: Gerar instalador (Windows)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 
 permissions:
   contents: read
@@ -489,6 +488,8 @@ jobs:
           files: publicar/WillPDV-Setup-*.exe
           generate_release_notes: true
 
+  # Destino: o repositório público só de downloads (variável DOWNLOADS_REPO + segredo DOWNLOADS_TOKEN) quando existir;
+  # senão este repositório. Assim o código pode ficar privado sem as lojas perderem o link. Ver docs/PROTEGER_CODIGO.md.
   # A cada push na main: republica o instalador e a versão portátil numa Release "última versão", com link fixo. É o lugar mais
   # fácil de achar (aba Releases, lado direito da página principal do repositório) e dá para mandar o link a quem vai testar.
   # O programa de licenças (do fornecedor) NÃO vai para cá: a Release é pública. Ele fica nos Artifacts da execução.
@@ -517,13 +518,16 @@ jobs:
 
       - name: Recriar a Release "ultima-versao" apontando para este commit
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
           VERSAO: ${{ needs.build.outputs.versao }}
         run: |
-          gh release delete ultima-versao --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          # No repositório de downloads (outro repositório) o commit deste código não existe: a Release não aponta para ele.
+          alvo=(); [ "$DESTINO" = "$GITHUB_REPOSITORY" ] && alvo=(--target "$GITHUB_SHA")
+          gh release delete ultima-versao --repo "$DESTINO" --cleanup-tag --yes || true
           curto="${GITHUB_SHA:0:7}"
           notas="Instalador e versão portátil gerados automaticamente a partir do código mais recente da main (versão $VERSAO, commit $curto). Já passaram no autoteste do programa empacotado, na instalação silenciosa e na atualização por cima com o programa aberto. Esta Release é sobrescrita a cada atualização da main; para uma versão numerada, veja as outras Releases. Passo a passo: docs/INSTALAR_E_TESTAR.md"
-          gh release create ultima-versao --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+          gh release create ultima-versao --repo "$DESTINO" "${alvo[@]}" --prerelease \
             --title "WillPDV - última versão ($VERSAO, commit $curto)" --notes "$notas" \
             publicar/WillPDV-Instalador.exe publicar/WillPDV-Portatil.zip
 
@@ -552,13 +556,16 @@ jobs:
 
       - name: Recriar a Release "ultima-versao-adega" apontando para este commit
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
           VERSAO: ${{ needs.adega.outputs.versao }}
         run: |
-          gh release delete ultima-versao-adega --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          # No repositório de downloads (outro repositório) o commit deste código não existe: a Release não aponta para ele.
+          alvo=(); [ "$DESTINO" = "$GITHUB_REPOSITORY" ] && alvo=(--target "$GITHUB_SHA")
+          gh release delete ultima-versao-adega --repo "$DESTINO" --cleanup-tag --yes || true
           curto="${GITHUB_SHA:0:7}"
           notas="Instalador e versão portátil do Will Adega (edição só de adega do WillPDV), gerados a partir da main (versão $VERSAO, commit $curto). Passaram no autoteste, na instalação silenciosa e na atualização por cima com o programa aberto. A licença é própria: emita no WillPDV Licenças escolhendo o programa Will Adega."
-          gh release create ultima-versao-adega --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+          gh release create ultima-versao-adega --repo "$DESTINO" "${alvo[@]}" --prerelease \
             --title "Will Adega - última versão ($VERSAO, commit $curto)" --notes "$notas" \
             publicar/WillAdega-Instalador.exe publicar/WillAdega-Portatil.zip
 
