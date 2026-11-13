@@ -1,8 +1,30 @@
 """Camada visual não modal: a operação continua recebendo cliques normalmente."""
 from PySide6.QtCore import QObject, QTimer, Qt, QRect, QEvent
 from PySide6.QtGui import QColor, QPainter, QPainterPath
-from PySide6.QtWidgets import QApplication, QWidget, QFrame, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QScrollArea, QTabWidget
-from src.controllers.tutoriais import PRODUTO, Tutoriais
+from PySide6.QtWidgets import (QApplication, QComboBox, QWidget, QFrame, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
+                               QScrollArea, QTabWidget)
+from src.controllers.tutoriais import PRODUTO, ROTEIROS, Tutoriais
+
+# Letra grande e contraste alto: o balão tem de ser lido sem esforço por quem enxerga pouco ou nunca usou sistema.
+ESTILO_BALAO = (
+    "QFrame {background: #ffffff; color: #101820; border: 2px solid #1f6feb; border-radius: 8px;}"
+    " QLabel {border: none; font-size: 16px;}"
+    " QLabel#tutorial_passo {font-size: 13px; font-weight: bold; color: #1f6feb;}"
+    " QLabel#tutorial_dica {font-size: 13px; color: #9a3412;}"
+    " QPushButton {color: #101820; background: #e8eaed; border: 1px solid #9aa0a6; border-radius: 6px;"
+    " padding: 8px 12px; font-size: 15px; min-height: 22px;}"
+    " QPushButton#tutorial_proximo {background: #1f6feb; color: #ffffff; border: none; font-weight: bold;}"
+    " QPushButton#tutorial_proximo:disabled {background: #c9d1d9; color: #57606a;}"
+    " QPushButton:disabled {color: #8c959f;}"
+)
+# O que falta fazer para o botão Próximo acender, dito em palavras simples.
+DICAS = {
+    "formulario": "Clique no botão destacado para continuar.",
+    "preenchido": "Escreva no campo destacado para continuar.",
+    "escolhido": "Escolha uma opção no campo destacado para continuar.",
+    "preco": "Digite um preço, como 12,50, para continuar.",
+    "salvo": "Clique em Salvar para terminar.",
+}
 
 class Sombra(QWidget):
     def __init__(self, janela):
@@ -19,10 +41,13 @@ class Sombra(QWidget):
         pintor.fillPath(caminho.subtracted(abertura), QColor(0, 0, 0, 155))
 
 class MotorTutorial(QObject):
-    def __init__(self, janelas, passos=PRODUTO, aviso=None):
+    def __init__(self, janelas, passos=PRODUTO, aviso=None, fim="Produto cadastrado. Tutorial concluído!",
+                 ao_encerrar=None):
         super().__init__()
         self.janelas, self.passos = janelas, passos
         self.aviso = aviso or (lambda mensagem: None)
+        self.fim = fim
+        self.ao_encerrar = ao_encerrar
         self.indice = 0
         self.ativo = True
         self.sombra = self.balao = None
@@ -34,12 +59,16 @@ class MotorTutorial(QObject):
         self.atualizar()
 
     def encerrar(self, mensagem=""):
+        if not self.ativo:
+            return
         self.ativo = False
         self.timer.stop()
         QApplication.instance().removeEventFilter(self)
         self._limpar()
         if mensagem:
             self.aviso(mensagem)
+        if self.ao_encerrar is not None:
+            self.ao_encerrar()
 
     def _limpar(self):
         for janela in (self.sombra, self.balao):
@@ -99,27 +128,45 @@ class MotorTutorial(QObject):
                 pai = pai.parentWidget()
             self.sombra = Sombra(janela)
             self.balao = QFrame(janela)
-            self.balao.setStyleSheet("QFrame {background: #fff; color: #18222c; border: 1px solid #888; border-radius: 6px;} QPushButton {color: #18222c; background: #eee; padding: 5px;}")
+            self.balao.setStyleSheet(ESTILO_BALAO)
             layout = QVBoxLayout(self.balao)
-            texto = QLabel(f"{self.indice + 1}/{len(self.passos)} — {passo.texto}")
+            numero = QLabel(f"Passo {self.indice + 1} de {len(self.passos)}")
+            numero.setObjectName("tutorial_passo")
+            layout.addWidget(numero)
+            texto = QLabel(passo.texto)
             texto.setWordWrap(True)
             layout.addWidget(texto)
+            self.dica = QLabel("")
+            self.dica.setObjectName("tutorial_dica")
+            self.dica.setWordWrap(True)
+            self.dica.setVisible(False)
+            layout.addWidget(self.dica)
             linha = QHBoxLayout()
             self.voltar = QPushButton("Voltar")
             self.voltar.clicked.connect(lambda: self.mover(-1))
             self.proximo = QPushButton("Próximo")
+            self.proximo.setObjectName("tutorial_proximo")
             self.proximo.clicked.connect(lambda: self.mover(1))
-            pular = QPushButton("Pular")
+            pular = QPushButton("Sair do tutorial")
             pular.clicked.connect(lambda: self.encerrar())
             for botao in (self.voltar, self.proximo, pular):
                 linha.addWidget(botao)
             layout.addLayout(linha)
-            self.balao.setFixedWidth(min(340, janela.width() - 16))
+            self.balao.setFixedWidth(min(420, janela.width() - 16))
             self.balao.adjustSize()
             self.sombra.show()
             self.balao.show()
-        valor = alvo.text() if hasattr(alvo, "text") else ""
-        self.proximo.setEnabled(Tutoriais.permite(passo, valor, bool(self.janelas.get("formulario"))))
+        if isinstance(alvo, QComboBox):
+            valor = "" if alvo.currentData() is None else "escolhido"
+        else:
+            valor = alvo.text() if hasattr(alvo, "text") else ""
+        liberado = Tutoriais.permite(passo, valor, bool(self.janelas.get("formulario")))
+        self.proximo.setEnabled(liberado)
+        dica = "" if liberado else DICAS.get(passo.condicao, "")
+        if self.dica.text() != dica:
+            self.dica.setText(dica)
+            self.dica.setVisible(bool(dica))
+            self.balao.adjustSize()
         pode_voltar = self.indice > 0 and self.passos[self.indice - 1].janela == passo.janela
         self.voltar.setEnabled(pode_voltar)
         self.sombra.setGeometry(janela.rect())
@@ -136,24 +183,27 @@ class MotorTutorial(QObject):
 
     def formulario(self, formulario):
         self.janelas["formulario"] = formulario
-        self.indice = 2
+        self.indice = next(i for i, passo in enumerate(self.passos) if passo.janela == "formulario")
         self._limpar()
-        formulario.accepted.connect(lambda: self.encerrar("Produto cadastrado. Tutorial concluído!"))
+        formulario.accepted.connect(lambda: self.encerrar(self.fim))
         formulario.rejected.connect(lambda: self.encerrar())
         QTimer.singleShot(0, self.atualizar)
 
 
-def iniciar_produto(principal):
+def iniciar(principal, chave="produto"):
+    """Abre o cadastro do roteiro e guia a pessoa até salvar um registro de verdade."""
+    roteiro = ROTEIROS[chave]
     anterior = getattr(principal, "tutorial", None)
     if anterior and anterior.ativo:
         anterior.encerrar()
-    janela = principal.abrir_cadastro("produtos")
+    janela = principal.abrir_cadastro(roteiro.cadastro)
     if janela is None:
-        return
+        return None
     def avisar(mensagem):
         janela.mensagem.setText(mensagem)
         principal.mensagem.setText(mensagem)
-    motor = MotorTutorial({"lista": janela}, aviso=avisar)
+    motor = MotorTutorial({"lista": janela}, roteiro.passos, aviso=avisar, fim=roteiro.fim,
+                          ao_encerrar=getattr(principal, "marcar_tutoriais", None))
     principal.tutorial = motor
     def aberto(formulario):
         if not motor.ativo:
@@ -161,8 +211,16 @@ def iniciar_produto(principal):
         if formulario.id_ is not None:
             motor.encerrar("Para este tutorial, use Novo em vez de Editar.")
             return
-        formulario.preparar_tutorial()
+        if chave == "produto":
+            formulario.preparar_tutorial()          # produto também lança o estoque inicial
+        else:
+            formulario.tutorial_chave = chave       # os outros concluem ao salvar
         formulario.tutorial_ativo = lambda: motor.ativo
         motor.formulario(formulario)
     janela.formulario_aberto.connect(aberto)
     janela.finished.connect(lambda: motor.encerrar())
+    return motor
+
+
+def iniciar_produto(principal):
+    return iniciar(principal, "produto")

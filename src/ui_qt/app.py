@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QToolBox, QTabWidget,
 )
 
+from src.controllers.tutoriais import ROTEIROS, Tutoriais
 from src.controllers.config_controller import modulos_desligados
 from src.controllers.fila_impressao_controller import ServicoFilaImpressao
 from src.controllers.mesas_modelo import montar_tiles
@@ -232,7 +233,7 @@ class JanelaPrincipal(QMainWindow):
             grupos[nome] = grade
             self.menu_grupos.addItem(pagina, nome)
         categorias = {
-            "Tutoriais": {"tutoriais"},
+            "Tutoriais": {"tutoriais"} | {f"tutorial_{c}" for c in ROTEIROS},
             "Operação": {"inicio", "caixa", "porteiro", "quartos", "cozinha", "alertas"},
             "Produtos e estoque": {"produtos", "estoque", "contagem", "retornaveis", "promocoes", "importar_produtos", "composicao"},
             "Gestão": {"relatorio_vendas", "relatorios", "contas", "devolucoes", "notas_fiscais", "whatsapp", "auditoria"},
@@ -242,8 +243,12 @@ class JanelaPrincipal(QMainWindow):
                              "impressora"},
         }
         self.botoes = {}
+        # Um botão por tutorial. O de produto mantém a chave antiga ("tutoriais"); os outros são "tutorial_<chave>".
+        tutoriais = tuple((f"tutorial_{r.chave}", r.titulo, lambda _=False, c=r.chave: self.abrir_tutoriais(c))
+                          for r in ROTEIROS.values() if r.chave != "produto")
         for chave, titulo, acao in (
-            ("tutoriais", "Cadastrar um produto", self.abrir_tutoriais),
+            ("tutoriais", ROTEIROS["produto"].titulo, lambda _=False: self.abrir_tutoriais()),
+            *tutoriais,
             ("inicio", "Visão geral", self.atualizar),
             ("caixa", "Abrir caixa", self.abrir_caixa),
             ("porteiro", "Porteiro no celular", self.abrir_porteiro),
@@ -300,6 +305,7 @@ class JanelaPrincipal(QMainWindow):
         for grade in grupos.values():
             grade.addStretch(1)
         self.menu_grupos.setCurrentIndex(1)  # Operação aberta por padrão; Tutoriais continua no topo.
+        self.marcar_tutoriais()
         self.busca_modulos.textChanged.connect(self.filtrar_modulos)
         self.sessao = tema.texto("", "suave")
         lateral.addWidget(self.sessao)
@@ -484,6 +490,11 @@ class JanelaPrincipal(QMainWindow):
             modulo = f"cad_{chave}"
             self.botoes[chave].setEnabled(modulo not in desligados and self.ctx.pode(modulo))
         self.botoes["mais_cadastros"].setEnabled(bool(self._cadastros_disponiveis()))
+        for roteiro in ROTEIROS.values():
+            if roteiro.chave != "produto":      # o de produto fica sempre clicável e explica quando falta acesso
+                self.botoes[f"tutorial_{roteiro.chave}"].setEnabled(
+                    roteiro.modulo not in desligados and self.ctx.pode(roteiro.modulo))
+        self.marcar_tutoriais()
         self.botoes["estoque"].setEnabled(self.ctx.pode("lanc_estoque"))
         self.botoes["retornaveis"].setEnabled(self.ctx.pode("lanc_estoque"))
         self._avisar_notas_dono()
@@ -590,11 +601,14 @@ class JanelaPrincipal(QMainWindow):
         from src.database.conexao import normalizar
         busca = normalizar(texto.strip())
         usa_mesas = self.ctx.banco.cfg_bool("usar_mesas", True)
+        desligados = modulos_desligados(self.ctx.banco)
         for chave, botao in self.botoes.items():
-            rotulo = ("Tutoriais " if chave == "tutoriais" else "") + botao.text()
+            rotulo = ("Tutoriais " if chave.startswith("tutoria") else "") + botao.text()
             visivel = chave not in self.edicao.menu_oculto and (not busca or busca in normalizar(rotulo))
             if chave == "porteiro" and not usa_mesas:
                 visivel = False
+            if chave.startswith("tutorial_") and ROTEIROS[chave[len("tutorial_"):]].modulo in desligados:
+                visivel = False                     # a casa não usa este cadastro: o tutorial dele some
             botao.setVisible(visivel)
         if busca:
             for i in range(self.menu_grupos.count()):
@@ -772,12 +786,22 @@ class JanelaPrincipal(QMainWindow):
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
 
-    def abrir_tutoriais(self):
-        from src.ui_qt.tutorial import iniciar_produto
-        if not self.ctx.pode("cad_produtos"):
-            self.mensagem.setText("Seu acesso não permite cadastrar produtos.")
+    def abrir_tutoriais(self, chave="produto"):
+        from src.ui_qt.tutorial import iniciar
+        roteiro = ROTEIROS[chave]
+        if not self.ctx.pode(roteiro.modulo):
+            self.mensagem.setText("Seu acesso não permite este tutorial. Peça ao gerente.")
             return
-        iniciar_produto(self)
+        iniciar(self, chave)
+
+    def marcar_tutoriais(self):
+        """Põe um ✓ no botão dos tutoriais que este operador já concluiu."""
+        if self.ctx.operador_id is None:
+            return
+        for roteiro, feito in Tutoriais(self.ctx.banco, self.ctx.operador_id).situacao():
+            botao = self.botoes.get("tutoriais" if roteiro.chave == "produto" else f"tutorial_{roteiro.chave}")
+            if botao is not None:
+                botao.setText(("✓ " if feito else "") + roteiro.titulo)
 
     def abrir_primeiros_passos(self):
         """Lista de conferência da instalação: abre sozinha na primeira entrada e fica no menu Configuração."""

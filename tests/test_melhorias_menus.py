@@ -20,11 +20,14 @@ class TesteMenusMelhoriasQt(BaseQt):
     def test_busca_modulos_ignora_acentos_sem_alterar_permissoes(self):
         janela = self.principal()
         estados = {chave: botao.isEnabled() for chave, botao in janela.botoes.items()}
+        # Sem busca só fica escondido o que a casa não usa (ex.: tutorial de clientes sem caderneta nem delivery).
+        escondidos = {chave for chave, botao in janela.botoes.items() if botao.isHidden()}
+        self.assertLessEqual(escondidos, {"tutorial_cliente"})
         janela.busca_modulos.setText("promocoes")
         self.assertFalse(janela.botoes["promocoes"].isHidden())
         self.assertTrue(janela.botoes["estoque"].isHidden())
         janela.busca_modulos.clear()
-        self.assertTrue(all(not botao.isHidden() for botao in janela.botoes.values()))
+        self.assertEqual(escondidos, {chave for chave, botao in janela.botoes.items() if botao.isHidden()})
         self.assertEqual(estados, {chave: botao.isEnabled() for chave, botao in janela.botoes.items()})
 
     def test_notebook_tem_rolagem_e_busca_por_teclado(self):
