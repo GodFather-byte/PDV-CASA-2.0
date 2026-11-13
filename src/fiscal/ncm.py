@@ -13,7 +13,7 @@ from src.core.erros import ErroNegocio
 # (palavras ou marcas, NCM, descrição). A ordem importa: o primeiro que bater ganha, então o mais específico vem antes.
 SUGESTOES: tuple[tuple[tuple[str, ...], str, str], ...] = (
     (("agua de coco", "leite de coco"), "", ""),           # parecido com outra coisa: melhor não sugerir
-    (("sem alcool", "zero alcool", "0 0"), "22029100", "cerveja sem álcool"),
+    (("sem alcool", "zero alcool", "0 0", "budweiser zero"), "22029100", "cerveja sem álcool"),
     (("gelo",), "22019000", "gelo"),
     (("ice", "beats", "xeque mate"), "22089000", "bebida alcoólica mista (ice)"),
     (("energetico", "red bull", "monster", "tnt", "baly", "fusion", "burn"), "22029900", "energético"),
@@ -46,6 +46,7 @@ SUGESTOES: tuple[tuple[tuple[str, ...], str, str], ...] = (
     (("cigarro", "marlboro", "lucky strike", "dunhill", "rothmans", "kent", "camel", "winston", "derby", "eight",
       "chesterfield"), "24022000", "cigarro"),
     (("charuto", "cigarrilha"), "24021000", "charuto"),
+    (("carvao de coco",), "44029000", "carvão para narguilé"),
     (("essencia", "narguile", "fumo"), "24031100", "tabaco para narguilé"),
     (("seda", "papel de enrolar"), "48131000", "papel para cigarro (seda)"),
     (("isqueiro", "bic"), "96131000", "isqueiro"),
@@ -56,8 +57,9 @@ SUGESTOES: tuple[tuple[tuple[str, ...], str, str], ...] = (
     (("amendoim", "dori", "mendorato", "japones"), "20081100", "amendoim"),
     (("chocolate", "bombom", "kitkat", "kit kat", "snickers", "twix", "lacta", "garoto", "talento"),
      "18069000", "chocolate"),
-    (("chiclete", "trident", "halls", "mentos"), "17041000", "goma de mascar"),
-    (("bala", "pirulito", "pacoca", "doce de leite"), "17049020", "balas e confeitos"),
+    (("chiclete", "trident", "mentos"), "17041000", "goma de mascar"),
+    (("bala", "halls", "pirulito", "pacoca", "doce de leite"), "17049020", "balas e confeitos"),
+    (("copo descartavel", "canudo"), "39241000", "copo e canudo descartável"),
     (("biscoito", "bolacha", "wafer", "cookie", "oreo", "trakinas", "passatempo"), "19053100", "biscoito"),
     (("leite",), "04011010", "leite UHT"),
     (("pao", "torrada"), "19059090", "pão e torrada"),

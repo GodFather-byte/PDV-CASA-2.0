@@ -1,17 +1,19 @@
 # Handoff — atualização com loja piloto + app da rede (13/11/2026)
 
-## Agora (branch `verificar-com-piloto`, versão 1.14.7)
+## Agora (branch `produtos-prontos`, entra na 1.14.7)
 
-- Defeito visto na Casa Verde (13/11): em Atualizações do programa, o "Verificar" só consultava o aviso antigo
-  (`/v1/atualizacoes`, `src/sync/atualizacoes.py`), que não conhece a loja piloto, e dizia "Nenhuma atualização
-  pendente" com a 1.14.6 oferecida. Agora a consulta manual também chama a rota do pacote com `chave_loja`
-  (`consultar_pacote` em `src/ui_qt/atualizacoes.py`) e mostra a versão que o "Instalar com o caixa livre" instala.
-  Testes em `tests/test_qt_atualizacoes.py`. Roteiro do piloto corrigido em `docs/ATUALIZACAO.md`.
-- Teste da loja piloto em andamento: 1.14.6 publicada (#94); Render com `PDV_ATUALIZACAO_PAUSADA=1` e
-  `PDV_ATUALIZACAO_PILOTO` = chave da Casa Verde. Falta o dono confirmar a versão no caixa; depois, com o OK dele,
-  apagar o piloto e tirar a pausa.
-- Vídeos de tutorial: `python -m tools.videos_tutoriais produto operador venda fechamento --saida videos/` (#95).
-- Próximos: deixar o repositório privado (conferir Render antes), rede EA Superações na central.
+- Produtos prontos de adega (pedido do dono: "diferencial"): `src/controllers/catalogo.py` traz 213 itens comuns em
+  adegas de SP (cervejas por marca e embalagem, destilados, vinhos, refrigerantes, águas/sucos, energéticos, gelo e
+  carvão, tabacaria, petiscos, descartáveis) com nome, subgrupo do perfil Adega e NCM. Sem preço (cada loja cobra o seu)
+  e sem código de barras (número inventado puxaria o produto errado). Grava pela mesma rotina da importação de
+  planilha; item que a loja já tem não é mexido.
+- Tela `src/ui_qt/catalogo.py`: botão "Produtos prontos…" na janela de importação (menu "Importar e produtos
+  prontos"). Digitar o preço marca o item. "Gravar códigos de barras…": escolhe o produto e passa no leitor.
+- `src/fiscal/ncm.py`: Budweiser Zero (sem álcool), Halls (bala), carvão de coco e copo/canudo descartável.
+- Testes: `tests/test_catalogo.py` (inclui: NCM do catálogo = NCM sugerido pelo nome).
+- Ainda de pé: Casa Verde instalar a 1.14.6 (piloto no Render corrigido para `CASA-VERDE`; o código que o dono passou
+  era o `caixa_id`); publicar a 1.14.7 depois disso; mensalidade da rede EA (inauguração na semana de 16/11);
+  repositório privado (falta o dono aprovar o acesso do GitHub Mobile para eu ver o app Render).
 
 ---
 

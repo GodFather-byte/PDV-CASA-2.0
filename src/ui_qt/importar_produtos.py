@@ -51,6 +51,11 @@ class JanelaImportarProdutos(QDialog):
             "suave"))
 
         arquivos = QHBoxLayout()
+        self.btn_catalogo = QPushButton("Produtos prontos…")
+        self.btn_catalogo.setObjectName("primario")
+        self.btn_catalogo.setToolTip("Mais de 200 produtos de adega com nome, subgrupo e NCM: é só digitar o preço.")
+        self.btn_catalogo.clicked.connect(self.abrir_catalogo)
+        arquivos.addWidget(self.btn_catalogo)
         self.btn_escolher = QPushButton("Escolher planilha…")
         self.btn_escolher.clicked.connect(self.escolher_arquivo)
         arquivos.addWidget(self.btn_escolher)
@@ -134,6 +139,17 @@ class JanelaImportarProdutos(QDialog):
         if entidade.modulo in modulos_desligados(self.ctx.banco):
             raise ErroPermissao("O cadastro de produtos está desativado.")
         self.ctx.acesso.exigir(self.ctx.operador, entidade.modulo)
+
+    def abrir_catalogo(self):
+        """Catálogo de produtos prontos (adega): o dono marca o que vende e digita o preço."""
+        from src.ui_qt.catalogo import JanelaCatalogo
+        try:
+            janela = JanelaCatalogo(self.ctx, self, ao_adicionar=self.ao_importar)
+        except ErroPermissao as erro:
+            QMessageBox.warning(self, "Produtos prontos", str(erro))
+            return None
+        janela.show()
+        return janela
 
     def _modo_codigo_alterado(self, _marcado):
         self.inicio.setEnabled(self.codigo_sequencial.isChecked())
