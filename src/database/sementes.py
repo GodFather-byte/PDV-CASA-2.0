@@ -91,6 +91,7 @@ CONFIG_PADRAO = {
     "nfce_regime_tributario": "nao_definido",
     "nfce_emissao": "desligada", "nfce_ativada_em": "", "nfce_token_homologacao": "", "nfce_token_producao": "",
     "nfce_cfop_padrao": "5102", "nfce_icms_padrao": "102", "nfce_pis_cofins_padrao": "49", "nfce_imprimir": "S",
+    "pix_integrado": "N", "pix_mp_token": "", "pix_email_pagador": "", "pix_expira_min": "15",
     "nfce_ibscbs_enviar": "N", "nfce_ibscbs_cst_padrao": "000", "nfce_ibscbs_class_padrao": "000001",
     # Módulo de operação Cozinha/Bar: impressoras nomeadas por setor e status de preparo por item.
     "usar_cozinha_bar": "N",
