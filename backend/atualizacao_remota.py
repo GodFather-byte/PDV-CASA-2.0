@@ -110,15 +110,26 @@ def resposta_publica(linha: PacoteAtualizacao, versao_instalada: str | None) -> 
     return {"disponivel": disponivel, "pacote": pacote}
 
 
+def pausada_para(loja: str) -> bool:
+    """PDV_ATUALIZACAO_PAUSADA=1 segura a oferta para todas as lojas. PDV_ATUALIZACAO_PILOTO=CHAVE1,CHAVE2 libera só
+    essas lojas enquanto a pausa vale, para testar uma versão numa loja antes das outras. Caixa antigo não manda a
+    loja, então continua esperando."""
+    if os.environ.get("PDV_ATUALIZACAO_PAUSADA", "").strip().lower() not in ("1", "s", "true", "sim"):
+        return False
+    piloto = {c.strip().upper() for c in os.environ.get("PDV_ATUALIZACAO_PILOTO", "").split(",") if c.strip()}
+    return not ((loja or "").strip().upper() in piloto)
+
+
 def instalar_no_app(app: FastAPI, autenticar) -> None:
     Base.metadata.create_all(bind=engine)
 
     @app.get("/v1/atualizacao/ultima")
     def ler_ultima(edicao: str = Query(..., max_length=40), canal: str = Query("estavel", max_length=20),
-                   versao: str = Query("", max_length=20), db: Session = Depends(get_db)):
+                   versao: str = Query("", max_length=20), loja: str = Query("", max_length=64),
+                   db: Session = Depends(get_db)):
         if edicao not in EDICOES or canal not in CANAIS:
             raise HTTPException(status_code=422, detail="Edição ou canal inválido.")
-        if os.environ.get("PDV_ATUALIZACAO_PAUSADA", "").strip().lower() in ("1", "s", "true", "sim"):
+        if pausada_para(loja):
             return {"disponivel": False, "pacote": None, "pausada": True}
         cliente_minimo = os.environ.get("PDV_ATUALIZACAO_CLIENTE_MINIMO", "").strip()
         if cliente_minimo and (not valida(cliente_minimo) or not valida(versao)

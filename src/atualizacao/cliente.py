@@ -132,13 +132,16 @@ def sem_pacote(dados: dict | None) -> str:
     return "assinatura_invalida"
 
 
-def consultar(api_url: str, http, edicao_nome: str | None = None, canal: str = CANAL, versao: str = VERSAO) -> dict | None:
+def consultar(api_url: str, http, edicao_nome: str | None = None, canal: str = CANAL, versao: str = VERSAO,
+              loja: str = "") -> dict | None:
+    """`loja` (a chave da loja) só serve para a nuvem liberar a versão a lojas piloto enquanto as outras esperam."""
     if not (api_url or "").strip() or http is None:
         return None
+    parametros = {"edicao": edicao_nome or edicao_atual(), "canal": canal, "versao": versao}
+    if (loja or "").strip():
+        parametros["loja"] = loja.strip()[:64]
     try:
-        resposta = http.get(url_ultima(api_url), params={
-            "edicao": edicao_nome or edicao_atual(), "canal": canal, "versao": versao,
-        }, timeout=(10, 60))                    # o Render pode levar perto de um minuto para acordar
+        resposta = http.get(url_ultima(api_url), params=parametros, timeout=(10, 60))                    # o Render pode levar perto de um minuto para acordar
     except (OSError, ValueError, AttributeError) as erro:
         log.info("Atualização: sem resposta da nuvem (%s).", erro)
         return None
@@ -321,7 +324,7 @@ def _rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: 
                 import requests as http
             except ImportError:
                 return {"acao": "sem_cliente_http"}
-        dados = consultar(banco.cfg("api_url"), http)
+        dados = consultar(banco.cfg("api_url"), http, loja=banco.cfg("chave_loja") or "")
         if dados is None:
             banco.cfg_set(CHAVE_FALHA_CONSULTA, fmt.agora())
             return {"acao": "sem_resposta"}
