@@ -83,7 +83,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Retornáveis por cliente (sem caução automática) | `retornaveis_controller.py`; `ui_qt/retornaveis.py` |
 | Promoções e simulação de faixas sem acumular | `promocoes_controller.py`, regras em `produto_controller.py`; `ui_qt/promocoes.py` |
 | Alertas operacionais e painel do dono | `alertas_controller.py`; `ui_qt/alertas.py`; WhatsApp em `src/whatsapp/` |
-| Produtos e importação por planilha | `produto_controller.py`, `importacao_produtos.py` |
+| Produtos e importação por planilha | `produto_controller.py`, `importacao_produtos.py`; produtos prontos de adega em `catalogo.py` (tela `ui_qt/catalogo.py`) |
 | Cadastros e entidades | `cadastro_controller.py`, `entidades.py` |
 | Operadores e níveis de acesso | `acesso_controller.py` |
 | Configurações da loja | `config_controller.py` (padrões em `CONFIG_PADRAO`, `src/database/sementes.py`) |

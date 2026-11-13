@@ -275,7 +275,7 @@ class JanelaPrincipal(QMainWindow):
             ("whatsapp", "WhatsApp do dono", self.abrir_whatsapp),
             ("utilitarios", "Utilitários e manutenção", self.abrir_utilitarios),
             ("atualizacoes", "Atualizações do programa", self.abrir_atualizacoes),
-            ("importar_produtos", "Importar produtos", self.abrir_importacao_produtos),
+            ("importar_produtos", "Importar e produtos prontos", self.abrir_importacao_produtos),
             ("auditoria", "Auditoria • somente leitura", self.abrir_auditoria),
             ("backup", "Backup externo cifrado", self.abrir_backup),
             ("restaurar", "Restaurar backup local", self.abrir_restaurar_backup),
