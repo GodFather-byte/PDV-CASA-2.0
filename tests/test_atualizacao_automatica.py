@@ -137,6 +137,41 @@ class TesteNuvem(unittest.TestCase):
                 self.assertIsNone(resposta["pacote"])
                 self.assertTrue(resposta["pausada"])
 
+    def test_piloto_libera_so_as_lojas_escolhidas_durante_a_pausa(self):
+        from unittest.mock import patch
+        from backend.atualizacao_remota import publicar
+        from backend.database import SessionLocal
+        db = SessionLocal()
+        try:
+            publicar(db, pacote())
+        finally:
+            db.close()
+        ambiente = {"PDV_ATUALIZACAO_PAUSADA": "1", "PDV_ATUALIZACAO_PILOTO": "CASA-VERDE, outra"}
+        with patch.dict(os.environ, ambiente):
+            def pedir(**extra):
+                return self.http.get("/v1/atualizacao/ultima",
+                                     params={"edicao": "willpdv", "versao": "1.0.0", **extra}).json()
+            self.assertTrue(pedir(loja="casa-verde")["disponivel"])        # piloto (maiúscula/minúscula tanto faz)
+            self.assertTrue(pedir(loja="OUTRA")["disponivel"])
+            self.assertTrue(pedir(loja="ADEGA-1")["pausada"])               # loja fora do piloto espera
+            self.assertTrue(pedir()["pausada"])                             # caixa antigo não manda a loja: espera
+        with patch.dict(os.environ, {"PDV_ATUALIZACAO_PAUSADA": "1"}):
+            self.assertTrue(self.http.get("/v1/atualizacao/ultima", params={
+                "edicao": "willpdv", "loja": "CASA-VERDE"}).json()["pausada"])   # sem piloto, ninguém
+
+    def test_caixa_manda_a_chave_da_loja_na_consulta(self):
+        from src.atualizacao import cliente
+        pedidos = []
+
+        class Http:
+            def get(self, url, params=None, timeout=None):
+                pedidos.append(params)
+                return type("R", (), {"status_code": 200, "json": lambda self: {"disponivel": False}})()
+        cliente.consultar("https://nuvem.exemplo/v1/sincronizar", Http(), loja=" CASA-VERDE ")
+        cliente.consultar("https://nuvem.exemplo/v1/sincronizar", Http())
+        self.assertEqual(pedidos[0]["loja"], "CASA-VERDE")
+        self.assertNotIn("loja", pedidos[1])
+
     def test_cliente_antigo_nao_recebe_instalacao_automatica(self):
         from unittest.mock import patch
         with patch.dict(os.environ, {"PDV_ATUALIZACAO_CLIENTE_MINIMO": "1.14.2"}):

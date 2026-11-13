@@ -1,4 +1,14 @@
-# Handoff — app da rede e mensalidade única pela central (13/11/2026)
+# Handoff — atualização com loja piloto + app da rede (13/11/2026)
+
+## Agora (branch `atualizacao-piloto`, versão 1.14.5)
+
+- Caixa manda `loja` (chave_loja) em `/v1/atualizacao/ultima`; nuvem com `PDV_ATUALIZACAO_PAUSADA=1` +
+  `PDV_ATUALIZACAO_PILOTO=CHAVE` oferece só à loja piloto (`backend/atualizacao_remota.pausada_para`).
+- Teste em PC real na Casa Verde (roteiro em `docs/ATUALIZACAO.md`, "Loja piloto"): instalar 1.14.5 à mão,
+  publicar 1.14.6, piloto = chave da Casa Verde, conferir que atualiza sem a janela de administrador.
+
+---
+
 
 Branch `rede-app-e-mensalidade`, criada da main depois do #91. Pedido do dono: PWA para a rede EA Superações
 (cliente com 4 lojas) e juntar as assinaturas das lojas numa só ("depois eu coloco o valor"). Guia: `docs/REDE_LOJAS.md`.

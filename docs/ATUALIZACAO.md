@@ -136,6 +136,23 @@ Se o repositório voltar a ser privado, este fluxo falha antes de anunciar um do
 Será necessário configurar hospedagem HTTPS pública novamente. Não remover a verificação de assinatura.
 
 
+## Loja piloto (testar numa loja antes das outras)
+
+Com `PDV_ATUALIZACAO_PAUSADA=1` no Render, ninguém recebe versão nova. Para testar numa loja só, acrescente
+`PDV_ATUALIZACAO_PILOTO=CHAVE-DA-LOJA` (várias separadas por vírgula; maiúsculas e minúsculas tanto faz). Desde a
+1.14.5 o caixa manda a própria chave (`chave_loja`) na consulta; a nuvem oferece a versão só às lojas da lista
+enquanto a pausa vale. Caixa anterior à 1.14.5 não manda a chave e continua esperando. Depois do teste, apague o
+piloto e, se tudo deu certo, tire a pausa para liberar as outras lojas.
+
+Roteiro na loja piloto:
+1. Caixa livre (turno fechado, sem comanda), backup feito pelo PDV.
+2. Instalar à mão a 1.14.5 (ou mais nova), que cria a tarefa `<Programa> Atualizacao`. Conferir no Prompt:
+   `schtasks /Query /TN "WillPDV Atualizacao"`.
+3. Publicar uma versão maior (ex.: 1.14.6) e pôr a chave da loja em `PDV_ATUALIZACAO_PILOTO`.
+4. No caixa: Atualizações do programa > Verificar > Instalar com o caixa livre. Esperar: sem a janela "Deseja
+   permitir..." do Windows, o programa fecha, instala e reabre na versão nova. Ou deixar sozinho com o turno fechado.
+5. Conferir a versão nova no caixa e na central (sem selo "Atualização travada").
+
 ## Contenção e recuperação de instalação
 
 `PDV_ATUALIZACAO_PAUSADA=1` no Render impede a rota de oferecer novos pacotes.
