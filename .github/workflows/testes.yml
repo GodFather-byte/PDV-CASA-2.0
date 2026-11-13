@@ -1,5 +1,8 @@
 # Roda a suíte inteira em PRs para main, após push na main ou por execução manual.
 # Windows é onde o PDV roda nas lojas; o Linux pega o que depende de sistema operacional sem querer.
+# Trabalhos de Windows: no PC do dono (runner próprio, sem custo de minutos) quando o repositório é privado e a variável
+# RUNNER_WINDOWS existe (ex.: ["self-hosted","Windows"]); senão no windows-latest do GitHub. Em repositório público o
+# runner próprio NUNCA é usado: qualquer PR de fora rodaria código no PC. Ver docs/PROTEGER_CODIGO.md.
 name: Testes
 
 on:
@@ -15,7 +18,7 @@ permissions:
 jobs:
   tutorial-windows:
     name: Tutorial e telas mínimas / Windows
-    runs-on: windows-latest
+    runs-on: ${{ github.event.repository.private && vars.RUNNER_WINDOWS && fromJSON(vars.RUNNER_WINDOWS) || 'windows-latest' }}
     timeout-minutes: 10
     env:
       QT_QPA_PLATFORM: offscreen
@@ -29,7 +32,7 @@ jobs:
 
   publicacao-windows:
     name: Publicação assinada / Windows
-    runs-on: windows-latest
+    runs-on: ${{ github.event.repository.private && vars.RUNNER_WINDOWS && fromJSON(vars.RUNNER_WINDOWS) || 'windows-latest' }}
     timeout-minutes: 10
     env:
       QT_QPA_PLATFORM: offscreen
@@ -72,20 +75,27 @@ jobs:
 
   testes:
     name: ${{ matrix.os }} / Python ${{ matrix.python }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os == 'windows-latest' && (github.event.repository.private && vars.RUNNER_WINDOWS && fromJSON(vars.RUNNER_WINDOWS) || 'windows-latest') || matrix.os }}
     timeout-minutes: 30          # um teste de tela travado (janela esperando resposta) vira falha, não horas de espera
     env:
       QT_QPA_PLATFORM: offscreen
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
-        python: ["3.10", "3.12"]
+        # Windows (onde o PDV roda) nas duas versões; Linux só na mais nova: o 3.10 já é coberto no Windows e cada
+        # minuto de Linux conta na cota do repositório privado.
+        include:
+          - {os: windows-latest, python: "3.10"}
+          - {os: windows-latest, python: "3.12"}
+          - {os: ubuntu-latest, python: "3.12"}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4          # o runner próprio (PC do dono) não vem com Node
+        with:
+          node-version: "20"
       - name: Dependências (opcionais do PDV e da API, para nada ficar pulado)
         run: |
           python -m pip install --upgrade pip
