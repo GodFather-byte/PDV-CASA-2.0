@@ -47,7 +47,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `src/cardapio/` | Preço público do cardápio e a folha A4 dos QR (`preco.py`, `folha.py`). A tela Qt é `ui_qt/cardapio_qr.py` |
 | `licenciador/` | `nucleo.py` (regras), `tela.py` (janela), `app.py`, `autoteste.py`; central própria em `central.py` (SQLite/emissão/ponte), `central_bot.py`, `central_cli.py`, `central_tela.py` |
 | `backend/` | FastAPI: `main.py` (rotas), `ponte.py` (central técnica, caixas aprovados e entrega de licenças assinadas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobranca_mercadopago.py` (Pix, Checkout Pro, webhook e varredura no próprio processo), `painel.py` e `painel_web/` (painel do dono em `/painel/`; aba Relatórios em `GET /v1/painel/lucro`; rede em `grupos.py`, link `/painel/?grupo=CHAVE`), `cardapio.py` e `cardapio_web/` (cardápio em `/cardapio/`; pedido online do Will Adega em `pedido_online.py`), `site.py` e `site_web/` (site de vendas em `/` e `/site`; preços em `site_precos.py`) |
-| `tools/` | `gerar_licenca.py`, `gerar_logos.py`, `esp32_campainha/main.py` (MicroPython da campainha dos quartos; nada disso vai no instalador do PDV) |
+| `tools/` | `gerar_licenca.py`, `gerar_logos.py`, `videos_tutoriais.py` (vídeos de tutorial com as telas reais), `esp32_campainha/main.py` (MicroPython da campainha dos quartos; nada disso vai no instalador do PDV) |
 | `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`, `WillAdega.iss`) e imagens (`willadega-*`: marca da edição adega) |
 | `tests/` | Um `test_*.py` por assunto; `base.py` (banco em memória, relógio controlável); `ui_robo.py` (robô das janelas modais) |
 | `docs/` | Guias por assunto (lista abaixo) |
