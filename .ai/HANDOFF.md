@@ -1,21 +1,19 @@
 # Handoff — atualização com loja piloto + app da rede (13/11/2026)
 
-## Agora (branch `drinks-garotas`, entra na 1.14.7, esquema 54)
+## Agora (branch `nfce-sefaz-propria`)
 
-- Consumo da garota (pedido do dono, para todas as boates): o código numérico que o dono escolhe em Configurações >
-  Caixa (config `codigo_consumo_garota`, vazio de fábrica = desligado, só números; em CODIGOS_ESPECIAIS) lança na comanda da garota a bebida que ela consumiu, com o preço digitado
-  (dose da casa, sem estoque, fora do faturamento). Linha VERMELHA na comanda ("CONSUMO (descontar)"), diferente da
-  comissão (rosa). Tabela `consumos_garotas` (pendente/descontado/cancelado); `acertos_garotas.consumo_cent`.
-- Acerto (`ComissaoController.pagar`): desconta sozinho todo o consumo pendente; a saída do caixa é só o que ela
-  recebe (dinheiro = total - vale - consumo - Pix). Se o consumo passa do que ela tem a receber, ela paga a diferença:
-  entrada no caixa (com "Registrar saída em dinheiro na gaveta" marcado) e comprovante de entrada. `consumos_ids` trava
-  o acerto se o consumo mudou depois de abrir a janela. Recibo mostra "Consumo (n) descontado".
-- Telas: `src/ui_qt/caixa.py` (lancar_comissao(tipo="consumo"), _consumo_confirmar, _cancelar_consumo, LINHAS_CONSUMO),
-  `src/ui_qt/comissao.py` (DialogoAcerto mostra e desconta). Testes: `tests/test_drinks_garota.py`.
-- Nome "consumo" e não "drink": na boate "drink marcado" já é a comissão (cartão da comanda).
-- A saída em dinheiro no acerto depende de `comissao_paga_do_caixa` (padrão N): o dono quer S nas boates.
-- Ainda de pé: Casa Verde instalar a 1.14.6 (piloto no Render = `CASA-VERDE`); publicar a 1.14.7 depois;
-  mensalidade da rede EA; repositório privado (falta aprovar o GitHub Mobile).
+- Emissão própria da NFC-e direto na SEFAZ-SP (decisão do dono: cobrar adicional menor e ganhar no volume). Guia em
+  `docs/NFCE_PROPRIA.md`. Código em `src/fiscal/sefaz/` (chave, xml_nfce, assinatura, qrcode, cliente, provedor);
+  provedor escolhido por `nfce_provedor` (focus | propria) em `FiscalController.transmissor()`; a fila não mudou.
+- Testes: `tests/test_nfce_sefaz.py` valida o XML nos schemas oficiais (PL_010 v1.30, em `tests/dados/xsd_nfe/`,
+  baixados de nfephp-org/sped-nfe), confere a assinatura e simula a SEFAZ (autoriza, rejeita, resposta perdida,
+  cancelamento). Nova dependência: `lxml` (requirements.in/.txt regenerados com uv).
+- Ainda não falou com a SEFAZ de verdade: falta o certificado A1 (o dono vai comprar um). Primeiro teste: status do
+  serviço em homologação; se der SSLError, embutir a cadeia ICP-Brasil.
+- Falta: contingência off-line (QR v3 assinado; confirmar no Manual DANFE NFC-e v6), inutilização, XMLs na nuvem,
+  IBS/CBS na emissão própria.
+- Outras pendências: Casa Verde instalar a 1.14.7 (piloto `CASA-VERDE` no Render; 1.14.7 publicada); depois liberar
+  as outras lojas; mensalidade da rede EA; repositório privado.
 
 ---
 
