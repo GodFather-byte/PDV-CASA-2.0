@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QDial
 from src.core import formatacao as fmt
 from src.controllers.produto_controller import ProdutoController
 from src.controllers import ficha_sangria
+from src.controllers.comissao_controller import LIMITE_CONFIRMAR_CENT
 from src.core.erros import ErroNegocio
 from src.core.identidade_visual import preview_logotipo
 from src.core.posicao import exemplos, parece_posicao, rotulo_do_campo
@@ -151,6 +152,8 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 """
 # fundo das linhas de comissão marcada na comanda da garota: (a pagar, paga) e o texto de cada uma, por modo
 LINHAS_COMISSAO = {"claro": ("#fbe0ee", "#dcebdf", "#8e1452"), "escuro": ("#4a1240", "#12382a", "#ffc4e4")}   # rosa: comissão
+# Consumo da garota (código escolhido nas Configurações): vermelho, para não confundir com a comissão (rosa). (a descontar, descontado, texto)
+LINHAS_CONSUMO = {"claro": ("#fde0dc", "#ececec", "#b3261e"), "escuro": ("#5a1414", "#2b2b2b", "#ff8a80")}
 LINHA_NOVA = {"claro": ("#d6efe0", "#0b5a3c"), "escuro": ("#123a35", "#7cf0c8")}     # o item que acabou de ser lançado
 # Etiqueta da venda no alto da coluna do meio: (fundo, texto, borda) por tipo e modo. A da garota é rosa, como o cartão dela.
 ETIQUETAS = {
@@ -305,6 +308,8 @@ class JanelaCaixa(QMainWindow):
         self.modo_comissao = False                 # a linha de entrada está lançando comissão (garota nº + valor), não produto
         self._cancelamento_autorizado = None
         self.comissao_marcada: list[dict] = []     # as comissões da comanda da garota que está na tela
+        self.consumo_marcado: list[dict] = []      # os drinks dela na comanda (vermelho), descontados no acerto
+        self.lancando = "comissao"                 # no modo da linha de entrada: "comissao" ou "consumo" (drink da garota)
         self._divisao: tuple[int, list[int], int] | None = None    # (venda, partes, parte atual) do "Dividir conta"
         self.janela_comissoes = None
         self.janela_fila = None
@@ -959,9 +964,29 @@ class JanelaCaixa(QMainWindow):
                 if col >= 3:
                     celula.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.tabela.setItem(linha, col, celula)
-        if itens or self.comissao_marcada:
+        self.consumo_marcado = self._consumos_da_comanda(v)
+        codigo_drink = self.ctx.comissoes.codigo_consumo()
+        for c in self.consumo_marcado:             # drink da garota: "d<id>", em vermelho
+            linha = self.tabela.rowCount()
+            self.tabela.insertRow(linha)
+            feito = c["status"] == "descontado"
+            valores = [codigo_drink, "CONSUMO (descontado)" if feito else "CONSUMO (descontar)", "",
+                       fmt.fmt_num(c["valor_cent"]), "1", f"- {fmt.fmt_num(c['valor_cent'])}"]
+            a_descontar, descontado, texto_cor = LINHAS_CONSUMO[self._modo_visual()]
+            for col, texto in enumerate(valores):
+                celula = QTableWidgetItem(str(texto))
+                celula.setData(Qt.UserRole, f"d{c['id']}")
+                celula.setBackground(QColor(descontado if feito else a_descontar))
+                celula.setForeground(QColor(texto_cor))
+                fonte = celula.font()
+                fonte.setBold(True)
+                celula.setFont(fonte)
+                if col >= 3:
+                    celula.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.tabela.setItem(linha, col, celula)
+        if itens or self.comissao_marcada or self.consumo_marcado:
             self.tabela.scrollToBottom()
-        self.lbl_vazio.setVisible(not itens and not self.comissao_marcada)
+        self.lbl_vazio.setVisible(not itens and not self.comissao_marcada and not self.consumo_marcado)
         self._etiqueta_venda(v)
         total = v["total_cent"] if v else 0
         pags = caixa.pagamentos(v["id"]) if v else []
@@ -1061,21 +1086,34 @@ class JanelaCaixa(QMainWindow):
         except (ErroNegocio, ValueError):
             return []
 
+    def _consumos_da_comanda(self, v: dict | None) -> list[dict]:
+        """Os drinks da garota na comanda dela: a descontar (de qualquer turno) e os descontados neste turno."""
+        if not (v and v["modalidade"] == "mesa" and v["comanda"] and self.ctx.comissoes.ligada()):
+            return []
+        turno = self._turno()
+        try:
+            return self.ctx.comissoes.consumos_marcados(v["posicao"], turno["id"] if turno else None)
+        except (ErroNegocio, ValueError):
+            return []
+
     def _aviso_comissao(self, v: dict | None) -> None:
         """Comanda de garota com comissão marcada: quanto há a pagar, o que já foi pago neste turno e como pagar."""
         texto = ""
         shows = (self.ctx.comissoes.quantidade_shows_quartos(v["posicao"])
                  if v and v["modalidade"] == "mesa" and v["comanda"] else 0)
-        if v and (self.comissao_marcada or shows):
+        drinks = sum(c["valor_cent"] for c in self.consumo_marcado if c["status"] == "pendente")
+        if v and (self.comissao_marcada or shows or drinks):
             a_pagar = sum(c["valor_cent"] for c in self.comissao_marcada if c["status"] == "pendente")
             paga = sum(c["valor_cent"] for c in self.comissao_marcada if c["status"] == "paga")
             nome = self.ctx.comissoes.nome(v["posicao"])
             texto = f"ACERTO DA COMANDA {v['posicao']}{' ' + nome if nome else ''}     Comissão a pagar: {fmt.fmt_brl(a_pagar)}"
             if shows:
                 texto += f"     + {shows} show(s) dos quartos (escolha a tarifa no acerto)"
+            if drinks:
+                texto += f"     Consumo dela: - {fmt.fmt_brl(drinks)}"
             if paga:
                 texto += f"     Paga neste turno: {fmt.fmt_brl(paga)}"
-            if a_pagar or shows:
+            if a_pagar or shows or drinks:
                 texto += "     F12 paga a garota" if self._comissao_na_linha() else "     Pague pelo botão Comissões"
         self.lbl_aviso_venda.setText(texto)
         self.lbl_aviso_venda.setVisible(bool(texto))
@@ -1892,7 +1930,7 @@ class JanelaCaixa(QMainWindow):
         if v is None or v["modalidade"] == "balcao":
             tipo, texto = "balcao", "BALCÃO"
         elif v["modalidade"] == "mesa" and v["comanda"]:
-            garota = self.ctx.comissoes.ligada() and (bool(self.comissao_marcada)
+            garota = self.ctx.comissoes.ligada() and (bool(self.comissao_marcada) or bool(self.consumo_marcado)
                                                       or self.ctx.comissoes.garota(v["posicao"]) is not None)
             tipo, texto = ("garota", "GAROTA") if garota else ("comanda", "COMANDA")
         elif v["modalidade"] == "mesa":
@@ -1933,6 +1971,10 @@ class JanelaCaixa(QMainWindow):
         if not somente_produto and self.ctx.comissoes.eh_codigo(texto):
             self.ent_codigo.clear()
             self.lancar_comissao()
+            return False
+        if not somente_produto and self.ctx.comissoes.eh_codigo_consumo(texto):
+            self.ent_codigo.clear()
+            self.lancar_comissao("consumo")
             return False
         if not somente_produto and self.ctx.caixa.eh_codigo_saida(texto):
             self.ent_codigo.clear()
@@ -2277,8 +2319,18 @@ class JanelaCaixa(QMainWindow):
         chave = item.data(Qt.UserRole) if item is not None else None
         return int(chave[1:]) if isinstance(chave, str) and chave.startswith("c") else None
 
+    def _consumo_selecionado(self) -> int | None:
+        linha = self.tabela.currentRow()
+        item = self.tabela.item(linha, 0) if linha >= 0 else None
+        chave = item.data(Qt.UserRole) if item is not None else None
+        return int(chave[1:]) if isinstance(chave, str) and chave.startswith("d") else None
+
     def cancelar_item(self) -> None:
         if not self._pronto() or self._ocupado:
+            return
+        did = self._consumo_selecionado()
+        if did is not None:                           # linha do drink da garota: cancela o lançamento
+            self._cancelar_consumo(did)
             return
         lid = self._comissao_selecionada()
         if lid is not None:                           # linha de comissão: cancela o lançamento, não um item
@@ -2921,11 +2973,13 @@ class JanelaCaixa(QMainWindow):
             return
         if self._a_pagar_na_comanda() and self._comissao_na_linha():
             a_pagar = sum(c["valor_cent"] for c in self.comissao_marcada if c["status"] == "pendente")
+            drinks = sum(c["valor_cent"] for c in self.consumo_marcado if c["status"] == "pendente")
             shows = self.ctx.comissoes.quantidade_shows_quartos(v["posicao"])
             escolha = self.dialogos.escolher("Fechar...", "Esta comanda tem consumo e acerto da garota. Escolha:", [
                 ("itens", f"Pagar a comanda (R$ {fmt.fmt_num(v['total_cent'])})"),
                 ("comissao", f"Acertar garota: comissão R$ {fmt.fmt_num(a_pagar)}" +
-                 (f" + {shows} show(s) dos quartos" if shows else ""))])
+                 (f" + {shows} show(s) dos quartos" if shows else "") +
+                 (f" - consumo R$ {fmt.fmt_num(drinks)}" if drinks else ""))])
             if escolha is None:
                 return
             if escolha == "comissao":
@@ -3048,7 +3102,7 @@ class JanelaCaixa(QMainWindow):
 
     def _a_pagar_na_comanda(self) -> bool:
         v = self.venda()
-        return any(c["status"] == "pendente" for c in self.comissao_marcada) or bool(
+        return any(c["status"] == "pendente" for c in self.comissao_marcada + self.consumo_marcado) or bool(
             v and v["modalidade"] == "mesa" and v["comanda"]
             and self.ctx.comissoes.quantidade_shows_quartos(v["posicao"]))
 
@@ -3106,37 +3160,45 @@ class JanelaCaixa(QMainWindow):
         dlg = comissao.DialogoAcerto(self, self.ctx, numero, nome, comissao_cent, quantidade, do_caixa_padrao)
         return dlg.resultado if dlg.exec() == QDialog.Accepted else None
 
-    def lancar_comissao(self) -> None:
-        """Código 50. Com `comissao_na_linha`: na própria linha de entrada, 'Garota nº' (já vem o da comanda) e o valor.
-        Desligada: pela janela."""
+    def lancar_comissao(self, tipo: str = "comissao") -> None:
+        """Código 50 (comissão) ou o do consumo da garota (Configurações). Com `comissao_na_linha`: na própria linha de entrada, 'Garota nº'
+        (já vem o da comanda) e o valor. Desligada: a comissão vai pela janela; o drink é sempre na linha."""
         if self._ocupado:
             return
-        if not self._comissao_na_linha():
+        drink = tipo == "consumo"
+        if not drink and not self._comissao_na_linha():
             self._lancar_comissao_na_janela()
             return
-        if not self._autorizar("caixa_comissao", "exigir_senha_comissao", "Lançar comissão exige autorização:"):
+        if not self._autorizar("caixa_comissao", "exigir_senha_comissao",
+                               ("Lançar o consumo da garota" if drink else "Lançar comissão") + " exige autorização:"):
             self.ent_codigo.setFocus()
             return
         if self._turno() is None:
-            self.dialogos.aviso("Comissão", "Abra o turno do caixa antes de lançar comissão.")
+            self.dialogos.aviso("Consumo da garota" if drink else "Comissão",
+                                "Abra o turno do caixa antes de lançar " + ("o consumo." if drink else "comissão."))
             return
         self._limpar_entrada()
         v = self.venda()
         garota = str(v["posicao"]) if v and v["modalidade"] == "mesa" and v["comanda"] else ""
         self.modo_comissao = True
+        self.lancando = tipo
         self.lbl_cod_titulo.setText("Garota nº:")
-        self.lbl_qtd_titulo.setText(f"{self.ctx.comissoes.rotulo_valor()}:")
-        self.btn_lancar.setText("Lançar comissão")
+        self.lbl_qtd_titulo.setText("Preço da bebida (R$):" if drink else f"{self.ctx.comissoes.rotulo_valor()}:")
+        self.btn_lancar.setText("Lançar consumo" if drink else "Lançar comissão")
         self.ent_codigo.setText(garota)
         self.ent_qtd.clear()
         self.lbl_comissao_nome.show()
         self._comissao_nome()
         if garota:
-            oque = "os pontos" if self.ctx.comissoes.em_pontos() else "o valor"
-            self.avisar(f"Comissão da garota {garota}: digite {oque} e tecle Enter (Esc cancela).", AMBAR)
+            if drink:
+                self.avisar(f"Consumo da garota {garota}: digite o preço da bebida e tecle Enter (Esc cancela).", VERMELHO)
+            else:
+                oque = "os pontos" if self.ctx.comissoes.em_pontos() else "o valor"
+                self.avisar(f"Comissão da garota {garota}: digite {oque} e tecle Enter (Esc cancela).", AMBAR)
             self.ent_qtd.setFocus()
         else:
-            self.avisar("Comissão: digite o número da garota e tecle Enter (Esc cancela).", AMBAR)
+            self.avisar(("Consumo da garota" if drink else "Comissão") + ": digite o número da garota e tecle Enter "
+                        "(Esc cancela).", VERMELHO if drink else AMBAR)
             self.ent_codigo.setFocus()
 
     def _lancar_comissao_na_janela(self) -> None:
@@ -3159,12 +3221,13 @@ class JanelaCaixa(QMainWindow):
         except ErroNegocio:
             n = None
         g = self.ctx.comissoes.garota(n) if n is not None else None
+        rotulo = "CONSUMO DA GAROTA" if self.lancando == "consumo" else "COMISSÃO"
         if n is None:
-            desc = "COMISSÃO - digite a garota"
+            desc = f"{rotulo} - digite a garota"
         elif g is not None:
-            desc = f"COMISSÃO - {g['nome']}" + ("" if g["ativo"] else " (inativa)")
+            desc = f"{rotulo} - {g['nome']}" + ("" if g["ativo"] else " (inativa)")
         else:
-            desc = f"COMISSÃO - garota {n}"              # sem cadastro: lança direto (o cadastro é opcional)
+            desc = f"{rotulo} - garota {n}"              # sem cadastro: lança direto (o cadastro é opcional)
         self.lbl_comissao_nome.setText(desc)
 
     def _comissao_ir_ao_valor(self) -> None:
@@ -3183,6 +3246,9 @@ class JanelaCaixa(QMainWindow):
         except ErroNegocio as e:
             self.avisar(str(e), VERMELHO)
             self.ent_codigo.setFocus()
+            return
+        if self.lancando == "consumo":
+            self._consumo_confirmar(numero)
             return
         try:
             cent = self.ctx.comissoes.para_centavos(self.ent_qtd.text())
@@ -3212,10 +3278,40 @@ class JanelaCaixa(QMainWindow):
         self.avisar(r[1])
         self.ent_codigo.setFocus()
 
+    def _consumo_confirmar(self, numero: int) -> None:
+        """Enter no preço do drink: grava na comanda da garota (vermelho) e deixa o caixa livre. Sem estoque e sem via."""
+        try:
+            cent = fmt.para_centavos(self.ent_qtd.text())
+        except ValueError:
+            cent = 0
+        if cent <= 0:
+            self.avisar("Digite o preço da bebida. Exemplo: 15,00.", VERMELHO)
+            self.ent_qtd.setFocus()
+            return
+        if cent > LIMITE_CONFIRMAR_CENT and not self.dialogos.confirmar(
+                "Confirma o valor", f"Consumo de {fmt.fmt_brl(cent)} para a garota {numero}.\nConfirma?", padrao_sim=False):
+            self.ent_qtd.setFocus()
+            return
+        turno = self._turno()
+        if turno is None:
+            self.dialogos.aviso("Consumo da garota", "Abra o turno do caixa antes de lançar o consumo.")
+            return
+        ok, _ = self._executar(self.ctx.comissoes.lancar_consumo, numero, cent, turno["id"], self.ctx.operador_id)
+        if not ok:
+            self.ent_qtd.setFocus()
+            return
+        self._limpar_entrada()
+        self.recarregar()
+        nome = self.ctx.comissoes.nome(numero)
+        self.avisar(f"Consumo de {fmt.fmt_brl(cent)} lançado para a garota {numero}{' ' + nome if nome else ''}. "
+                    f"A descontar no acerto: {fmt.fmt_brl(self.ctx.comissoes.consumo_pendente(numero))}.", VERMELHO)
+        self.ent_codigo.setFocus()
+
     def _limpar_entrada(self) -> None:
         """Desfaz o modo comissão (se ligado) e devolve a linha de entrada ao produto."""
         if self.modo_comissao:
             self.modo_comissao = False
+            self.lancando = "comissao"
             self.lbl_cod_titulo.setText("Código ou nome do produto:")
             self.lbl_qtd_titulo.setText("Quantidade:")
             self.btn_lancar.setText("Lançar")
@@ -3233,9 +3329,9 @@ class JanelaCaixa(QMainWindow):
             self.ent_codigo.setFocus()
         if not self.modo_comissao and self.com_mesas:
             return
-        era_comissao = self.modo_comissao
+        era_comissao, era_drink = self.modo_comissao, self.lancando == "consumo"
         self._limpar_entrada()
-        self.avisar("Comissão descartada." if era_comissao else "", AMBAR)
+        self.avisar(("Consumo descartado." if era_drink else "Comissão descartada.") if era_comissao else "", AMBAR)
         self.ent_codigo.setFocus()
 
     def pagar_comissao(self, numero: int | None = None) -> None:
@@ -3277,6 +3373,25 @@ class JanelaCaixa(QMainWindow):
         if ok:
             self.recarregar()
             self.avisar("Comissão cancelada.", AMBAR)
+
+    def _cancelar_consumo(self, consumo_id: int) -> None:
+        lanc = next((c for c in self.consumo_marcado if c["id"] == consumo_id), None)
+        if lanc is None:
+            return
+        if lanc["status"] != "pendente":
+            self.dialogos.aviso("Consumo da garota", "Este consumo já foi descontado no acerto: não pode mais ser cancelado.")
+            return
+        if not self._em_cancelamento() and not self._autorizar(
+                "caixa_cancelamento", "exigir_senha_cancelamento", "Cancelar o consumo exige autorização:"):
+            return
+        if not self.dialogos.confirmar("Cancelar consumo", f"Cancelar o consumo de {fmt.fmt_brl(lanc['valor_cent'])} da garota "
+                                                         f"{lanc['garota']}?\nEle deixa de ser descontado no acerto.",
+                                       padrao_sim=False):
+            return
+        ok, _ = self._executar(self.ctx.comissoes.cancelar_consumo, consumo_id, self.ctx.operador_id, "cancelado no caixa")
+        if ok:
+            self.recarregar()
+            self.avisar("Consumo da garota cancelado.", AMBAR)
 
     def abrir_comissoes(self):
         """Botão Comissões: o que há a pagar a cada garota, pagamento com recibo e cancelamento de lançamento."""

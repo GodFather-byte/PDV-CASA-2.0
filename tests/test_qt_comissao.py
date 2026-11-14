@@ -18,7 +18,7 @@ class TestComissaoQt(BaseCaixaQt):
         return self.ctx.comissoes.lancar(numero, cent, self.turno, self.ctx.operador_id)
 
     def acerto(self, **valores):
-        return dict(do_caixa=False, shows=0, valor_show_cent=0, pix_cent=0, vale_cent=0, zerado=False) | valores
+        return dict(do_caixa=False, shows=0, valor_show_cent=0, pix_cent=0, vale_cent=0, zerado=False, consumos_ids=[]) | valores
 
     def comanda(self, j):
         j.ent_pos.setText("180")

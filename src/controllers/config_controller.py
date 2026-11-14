@@ -82,6 +82,8 @@ CAMPOS_CONFIG = [
     ("exigir_senha_desconto", "Exigir senha de supervisor para desconto", "sn", "Caixa"),
     ("exigir_senha_comissao", "Exigir senha de supervisor para lançar comissão das garotas", "sn", "Caixa"),
     ("codigo_comissao", "Código que lança a comissão das garotas no caixa (vazio = desligado)", "texto", "Caixa"),
+    ("codigo_consumo_garota", "Código (só números) que lança na comanda da garota a bebida que ela consumiu, descontada no acerto "
+     "(vazio = desligado)", "texto", "Caixa"),
     ("comissao_em_pontos", "Comissão das garotas em pontos (0,1, 0,2...) em vez de reais", "sn", "Caixa"),
     ("comissao_valor_ponto", "Quanto vale cada 0,1 ponto de comissão (R$)", "decimal", "Caixa"),
     ("comissao_paga_do_caixa", "Pagamento da comissão já vem marcado para sair da gaveta (sangria)", "sn", "Caixa"),
@@ -226,6 +228,7 @@ MODULOS_OPCIONAIS = {
 # Códigos especiais do caixa: (módulo que o usa, valor de fábrica, para que serve). Com o módulo desligado o código deixa de
 # existir: não lança nada no caixa e fica livre para um produto.
 CODIGOS_ESPECIAIS = {"codigo_comissao": ("usar_garotas", "50", "lançar a comissão das garotas"),
+                     "codigo_consumo_garota": ("usar_garotas", "", "lançar o consumo da garota"),
                      "codigo_saida": ("usar_portaria", "1002", "liberar a saída da comanda sem consumo")}
 
 
@@ -316,13 +319,15 @@ class ConfigController:
         self.banco.atualizar("maquinas", atual["id"], limpos)
 
     # --------------------------------------------------------------- config
-    _USO_CODIGO = {"codigo_comissao": "a comissão", "codigo_saida": "a saída"}
+    _USO_CODIGO = {"codigo_comissao": "a comissão", "codigo_saida": "a saída", "codigo_consumo_garota": "o consumo da garota"}
 
     def _formatar_codigo_especial(self, v: str, chave: str) -> str:
         """Até 13 letras ou números, sem espaços; 050 e 50 são o mesmo código."""
         v = v.strip()
         if not v:
             return ""
+        if chave == "codigo_consumo_garota" and not v.isdigit():
+            raise ErroValidacao("O código do consumo da garota deve ter só números (até 13).", {chave: "inválido"})
         if not re.fullmatch(r"[A-Za-z0-9]{1,13}", v):
             uso = self._USO_CODIGO[chave]
             raise ErroValidacao(f"O código d{uso[0]} {uso[2:]} deve ter até 13 letras ou números, sem espaços.",
@@ -344,9 +349,13 @@ class ConfigController:
                 raise ErroValidacao(f"O produto '{achado['nome']}' já usa o código {v}. Troque o código dele ou escolha "
                                     f"outro para {self._USO_CODIGO[chave]}.", {chave: "em uso"})
             ativos[chave] = str(int(v)) if v.isdigit() else v.lower()
-        if len(ativos) == 2 and ativos["codigo_comissao"] == ativos["codigo_saida"]:
-            campo = "codigo_saida" if "codigo_saida" in valores else "codigo_comissao"
-            raise ErroValidacao("A comissão e a saída não podem usar o mesmo código.", {campo: "em uso"})
+        chaves = list(ativos)
+        for i, a in enumerate(chaves):
+            for b in chaves[i + 1:]:
+                if ativos[a] == ativos[b]:
+                    campo = b if b in valores else a
+                    raise ErroValidacao(f"{self._USO_CODIGO[a][0].upper()}{self._USO_CODIGO[a][1:]} e {self._USO_CODIGO[b]} não podem usar o "
+                                        "mesmo código.", {campo: "em uso"})
 
     @staticmethod
     def _validar_show_valores(v: str) -> str:
