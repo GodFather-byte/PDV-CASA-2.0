@@ -1,6 +1,6 @@
 # Handoff — atualização com loja piloto + app da rede (13/11/2026)
 
-## Agora (branch `nfce-sefaz-propria`)
+## Agora (versão 1.14.8: emissão própria da NFC-e, #99)
 
 - Emissão própria da NFC-e direto na SEFAZ-SP (decisão do dono: cobrar adicional menor e ganhar no volume). Guia em
   `docs/NFCE_PROPRIA.md`. Código em `src/fiscal/sefaz/` (chave, xml_nfce, assinatura, qrcode, cliente, provedor);
@@ -8,7 +8,8 @@
 - Testes: `tests/test_nfce_sefaz.py` valida o XML nos schemas oficiais (PL_010 v1.30, em `tests/dados/xsd_nfe/`,
   baixados de nfephp-org/sped-nfe), confere a assinatura e simula a SEFAZ (autoriza, rejeita, resposta perdida,
   cancelamento). Nova dependência: `lxml` (requirements.in/.txt regenerados com uv).
-- Ainda não falou com a SEFAZ de verdade: falta o certificado A1 (o dono vai comprar um). Primeiro teste: status do
+- Ainda não falou com a SEFAZ de verdade. Piloto: DELICIOZ (Osasco, Simples, A1 da própria loja), instalação marcada
+  para 15/11; o dono levanta credenciamento NFC-e, IE, série/último número e CFOP/CSOSN com o contador. Primeiro teste: status do
   serviço em homologação; se der SSLError, embutir a cadeia ICP-Brasil.
 - Falta: contingência off-line (QR v3 assinado; confirmar no Manual DANFE NFC-e v6), inutilização, XMLs na nuvem,
   IBS/CBS na emissão própria.
