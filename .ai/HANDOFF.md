@@ -1,19 +1,21 @@
 # Handoff — atualização com loja piloto + app da rede (13/11/2026)
 
-## Agora (branch `produtos-prontos`, entra na 1.14.7)
+## Agora (branch `drinks-garotas`, entra na 1.14.7, esquema 54)
 
-- Produtos prontos de adega (pedido do dono: "diferencial"): `src/controllers/catalogo.py` traz 213 itens comuns em
-  adegas de SP (cervejas por marca e embalagem, destilados, vinhos, refrigerantes, águas/sucos, energéticos, gelo e
-  carvão, tabacaria, petiscos, descartáveis) com nome, subgrupo do perfil Adega e NCM. Sem preço (cada loja cobra o seu)
-  e sem código de barras (número inventado puxaria o produto errado). Grava pela mesma rotina da importação de
-  planilha; item que a loja já tem não é mexido.
-- Tela `src/ui_qt/catalogo.py`: botão "Produtos prontos…" na janela de importação (menu "Importar e produtos
-  prontos"). Digitar o preço marca o item. "Gravar códigos de barras…": escolhe o produto e passa no leitor.
-- `src/fiscal/ncm.py`: Budweiser Zero (sem álcool), Halls (bala), carvão de coco e copo/canudo descartável.
-- Testes: `tests/test_catalogo.py` (inclui: NCM do catálogo = NCM sugerido pelo nome).
-- Ainda de pé: Casa Verde instalar a 1.14.6 (piloto no Render corrigido para `CASA-VERDE`; o código que o dono passou
-  era o `caixa_id`); publicar a 1.14.7 depois disso; mensalidade da rede EA (inauguração na semana de 16/11);
-  repositório privado (falta o dono aprovar o acesso do GitHub Mobile para eu ver o app Render).
+- Consumo da garota (pedido do dono, para todas as boates): o código `D` (config `codigo_consumo_garota`, em
+  CODIGOS_ESPECIAIS, módulo `usar_garotas`) lança na comanda da garota a bebida que ela consumiu, com o preço digitado
+  (dose da casa, sem estoque, fora do faturamento). Linha VERMELHA na comanda ("CONSUMO (descontar)"), diferente da
+  comissão (rosa). Tabela `consumos_garotas` (pendente/descontado/cancelado); `acertos_garotas.consumo_cent`.
+- Acerto (`ComissaoController.pagar`): desconta sozinho todo o consumo pendente; a saída do caixa é só o que ela
+  recebe (dinheiro = total - vale - consumo - Pix). Se o consumo passa do que ela tem a receber, ela paga a diferença:
+  entrada no caixa (com "Registrar saída em dinheiro na gaveta" marcado) e comprovante de entrada. `consumos_ids` trava
+  o acerto se o consumo mudou depois de abrir a janela. Recibo mostra "Consumo (n) descontado".
+- Telas: `src/ui_qt/caixa.py` (lancar_comissao(tipo="consumo"), _consumo_confirmar, _cancelar_consumo, LINHAS_CONSUMO),
+  `src/ui_qt/comissao.py` (DialogoAcerto mostra e desconta). Testes: `tests/test_drinks_garota.py`.
+- Nome "consumo" e não "drink": na boate "drink marcado" já é a comissão (cartão da comanda).
+- A saída em dinheiro no acerto depende de `comissao_paga_do_caixa` (padrão N): o dono quer S nas boates.
+- Ainda de pé: Casa Verde instalar a 1.14.6 (piloto no Render = `CASA-VERDE`); publicar a 1.14.7 depois;
+  mensalidade da rede EA; repositório privado (falta aprovar o GitHub Mobile).
 
 ---
 

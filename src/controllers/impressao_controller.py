@@ -467,15 +467,21 @@ class ImpressaoController:
             linhas.append(f"Shows dos quartos: {pag['shows_quartos']} (incluídos)"[:w])
         if pag.get("shows_quartos") and pag.get("shows_manuais"):
             linhas.append(f"Shows manuais: {pag['shows_manuais']} (incluídos)"[:w])
-        pix, vale = pag.get("pix_cent", 0), pag.get("vale_cent", 0)
-        if pix or vale:
-            dinheiro = pag["total_cent"] - pix - vale
-            if dinheiro:
-                linhas.append(_lr("Dinheiro" + (" (saiu do caixa)" if pag.get("tirou_do_caixa") else " (fora do caixa)"), M(dinheiro), w))
+        pix, vale, drinks = pag.get("pix_cent", 0), pag.get("vale_cent", 0), pag.get("consumo_cent", 0)
+        if pix or vale or drinks:
+            dinheiro = pag.get("dinheiro_cent", pag["total_cent"] - pix - vale)
             if vale:
                 linhas.append(_lr("Vale (já recebido)", M(vale), w))
+            if drinks:
+                linhas.append(_lr(f"Consumo ({len(pag.get('consumos') or []) or 1}) descontado", M(drinks), w))
+            if dinheiro:
+                linhas.append(_lr("Dinheiro" + (" (saiu do caixa)" if pag.get("tirou_do_caixa") else " (fora do caixa)"), M(dinheiro), w))
             if pix:
                 linhas.append(_lr("Pix", M(pix), w))
+            if pag.get("recebido_cent"):
+                linhas.append(_lr("ELA PAGOU AO CAIXA", M(pag["recebido_cent"]), w))
+            elif not dinheiro and not pix:
+                linhas.append("Nada a receber: tudo descontado.")
         elif not pag["total_cent"]:
             linhas.append("Conta fechada, nada a pagar.")
         else:

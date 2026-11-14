@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 53
+VERSAO_ESQUEMA = 54
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -823,8 +823,28 @@ TABELAS = [
         tirou_do_caixa INTEGER NOT NULL DEFAULT 0,
         pix_cent INTEGER NOT NULL DEFAULT 0,
         vale_cent INTEGER NOT NULL DEFAULT 0,
-        nome TEXT
+        nome TEXT,
+        consumo_cent INTEGER NOT NULL DEFAULT 0
     )""",
+    # Drinks da garota (v54): o que ela bebeu durante a noite, lançado na comanda dela com o preço digitado (dose da casa,
+    # sem estoque) e descontado no acerto. Não é venda: não entra no faturamento.
+    """CREATE TABLE IF NOT EXISTS consumos_garotas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        garota INTEGER NOT NULL CHECK (garota BETWEEN 1 AND 99999),
+        valor_cent INTEGER NOT NULL CHECK (valor_cent > 0),
+        turno_id INTEGER REFERENCES turnos(id),
+        operador_id INTEGER REFERENCES operadores(id),
+        criado_em TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente','descontado','cancelado')),
+        acerto_id INTEGER REFERENCES acertos_garotas(id),
+        descontado_em TEXT,
+        descontado_turno_id INTEGER REFERENCES turnos(id),
+        cancelado_em TEXT,
+        cancelado_por INTEGER REFERENCES operadores(id),
+        motivo_cancelamento TEXT
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_consumos_garota ON consumos_garotas(garota, status)",
+    "CREATE INDEX IF NOT EXISTS ix_consumos_turno ON consumos_garotas(turno_id)",
     "CREATE INDEX IF NOT EXISTS ix_acertos_garota ON acertos_garotas(garota, criado_em)",
     "CREATE INDEX IF NOT EXISTS ix_acertos_turno ON acertos_garotas(turno_id)",
     # Índices dos relatórios e do fechamento (v3). São criados também em bancos antigos, na próxima abertura.
@@ -1155,6 +1175,8 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v54: drinks da garota descontados no acerto (a tabela consumos_garotas nasce em TABELAS).
+    54: [("coluna", "acertos_garotas", "consumo_cent", "INTEGER NOT NULL DEFAULT 0")],
     # v52: NFC-e (Will Fiscal). Dados fiscais do produto e da forma de pagamento; a tabela nfce_notas nasce em TABELAS.
     53: [],  # tabela aditiva pix_cobrancas (Pix integrado)
     52: [

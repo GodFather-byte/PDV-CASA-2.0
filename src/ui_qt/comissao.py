@@ -101,7 +101,7 @@ def pagar_garota(caixa, numero: int) -> dict | None:
     if escolha is None:
         return None
     turno = ctx.turnos.atual()
-    extras = {"shows_quartos_ids": escolha.get("shows_quartos_ids", [])}
+    extras = {"shows_quartos_ids": escolha.get("shows_quartos_ids", []), "consumos_ids": escolha.get("consumos_ids")}
     ok, pag = caixa._executar(ctx.comissoes.pagar, numero, turno["id"] if turno else None, ctx.operador_id,
                               escolha["do_caixa"], escolha["shows"], escolha["valor_show_cent"], escolha["pix_cent"],
                               escolha["vale_cent"], permitir_zerado=bool(escolha.get("zerado")), nome=escolha.get("nome"), **extras)
@@ -110,7 +110,13 @@ def pagar_garota(caixa, numero: int) -> dict | None:
     try:
         caixa._emitir("Recibo de acerto" if pag["shows"] or not pag["quantidade"] else "Recibo de comissão",
                       ctx.impressao.recibo_comissao(pag, ctx.operador.nome), f"recibo_comissao_{numero}",
-                      tipo="recibo_garota", abrir_gaveta=pag["tirou_do_caixa"])
+                      tipo="recibo_garota", abrir_gaveta=pag["tirou_do_caixa"] or pag.get("recebeu_no_caixa", False))
+        if pag.get("recebeu_no_caixa"):
+            # O consumo passou do que ela tinha a receber: ela pagou a diferença e o dinheiro entrou na gaveta.
+            caixa._emitir("Comprovante de entrada",
+                          ctx.impressao.comprovante_movimento("entrada", pag["recebido_cent"],
+                                                              f"Consumo garota {numero} {pag['nome']}".strip(), ctx.operador.nome),
+                          f"entrada_consumo_{numero}", tipo="saida_garota")
         if pag["tirou_do_caixa"]:
             # O dinheiro saiu da gaveta: sai também o comprovante da saída financeira (o mesmo da sangria), só com o que saiu
             # do caixa (o Pix não passa por ela). A gaveta já foi aberta pelo recibo.
@@ -138,8 +144,16 @@ def cancelar_lancamento(caixa, lancamento_id: int, rotulo: str) -> bool:
 
 def texto_pagamento(pag: dict) -> str:
     """A frase do status depois do acerto, como no caixa clássico."""
+    if pag.get("recebido_cent"):
+        return (f"O consumo da garota {pag['garota']} ({fmt.fmt_brl(pag['consumo_cent'])}) passou do que ela tinha a receber: "
+                f"ela pagou {fmt.fmt_brl(pag['recebido_cent'])} ao caixa.")
+    drinks = f" Consumo descontado: {fmt.fmt_brl(pag['consumo_cent'])}." if pag.get("consumo_cent") else ""
     if not pag["total_cent"] and not pag["quantidade"]:
         return f"Conta da garota {pag['garota']} fechada sem valor a pagar."
+    if drinks:
+        return (f"Acerto da garota {pag['garota']}: {fmt.fmt_brl(pag['total_cent'])} - consumo "
+                f"{fmt.fmt_brl(pag['consumo_cent'])}{' - vale ' + fmt.fmt_brl(pag['vale_cent']) if pag.get('vale_cent') else ''}"
+                f" = {fmt.fmt_brl(pag['dinheiro_cent'] + pag['pix_cent'])} pago a ela.")
     if not pag["shows"]:
         return f"Comissão de {fmt.fmt_brl(pag['total_cent'])} paga à garota {pag['garota']}."
     return (f"Acerto de {fmt.fmt_brl(pag['total_cent'])} pago à garota {pag['garota']} "
@@ -251,6 +265,8 @@ class DialogoAcerto(QDialog):
         self.comissao_cent = comissao_cent
         self.quantidade = quantidade
         self.shows_quartos = ctx.comissoes.shows_quartos_pendentes(numero)
+        self.consumos = ctx.comissoes.consumos_pendentes(numero)        # o consumo dela: descontado sozinho
+        self.consumo_cent = sum(c["valor_cent"] for c in self.consumos)
         self.shows_automaticos = sum(s["quantidade"] for s in self.shows_quartos)
         self.modo_shows_quartos = bool(self.shows_quartos) or ctx.banco.cfg_bool("usar_quartos", False)
         self.pede_shows = ctx.comissoes.pede_shows() or self.modo_shows_quartos
@@ -277,6 +293,11 @@ class DialogoAcerto(QDialog):
         lbl_com = QLabel(f"Comissão: {fmt.fmt_brl(comissao_cent)}")
         lbl_com.setFont(QFont("Georgia", 14, QFont.Bold))
         caixa.addWidget(lbl_com)
+        if self.consumo_cent:
+            lbl_drinks = QLabel(f"Consumo dela ({len(self.consumos)} bebida(s)): - {fmt.fmt_brl(self.consumo_cent)}  (descontado)")
+            lbl_drinks.setFont(QFont("Georgia", 14, QFont.Bold))
+            lbl_drinks.setStyleSheet(f"color: {VERMELHO};")
+            caixa.addWidget(lbl_drinks)
 
         colunas = QHBoxLayout()
         externo.addLayout(colunas, 1)
@@ -422,14 +443,17 @@ class DialogoAcerto(QDialog):
         n, v = self._shows()
         total = self.comissao_cent + n * v
         vale = self._cent(self.ent_vale, total)
-        a_pagar = total - (vale or 0)
-        self.lbl_total.setText(fmt.fmt_brl(a_pagar))
+        a_pagar = total - (vale or 0) - self.consumo_cent
+        self.lbl_total.setText(fmt.fmt_brl(a_pagar) if a_pagar >= 0 else f"ELA PAGA AO CAIXA {fmt.fmt_brl(-a_pagar)}")
+        a_pagar = max(0, a_pagar)
         if qtd is None:
             self.lbl_total.setText("Confira a quantidade de shows")
         elif qtd and not v:
             self.lbl_total.setText("Escolha o valor por show")
+        drinks = f"  -  consumo {fmt.fmt_brl(self.consumo_cent)}" if self.consumo_cent else ""
         self.lbl_vale.setText("O vale é inválido ou maior que o total do acerto." if vale is None else
-                              f"Total {fmt.fmt_brl(total)}  -  vale {fmt.fmt_brl(vale)}  =  {fmt.fmt_brl(a_pagar)}" if vale else "")
+                              f"Total {fmt.fmt_brl(total)}  -  vale {fmt.fmt_brl(vale)}{drinks}  =  {fmt.fmt_brl(a_pagar)}"
+                              if vale else f"Total {fmt.fmt_brl(total)}{drinks}  =  {fmt.fmt_brl(a_pagar)}" if drinks else "")
         pix = self._cent(self.ent_pix, a_pagar)
         self.lbl_divisao.setText("Pix maior que o total ou inválido." if pix is None else
                                  f"Dinheiro {fmt.fmt_brl(a_pagar - pix)}  +  Pix {fmt.fmt_brl(pix)}")
@@ -437,7 +461,7 @@ class DialogoAcerto(QDialog):
     def tudo_no_pix(self) -> None:
         n, v = self._shows()                                 # shows ainda incompletos: o Pix cobre ao menos a comissão
         total = self.comissao_cent + n * v
-        self.ent_pix.setText(fmt.fmt_num(total - (self._cent(self.ent_vale, total) or 0)))
+        self.ent_pix.setText(fmt.fmt_num(max(0, total - (self._cent(self.ent_vale, total) or 0) - self.consumo_cent)))
         self.calcular()
         self.ent_pix.setFocus()
 
@@ -447,7 +471,7 @@ class DialogoAcerto(QDialog):
         except ErroNegocio as e:
             self.lbl_msg.setText(str(e))
             return
-        zerado = not self.quantidade and not n
+        zerado = not self.quantidade and not n and not self.consumos
         if zerado and not self._zerado_confirmado:
             # Como no caixa clássico: sem comissão nem shows, a conta dela fecha sem valor (R$ 0,00), mas só no segundo Pagar
             self._zerado_confirmado = True
@@ -462,13 +486,14 @@ class DialogoAcerto(QDialog):
             self.lbl_msg.setText("O vale é inválido ou maior que o total do acerto.")
             self.ent_vale.setFocus()
             return
-        pix = self._cent(self.ent_pix, total - vale)
+        pix = self._cent(self.ent_pix, max(0, total - vale - self.consumo_cent))
         if pix is None:
             self.lbl_msg.setText("O valor do Pix é inválido ou maior que o total a pagar.")
             self.ent_pix.setFocus()
             return
         self.resultado = {"do_caixa": self.chk_do_caixa.isChecked(), "shows": n, "valor_show_cent": v, "pix_cent": pix,
-                          "vale_cent": vale, "zerado": zerado, "nome": " ".join(self.ent_nome.text().split())}
+                          "vale_cent": vale, "zerado": zerado, "nome": " ".join(self.ent_nome.text().split()),
+                          "consumos_ids": [c["id"] for c in self.consumos]}
         if self.modo_shows_quartos:
             self.resultado["shows_quartos_ids"] = [s["id"] for s in self.shows_quartos]
         self.accept()

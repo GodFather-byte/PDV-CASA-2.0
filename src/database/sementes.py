@@ -72,7 +72,7 @@ CONFIG_PADRAO = {
     "tempo_inatividade_min": "30", "num_turnos": "3", "pergunta_pessoas": "N",
     "exigir_senha_gaveta": "S", "exigir_senha_sangria": "S",
     "exigir_senha_cancelamento": "S", "exigir_motivo_cancelamento": "N", "consumacao_minima": "0", "limite_comanda": "200", "sangria_horarios": "", "consumacao_minima_de": "0", "consumacao_minima_ate": "0", "exigir_senha_desconto": "N",
-    "imprimir_cupom": "S", "terminal": "1", "codigo_comissao": "50", "exigir_senha_comissao": "N",
+    "imprimir_cupom": "S", "terminal": "1", "codigo_comissao": "50", "codigo_consumo_garota": "D", "exigir_senha_comissao": "N",
     "codigo_ficha_sangria": "",  # vazio = desativado; configure 31 apenas nas lojas que usam ficha em dinheiro
     "codigo_saida": "1002",          # digitado na comanda sem consumo: libera a saída e imprime o comprovante
     "imprimir_saida_ao_pagar": "S",  # comanda/mesa paga: junto com o cupom sai o ticket de saída para a portaria
