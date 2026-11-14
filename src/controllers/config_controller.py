@@ -82,8 +82,8 @@ CAMPOS_CONFIG = [
     ("exigir_senha_desconto", "Exigir senha de supervisor para desconto", "sn", "Caixa"),
     ("exigir_senha_comissao", "Exigir senha de supervisor para lançar comissão das garotas", "sn", "Caixa"),
     ("codigo_comissao", "Código que lança a comissão das garotas no caixa (vazio = desligado)", "texto", "Caixa"),
-    ("codigo_consumo_garota", "Código que lança na comanda da garota a bebida que ela consumiu, descontada no acerto (vazio = "
-     "desligado)", "texto", "Caixa"),
+    ("codigo_consumo_garota", "Código (só números) que lança na comanda da garota a bebida que ela consumiu, descontada no acerto "
+     "(vazio = desligado)", "texto", "Caixa"),
     ("comissao_em_pontos", "Comissão das garotas em pontos (0,1, 0,2...) em vez de reais", "sn", "Caixa"),
     ("comissao_valor_ponto", "Quanto vale cada 0,1 ponto de comissão (R$)", "decimal", "Caixa"),
     ("comissao_paga_do_caixa", "Pagamento da comissão já vem marcado para sair da gaveta (sangria)", "sn", "Caixa"),
@@ -228,7 +228,7 @@ MODULOS_OPCIONAIS = {
 # Códigos especiais do caixa: (módulo que o usa, valor de fábrica, para que serve). Com o módulo desligado o código deixa de
 # existir: não lança nada no caixa e fica livre para um produto.
 CODIGOS_ESPECIAIS = {"codigo_comissao": ("usar_garotas", "50", "lançar a comissão das garotas"),
-                     "codigo_consumo_garota": ("usar_garotas", "D", "lançar o consumo da garota"),
+                     "codigo_consumo_garota": ("usar_garotas", "", "lançar o consumo da garota"),
                      "codigo_saida": ("usar_portaria", "1002", "liberar a saída da comanda sem consumo")}
 
 
@@ -326,6 +326,8 @@ class ConfigController:
         v = v.strip()
         if not v:
             return ""
+        if chave == "codigo_consumo_garota" and not v.isdigit():
+            raise ErroValidacao("O código do consumo da garota deve ter só números (até 13).", {chave: "inválido"})
         if not re.fullmatch(r"[A-Za-z0-9]{1,13}", v):
             uso = self._USO_CODIGO[chave]
             raise ErroValidacao(f"O código d{uso[0]} {uso[2:]} deve ter até 13 letras ou números, sem espaços.",

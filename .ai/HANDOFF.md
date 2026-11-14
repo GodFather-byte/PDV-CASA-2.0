@@ -2,8 +2,8 @@
 
 ## Agora (branch `drinks-garotas`, entra na 1.14.7, esquema 54)
 
-- Consumo da garota (pedido do dono, para todas as boates): o código `D` (config `codigo_consumo_garota`, em
-  CODIGOS_ESPECIAIS, módulo `usar_garotas`) lança na comanda da garota a bebida que ela consumiu, com o preço digitado
+- Consumo da garota (pedido do dono, para todas as boates): o código numérico que o dono escolhe em Configurações >
+  Caixa (config `codigo_consumo_garota`, vazio de fábrica = desligado, só números; em CODIGOS_ESPECIAIS) lança na comanda da garota a bebida que ela consumiu, com o preço digitado
   (dose da casa, sem estoque, fora do faturamento). Linha VERMELHA na comanda ("CONSUMO (descontar)"), diferente da
   comissão (rosa). Tabela `consumos_garotas` (pendente/descontado/cancelado); `acertos_garotas.consumo_cent`.
 - Acerto (`ComissaoController.pagar`): desconta sozinho todo o consumo pendente; a saída do caixa é só o que ela

@@ -152,7 +152,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 """
 # fundo das linhas de comissão marcada na comanda da garota: (a pagar, paga) e o texto de cada uma, por modo
 LINHAS_COMISSAO = {"claro": ("#fbe0ee", "#dcebdf", "#8e1452"), "escuro": ("#4a1240", "#12382a", "#ffc4e4")}   # rosa: comissão
-# Drink da garota (código D): vermelho, para não confundir com a comissão (rosa). (a descontar, descontado, texto)
+# Consumo da garota (código escolhido nas Configurações): vermelho, para não confundir com a comissão (rosa). (a descontar, descontado, texto)
 LINHAS_CONSUMO = {"claro": ("#fde0dc", "#ececec", "#b3261e"), "escuro": ("#5a1414", "#2b2b2b", "#ff8a80")}
 LINHA_NOVA = {"claro": ("#d6efe0", "#0b5a3c"), "escuro": ("#123a35", "#7cf0c8")}     # o item que acabou de ser lançado
 # Etiqueta da venda no alto da coluna do meio: (fundo, texto, borda) por tipo e modo. A da garota é rosa, como o cartão dela.
@@ -965,7 +965,7 @@ class JanelaCaixa(QMainWindow):
                     celula.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.tabela.setItem(linha, col, celula)
         self.consumo_marcado = self._consumos_da_comanda(v)
-        codigo_drink = self.ctx.comissoes.codigo_consumo() or "D"
+        codigo_drink = self.ctx.comissoes.codigo_consumo()
         for c in self.consumo_marcado:             # drink da garota: "d<id>", em vermelho
             linha = self.tabela.rowCount()
             self.tabela.insertRow(linha)
@@ -3161,7 +3161,7 @@ class JanelaCaixa(QMainWindow):
         return dlg.resultado if dlg.exec() == QDialog.Accepted else None
 
     def lancar_comissao(self, tipo: str = "comissao") -> None:
-        """Código 50 (comissão) ou D (drink da garota). Com `comissao_na_linha`: na própria linha de entrada, 'Garota nº'
+        """Código 50 (comissão) ou o do consumo da garota (Configurações). Com `comissao_na_linha`: na própria linha de entrada, 'Garota nº'
         (já vem o da comanda) e o valor. Desligada: a comissão vai pela janela; o drink é sempre na linha."""
         if self._ocupado:
             return

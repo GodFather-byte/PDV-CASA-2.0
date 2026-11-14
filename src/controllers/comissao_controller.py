@@ -5,7 +5,7 @@ janela): o número da garota é o da comanda dela (comanda 180 = garota 180) e o
 registrada no número da garota. Não é venda: nada disso entra no faturamento, no estoque nem na conferência do dinheiro até a
 comissão ser PAGA, quando sai dinheiro do caixa (uma sangria).
 
-Drinks da garota (código D, configurável): o que ela bebeu durante a noite, lançado na comanda dela com o preço digitado
+Consumo da garota (código numérico escolhido nas Configurações; vazio = desligado): o que ela bebeu durante a noite, lançado na comanda dela com o preço digitado
 (a dose da casa; sem estoque e fora do faturamento). No acerto o total dos drinks é descontado do que ela recebe; se os
 drinks passam do que ela tem a receber, ela paga a diferença ao caixa.
 

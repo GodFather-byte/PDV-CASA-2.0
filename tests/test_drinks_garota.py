@@ -1,4 +1,4 @@
-"""Drinks da garota: lançados na comanda dela (código D, preço digitado, em vermelho) e descontados no acerto."""
+"""Consumo da garota: lançado na comanda dela (código numérico das Configurações, preço digitado, em vermelho) e descontado no acerto."""
 from unittest.mock import patch
 
 from src.controllers.comissao_controller import ComissaoController
@@ -20,12 +20,17 @@ class TestDrinksGarota(BaseCaixa):
     def saidas(self, tipo="saida"):
         return [dict(r) for r in self.banco.todos("SELECT * FROM movimentos_caixa WHERE tipo = ?", (tipo,))]
 
-    def test_codigo_d_de_fabrica_e_configuravel(self):
-        self.assertEqual(self.com.codigo_consumo(), "D")
-        self.assertTrue(self.com.eh_codigo_consumo(" d "))
+    def test_desligado_de_fabrica_e_numerico_nas_configuracoes(self):
+        self.assertEqual(self.com.codigo_consumo(), "")
+        self.assertFalse(self.com.eh_codigo_consumo("49"))
+        with self.assertRaisesRegex(ErroValidacao, "só números"):
+            ConfigController(self.banco).salvar_config({"codigo_consumo_garota": "D"})
+        ConfigController(self.banco).salvar_config({"codigo_consumo_garota": "049"})
+        self.assertEqual(self.com.codigo_consumo(), "49")
+        self.assertTrue(self.com.eh_codigo_consumo(" 0049 "))
         self.assertFalse(self.com.eh_codigo_consumo("50"))
         self.banco.cfg_set("usar_garotas", "N")
-        self.assertFalse(self.com.eh_codigo_consumo("D"))
+        self.assertFalse(self.com.eh_codigo_consumo("49"))
 
     def test_codigo_igual_ao_da_comissao_e_recusado(self):
         with self.assertRaisesRegex(ErroValidacao, "mesmo código"):
@@ -93,17 +98,18 @@ class TestDrinksGarotaQt(BaseCaixaQt):
         self.banco.cfg_set("comissao_pede_shows", "N")
         self.banco.cfg_set("num_comandas", "300")
         self.banco.cfg_set("posicao_padrao", "comanda")
+        self.banco.cfg_set("codigo_consumo_garota", "49")
 
     def comanda(self, j, numero="180"):
         j.ent_pos.setText(numero)
         j.btn_chamar.click()
         self.assertIsNotNone(j.venda_id)
 
-    def test_codigo_d_lanca_o_drink_na_comanda_em_vermelho(self):
+    def test_codigo_lanca_o_consumo_na_comanda_em_vermelho(self):
         from src.ui_qt.caixa import LINHAS_CONSUMO
         j = self.janela()
         self.comanda(j)
-        j.ent_codigo.setText("D")
+        j.ent_codigo.setText("49")
         j.lancar_item(pedir_quantidade=True)
         self.assertTrue(j.modo_comissao)
         self.assertEqual(j.lancando, "consumo")
@@ -122,7 +128,7 @@ class TestDrinksGarotaQt(BaseCaixaQt):
     def test_esc_descarta_e_cancelar_item_cancela_o_drink(self):
         j = self.janela()
         self.comanda(j)
-        j.ent_codigo.setText("d")
+        j.ent_codigo.setText("049")
         j.lancar_item(pedir_quantidade=True)
         j.cancelar_modo_comissao()
         self.assertEqual(self.contar("consumos_garotas"), 0)
