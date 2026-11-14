@@ -135,9 +135,9 @@ def auditar(db, acao, loja, motivo):
 
 
 INSTALADORES = {
-    "willrestaurante": "https://github.com/GodFather-byte/PDV-CASA-2.0/releases/download/ultima-versao-restaurante/WillRestaurante-Instalador.exe",   # link fixo das Releases publicadas pelo CI; PDV_INSTALADOR_<PROGRAMA> no servidor troca o endereço
-    "willpdv": "https://github.com/GodFather-byte/PDV-CASA-2.0/releases/download/ultima-versao/WillPDV-Instalador.exe",
-    "willadega": "https://github.com/GodFather-byte/PDV-CASA-2.0/releases/download/ultima-versao-adega/"
+    "willrestaurante": "https://github.com/GodFather-byte/willpdv-downloads/releases/download/ultima-versao-restaurante/WillRestaurante-Instalador.exe",   # link fixo das Releases do repositório público de downloads (o do código é privado); PDV_INSTALADOR_<PROGRAMA> no servidor troca o endereço
+    "willpdv": "https://github.com/GodFather-byte/willpdv-downloads/releases/download/ultima-versao/WillPDV-Instalador.exe",
+    "willadega": "https://github.com/GodFather-byte/willpdv-downloads/releases/download/ultima-versao-adega/"
                  "WillAdega-Instalador.exe",
 }
 

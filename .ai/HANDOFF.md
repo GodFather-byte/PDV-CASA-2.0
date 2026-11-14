@@ -1,4 +1,14 @@
-# Handoff — atualização com loja piloto + app da rede (13/11/2026)
+# Handoff — código privado + NFC-e própria (14/11/2026)
+
+## Repositório privado (branch `codigo-privado`)
+
+- Links padrão dos instaladores (`backend/central_fornecedor.py`) agora no repositório público `willpdv-downloads`
+  (o Render já tinha `PDV_INSTALADOR_*`). Downloads conferidos: os 3 instaladores baixam.
+- `testes.yml`: privado sem `RUNNER_WINDOWS` → PR roda só Linux + 2 trabalhos curtos de Windows; suíte inteira no
+  Windows 3.12 só depois do merge (Windows conta em dobro na cota de 2.000 min). Teste em `tests/test_ci_protecao.py`.
+- Depois do merge: mudar a visibilidade para Private (Chrome do dono, aprovação no GitHub Mobile) e conferir que o
+  deploy automático do Render (autoDeploy por commit) continua. Próximo passo: Nuitka.
+
 
 ## Agora (versão 1.14.8: emissão própria da NFC-e, #99)
 
@@ -14,7 +24,7 @@
 - Falta: contingência off-line (QR v3 assinado; confirmar no Manual DANFE NFC-e v6), inutilização, XMLs na nuvem,
   IBS/CBS na emissão própria.
 - Outras pendências: Casa Verde instalar a 1.14.7 (piloto `CASA-VERDE` no Render; 1.14.7 publicada); depois liberar
-  as outras lojas; mensalidade da rede EA; repositório privado.
+  as outras lojas; mensalidade da rede EA.
 
 ---
 

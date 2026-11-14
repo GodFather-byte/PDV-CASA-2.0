@@ -84,10 +84,14 @@ jobs:
       matrix:
         # Windows (onde o PDV roda) nas duas versões; Linux só na mais nova: o 3.10 já é coberto no Windows e cada
         # minuto de Linux conta na cota do repositório privado.
-        include:
-          - {os: windows-latest, python: "3.10"}
-          - {os: windows-latest, python: "3.12"}
-          - {os: ubuntu-latest, python: "3.12"}
+        # Privado SEM runner próprio: cada minuto de Windows do GitHub conta em dobro. Aí o PR roda só o Linux (mais os
+        # dois trabalhos curtos de Windows acima) e a suíte inteira no Windows roda uma vez, no 3.12, depois do merge.
+        include: ${{ fromJSON(
+          (github.event.repository.private && !vars.RUNNER_WINDOWS && github.event_name == 'pull_request')
+            && '[{"os":"ubuntu-latest","python":"3.12"}]'
+          || (github.event.repository.private && !vars.RUNNER_WINDOWS)
+            && '[{"os":"windows-latest","python":"3.12"},{"os":"ubuntu-latest","python":"3.12"}]'
+          || '[{"os":"windows-latest","python":"3.10"},{"os":"windows-latest","python":"3.12"},{"os":"ubuntu-latest","python":"3.12"}]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
