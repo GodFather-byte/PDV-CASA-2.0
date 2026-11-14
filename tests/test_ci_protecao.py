@@ -40,6 +40,20 @@ class TestCiProtecao(unittest.TestCase):
             self.assertIn("workflow_dispatch", gatilhos, arquivo)
             self.assertNotIn("push:", gatilhos, arquivo)
 
+    def test_privado_sem_runner_economiza_windows(self):
+        texto = (RAIZ / "testes.yml").read_text(encoding="utf-8")
+        matriz = texto.split("include:", 1)[1].split("steps:", 1)[0]
+        pr, merge, normal = [trecho.split("'", 1)[0] for trecho in matriz.split("'[")[1:]]
+        self.assertIn("!vars.RUNNER_WINDOWS && github.event_name == 'pull_request'", matriz)
+        self.assertNotIn("windows", pr)                       # PR no privado sem runner: só Linux
+        self.assertEqual(merge.count("windows-latest"), 1)    # depois do merge: uma vez no Windows
+        self.assertEqual(normal.count("windows-latest"), 2)   # público ou com runner: as duas versões
+
+    def test_link_padrao_do_instalador_nao_depende_do_repositorio_do_codigo(self):
+        from backend.central_fornecedor import INSTALADORES
+        for link in INSTALADORES.values():
+            self.assertIn("/willpdv-downloads/releases/download/", link)
+
 
 if __name__ == "__main__":
     unittest.main()

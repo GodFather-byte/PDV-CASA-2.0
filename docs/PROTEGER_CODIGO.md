@@ -47,7 +47,11 @@ PDV_INSTALADOR_WILLRESTAURANTE=https://github.com/GodFather-byte/willpdv-downloa
 
 Abra cada link no navegador: tem que baixar.
 
-### 4. Runner no PC com Windows
+### 4. Runner no PC com Windows (opcional)
+
+Sem o runner, o privado já economiza sozinho: o PR roda só o Linux e os dois trabalhos curtos de Windows, e a suíte
+inteira no Windows roda uma vez (Python 3.12) depois do merge. Com o runner, volta a rodar tudo no Windows a cada PR,
+sem gastar minutos.
 
 O PC precisa ficar ligado e com internet. De preferência crie um **usuário do Windows só para isso** (sem seus
 arquivos pessoais).
