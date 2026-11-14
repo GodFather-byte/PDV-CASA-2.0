@@ -41,13 +41,21 @@ class FiscalController:
     def ligada(self) -> bool:
         return self.ambiente() is not None
 
+    def provedor(self) -> str:
+        """'focus' (padrão) ou 'propria' (emissão direta na SEFAZ-SP com o certificado da loja)."""
+        return "propria" if (self.banco.cfg("nfce_provedor") or "").strip() == "propria" else "focus"
+
     def transmissor(self):
         if self._transmissor is None:
-            from src.fiscal.focus import Focus
             ambiente = self.ambiente()
             if ambiente is None:
                 raise ErroNegocio("A NFC-e está desligada (Configurações > Integrações).")
-            self._transmissor = Focus(self.banco.cfg(f"nfce_token_{ambiente}"), ambiente)
+            if self.provedor() == "propria":
+                from src.fiscal.sefaz.provedor import EmissaoPropria
+                self._transmissor = EmissaoPropria(self.banco, ambiente)
+            else:
+                from src.fiscal.focus import Focus
+                self._transmissor = Focus(self.banco.cfg(f"nfce_token_{ambiente}"), ambiente)
         return self._transmissor
 
     def ligar(self, ambiente: str) -> None:
@@ -57,7 +65,20 @@ class FiscalController:
             return
         if ambiente not in ("homologacao", "producao"):
             raise ErroNegocio("Ambiente inválido.")
-        if not self.banco.cfg(f"nfce_token_{ambiente}"):
+        if self.provedor() == "propria":
+            from src.fiscal.sefaz.assinatura import ErroCertificado
+            from src.fiscal.sefaz.provedor import EmissaoPropria
+            propria = EmissaoPropria(self.banco, ambiente)
+            try:
+                propria.certificado()
+            except ErroCertificado as erro:
+                raise ErroNegocio(str(erro)) from erro
+            from src.fiscal.nfce import ErroFiscal
+            try:
+                propria.emitente().conferir()
+            except ErroFiscal as erro:
+                raise ErroNegocio(str(erro)) from erro
+        elif not self.banco.cfg(f"nfce_token_{ambiente}"):
             raise ErroNegocio("Falta o token da Focus NFe deste ambiente (Configurações > Integrações).")
         with self.banco.transacao():
             self.banco.cfg_set("nfce_emissao", ambiente)

@@ -50,10 +50,11 @@ class ServicoFiscal:
             ambiente = None
             while not self._parar.is_set():
                 try:
-                    atual = controle.ambiente()
-                    if atual != ambiente:                     # trocou de ambiente: outro token, outro endereço
+                    atual = (controle.ambiente(), controle.provedor())
+                    if atual != ambiente:                     # trocou de ambiente ou de provedor: recomeça
                         controle = FiscalController(banco)
                         ambiente = atual
+                    atual = atual[0]
                     if atual:
                         controle.processar()
                 except Exception:
