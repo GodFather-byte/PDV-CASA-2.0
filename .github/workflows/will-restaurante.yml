@@ -85,6 +85,7 @@ jobs:
             instalador/saida/WillRestaurante-Setup-*.exe
             instalador/saida/WillRestaurante-Portatil.zip
           if-no-files-found: error
+          retention-days: 2          # cópia de passagem: a versão fica nas Releases do willpdv-downloads
 
   publicar:
     name: Publicar última versão do Will Restaurante

@@ -92,3 +92,4 @@ jobs:
           name: manifesto-${{ inputs.edicao }}
           path: manifesto.json
           if-no-files-found: ignore
+          retention-days: 2          # cópia de passagem: a versão fica nas Releases do willpdv-downloads
