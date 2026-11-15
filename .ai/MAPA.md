@@ -26,7 +26,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `python -m backend.lojas painel LOJA [senha]` | Senha do painel do dono no celular (app em `/painel/` da nuvem); o dono também a troca no PDV (Configurações > Nuvem) |
 | `python -m backend.lojas limpar-painel` | Apaga já o que passou da retenção do painel (vendas > 120 dias, sessões vencidas, caixas parados); a nuvem também faz sozinha |
 | `python -m tools.gerar_icones_painel` | Ícones PNG da PWA do painel (só biblioteca padrão) |
-| `python build_pdv.py` / `build_licenciador.py` | Executável (PyInstaller) e instalador (Inno Setup); `build_pdv.py --edicao willadega` gera o Will Adega |
+| `python build_pdv.py` / `build_licenciador.py` | Executável (Nuitka compila `src/` via `tools/compilar_nuitka.py`, depois PyInstaller) e instalador (Inno Setup); `build_pdv.py --edicao willadega` gera o Will Adega; `--sem-nuitka` só em emergência |
 
 ## Pastas
 

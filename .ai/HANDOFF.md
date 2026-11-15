@@ -9,7 +9,10 @@
   `--add-binary` e os imports de fora como `--hidden-import`. Só app/autoteste/versao/homologacao ficam em Python.
   `--sem-nuitka` só em emergência. `atualizacao/` e `cardapio/` ganharam `__init__.py`. Teste: `tests/test_nuitka_build.py`.
 - Conferido no Linux: compilação (12 min, 2 núcleos), PyInstaller, `--autoteste` e `--autoteste-qt` TUDO CERTO, e só
-  5 módulos `src` no PYZ. Falta a primeira geração no Windows (MSVC) pelo workflow; depois publicar 1.14.9.
+  5 módulos `src` no PYZ. No Windows (workflow na branch): WillPDV e Adega geraram, autoteste do .exe e do instalado
+  OK; build ~34 min por edição (Nuitka quase tudo). Falta: merge (pedido do dono) e publicar 1.14.9.
+- Suíte rodando contra o código compilado: o que falha é teste que troca `sys.platform` (o Nuitka fixa a constante),
+  não o programa.
 - Timeouts dos builds: 60 min (WillPDV, Adega), 50 (Restaurante). Ideia de economia: compilar uma vez e reaproveitar
   entre as edições (artifact).
 
