@@ -32,7 +32,7 @@ jobs:
   instalador:
     name: Instalador Will Restaurante / Windows
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 50          # inclui a compilação com o Nuitka
     outputs:
       versao: ${{ steps.info.outputs.versao }}
     defaults:

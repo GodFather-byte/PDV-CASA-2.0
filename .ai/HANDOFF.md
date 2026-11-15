@@ -1,16 +1,22 @@
-# Handoff — código privado + NFC-e própria (14/11/2026)
+# Handoff — código privado e compilado com Nuitka (14/11/2026)
 
-## Repositório privado (branch `codigo-privado`)
+## Agora (branch `nuitka`)
 
-- Links padrão dos instaladores (`backend/central_fornecedor.py`) agora no repositório público `willpdv-downloads`
-  (o Render já tinha `PDV_INSTALADOR_*`). Downloads conferidos: os 3 instaladores baixam.
-- `testes.yml`: privado sem `RUNNER_WINDOWS` → PR roda só Linux + 2 trabalhos curtos de Windows; suíte inteira no
-  Windows 3.12 só depois do merge (Windows conta em dobro na cota de 2.000 min). Teste em `tests/test_ci_protecao.py`.
-- Depois do merge: mudar a visibilidade para Private (Chrome do dono, aprovação no GitHub Mobile) e conferir que o
-  deploy automático do Render (autoDeploy por commit) continua. Próximo passo: Nuitka.
+- Repositório PDV-CASA-2.0 está PRIVADO (14/11). Instaladores e pacotes no público `willpdv-downloads`. Falta ver o
+  primeiro deploy do Render depois disso (se falhar: GitHub > Settings > Applications > Render > incluir o repo).
+- Nuitka: `tools/compilar_nuitka.py` compila cada pacote de `src/` (`--mode=package`, um `.pyd` por pacote) e o
+  `build_pdv.py` (`argumentos_codigo`) entrega ao PyInstaller as extensões com `--exclude-module src.<pacote>`,
+  `--add-binary` e os imports de fora como `--hidden-import`. Só app/autoteste/versao/homologacao ficam em Python.
+  `--sem-nuitka` só em emergência. `atualizacao/` e `cardapio/` ganharam `__init__.py`. Teste: `tests/test_nuitka_build.py`.
+- Conferido no Linux: compilação (12 min, 2 núcleos), PyInstaller, `--autoteste` e `--autoteste-qt` TUDO CERTO, e só
+  5 módulos `src` no PYZ. No Windows (workflow na branch): WillPDV e Adega geraram, autoteste do .exe e do instalado
+  OK; build ~34 min por edição (Nuitka quase tudo). Falta: merge (pedido do dono) e publicar 1.14.9.
+- Suíte rodando contra o código compilado: o que falha é teste que troca `sys.platform` (o Nuitka fixa a constante),
+  não o programa.
+- Timeouts dos builds: 60 min (WillPDV, Adega), 50 (Restaurante). Ideia de economia: compilar uma vez e reaproveitar
+  entre as edições (artifact).
 
-
-## Agora (versão 1.14.8: emissão própria da NFC-e, #99)
+## Antes (versão 1.14.8: emissão própria da NFC-e, #99)
 
 - Emissão própria da NFC-e direto na SEFAZ-SP (decisão do dono: cobrar adicional menor e ganhar no volume). Guia em
   `docs/NFCE_PROPRIA.md`. Código em `src/fiscal/sefaz/` (chave, xml_nfce, assinatura, qrcode, cliente, provedor);
