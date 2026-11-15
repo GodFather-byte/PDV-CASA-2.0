@@ -45,7 +45,6 @@ QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateEdit { background: #182437;
 QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateEdit:hover { border-color: #5b7393; }
 QLineEdit:disabled, QComboBox:disabled { color: #8190a6; background: #1b2534; }
 QPlainTextEdit, QTextEdit, QListWidget { background: #182437; border: 1px solid #324158; border-radius: 8px; }
-QComboBox::drop-down { border: 0; width: 22px; }
 QComboBox QAbstractItemView { background: #182437; border: 1px solid #405570; selection-background-color: #187e65;
                               outline: 0; padding: 4px; }
 QTableWidget, QTableView { background: #182437; alternate-background-color: #1d2d43; border: 1px solid #324158;
