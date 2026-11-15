@@ -5,22 +5,24 @@
 - #104 caixa: com a conta paga, escolher outra forma pergunta e troca o último pagamento (`_trocar_forma_paga`).
 - #105 nuvem: caixa da ponte de loja fora do modo ponte recebe a licença da nuvem (Casa Verde ficava 404 a cada hora).
 - #106 teste Windows: limpeza espera o .exe ser solto (falha intermitente da Publicação assinada).
-- Branch `auditoria-telas`: tema novo (botões centralizados com hierarquia automática primário/perigo, Fechar sozinho
+- #107 tema novo (botões centralizados com hierarquia automática primário/perigo, Fechar sozinho
   à direita, tabelas com colunas ajustadas e linhas de 28 px, barras de rolagem finas, abas, campos, menus, dicas) e
   `tools/capturar_telas.py` (`QT_QPA_PLATFORM` offscreen com monitor fictício 1366x768) para revisar tudo de uma vez.
-- PR #103 (versão 1.14.9) parado: publicar só depois de #104/#105/#106 e da auditoria entrarem.
+- 1.14.9 publicada em 15/11 com tudo isso (piloto: só CASA-VERDE). Nuvem: deploy automático do Render não dispara
+  depois da troca de conexão; usar Manual Deploy ou o secret RENDER_DEPLOY_HOOK_URL (nuvem-deploy.yml).
 
 ## Agora (branch `nuitka`)
 
-- Repositório PDV-CASA-2.0 está PRIVADO (14/11). Instaladores e pacotes no público `willpdv-downloads`. Falta ver o
-  primeiro deploy do Render depois disso (se falhar: GitHub > Settings > Applications > Render > incluir o repo).
+- Repositório PDV-CASA-2.0 está PRIVADO (14/11). Instaladores e pacotes no público `willpdv-downloads`. O Render
+  passou a usar a conexão GitHub (credencial willyan-neres) em 15/11; deploy do #102 no ar.
+- 1.14.9 = primeira versão compilada (Nuitka). Piloto continua só CASA-VERDE.
 - Nuitka: `tools/compilar_nuitka.py` compila cada pacote de `src/` (`--mode=package`, um `.pyd` por pacote) e o
   `build_pdv.py` (`argumentos_codigo`) entrega ao PyInstaller as extensões com `--exclude-module src.<pacote>`,
   `--add-binary` e os imports de fora como `--hidden-import`. Só app/autoteste/versao/homologacao ficam em Python.
   `--sem-nuitka` só em emergência. `atualizacao/` e `cardapio/` ganharam `__init__.py`. Teste: `tests/test_nuitka_build.py`.
 - Conferido no Linux: compilação (12 min, 2 núcleos), PyInstaller, `--autoteste` e `--autoteste-qt` TUDO CERTO, e só
   5 módulos `src` no PYZ. No Windows (workflow na branch): WillPDV e Adega geraram, autoteste do .exe e do instalado
-  OK; build ~34 min por edição (Nuitka quase tudo). Falta: merge (pedido do dono) e publicar 1.14.9.
+  OK; build ~34 min por edição (Nuitka quase tudo). #102 na main.
 - Suíte rodando contra o código compilado: o que falha é teste que troca `sys.platform` (o Nuitka fixa a constante),
   não o programa.
 - Timeouts dos builds: 60 min (WillPDV, Adega), 50 (Restaurante). Ideia de economia: compilar uma vez e reaproveitar
