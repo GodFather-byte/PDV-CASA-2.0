@@ -19,7 +19,7 @@ class JanelaMaquinas(QDialog):
         self.campos = {}
         self._originais = {}
         self.setWindowTitle("Máquinas • Qt")
-        self.resize(900, 720)
+        self.resize(1120, 720)
         layout = QVBoxLayout(self)
         layout.addWidget(texto("Máquinas e equipamentos", "titulo"))
         layout.addWidget(texto(
