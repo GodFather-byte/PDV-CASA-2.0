@@ -52,8 +52,12 @@ def assinar_ate(semente: bytes, chave: str, validade: date, edicao_programa: str
     return licenca.gerar_licenca(semente, chave, dias, hoje, edicao_programa), (hoje + timedelta(days=dias)).isoformat()
 
 
-def renovar_ponte(db, chave):
+def renovar_ponte(db, chave, caixa_da_ponte: bool = False):
     """Só lojas explicitamente transferidas. Mantém códigos anteriores e não reduz validade.
+
+    `caixa_da_ponte`: pedido de um caixa aprovado na central (GET /v1/ponte/licenca). Se a loja dele nunca passou para o
+    modo ponte (nenhum código publicado pela central), quem emite é a nuvem, como no caminho antigo (/v1/licenca): o
+    caixa com credencial da ponte desliga o caminho antigo e, sem isto, nunca mais renovava (Casa Verde, 11/2026).
 
     Nunca derruba a consulta do caixa: sem a chave da nuvem, ou numa corrida entre dois pedidos, o caixa continua
     recebendo o último código publicado (o erro fica no log)."""
@@ -61,8 +65,11 @@ def renovar_ponte(db, chave):
     from backend import ponte
     from backend.main import Loja, semente_licenca
     log = logging.getLogger("pdv.nuvem")
-    if not habilitada(db, chave) or not ponte.em_modo_ponte(db, chave):
-        return
+    if ponte.em_modo_ponte(db, chave):
+        if not habilitada(db, chave):
+            return                                  # a central local assina: a nuvem só repassa o que ela publicou
+    elif not caixa_da_ponte:
+        return                                      # caminho antigo: o /v1/licenca assina direto, sem publicar aqui
     loja = db.query(Loja).filter_by(chave_loja=chave).with_for_update().first()
     if loja is None or not loja.ativa or not loja.licenca_ate:
         return

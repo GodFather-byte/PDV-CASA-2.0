@@ -251,6 +251,38 @@ class TesteCentralFornecedor(unittest.TestCase):
         self.assertEqual(self.post(f"/lojas/LOJA-1/caixas/{ident}/revogar", {"motivo": "Troca de PC"}).status_code, 200)
         self.assertEqual(self.http.get("/v1/ponte/licenca", headers={"Authorization": "Bearer " + token}).status_code, 403)
 
+    def test_caixa_da_ponte_de_loja_fora_do_modo_ponte_recebe_a_licenca_da_nuvem(self):
+        """Casa Verde: caixa aprovado na central, mas a central nunca publicou código. Antes: 404 para sempre."""
+        r = self.post("/lojas/LOJA-1/caixas", {"caixa_id": str(uuid4()), "motivo": "Instalação"})
+        token = {"Authorization": "Bearer " + r.json()["token"]}
+        validade = (date.today() + timedelta(days=25)).isoformat()
+        with nuvem.SessionLocal() as db:
+            db.query(nuvem.Loja).filter_by(chave_loja="LOJA-1").update({"licenca_ate": validade})
+            db.commit()
+            self.assertFalse(ponte.em_modo_ponte(db, "LOJA-1"))
+        with patch.object(nuvem, "semente_licenca", return_value=SEMENTE), patch.object(licenca, "CHAVE_PUBLICA_HEX", PUBLICA):
+            r = self.http.get("/v1/ponte/licenca", headers=token)
+            self.assertEqual(r.status_code, 200, r.text)
+            self.assertEqual(r.json()["expira_em"], validade)
+            self.assertEqual(licenca.ler_licenca(r.json()["codigo"], bytes.fromhex(PUBLICA))["loja"], "LOJA-1")
+            self.assertEqual(self.http.get("/v1/ponte/licenca", headers=token).json(), r.json())   # não republica
+            with nuvem.SessionLocal() as db:
+                self.assertFalse(ponte.em_modo_ponte(db, "LOJA-1"))   # continua fora do modo ponte
+                db.query(nuvem.Loja).filter_by(chave_loja="LOJA-1").update(
+                    {"licenca_ate": (date.today() - timedelta(days=1)).isoformat()})
+                db.commit()
+            self.assertEqual(self.http.get("/v1/ponte/licenca", headers=token).json(), r.json())   # vencida: não emite
+
+    def test_loja_em_modo_ponte_sem_opt_in_continua_so_com_o_codigo_da_central(self):
+        codigo = self.preparar_ponte()
+        r = self.post("/lojas/LOJA-1/caixas", {"caixa_id": str(uuid4()), "motivo": "Instalação"})
+        with nuvem.SessionLocal() as db:
+            db.query(nuvem.Loja).filter_by(chave_loja="LOJA-1").update({"licenca_ate": "2099-01-01"})
+            db.commit()
+        with patch.object(nuvem, "semente_licenca", return_value=SEMENTE), patch.object(licenca, "CHAVE_PUBLICA_HEX", PUBLICA):
+            resposta = self.http.get("/v1/ponte/licenca", headers={"Authorization": "Bearer " + r.json()["token"]})
+        self.assertEqual(resposta.json()["codigo"], codigo)
+
 
 @unittest.skipIf(TestClient is None, "Dependências da nuvem ausentes")
 class TesteProgramaDaLojaECorrecoes(TesteCentralFornecedor):
