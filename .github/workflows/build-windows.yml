@@ -204,7 +204,7 @@ jobs:
           name: WillPDV-Instalador-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
           path: instalador/saida/WillPDV-Setup-*.exe
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 2
 
       - name: Guardar a versão portátil
         uses: actions/upload-artifact@v4
@@ -213,7 +213,7 @@ jobs:
           path: WillPDV-Portatil.zip
           if-no-files-found: error
           compression-level: 0          # já é um .zip
-          retention-days: 30
+          retention-days: 2
 
       - name: Guardar os relatórios do autoteste
         if: always()
@@ -224,7 +224,7 @@ jobs:
             ${{ runner.temp }}/autoteste-*.txt
             ${{ runner.temp }}/instalador.log
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 2
 
   # O programa SEPARADO do fornecedor que emite as licenças (mensais, permanentes e de teste). É para quem vende o WillPDV, não para o
   # cliente: por isso fica só nos artifacts e NÃO vai para a aba Releases. Mesma disciplina do job acima: autoteste no .exe, instalação
@@ -325,7 +325,7 @@ jobs:
           name: WillLicencas-Instalador-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
           path: instalador/saida/WillLicencas-Setup-*.exe
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 2
 
   # A edição só de adega (Will Adega): o mesmo código com outra marca, outra pasta de dados e licença própria
   # (src/core/edicao.py). Mesma disciplina do WillPDV: autoteste no .exe e no instalado, instalação silenciosa de verdade e
@@ -447,7 +447,7 @@ jobs:
           name: WillAdega-Instalador-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
           path: instalador/saida/WillAdega-Setup-*.exe
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 2
 
       - name: Guardar a versão portátil
         uses: actions/upload-artifact@v4
@@ -456,7 +456,7 @@ jobs:
           path: WillAdega-Portatil.zip
           if-no-files-found: error
           compression-level: 0
-          retention-days: 30
+          retention-days: 2
 
       - name: Guardar os relatórios do autoteste
         if: always()
@@ -467,7 +467,7 @@ jobs:
             ${{ runner.temp }}/autoteste-adega-*.txt
             ${{ runner.temp }}/instalador-adega.log
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 2
 
   # Só em execução manual numa tag v*: publica o instalador na aba Releases.
   publicar:
