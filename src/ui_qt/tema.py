@@ -28,7 +28,7 @@ QProgressBar::chunk { background: #5ee2bb; border-radius: 5px; }
 QLabel#secao { color: #5ee2bb; font-size: 14px; font-weight: 700; }
 QLabel#aviso { color: #ffd28a; }
 QPushButton { background: #24364d; border: 1px solid #405570; border-radius: 8px;
-              padding: 6px 11px; min-height: 20px; font-weight: 600; }
+              padding: 5px 10px; min-height: 20px; }
 QPushButton:hover { background: #304864; border-color: #5b7393; }
 QPushButton:pressed { background: #1b2739; }
 QToolBox QPushButton { text-align: left; font-weight: 400; padding: 4px 10px; min-height: 16px; }
