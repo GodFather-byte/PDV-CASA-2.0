@@ -1,5 +1,15 @@
 # Handoff — código privado e compilado com Nuitka (14/11/2026)
 
+## 15/11 (tarde)
+
+- #104 caixa: com a conta paga, escolher outra forma pergunta e troca o último pagamento (`_trocar_forma_paga`).
+- #105 nuvem: caixa da ponte de loja fora do modo ponte recebe a licença da nuvem (Casa Verde ficava 404 a cada hora).
+- #106 teste Windows: limpeza espera o .exe ser solto (falha intermitente da Publicação assinada).
+- Branch `auditoria-telas`: tema novo (botões centralizados com hierarquia automática primário/perigo, Fechar sozinho
+  à direita, tabelas com colunas ajustadas e linhas de 28 px, barras de rolagem finas, abas, campos, menus, dicas) e
+  `tools/capturar_telas.py` (`QT_QPA_PLATFORM` offscreen com monitor fictício 1366x768) para revisar tudo de uma vez.
+- PR #103 (versão 1.14.9) parado: publicar só depois de #104/#105/#106 e da auditoria entrarem.
+
 ## Agora (branch `nuitka`)
 
 - Repositório PDV-CASA-2.0 está PRIVADO (14/11). Instaladores e pacotes no público `willpdv-downloads`. Falta ver o
