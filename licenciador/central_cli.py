@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import os
 import sqlite3
+import time
 from pathlib import Path
 
 from licenciador.central import Central, ClientePonte, ErroCentral, caminho_padrao
@@ -36,6 +37,8 @@ def main(argumentos: list[str] | None = None) -> int:
     restaurar = comandos.add_parser("restaurar")
     restaurar.add_argument("origem", type=Path)
     comandos.add_parser("sincronizar")
+    monitorar = comandos.add_parser("monitorar", help="Sincronizar pagamentos e licenças periodicamente")
+    monitorar.add_argument("--intervalo", type=int, default=300)
     comandos.add_parser("listar")
     comandos.add_parser("servir")
     args = parser.parse_args(argumentos)
@@ -46,7 +49,7 @@ def main(argumentos: list[str] | None = None) -> int:
             print("Backup restaurado em banco novo. Confira administradores antes de iniciar.")
             return 0
         ponte = None
-        if args.comando in ("aprovar-caixa", "revogar-caixa", "sincronizar", "servir"):
+        if args.comando in ("aprovar-caixa", "revogar-caixa", "sincronizar", "monitorar", "servir"):
             ponte = ClientePonte(os.environ.get("WILLCENTRAL_API_URL", ""),
                                  os.environ.get("PDV_CENTRAL_TOKEN", ""))
         central = Central(args.banco, ponte)
@@ -74,6 +77,20 @@ def main(argumentos: list[str] | None = None) -> int:
         elif args.comando == "sincronizar":
             central.sincronizar()
             print("Sincronização concluída; confirme aplicação por caixa no painel.")
+        elif args.comando == "monitorar":
+            if not 60 <= args.intervalo <= 86400:
+                raise ErroCentral("O intervalo deve ser de 60 a 86400 segundos.")
+            print("Monitorando mensalidades e licenças. Ctrl+C encerra.", flush=True)
+            try:
+                while True:
+                    try:
+                        central.sincronizar()
+                        print("Central sincronizada.", flush=True)
+                    except (ErroNegocio, OSError, sqlite3.Error) as erro:
+                        print(f"Falha temporária na central: {erro}", flush=True)
+                    time.sleep(args.intervalo)
+            except KeyboardInterrupt:
+                print("Monitoramento encerrado.")
         elif args.comando == "listar":
             for loja in central.lojas():
                 print(f"{loja['chave']} — {loja['nome']} — validade {loja['validade'] or 'sem licença'}")

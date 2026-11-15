@@ -41,6 +41,7 @@ class TesteCentral(unittest.TestCase):
         self.chamadas = []
         self.falhar = False
         self.publicados = {}
+        self.assinaturas_pagas = []
         self.ponte = ClientePonte("https://exemplo.invalid", "segredo-teste", self.http)
         self.central = Central(self.pasta / "central.db", self.ponte, self.chave)
         self.addCleanup(self.central.fechar)
@@ -51,6 +52,8 @@ class TesteCentral(unittest.TestCase):
         self.chamadas.append((metodo, rota, dados))
         if self.falhar:
             raise ErroCentral("Falha simulada.")
+        if rota == "/v1/central/assinaturas":
+            return {"assinaturas": list(self.assinaturas_pagas)}
         if rota == "/v1/central/estado":
             return {"caixas": [], "licencas": list(self.publicados.values()), "solicitacoes": []}
         if rota == "/v1/central/lojas":
@@ -66,6 +69,25 @@ class TesteCentral(unittest.TestCase):
         pedido = self.central.preparar_emissao(1001, "LOJA-1", meses)
         identificador = self.central.confirmar_emissao(1001, pedido)
         return self.central.db.execute("SELECT * FROM licencas WHERE id=?", (identificador,)).fetchone()
+
+    def test_pagamento_renova_e_publica_sem_repetir(self):
+        self.assinaturas_pagas = [{"chave_loja": "LOJA-1", "paga_ate": "2026-11-21"}]
+        self.central.sincronizar()
+        self.assertEqual(len(self.publicados), 1)
+        self.central.sincronizar()
+        self.assertEqual(len(self.publicados), 1)
+        self.assertEqual(self.central.db.execute("SELECT COUNT(*) FROM licencas").fetchone()[0], 1)
+        codigo = next(iter(self.publicados.values()))["codigo"]
+        self.assertEqual(licenca.ler_licenca(codigo)["expira_em"], date(2026, 11, 21))
+
+    def test_sem_pagamento_nao_emite_e_rejeita_chave_errada(self):
+        self.central.sincronizar()
+        self.assertFalse(self.publicados)
+        self.assinaturas_pagas = [{"chave_loja": "LOJA-1", "paga_ate": "2026-11-21"}]
+        self.chave.write_text(bytes(reversed(range(32))).hex(), encoding="ascii")
+        with self.assertRaises(ErroCentral):
+            self.central.sincronizar()
+        self.assertEqual(self.central.db.execute("SELECT COUNT(*) FROM licencas").fetchone()[0], 0)
 
     def test_emite_assinado_localmente_e_renova_a_partir_da_validade(self):
         primeira = self.emitir()
