@@ -59,8 +59,7 @@ class Simulador {
         cls.pasta_compilada.cleanup()
 
     def setUp(self):
-        self.pasta = tempfile.TemporaryDirectory(prefix='pdv retomada ação ')
-        self.raiz = Path(self.pasta.name)
+        self.raiz = Path(tempfile.mkdtemp(prefix='pdv retomada ação '))
         self.programa = self.raiz / 'programa'
         self.backup = self.raiz / 'anterior'
         self.programa.mkdir(); self.backup.mkdir()
@@ -73,8 +72,18 @@ class Simulador {
         self.ambiente = dict(os.environ, PDV_TESTE_CODIGO='0', PDV_TESTE_LEGADO='0', PDV_TESTE_ENCERRAR='')
 
     def tearDown(self):
-        subprocess.run(['taskkill', '/F', '/IM', self.nome], capture_output=True)
-        self.pasta.cleanup()
+        # O taskkill volta antes de o Windows soltar o .exe, e o script ainda pode reabrir o programa ("reinicia"):
+        # apagar a pasta logo em seguida dava "Access is denied" de vez em quando. Mata e tenta de novo por até 15 s.
+        limite = time.monotonic() + 15
+        while True:
+            subprocess.run(['taskkill', '/F', '/T', '/IM', self.nome], capture_output=True)
+            try:
+                shutil.rmtree(self.raiz)
+                return
+            except PermissionError:
+                if time.monotonic() > limite:
+                    raise
+                time.sleep(.5)
 
     def executar(self):
         return subprocess.run(['cmd.exe', '/d', '/c', str(self.script)], env=self.ambiente, capture_output=True, timeout=20)

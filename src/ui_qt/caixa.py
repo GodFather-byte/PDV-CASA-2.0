@@ -2094,9 +2094,49 @@ class JanelaCaixa(QMainWindow):
         self.cmb_forma.setFocus()
 
     def _forma_escolhida(self) -> None:
-        """Enter (ou o número da forma) na lista de formas: o foco vai para o valor, já selecionado para digitar por cima."""
+        """Enter (ou o número da forma) na lista de formas: o foco vai para o valor, já selecionado para digitar por cima.
+        Conta já paga e o operador escolhe outra forma: errou a forma (Débito em vez de Dinheiro), então oferece trocar."""
+        if self._trocar_forma_paga():
+            return
         self.ent_valor.setFocus()
         self.ent_valor.selectAll()
+
+    def _trocar_forma_paga(self) -> bool:
+        """Troca a forma do último pagamento quando a conta já está paga e o operador escolhe outra forma na lista. Sem isso
+        o valor sugerido é zero e o Receber recusa: o caixa só saía cancelando a venda inteira. Devolve True se tratou."""
+        v = self.venda()
+        if v is None or self._ocupado or self._fechando_venda:
+            return False
+        pags = self.ctx.caixa.pagamentos(v["id"])
+        forma = self.cmb_forma.currentData()
+        if not pags or forma is None or sum(p["valor_cent"] for p in pags) < v["total_cent"]:
+            return False
+        ultimo = pags[-1]
+        if int(ultimo["tipo_pagamento_id"]) == int(forma):
+            return False                                  # mesma forma: nada a trocar (Enter segue o fluxo normal)
+        nova = self.cmb_forma.currentText()
+        aviso = ""
+        if self.pix.forma_e_pix(int(ultimo["tipo_pagamento_id"])) and self.ctx.banco.um(
+                "SELECT 1 FROM pix_cobrancas WHERE pagamento_id = ? AND situacao = 'aprovado'", (ultimo["id"],)):
+            aviso = "\n\nAtenção: esse Pix já foi confirmado pelo banco (o dinheiro está na conta)."
+        if not self.dialogos.confirmar(
+                "Trocar forma de pagamento",
+                f"A conta já está paga: {ultimo['tipo']} {fmt.fmt_brl(ultimo['valor_cent'])}.\n"
+                f"Trocar para {nova}?{aviso}", padrao_sim=not aviso):
+            self.cmb_forma.setFocus()
+            return True
+        ok, _ = self._executar(self.ctx.caixa.remover_pagamento, int(ultimo["id"]))
+        if ok:
+            self._divisao = None
+        self.recarregar()
+        indice = self.cmb_forma.findData(forma)
+        if indice >= 0:
+            self.cmb_forma.setCurrentIndex(indice)        # o recarregar pode ter voltado à forma padrão
+        if ok:
+            self.avisar(f"{ultimo['tipo']} removido. Confira o valor em {nova} e tecle Enter.", AMBAR)
+            self.ent_valor.setFocus()
+            self.ent_valor.selectAll()
+        return True
 
     def _tecla_forma(self, ev) -> bool:
         """Teclas da lista de formas: Enter confirma; 1 a 9 escolhe a forma pelo número; uma letra escolhe pela inicial (a da
