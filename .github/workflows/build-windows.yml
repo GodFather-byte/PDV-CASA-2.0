@@ -25,7 +25,7 @@ jobs:
   build:
     name: Programa e instalador
     runs-on: windows-latest
-    timeout-minutes: 30          # um programa travado (janela esperando resposta) vira falha, não horas de espera
+    timeout-minutes: 60          # o Nuitka compila o código (~20 min); um programa travado ainda vira falha, não horas
     defaults:
       run:
         shell: pwsh
@@ -333,7 +333,7 @@ jobs:
   adega:
     name: Programa e instalador (Will Adega)
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 60          # inclui a compilação com o Nuitka
     defaults:
       run:
         shell: pwsh

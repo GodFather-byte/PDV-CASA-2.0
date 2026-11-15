@@ -2,11 +2,15 @@
 
     python build_pdv.py                  -> dist/WillPDV/WillPDV.exe  e  instalador/saida/WillPDV-Setup-<versão>.exe
     python build_pdv.py --sem-instalador -> só o executável
+    python build_pdv.py --sem-nuitka     -> sem compilar o código (só em emergência: o .exe leva o código legível)
     python build_pdv.py --edicao willadega
                                          -> dist/WillAdega/WillAdega.exe  e  instalador/saida/WillAdega-Setup-<versão>.exe
                                             (edição só de adega; ver src/core/edicao.py)
 
-Requisitos (uma vez, na máquina que gera a versão): pip install pyinstaller  e  o Inno Setup 6 (jrsoftware.org).
+Por padrão os pacotes de `src/` são compilados com o Nuitka antes (tools/compilar_nuitka.py, docs/PROTEGER_CODIGO.md).
+
+Requisitos (uma vez, na máquina que gera a versão): pip install -r requirements-build.txt, um compilador C (no Windows,
+o Visual Studio com "Desenvolvimento para desktop com C++") e o Inno Setup 6 (jrsoftware.org).
 O compilador do Inno (ISCC.exe) é procurado na variável de ambiente ISCC e nas pastas padrão de instalação.
 """
 from __future__ import annotations
@@ -51,8 +55,7 @@ def gerar_executavel(ed) -> None:
                "--windowed",                                # sem a janela preta do CMD atrás do caixa
                "--name", nome, "--paths", str(RAIZ)]        # a raiz no caminho: os imports são "from src..."
     from src.autoteste import MODULOS
-    for modulo in MODULOS:
-        comando += ["--hidden-import", modulo]
+    comando += argumentos_codigo(MODULOS, compilar="--sem-nuitka" not in sys.argv[1:])
     comando += ["--collect-data", "tzdata"]  # fuso de Brasília também no Windows
     icone = PASTA_INSTALADOR / ed.icone
     if icone.exists():
@@ -70,6 +73,25 @@ def gerar_executavel(ed) -> None:
     (destino / "edicao.txt").write_text(ed.chave + "\n", encoding="utf-8")       # o programa sabe qual edição é
     copiar_licencas(destino)
     print(f"Executável pronto: {destino / (nome + '.exe')}")
+
+
+def argumentos_codigo(modulos: list[str], compilar: bool) -> list[str]:
+    """O que o PyInstaller leva do código. Sem compilar: os módulos de `src` como Python. Compilando: a extensão do Nuitka
+    de cada pacote de `src` no lugar dos `.py` dele, e como `--hidden-import` o que esses pacotes usam de fora."""
+    if not compilar:
+        return [arg for modulo in modulos for arg in ("--hidden-import", modulo)]
+    from tools import compilar_nuitka
+    extensoes = compilar_nuitka.compilar()
+    compilados = compilar_nuitka.pacotes()
+    argumentos = []
+    for nome in compilados:
+        argumentos += ["--exclude-module", f"src.{nome}"]          # nenhum .py desses pacotes vai para o .exe
+    for extensao in extensoes:
+        argumentos += ["--add-binary", f"{extensao}{os.pathsep}src"]
+    soltos = [m for m in modulos if m.split(".")[1] not in compilados]   # src.autoteste, src.versao...
+    for modulo in soltos + compilar_nuitka.imports_externos(compilados):
+        argumentos += ["--hidden-import", modulo]
+    return argumentos
 
 
 def copiar_licencas(destino: Path) -> None:

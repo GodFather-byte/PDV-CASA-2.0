@@ -103,8 +103,21 @@ máquina virtual**: a geração instala o programa no Windows, cria a tarefa de 
 teste e mexe nos direitos do sistema. Um usuário separado do Windows não isola isso (vale para o PC inteiro). Outra
 saída é juntar vários PRs antes de cada merge na main.
 
-## O que isto não resolve
+## Código compilado (Nuitka)
 
-O instalador continua público e o programa é feito com PyInstaller: dá para extrair o código Python de dentro do .exe.
-A licença (ed25519) impede gerar licença falsa, mas alguém pode remover a checagem no código extraído. O próximo passo
-para isso é compilar com **Nuitka** (vira C compilado). Ver `.ai/HANDOFF.md`.
+Desde esta mudança o instalador não leva mais o código Python legível. O `build_pdv.py` compila cada pacote de `src/`
+(core, controllers, ui_qt, fiscal, sync...) com o Nuitka (`tools/compilar_nuitka.py`) e o PyInstaller empacota as
+extensões nativas (`.pyd`) no lugar dos `.py`. Só ficam em Python os arquivos soltos de `src/` (entrada, autoteste,
+versão), que não têm regra de negócio. O autoteste do executável e do instalado continua conferindo tudo.
+
+- Custo: a compilação leva uns 15 minutos por edição no GitHub (Windows, conta em dobro na cota do privado).
+- Pasta nova em `src/` precisa de `__init__.py` (um teste cobra): sem ele ela iria como `.py`.
+- Emergência (o Nuitka quebrou e a loja precisa da versão já): `python build_pdv.py --sem-nuitka` gera como antes,
+  com o código legível. Não deixe isso no workflow.
+
+## O que ainda não resolve
+
+Código compilado não é impossível de estudar: dá para desmontar o `.pyd` com ferramentas de engenharia reversa, mas
+leva muito mais tempo e conhecimento do que abrir um `.pyc`. A licença (ed25519) continua impedindo gerar licença falsa.
+A proteção real do negócio é o conjunto: código fechado, compilado, licença assinada e a nuvem (que só atende loja
+cadastrada).
