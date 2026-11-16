@@ -65,7 +65,7 @@ ACESSOS = [
 ]
 
 CONFIG_PADRAO = {
-    "permitir_venda_sem_estoque": "S",
+    "permitir_venda_sem_estoque": "S", "pagamento_direto": "N",
     "num_mesas": "50", "cobra_servico_mesa": "S", "servico_pct": "10",
     "num_comandas": "10000", "cobra_servico_comanda": "S", "painel_mesas_fixo": "S", "posicao_padrao": "comanda", "tema_visual": "escuro", "caixa_tela_cheia": "S",
     "controle_garcom": "N", "comissao_garcom_pct": "0",
@@ -162,7 +162,8 @@ ALIQUOTAS = [("ISENTO", 0, "II"), ("SUBSTITUIÇÃO TRIBUTÁRIA", 0, "FF"),
 
 # (tipo, ordem, permite_troco, emite_vale, na_gaveta, acréscimo em centavos). Dinheiro sempre na primeira posição.
 # Cartão e Pix não ficam na gaveta: o operador confere na maquininha, não contando dinheiro.
-# O crédito acrescenta R$ 5,00 de taxa à venda (uma vez por venda; o dono muda em Tipos de Pagamento).
+# O crédito acrescenta R$ 5,00 de taxa à venda (uma vez por venda; o dono muda em Tipos de Pagamento). É costume da boate:
+# o Will Adega zera essa taxa na primeira entrada (`edicao.preparar`).
 TIPOS_PAGAMENTO = [("Dinheiro", 1, 1, 0, 1, 0), ("Cartão Débito", 2, 0, 0, 0, 0),
                    ("Cartão Crédito", 3, 0, 0, 0, 500), ("Pix", 4, 0, 0, 0, 0)]
 

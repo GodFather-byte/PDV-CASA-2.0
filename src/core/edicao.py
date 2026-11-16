@@ -133,4 +133,19 @@ def preparar(banco, operador_id: int | None = None) -> list[dict]:
     for chave, valor in ed.fixas.items():
         if banco.cfg(chave) != valor:
             banco.cfg_set(chave, valor)
+    if ed.chave == "willadega" and banco.cfg(AJUSTE_ADEGA) != "S":
+        _ajustar_recebimento_da_adega(banco)
     return mudancas
+
+
+AJUSTE_ADEGA = "adega_recebimento_simples"
+TAXA_CREDITO_DA_BOATE = 500
+
+
+def _ajustar_recebimento_da_adega(banco) -> None:
+    """Uma única vez em cada adega (nova ou já instalada): a taxa de R$ 5,00 do crédito é costume da boate e sai das formas
+    de pagamento (um acréscimo de outro valor foi o dono quem pôs e fica); e o recebimento passa a ser o direto. Depois
+    disso o dono manda: pode pôr a taxa de volta em Tipos de Pagamento e desligar o recebimento direto em Configurações."""
+    banco.executar("UPDATE tipos_pagamento SET acrescimo_cent = 0 WHERE acrescimo_cent = ?", (TAXA_CREDITO_DA_BOATE,))
+    banco.cfg_set("pagamento_direto", "S")
+    banco.cfg_set(AJUSTE_ADEGA, "S")

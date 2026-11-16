@@ -128,7 +128,7 @@ da categoria). A nuvem precisa estar atualizada para aceitar as miniaturas.
 | Atacado | Automático ao atingir o mínimo do produto (por temperatura). A linha mostra `[Atacado]` e o total da economia. |
 | Casco | Produto retornável pergunta quantos cascos cobrar: 0 quando trouxe tudo. O casco entra como linha separada. Em venda com cliente (fiado ou entrega), pergunta também quantas garrafas ele levou **sem trazer o casco**: ao fechar a venda, isso fica anotado no nome dele como empréstimo (Lançamentos > Retornáveis; botão **Quem deve cascos**). Cancelar o cupom desfaz a anotação. |
 | Mudou a quantidade | Selecione a linha e **Ctrl+Q** (ou Operações > Alterar quantidade do item). Aumentar soma na mesma linha e recalcula o atacado; diminuir pede a mesma autorização e o motivo do cancelamento. Produto com casco só diminui por aqui; para aumentar, bipe de novo (ele pergunta os cascos). |
-| Fechar | F12, forma de pagamento, valor recebido (troco calculado), Enter. Cupom imprime se estiver ligado. |
+| Receber e fechar | Enter com o código vazio (ou F12): o cursor vai ao valor, já preenchido em Dinheiro. Enter recebe e fecha a venda. Recebeu mais? Digite o valor antes do Enter (o troco aparece). Outra forma: D débito, C crédito, P Pix ou as setas, e Enter. Pagou só uma parte: o valor que falta volta ao campo. Cupom imprime se estiver ligado. Desliga em Configurações > Caixa > Recebimento direto. |
 | Fiado | F5 escolhe o cliente (limite por cliente); recebimento na mesma tela sem itens. |
 | Entrega | F6: cliente, taxa por bairro, troco para; F8 imprime o pedido. |
 | Produto novo no bipe | "Sim" > nome, preço, categoria (estoque e preço gelada opcionais) > Gravar. Já lança. |

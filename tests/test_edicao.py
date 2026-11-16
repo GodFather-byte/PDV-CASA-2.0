@@ -94,6 +94,37 @@ class TestePrepararBanco(unittest.TestCase):
         self.assertTrue(self.banco.cfg_bool("usar_delivery"))
         self.assertIsNotNone(self.banco.um("SELECT id FROM grupos WHERE nome = 'BEBIDAS'"))
 
+    def taxa_do_credito(self):
+        return self.banco.valor("SELECT acrescimo_cent FROM tipos_pagamento WHERE tipo = 'Cartão Crédito'")
+
+    def test_adega_nao_cobra_a_taxa_do_credito_e_recebe_direto(self):
+        self.assertEqual(self.taxa_do_credito(), 500)                            # de fábrica (boate)
+        with patch.dict(os.environ, ADEGA):
+            edicao.preparar(self.banco)
+        self.assertEqual(self.taxa_do_credito(), 0)
+        self.assertTrue(self.banco.cfg_bool("pagamento_direto"))
+
+    def test_adega_ja_instalada_perde_a_taxa_uma_vez_e_o_dono_decide_depois(self):
+        with patch.dict(os.environ, ADEGA):
+            self.banco.cfg_set("edicao", "willadega")                            # instalada antes desta versão
+            edicao.preparar(self.banco)
+            self.assertEqual(self.taxa_do_credito(), 0)
+            self.banco.executar("UPDATE tipos_pagamento SET acrescimo_cent = 500 WHERE tipo = 'Cartão Crédito'")
+            ConfigController(self.banco).salvar_config({"pagamento_direto": "N"})
+            edicao.preparar(self.banco)
+        self.assertEqual(self.taxa_do_credito(), 500)                            # o dono pôs de volta: fica
+        self.assertFalse(self.banco.cfg_bool("pagamento_direto"))
+
+    def test_adega_mantem_acrescimo_de_outro_valor_e_o_willpdv_mantem_a_taxa(self):
+        self.banco.executar("UPDATE tipos_pagamento SET acrescimo_cent = 200 WHERE tipo = 'Cartão Débito'")
+        with sem_variavel():
+            edicao.preparar(self.banco)
+        self.assertEqual(self.taxa_do_credito(), 500)
+        self.assertFalse(self.banco.cfg_bool("pagamento_direto"))
+        with patch.dict(os.environ, ADEGA):
+            edicao.preparar(self.banco)
+        self.assertEqual(self.banco.valor("SELECT acrescimo_cent FROM tipos_pagamento WHERE tipo = 'Cartão Débito'"), 200)
+
     def test_ajuste_do_dono_fica_e_modulo_de_boate_volta_a_desligar(self):
         with patch.dict(os.environ, ADEGA):
             edicao.preparar(self.banco)

@@ -1,3 +1,15 @@
+# Handoff (16/11/2026, noite): 1.14.10, recebimento direto na adega
+
+- Pedido do dono: receber na adega estava complicado (Enter, forma, Enter, valor, Enter, Enter) e a taxa de R$ 5,00 do
+  crédito é só da boate.
+- `pagamento_direto` (Configurações > Caixa, padrão N): Enter com o código vazio (ou F12) vai direto ao valor já
+  preenchido em Dinheiro; Enter recebe e, com a conta paga, a venda fecha sozinha. No campo do valor a letra (D, C, P) ou
+  as setas trocam a forma. Parcial: fica no valor com o que falta. Código em `ui_qt/caixa.py` (`ir_para_pagamento`,
+  `_tecla_valor`, `receber`, `_falta_receber_no_direto`). Teste: `tests/test_qt_pagamento_direto.py`.
+- Will Adega, uma vez por banco (`edicao.preparar`, marca `adega_recebimento_simples`): zera acréscimo de 500 nas formas
+  e liga `pagamento_direto`. Depois o dono manda. WillPDV e Restaurante não mudam. Teste em `tests/test_edicao.py`.
+- Com o recebimento direto a venda fecha ao pagar, então a troca de forma do #104 só vale no fluxo clássico.
+
 # Handoff (16/11/2026)
 
 - Testes de volta no GitHub (PC do dono com problema): o workflow lê `vars.RUNNER_PC` (não existe), a antiga

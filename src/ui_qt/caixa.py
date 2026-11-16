@@ -693,6 +693,7 @@ class JanelaCaixa(QMainWindow):
         self.ent_valor.setObjectName("valor")
         self.ent_valor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.ent_valor.returnPressed.connect(self.receber)
+        self.ent_valor.installEventFilter(self)
         self.btn_receber = QPushButton("Receber")
         self.btn_receber.clicked.connect(self.receber)
         recebido = QHBoxLayout()
@@ -2090,8 +2091,35 @@ class JanelaCaixa(QMainWindow):
         if itens and pago > 0 and pago >= v["total_cent"]:
             self.fechar_venda()
             return
+        if self._pagamento_direto():
+            self._sugerir_valor()
+            falta = self.ent_valor.text() or "0,00"
+            self.avisar(f"Enter recebe R$ {falta} em {self.cmb_forma.currentText()} e fecha. Recebeu mais? Digite o valor. "
+                        "Outra forma: D débito, C crédito, P Pix (ou as setas).", AMBAR)
+            self.ent_valor.setFocus()
+            self.ent_valor.selectAll()
+            return
         self.avisar("Forma de pagamento: setas, o número ou a inicial. Enter confirma.", AMBAR)
         self.cmb_forma.setFocus()
+
+    def _pagamento_direto(self) -> bool:
+        """Recebimento direto (Configurações > Caixa; ligado no Will Adega): o Enter vai ao valor, e a conta paga fecha."""
+        return self.ctx.banco.cfg_bool("pagamento_direto")
+
+    def _tecla_valor(self, ev) -> bool:
+        """No recebimento direto, o campo do valor também escolhe a forma: a letra inicial ou as setas para cima e para baixo.
+        O valor volta ao que falta nessa forma, já selecionado. Devolve True quando tratou a tecla."""
+        if not self._pagamento_direto():
+            return False
+        tecla, total = ev.key(), self.cmb_forma.count()
+        if tecla in (Qt.Key_Up, Qt.Key_Down) and total:
+            self.cmb_forma.setCurrentIndex((self.cmb_forma.currentIndex() + (1 if tecla == Qt.Key_Down else -1)) % total)
+        elif not self._forma_pela_inicial(ev):
+            return False
+        self._sugerir_valor()
+        self.ent_valor.selectAll()
+        self.avisar(f"{self.cmb_forma.currentText()}: Enter recebe e fecha.", AMBAR)
+        return True
 
     def _forma_escolhida(self) -> None:
         """Enter (ou o número da forma) na lista de formas: o foco vai para o valor, já selecionado para digitar por cima.
@@ -2151,6 +2179,11 @@ class JanelaCaixa(QMainWindow):
                 self.cmb_forma.setCurrentIndex(n - 1)
                 self._forma_escolhida()
             return True
+        return self._forma_pela_inicial(ev)
+
+    def _forma_pela_inicial(self, ev) -> bool:
+        """Uma letra escolhe a forma pela inicial (repetir a letra passa para a seguinte). Devolve True se era uma letra."""
+        texto = ev.text()
         if len(texto) == 1 and texto.isalpha() and not ev.modifiers() & (Qt.ControlModifier | Qt.AltModifier):
             letra, total, atual = texto.lower(), self.cmb_forma.count(), self.cmb_forma.currentIndex()
             ordem = [i for i in list(range(atual + 1, total)) + list(range(0, atual + 1))]
@@ -2616,6 +2649,8 @@ class JanelaCaixa(QMainWindow):
             # forma -> Enter -> valor -> Enter -> Enter fecha.
             if obj is getattr(self, "cmb_forma", None) and self._tecla_forma(ev):
                 return True
+            if obj is getattr(self, "ent_valor", None) and self._tecla_valor(ev):
+                return True
             if obj is getattr(self, "btn_fechar_venda", None) and tecla in (Qt.Key_Return, Qt.Key_Enter):
                 self.fechar_venda()                                          # no botão de fechar, Enter fecha
                 return True
@@ -2863,9 +2898,16 @@ class JanelaCaixa(QMainWindow):
             _, partes, atual = self._divisao
             self._divisao = None if atual + 1 >= len(partes) or liq.get("falta", 0) <= 0 else (v["id"], partes, atual + 1)
         self.recarregar()
-        if liq.get("falta", 0) == 0:
+        if liq.get("falta", 0) == 0 and self._pagamento_direto():
+            self.fechar_venda()                        # recebimento direto: conta paga fecha sozinha e mostra o troco
+        elif liq.get("falta", 0) == 0:
             self.avisar(f"Pagamento completo. Troco {fmt.fmt_brl(liq.get('troco', 0))}. Enter fecha a venda (F12).")
             self.btn_fechar_venda.setFocus()
+        elif self._pagamento_direto():
+            self.avisar(f"Falta {fmt.fmt_brl(liq['falta'])}. Enter recebe em {self.cmb_forma.currentText()}; a letra troca "
+                        "a forma.", AMBAR)
+            self.ent_valor.setFocus()
+            self.ent_valor.selectAll()
         else:
             self.cmb_forma.setFocus()                  # ainda falta: próxima forma, como na janela de pagamento clássica
 
@@ -2991,11 +3033,22 @@ class JanelaCaixa(QMainWindow):
     def fechar_venda(self) -> None:
         if self._fechando_venda or self._ocupado or not self._pronto():   # duas teclas F12 seguidas não gravam duas vezes
             return
+        if self._falta_receber_no_direto():            # F12 antes de receber: no valor, recebe; fora dele, leva ao valor
+            self.receber() if self.focusWidget() is self.ent_valor else self.ir_para_pagamento()
+            return
         self._fechando_venda = True
         try:
             self._fechar_venda()
         finally:
             self._fechando_venda = False
+
+    def _falta_receber_no_direto(self) -> bool:
+        v = self.venda()
+        if v is None or v["modalidade"] == "caderneta" or v["prepago"] or not self._pagamento_direto():
+            return False
+        if not self.ctx.caixa.itens(v["id"]):
+            return False
+        return sum(p["valor_cent"] for p in self.ctx.caixa.pagamentos(v["id"])) < v["total_cent"]
 
     def _fechar_venda(self) -> None:
         v = self.venda()
