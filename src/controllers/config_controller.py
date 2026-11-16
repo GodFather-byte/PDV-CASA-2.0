@@ -52,6 +52,8 @@ CAMPOS_CONFIG = [
     ("tema_visual", "Aparência do programa", "escolha", "Aparência",
      [("escuro", "Modo escuro (fundo escuro, o padrão)"), ("claro", "Modo claro (fundo claro)")]),
     ("caixa_tela_cheia", "Abrir o caixa em tela cheia (Ctrl+F alterna)", "sn", "Aparência"),
+    ("pagamento_direto", "Recebimento direto: Enter vai ao valor já preenchido (Dinheiro) e, com a conta paga, a venda "
+     "fecha sozinha; a letra troca a forma (D débito, C crédito, P Pix)", "sn", "Caixa"),
     ("mensagem_rodape", "Mensagem de rodape do cupom", "texto", "Impressao"),
     ("papel_economico", "Cupom e fechamento compactos: sem molduras nem linhas em branco (mesmo conteúdo, menos papel)", "sn",
      "Impressao"),
