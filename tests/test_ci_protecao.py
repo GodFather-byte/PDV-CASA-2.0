@@ -54,6 +54,22 @@ class TestCiProtecao(unittest.TestCase):
         for link in INSTALADORES.values():
             self.assertIn("/willpdv-downloads/releases/download/", link)
 
+    def test_publicacao_nao_depende_da_cota_de_artifacts(self):
+        """Repositório privado tem cota pequena de artifacts: o build entrega o instalador num rascunho do repositório de
+        downloads, a publicação busca de lá e apaga no fim. Artifact virou cópia opcional (cota cheia não derruba)."""
+        for arquivo in ("build-windows.yml", "will-restaurante.yml", "publicar-pacote.yml"):
+            texto = (RAIZ / arquivo).read_text(encoding="utf-8")
+            self.assertNotIn("download-artifact", texto, arquivo)
+            self.assertIn("select(.tag_name == env.TAG)", texto, arquivo)
+            for bloco in texto.split("uses: actions/upload-artifact@v4")[1:]:
+                self.assertTrue(bloco.lstrip().startswith("continue-on-error: true"), arquivo)
+        for arquivo, edicoes in (("build-windows.yml", ("willpdv", "willadega")), ("will-restaurante.yml", ("willrestaurante",))):
+            texto = (RAIZ / arquivo).read_text(encoding="utf-8")
+            for edicao in edicoes:
+                self.assertIn(f"TAG: rascunho-{edicao}-${{{{ github.sha }}}}", texto)
+                self.assertIn(f'"rascunho-{edicao}-$GITHUB_SHA"', texto)          # e é apagado no fim
+            self.assertIn("--draft", texto)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -78,7 +78,24 @@ jobs:
         run: python -m tools.homologar_consulta_atualizacao --programa "$env:RUNNER_TEMP\WillRestaurante-instalado\WillRestaurante.exe"
       - name: Pacote portátil
         run: Compress-Archive -Path "dist\WillRestaurante\*" -DestinationPath "instalador\saida\WillRestaurante-Portatil.zip"
+      # A publicação busca o instalador aqui (rascunho = só quem tem acesso ao repositório vê), não nos artifacts do GitHub,
+      # que no repositório privado têm cota pequena e travavam a versão inteira. O rascunho é apagado no fim da publicação.
+      - name: Entregar o instalador à publicação (rascunho no repositório de downloads)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+          TAG: rascunho-willrestaurante-${{ github.sha }}
+        run: |
+          $antigo = gh api "repos/$env:DESTINO/releases?per_page=100" --jq '.[] | select(.tag_name == env.TAG) | .id'
+          foreach ($id in @($antigo | Where-Object { $_ })) { gh api -X DELETE "repos/$env:DESTINO/releases/$id" | Out-Null }
+          $arquivos = @((Get-ChildItem instalador\saida\WillRestaurante-Setup-*.exe).FullName) + @((Resolve-Path instalador\saida\WillRestaurante-Portatil.zip).Path)
+          gh release create $env:TAG --repo $env:DESTINO --draft --title "Rascunho Will Restaurante $env:GITHUB_SHA" `
+            --notes "Cópia de passagem do build para a publicação. Apagada quando a publicação termina." @arquivos
+          if ($LASTEXITCODE -ne 0) { throw "Não consegui entregar o instalador à publicação." }
+
       - uses: actions/upload-artifact@v4
+        continue-on-error: true          # cota cheia não derruba a versão: a publicação usa o rascunho
         with:
           name: WillRestaurante-instalador
           path: |
@@ -95,10 +112,20 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: WillRestaurante-instalador
-          path: release
+      - name: Buscar o instalador entregue pelo build (rascunho)
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+          TAG: rascunho-willrestaurante-${{ github.sha }}
+          PASTA: release
+        run: |
+          id=$(gh api "repos/$DESTINO/releases?per_page=100" --jq '.[] | select(.tag_name == env.TAG) | .id' | head -1)
+          [ -n "$id" ] || { echo "Rascunho $TAG não encontrado: o build não entregou o instalador."; exit 1; }
+          mkdir -p "$PASTA"
+          gh api "repos/$DESTINO/releases/$id/assets" --jq '.[] | "\(.id) \(.name)"' | while read -r aid nome; do
+            gh api -H "Accept: application/octet-stream" "repos/$DESTINO/releases/assets/$aid" > "$PASTA/$nome"
+          done
+          ls -l "$PASTA"
       - name: Publicar instalador e portátil
         env:
           GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
@@ -134,7 +161,25 @@ jobs:
     uses: ./.github/workflows/publicar-pacote.yml
     with:
       edicao: willrestaurante
-      artefato: WillRestaurante-instalador
+      rascunho: rascunho-willrestaurante-${{ github.sha }}
       mascara: WillRestaurante-Setup-*.exe
       versao: ${{ needs.instalador.outputs.versao }}
     secrets: inherit
+
+  # Publicou tudo: apaga os rascunhos de passagem. Se algo falhou eles ficam (privados) para repetir só a publicação.
+  limpar_rascunho:
+    name: Apagar os rascunhos de passagem
+    needs: [publicar, atualizar_caixas]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+        run: |
+          for TAG in "rascunho-willrestaurante-$GITHUB_SHA"; do
+            export TAG
+            for id in $(gh api "repos/$DESTINO/releases?per_page=100" --jq '.[] | select(.tag_name == env.TAG) | .id'); do
+              gh api -X DELETE "repos/$DESTINO/releases/$id"
+            done
+          done

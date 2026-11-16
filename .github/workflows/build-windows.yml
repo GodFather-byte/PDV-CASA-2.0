@@ -198,8 +198,25 @@ jobs:
           Passo a passo: ``docs/INSTALAR_E_TESTAR.md``.
           "@ >> $env:GITHUB_STEP_SUMMARY
 
+      # A publicação busca o instalador aqui (rascunho = só quem tem acesso ao repositório vê), não nos artifacts do GitHub,
+      # que no repositório privado têm cota pequena e travavam a versão inteira. O rascunho é apagado no fim da publicação.
+      - name: Entregar o instalador à publicação (rascunho no repositório de downloads)
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+          TAG: rascunho-willpdv-${{ github.sha }}
+        run: |
+          $antigo = gh api "repos/$env:DESTINO/releases?per_page=100" --jq '.[] | select(.tag_name == env.TAG) | .id'
+          foreach ($id in @($antigo | Where-Object { $_ })) { gh api -X DELETE "repos/$env:DESTINO/releases/$id" | Out-Null }
+          $arquivos = @((Get-ChildItem instalador\saida\WillPDV-Setup-*.exe).FullName) + @((Resolve-Path WillPDV-Portatil.zip).Path)
+          gh release create $env:TAG --repo $env:DESTINO --draft --title "Rascunho WillPDV $env:GITHUB_SHA" `
+            --notes "Cópia de passagem do build para a publicação. Apagada quando a publicação termina." @arquivos
+          if ($LASTEXITCODE -ne 0) { throw "Não consegui entregar o instalador à publicação." }
+
       - name: Guardar o instalador
         uses: actions/upload-artifact@v4
+        continue-on-error: true          # cota cheia não derruba a versão: a publicação usa o rascunho
         with:
           name: WillPDV-Instalador-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
           path: instalador/saida/WillPDV-Setup-*.exe
@@ -208,6 +225,7 @@ jobs:
 
       - name: Guardar a versão portátil
         uses: actions/upload-artifact@v4
+        continue-on-error: true          # cota cheia não derruba a versão: a publicação usa o rascunho
         with:
           name: WillPDV-Portatil-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
           path: WillPDV-Portatil.zip
@@ -218,6 +236,7 @@ jobs:
       - name: Guardar os relatórios do autoteste
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true          # cota cheia não derruba a versão: a publicação usa o rascunho
         with:
           name: autoteste-${{ steps.info.outputs.curto }}
           path: |
@@ -321,6 +340,7 @@ jobs:
 
       - name: Guardar o instalador do programa de licenças
         uses: actions/upload-artifact@v4
+        continue-on-error: true          # cota cheia não derruba a versão: a publicação usa o rascunho
         with:
           name: WillLicencas-Instalador-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
           path: instalador/saida/WillLicencas-Setup-*.exe
@@ -441,8 +461,25 @@ jobs:
           A licença é própria: emita no WillPDV Licenças escolhendo o programa Will Adega.
           "@ >> $env:GITHUB_STEP_SUMMARY
 
+      # A publicação busca o instalador aqui (rascunho = só quem tem acesso ao repositório vê), não nos artifacts do GitHub,
+      # que no repositório privado têm cota pequena e travavam a versão inteira. O rascunho é apagado no fim da publicação.
+      - name: Entregar o instalador à publicação (rascunho no repositório de downloads)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+          TAG: rascunho-willadega-${{ github.sha }}
+        run: |
+          $antigo = gh api "repos/$env:DESTINO/releases?per_page=100" --jq '.[] | select(.tag_name == env.TAG) | .id'
+          foreach ($id in @($antigo | Where-Object { $_ })) { gh api -X DELETE "repos/$env:DESTINO/releases/$id" | Out-Null }
+          $arquivos = @((Get-ChildItem instalador\saida\WillAdega-Setup-*.exe).FullName) + @((Resolve-Path WillAdega-Portatil.zip).Path)
+          gh release create $env:TAG --repo $env:DESTINO --draft --title "Rascunho Will Adega $env:GITHUB_SHA" `
+            --notes "Cópia de passagem do build para a publicação. Apagada quando a publicação termina." @arquivos
+          if ($LASTEXITCODE -ne 0) { throw "Não consegui entregar o instalador à publicação." }
+
       - name: Guardar o instalador
         uses: actions/upload-artifact@v4
+        continue-on-error: true          # cota cheia não derruba a versão: a publicação usa o rascunho
         with:
           name: WillAdega-Instalador-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
           path: instalador/saida/WillAdega-Setup-*.exe
@@ -451,6 +488,7 @@ jobs:
 
       - name: Guardar a versão portátil
         uses: actions/upload-artifact@v4
+        continue-on-error: true          # cota cheia não derruba a versão: a publicação usa o rascunho
         with:
           name: WillAdega-Portatil-${{ steps.info.outputs.versao }}-${{ steps.info.outputs.curto }}
           path: WillAdega-Portatil.zip
@@ -461,6 +499,7 @@ jobs:
       - name: Guardar os relatórios do autoteste
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true          # cota cheia não derruba a versão: a publicação usa o rascunho
         with:
           name: autoteste-adega-${{ steps.info.outputs.curto }}
           path: |
@@ -478,15 +517,33 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: WillPDV-Instalador-*
-          merge-multiple: true
-          path: publicar
+      - name: Buscar o instalador entregue pelo build (rascunho)
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+          TAG: rascunho-willpdv-${{ github.sha }}
+          PASTA: publicar
+        run: |
+          id=$(gh api "repos/$DESTINO/releases?per_page=100" --jq '.[] | select(.tag_name == env.TAG) | .id' | head -1)
+          [ -n "$id" ] || { echo "Rascunho $TAG não encontrado: o build não entregou o instalador."; exit 1; }
+          mkdir -p "$PASTA"
+          gh api "repos/$DESTINO/releases/$id/assets" --jq '.[] | "\(.id) \(.name)"' | while read -r aid nome; do
+            gh api -H "Accept: application/octet-stream" "repos/$DESTINO/releases/assets/$aid" > "$PASTA/$nome"
+          done
+          ls -l "$PASTA"
       - uses: softprops/action-gh-release@v2
         with:
           files: publicar/WillPDV-Setup-*.exe
           generate_release_notes: true
+      - name: Apagar o rascunho de passagem
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+          TAG: rascunho-willpdv-${{ github.sha }}
+        run: |
+          for id in $(gh api "repos/$DESTINO/releases?per_page=100" --jq '.[] | select(.tag_name == env.TAG) | .id'); do
+            gh api -X DELETE "repos/$DESTINO/releases/$id"
+          done
 
   # Destino: o repositório público só de downloads (variável DOWNLOADS_REPO + segredo DOWNLOADS_TOKEN) quando existir;
   # senão este repositório. Assim o código pode ficar privado sem as lojas perderem o link. Ver docs/PROTEGER_CODIGO.md.
@@ -504,11 +561,20 @@ jobs:
       group: publicar-ultima-versao
       cancel-in-progress: false          # nunca interrompe no meio de apagar e recriar a Release
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: WillPDV-*
-          merge-multiple: true
-          path: publicar
+      - name: Buscar o instalador entregue pelo build (rascunho)
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+          TAG: rascunho-willpdv-${{ github.sha }}
+          PASTA: publicar
+        run: |
+          id=$(gh api "repos/$DESTINO/releases?per_page=100" --jq '.[] | select(.tag_name == env.TAG) | .id' | head -1)
+          [ -n "$id" ] || { echo "Rascunho $TAG não encontrado: o build não entregou o instalador."; exit 1; }
+          mkdir -p "$PASTA"
+          gh api "repos/$DESTINO/releases/$id/assets" --jq '.[] | "\(.id) \(.name)"' | while read -r aid nome; do
+            gh api -H "Accept: application/octet-stream" "repos/$DESTINO/releases/assets/$aid" > "$PASTA/$nome"
+          done
+          ls -l "$PASTA"
 
       - name: Nomes fixos (o link não muda a cada versão)
         run: |
@@ -543,11 +609,20 @@ jobs:
       group: publicar-ultima-versao-adega
       cancel-in-progress: false
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: WillAdega-*
-          merge-multiple: true
-          path: publicar
+      - name: Buscar o instalador entregue pelo build (rascunho)
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+          TAG: rascunho-willadega-${{ github.sha }}
+          PASTA: publicar
+        run: |
+          id=$(gh api "repos/$DESTINO/releases?per_page=100" --jq '.[] | select(.tag_name == env.TAG) | .id' | head -1)
+          [ -n "$id" ] || { echo "Rascunho $TAG não encontrado: o build não entregou o instalador."; exit 1; }
+          mkdir -p "$PASTA"
+          gh api "repos/$DESTINO/releases/$id/assets" --jq '.[] | "\(.id) \(.name)"' | while read -r aid nome; do
+            gh api -H "Accept: application/octet-stream" "repos/$DESTINO/releases/assets/$aid" > "$PASTA/$nome"
+          done
+          ls -l "$PASTA"
 
       - name: Nomes fixos (o link não muda a cada versão)
         run: |
@@ -579,15 +654,33 @@ jobs:
       matrix:
         include:
           - edicao: willpdv
-            artefato: WillPDV-Instalador-*
+            rascunho: willpdv
             mascara: WillPDV-Setup-*.exe
           - edicao: willadega
-            artefato: WillAdega-Instalador-*
+            rascunho: willadega
             mascara: WillAdega-Setup-*.exe
     uses: ./.github/workflows/publicar-pacote.yml
     with:
       edicao: ${{ matrix.edicao }}
-      artefato: ${{ matrix.artefato }}
+      rascunho: rascunho-${{ matrix.rascunho }}-${{ github.sha }}
       mascara: ${{ matrix.mascara }}
       versao: ${{ needs.build.outputs.versao }}
     secrets: inherit
+
+  # Publicou tudo: apaga os rascunhos de passagem. Se algo falhou eles ficam (privados) para repetir só a publicação.
+  limpar_rascunhos:
+    name: Apagar os rascunhos de passagem
+    needs: [ultima_versao, ultima_versao_adega, registrar_atualizacao]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+        run: |
+          for TAG in "rascunho-willpdv-$GITHUB_SHA" "rascunho-willadega-$GITHUB_SHA"; do
+            export TAG
+            for id in $(gh api "repos/$DESTINO/releases?per_page=100" --jq '.[] | select(.tag_name == env.TAG) | .id'); do
+              gh api -X DELETE "repos/$DESTINO/releases/$id"
+            done
+          done
