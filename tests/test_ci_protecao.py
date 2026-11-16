@@ -14,7 +14,7 @@ def runs_on(nome):
 
 class TestCiProtecao(unittest.TestCase):
     def test_runner_proprio_so_com_repositorio_privado(self):
-        proprios = [alvo for alvo in runs_on("testes.yml") if "RUNNER_WINDOWS" in alvo]
+        proprios = [alvo for alvo in runs_on("testes.yml") if "RUNNER_PC" in alvo]
         self.assertEqual(len(proprios), 3)                    # tutorial, publicação e a suíte no Windows
         for alvo in proprios:
             self.assertIn("github.event.repository.private &&", alvo)
@@ -24,7 +24,7 @@ class TestCiProtecao(unittest.TestCase):
         for arquivo in ("build-windows.yml", "will-restaurante.yml"):
             for alvo in runs_on(arquivo):
                 self.assertNotIn("self-hosted", alvo, arquivo)
-                self.assertNotIn("RUNNER_WINDOWS", alvo, arquivo)
+                self.assertNotIn("RUNNER_PC", alvo, arquivo)
 
     def test_downloads_vao_para_o_repositorio_publico_quando_configurado(self):
         for arquivo in ("build-windows.yml", "publicar-pacote.yml", "will-restaurante.yml"):
@@ -43,11 +43,22 @@ class TestCiProtecao(unittest.TestCase):
     def test_privado_sem_runner_economiza_windows(self):
         texto = (RAIZ / "testes.yml").read_text(encoding="utf-8")
         matriz = texto.split("include:", 1)[1].split("steps:", 1)[0]
-        pr, merge, normal = [trecho.split("'", 1)[0] for trecho in matriz.split("'[")[1:]]
-        self.assertIn("!vars.RUNNER_WINDOWS && github.event_name == 'pull_request'", matriz)
+        pr, merge, manual, normal = [trecho.split("'", 1)[0] for trecho in matriz.split("'[")[1:]]
+        self.assertIn("!vars.RUNNER_PC && github.event_name == 'pull_request'", matriz)
+        self.assertIn("!vars.RUNNER_PC && github.event_name == 'push'", matriz)
         self.assertNotIn("windows", pr)                       # PR no privado sem runner: só Linux
-        self.assertEqual(merge.count("windows-latest"), 1)    # depois do merge: uma vez no Windows
+        self.assertEqual(merge.count("windows-latest"), 1)    # depois do merge: uma vez no Windows...
+        self.assertNotIn("ubuntu", merge)                     # ...e o Linux não repete o que o PR já rodou
+        self.assertEqual(manual.count("windows-latest"), 1)
         self.assertEqual(normal.count("windows-latest"), 2)   # público ou com runner: as duas versões
+
+    def test_testes_nao_gastam_minutos_a_toa(self):
+        texto = (RAIZ / "testes.yml").read_text(encoding="utf-8")
+        self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", texto)
+        self.assertEqual(texto.count('paths-ignore: ["docs/**", ".ai/**", "**/*.md"]'), 2)
+        for job in ("tutorial-windows:", "publicacao-windows:", "cobrancas-postgres:"):
+            trecho = texto.split("  " + job, 1)[1][:200]
+            self.assertIn("if: github.event_name != 'push'", trecho, job)
 
     def test_link_padrao_do_instalador_nao_depende_do_repositorio_do_codigo(self):
         from backend.central_fornecedor import INSTALADORES

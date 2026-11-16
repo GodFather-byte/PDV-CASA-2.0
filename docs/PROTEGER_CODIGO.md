@@ -49,6 +49,9 @@ Abra cada link no navegador: tem que baixar.
 
 ### 4. Runner no PC com Windows (opcional)
 
+Desligado em 16/11/2026 (o PC deu problema): os testes voltaram para o GitHub. Para religar, crie a variável
+`RUNNER_PC` com `["self-hosted","Windows"]` (a antiga `RUNNER_WINDOWS` não é mais lida e pode ser apagada).
+
 Sem o runner, o privado já economiza sozinho: o PR roda só o Linux e os dois trabalhos curtos de Windows, e a suíte
 inteira no Windows roda uma vez (Python 3.12) depois do merge. Com o runner, volta a rodar tudo no Windows a cada PR,
 sem gastar minutos.
@@ -59,7 +62,7 @@ arquivos pessoais).
 1. Instale o **Git for Windows** (https://git-scm.com).
 2. GitHub > `PDV-CASA-2.0` > Settings > Actions > Runners > **New self-hosted runner** > Windows. Siga os comandos que
    a página mostra (baixar, `config.cmd`). No final, responda **Y** para "run as service".
-3. Em Settings > Secrets and variables > Actions > **Variables**: nome `RUNNER_WINDOWS`, valor
+3. Em Settings > Secrets and variables > Actions > **Variables**: nome `RUNNER_PC`, valor
    `["self-hosted","Windows"]`.
 
 O runner só é usado depois do passo 5. Com o repositório público ele é ignorado de propósito: qualquer pessoa poderia

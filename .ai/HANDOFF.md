@@ -1,3 +1,11 @@
+# Handoff (16/11/2026)
+
+- Testes de volta no GitHub (PC do dono com problema): o workflow lê `vars.RUNNER_PC` (não existe), a antiga
+  `RUNNER_WINDOWS` ficou ignorada. Economia em `testes.yml`: PR = Linux inteiro + 2 curtos de Windows + PostgreSQL;
+  merge = só Windows 3.12 inteiro; docs/.ai/*.md não rodam; push novo no PR cancela a rodada anterior.
+- Publicação usa rascunho (Release draft) no willpdv-downloads (#109), não depende da cota de artifacts.
+- 1.14.9 publicada (piloto CASA-VERDE). Casa Verde ainda informa 1.14.5: instalar na mão uma vez.
+
 # Handoff — código privado e compilado com Nuitka (14/11/2026)
 
 ## 15/11 (tarde)
