@@ -421,6 +421,69 @@ class TesteFornecedor(BaseNuvem):
         self.assertTrue(self.fornecedor.post(f"{base}/{ident}/pago", headers=self.csrf).json()["servico"]["pago_em"])
         self.assertEqual(self.fornecedor.get(base).json()["a_receber_cent"], 0)
 
+    def test_servico_gera_pix_e_da_baixa_quando_o_mercado_pago_aprova(self):
+        from unittest import mock
+        from backend import cobranca_mercadopago as mp
+        with nuvem.SessionLocal() as db:
+            db.query(mp.Plano).filter_by(chave_loja="ADEGA-1").delete()
+            db.add(mp.Plano(id="plano-t", chave_loja="ADEGA-1", valor_cent=9900, email_pagador="loja@exemplo.com",
+                            criado_em="2026-11-17 08:00:00", whatsapp="+5511999990000"))
+            db.commit()
+        self.addCleanup(self._sem_plano)
+        base = "/v1/fornecedor/lojas/ADEGA-1/retaguarda/servicos"
+        r = self.fornecedor.post("/v1/fornecedor/servicos/precos", headers=self.csrf,
+                                 json={"descricao": "Cadastro por produto", "valor_cent": 150, "por_unidade": True})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(len(self.fornecedor.get("/v1/fornecedor/servicos/precos").json()["precos"]), 1)
+        ident = self.fornecedor.post(base, json={"descricao": "Cadastro de 100 produtos", "valor_cent": 15000},
+                                     headers=self.csrf).json()["servico"]["id"]
+        chamadas = []
+
+        def falso(metodo, caminho, corpo=None, idempotencia=None):
+            chamadas.append((metodo, caminho, corpo))
+            if metodo == "POST":
+                return {"id": 777, "point_of_interaction": {"transaction_data": {
+                    "qr_code": "00020126PIXCOPIAECOLA", "ticket_url": "https://www.mercadopago.com.br/p/777"}}}
+            return {"id": 777, "status": "approved", "transaction_amount": 150.0, "currency_id": "BRL",
+                    "external_reference": f"servico-{ident}"}
+        with mock.patch.object(mp, "requisitar", side_effect=falso):
+            r = self.fornecedor.post(f"{base}/{ident}/pix", headers=self.csrf)
+            self.assertEqual(r.status_code, 200, r.text)
+            self.assertIn("00020126PIXCOPIAECOLA", r.json()["texto"])
+            self.assertTrue(r.json()["whatsapp"].startswith("https://wa.me/5511999990000?text="))
+            self.assertEqual(chamadas[0][2]["external_reference"], f"servico-{ident}")
+            self.fornecedor.post(f"{base}/{ident}/pix", headers=self.csrf)          # repetir não cria outro Pix
+            self.assertEqual(sum(c[0] == "POST" for c in chamadas), 1)
+            # valor errado não dá baixa; o certo dá (via conferência ou webhook)
+            with nuvem.SessionLocal() as db:
+                errado = {"status": "approved", "transaction_amount": 1.0, "external_reference": f"servico-{ident}"}
+                self.assertEqual(nuvem_retaguarda.aplicar_pagamento_servico(db, errado), "pendente")
+            r = self.fornecedor.post(f"{base}/{ident}/conferir", headers=self.csrf)
+            self.assertTrue(r.json()["servico"]["pago_em"])
+
+    def _sem_plano(self):
+        from backend import cobranca_mercadopago as mp
+        with nuvem.SessionLocal() as db:
+            db.query(mp.Plano).filter_by(chave_loja="ADEGA-1").delete()
+            db.query(nuvem_retaguarda.PrecoServico).delete()
+            db.commit()
+
+    def test_catalogo_da_adega_vai_com_ncm_e_so_os_que_tem_preco(self):
+        retaguarda.sincronizar(self.banco, self.ponte)
+        r = self.fornecedor.get("/v1/fornecedor/servicos/catalogo")
+        self.assertEqual(r.status_code, 200, r.text)
+        linhas = r.json()["linhas"]
+        self.assertGreater(len(linhas), 270)
+        zomo = next(l for l in linhas if l["nome"] == "ESSENCIA NARGUILE ZOMO 50G")
+        self.assertEqual(zomo["preco"], "")
+        zomo["preco"] = "25,00"
+        corpo = {"tipo": "produtos.importar", "dados": {"linhas": [zomo]}, "resumo": "catálogo"}
+        self.assertEqual(self.fornecedor.post("/v1/fornecedor/lojas/ADEGA-1/retaguarda/comandos", json=corpo,
+                                              headers=self.csrf).status_code, 200)
+        retaguarda.sincronizar(self.banco, self.ponte, forcar=True)
+        p = self.banco.um("SELECT preco_cent, ncm FROM produtos WHERE nome = ? COLLATE NOCASE", (zomo["nome"],))
+        self.assertEqual((p["preco_cent"], p["ncm"]), (2500, zomo["ncm"]))
+
     def test_sem_sessao_da_central_nao_entra_e_loja_inexistente_da_404(self):
         base = "/v1/fornecedor/lojas/ADEGA-1/retaguarda"
         self.assertEqual(self.http.get(base).status_code, 401)

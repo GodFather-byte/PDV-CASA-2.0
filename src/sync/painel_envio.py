@@ -417,6 +417,7 @@ def retrato(banco) -> dict:
         "abaixo_minimo_total": banco.valor(
             "SELECT COUNT(*) FROM produtos WHERE ativo = 1 AND controla_estoque = 1 AND qt_atual <= estoque_minimo", (), 0),
         "abaixo_minimo": abaixo,
+        "parados": _parados(banco),
     }
     devedores = banco.um("SELECT COUNT(*) AS n, COALESCE(SUM(-saldo_cent), 0) AS total FROM clientes WHERE saldo_cent < 0")
     from src.controllers.config_controller import ConfigController
@@ -607,3 +608,11 @@ def trocar_senha(banco, senha: str | None = None, http=None, operador_id: int | 
     gerada = trocar_senha_na_nuvem(banco.cfg("api_url"), banco.cfg("api_token"), senha, http)
     registrar_troca_de_senha(banco, bool(gerada), operador_id)
     return gerada
+
+
+def _parados(banco) -> list[dict]:
+    from src.controllers.estoque_controller import parados
+    try:
+        return parados(banco)
+    except Exception:                       # painel nunca pode falhar por causa de um extra
+        return []

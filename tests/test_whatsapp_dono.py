@@ -37,6 +37,27 @@ class TesteWhatsApp(BaseCaixa):
         self.assertIn("5511988887777", abertos[-1])
         self.assertIn("Total do período", texto)
 
+    def test_resumo_lista_o_que_esta_acabando_e_o_painel_os_parados(self):
+        from src.controllers.estoque_controller import parados
+        gelo = self.novo_produto("GELO", preco=1000, estoque=True, qt=0, estoque_minimo=5)
+        seda = self.novo_produto("SEDA", preco=350, estoque=True, qt=2, estoque_minimo=10)
+        velho = self.novo_produto("LICOR VELHO", preco=5000, estoque=True, qt=4)
+        texto = texto_resumo(montar_caixa(self.banco))
+        self.assertIn("Acabando (comprar):", texto)
+        self.assertIn("• GELO: zerado", texto)
+        self.assertIn("• SEDA: restam 2", texto)
+        nomes = [p["nome"] for p in parados(self.banco)]
+        self.assertIn("LICOR VELHO", nomes)
+        self.assertNotIn("GELO", nomes)                       # sem estoque não é "parado"
+        lista = parados(self.banco)
+        self.assertEqual(lista, sorted(lista, key=lambda p: -p["valor_cent"]))       # maior valor parado primeiro
+        self.assertEqual(next(p for p in lista if p["nome"] == "LICOR VELHO")["valor_cent"], 20000)
+        vid = self.vender((velho, 1))
+        self.pagar(vid, "Dinheiro", self.caixa.obter(vid)["total_cent"])
+        self.caixa.fechar(vid)
+        self.assertNotIn("LICOR VELHO", [p["nome"] for p in parados(self.banco)])
+        self.assertTrue(gelo and seda)
+
     def test_alertas_agrupam_o_dia_e_ignoram_fechamento_sem_contagem(self):
         from src.whatsapp.alertas import contagem_informada
         self.assertFalse(contagem_informada({"valor_final_cent": None, "resultado_cent": -8000}))

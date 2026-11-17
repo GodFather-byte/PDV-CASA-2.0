@@ -44,7 +44,7 @@ SO_FORNECEDOR = ("produtos.importar",)      # cadastro em massa é serviço do f
 LIMITE_PLANILHA_BYTES = 3 * 1024 * 1024
 LIMITE_LOTE = 200                           # produtos por comando (o caixa aplica numa transação só)
 CAMPOS_LOTE = ("codigo", "nome", "preco", "custo", "grupo", "unidade", "quantidade", "estoque_minimo", "codigo_barras",
-               "controla_estoque")
+               "controla_estoque", "preco_gelada", "atacado_qtd", "preco_atacado", "ncm")
 
 
 class RetaguardaEspelho(Base):
@@ -67,6 +67,36 @@ class RetaguardaServico(Base):
     valor_cent = Column(Integer, nullable=False)
     criado_em = Column(String, nullable=False)
     pago_em = Column(String, nullable=True)
+    pix_id = Column(String, nullable=True)
+    pix_copia_cola = Column(Text, nullable=True)
+    pix_url = Column(String, nullable=True)
+
+
+class PrecoServico(Base):
+    """Tabela de preços dos serviços do fornecedor (vale para todas as lojas). `por_unidade`: o valor é multiplicado
+    pela quantidade informada no lançamento (ex.: R$ 1,50 por produto cadastrado)."""
+    __tablename__ = "retaguarda_precos_servico"
+    id = Column(Integer, primary_key=True)
+    descricao = Column(String, nullable=False)
+    valor_cent = Column(Integer, nullable=False)
+    por_unidade = Column(Integer, nullable=False, default=0)
+
+
+COLUNAS_NOVAS = {"retaguarda_servicos": {"pix_id": "VARCHAR", "pix_copia_cola": "TEXT", "pix_url": "VARCHAR"}}
+
+
+def garantir_colunas(bind=None) -> None:
+    from sqlalchemy import inspect, text
+    alvo = bind or engine
+    with alvo.begin() as con:
+        inspetor = inspect(con)
+        for tabela, colunas in COLUNAS_NOVAS.items():
+            if not inspetor.has_table(tabela):
+                continue
+            existentes = {c["name"] for c in inspetor.get_columns(tabela)}
+            for nome, tipo in colunas.items():
+                if nome not in existentes:
+                    con.execute(text(f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo}"))
 
 
 class RetaguardaComando(Base):
@@ -266,6 +296,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
     """Rotas do dono e do caixa. As do fornecedor entram por `instalar_fornecedor`, chamada pela central."""
     from backend.painel import PainelSessao, sessao_do_dono
     Base.metadata.create_all(bind=engine)
+    garantir_colunas()
     router = APIRouter()
 
     def loja_do_dono(sessao: PainelSessao = Depends(sessao_do_dono), db: Session = Depends(get_db)) -> str:
@@ -394,7 +425,87 @@ def ler_planilha(nome: str, conteudo_b64: str) -> list[dict]:
 
 def _servico_publico(s: RetaguardaServico) -> dict:
     return {"id": s.id, "descricao": s.descricao, "valor_cent": s.valor_cent, "criado_em": s.criado_em,
-            "pago_em": s.pago_em}
+            "pago_em": s.pago_em, "pix_copia_cola": s.pix_copia_cola, "pix_url": s.pix_url}
+
+
+REFERENCIA_SERVICO = "servico-"
+
+
+def _texto_servico(nome_loja: str, s: RetaguardaServico) -> str:
+    valor = f"R$ {s.valor_cent / 100:.2f}".replace(".", ",")
+    linhas = [f"WB SISTEMAS: {s.descricao}", f"Loja: {nome_loja}", f"Valor: {valor}"]
+    if s.pix_copia_cola:
+        linhas += ["Pix copia e cola:", s.pix_copia_cola]
+    return "\n".join(linhas)
+
+
+def gerar_pix_servico(db: Session, servico: RetaguardaServico) -> RetaguardaServico:
+    """Pix do Mercado Pago para o serviço, uma vez só (idempotente). O pagador é o e-mail do plano da loja."""
+    from backend import cobranca_mercadopago as mp
+    if servico.pago_em:
+        raise HTTPException(status_code=409, detail="Este serviço já foi pago.")
+    if servico.pix_copia_cola:
+        return servico
+    plano = db.query(mp.Plano).filter_by(chave_loja=servico.chave_loja).first()
+    if plano is None or not plano.email_pagador:
+        raise HTTPException(status_code=422, detail="Loja sem e-mail de cobrança: cadastre a mensalidade dela primeiro.")
+    referencia = f"{REFERENCIA_SERVICO}{servico.id}"
+    corpo = {
+        "transaction_amount": mp.reais(servico.valor_cent),
+        "description": f"Serviço WillPDV {servico.chave_loja}: {servico.descricao}"[:200],
+        "payment_method_id": "pix",
+        "date_of_expiration": mp._iso_mp(datetime.now().astimezone() + timedelta(days=7)),
+        "external_reference": referencia,
+        "payer": {"email": plano.email_pagador},
+        "metadata": {"chave_loja": servico.chave_loja, "servico": servico.id},
+    }
+    notificacao = mp.url_notificacao()
+    if notificacao:
+        corpo["notification_url"] = notificacao
+    try:
+        resposta = mp.requisitar("POST", "/v1/payments", corpo, idempotencia=f"willpdv-{referencia}")
+    except mp.ErroCobranca as erro:
+        raise HTTPException(status_code=502, detail=str(erro)[:200]) from None
+    transacao = ((resposta.get("point_of_interaction") or {}).get("transaction_data") or {})
+    codigo = transacao.get("qr_code")
+    if not isinstance(codigo, str) or len(codigo) < 10:
+        raise HTTPException(status_code=502, detail="Mercado Pago não devolveu o Pix copia e cola.")
+    servico.pix_id = mp._id_pagamento(resposta.get("id"))
+    servico.pix_copia_cola = codigo
+    servico.pix_url = mp._https(transacao.get("ticket_url"))
+    db.commit()
+    return servico
+
+
+def aplicar_pagamento_servico(db: Session, dados: dict) -> str:
+    """Webhook ou conferência: dá baixa no serviço quando o Pix aprovado tem o valor certo. Chamada pela cobrança."""
+    from backend import cobranca_mercadopago as mp
+    referencia = str(dados.get("external_reference") or "")
+    try:
+        ident = int(referencia[len(REFERENCIA_SERVICO):])
+    except ValueError:
+        return "desconhecida"
+    servico = db.get(RetaguardaServico, ident)
+    if servico is None:
+        return "desconhecida"
+    try:
+        valor = mp.centavos(dados.get("transaction_amount"))
+    except mp.ErroCobranca:
+        valor = 0
+    aprovado = (dados.get("status") == mp.APROVADO and not mp._estornado(dados) and valor == servico.valor_cent
+                and dados.get("currency_id", "BRL") == "BRL")
+    if aprovado and not servico.pago_em:
+        servico.pago_em = _agora()
+        db.commit()
+    return "processado" if aprovado else "pendente"
+
+
+def _preco_publico(p: PrecoServico) -> dict:
+    return {"id": p.id, "descricao": p.descricao, "valor_cent": p.valor_cent, "por_unidade": bool(p.por_unidade)}
+
+
+def _valor_valido(valor) -> bool:
+    return isinstance(valor, int) and not isinstance(valor, bool) and 0 < valor <= 10_000_000
 
 
 def instalar_fornecedor(app: FastAPI, sessao, obter, auditar) -> APIRouter:
@@ -432,6 +543,58 @@ def instalar_fornecedor(app: FastAPI, sessao, obter, auditar) -> APIRouter:
         db.commit()
         auditar(db, "servico", chave_loja, f"{descricao} ({valor / 100:.2f})"[:500])
         db.commit()
+        return {"servico": _servico_publico(servico)}
+
+    @router.get("/v1/fornecedor/servicos/catalogo")
+    def catalogo(_=Depends(sessao)):
+        from src.controllers.catalogo import CATALOGO_ADEGA
+        linhas = [{**{c: "" for c in CAMPOS_LOTE}, "nome": i.nome, "grupo": i.subgrupo, "ncm": i.ncm, "unidade": "UN"}
+                  for i in CATALOGO_ADEGA]
+        return {"linhas": linhas}
+
+    @router.get("/v1/fornecedor/servicos/precos")
+    def precos(_=Depends(sessao), db: Session = Depends(get_db)):
+        return {"precos": [_preco_publico(p) for p in db.query(PrecoServico).order_by(PrecoServico.descricao).all()]}
+
+    @router.post("/v1/fornecedor/servicos/precos")
+    def novo_preco(corpo: dict = Body(...), _=Depends(sessao), db: Session = Depends(get_db)):
+        descricao = re.sub(r"\s+", " ", str(corpo.get("descricao") or "")).strip()[:120]
+        if not descricao or not _valor_valido(corpo.get("valor_cent")):
+            raise HTTPException(status_code=422, detail="Informe a descrição e um valor maior que zero.")
+        preco = PrecoServico(descricao=descricao, valor_cent=corpo["valor_cent"], por_unidade=int(bool(corpo.get("por_unidade"))))
+        db.add(preco)
+        db.commit()
+        return {"preco": _preco_publico(preco)}
+
+    @router.post("/v1/fornecedor/servicos/precos/{preco_id}/excluir")
+    def excluir_preco(preco_id: int, _=Depends(sessao), db: Session = Depends(get_db)):
+        db.query(PrecoServico).filter_by(id=preco_id).delete()
+        db.commit()
+        return {"excluido": True}
+
+    @router.post(prefixo + "/servicos/{servico_id}/pix")
+    def pix_do_servico(servico_id: int, chave_loja: str = Depends(loja_escolhida), db: Session = Depends(get_db)):
+        servico = db.query(RetaguardaServico).filter_by(id=servico_id, chave_loja=chave_loja).first()
+        if servico is None:
+            raise HTTPException(status_code=404, detail="Serviço não encontrado.")
+        servico = gerar_pix_servico(db, servico)
+        from backend import cobranca_mercadopago as mp
+        plano = db.query(mp.Plano).filter_by(chave_loja=chave_loja).first()
+        texto = _texto_servico(obter(db, chave_loja).nome or chave_loja, servico)
+        whatsapp = mp.link_whatsapp(plano.whatsapp, texto) if plano is not None and plano.whatsapp else None
+        return {"servico": _servico_publico(servico), "texto": texto, "whatsapp": whatsapp}
+
+    @router.post(prefixo + "/servicos/{servico_id}/conferir")
+    def conferir_servico(servico_id: int, chave_loja: str = Depends(loja_escolhida), db: Session = Depends(get_db)):
+        from backend import cobranca_mercadopago as mp
+        servico = db.query(RetaguardaServico).filter_by(id=servico_id, chave_loja=chave_loja).first()
+        if servico is None:
+            raise HTTPException(status_code=404, detail="Serviço não encontrado.")
+        if servico.pix_id and not servico.pago_em:
+            try:
+                aplicar_pagamento_servico(db, mp.obter_pagamento(servico.pix_id))
+            except mp.ErroCobranca as erro:
+                raise HTTPException(status_code=502, detail=str(erro)[:200]) from None
         return {"servico": _servico_publico(servico)}
 
     @router.post(prefixo + "/servicos/{servico_id}/pago")

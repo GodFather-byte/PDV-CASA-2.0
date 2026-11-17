@@ -106,6 +106,11 @@ def texto_resumo(dados: dict) -> str:
     if perdas:
         linhas += ["", "Perdas na contagem:"]
         linhas += [f"• {p['nome']}: {_qtd(p.get('unidades'))} · {_reais(p.get('valor_cent'))}" for p in perdas[:8]]
+    acabando = dados.get("acabando") or []
+    if acabando:
+        linhas += ["", "Acabando (comprar):"]
+        linhas += [f"• {p['nome']}: {'zerado' if float(p.get('qt_atual') or 0) <= 0 else 'restam ' + _qtd(p.get('qt_atual'))}"
+                   for p in acabando[:12]]
     texto = "\n".join(linhas)
     if len(texto) > LIMITE_TEXTO:
         texto = texto[: LIMITE_TEXTO - 20].rstrip() + "\n…(resumo cortado)"

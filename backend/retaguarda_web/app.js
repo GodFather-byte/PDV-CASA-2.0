@@ -673,15 +673,31 @@
     const arquivo = el("input");
     arquivo.type = "file";
     arquivo.accept = ".csv,.xlsx,.xlsm,.txt";
+    const catalogo = botaoPequeno("Carregar catálogo da adega (274 produtos)", async () => {
+      const r = await apiCentral("/catalogo");
+      linhas = r.linhas;
+      filtro = "";
+      desenhar();
+    });
     const area = el("div");
-    raiz.append(arquivo, area);
-    let linhas = [], lote = 200;
+    raiz.append(arquivo, catalogo, area);
+    let linhas = [], lote = 200, filtro = "";
+    const comPreco = (l) => paraCentavos(l.preco) !== null && paraCentavos(l.preco) > 0 && String(l.nome || "").trim();
     function desenhar() {
       limpar(area);
       if (!linhas.length) return;
-      const semPreco = linhas.filter((l) => paraCentavos(l.preco) === null).length;
-      area.append(el("p", linhas.length + " produtos lidos" + (semPreco ? "; " + semPreco + " sem preço válido (em destaque)." : "."),
-        semPreco ? "aviso" : "suave"));
+      const prontos = linhas.filter(comPreco).length;
+      area.append(el("p", linhas.length + " produtos na lista; " + prontos + " com preço vão para o caixa. " +
+        "Os sem preço ficam de fora.", "suave"));
+      const grupos = [...new Set(linhas.map((l) => l.grupo).filter(Boolean))].sort();
+      if (grupos.length > 1) {
+        const sel = el("select");
+        sel.append(new Option("Todos os grupos", ""));
+        grupos.forEach((g) => sel.append(new Option(g, g)));
+        sel.value = filtro;
+        sel.addEventListener("change", () => { filtro = sel.value; desenhar(); });
+        area.append(sel);
+      }
       const rolagem = el("div", null, "tabela-rolagem");
       const tabela = el("table");
       const cab = el("tr");
@@ -691,6 +707,7 @@
       tabela.append(el("thead")).firstChild.append(cab);
       const corpo = el("tbody");
       linhas.forEach((l, i) => {
+        if (filtro && l.grupo !== filtro) return;
         const tr = el("tr");
         tr.append(el("td", i + 1));
         COLUNAS_LOTE.forEach(([c]) => {
@@ -717,16 +734,16 @@
       const enviar = el("button", "Enviar para o caixa", "botao");
       enviar.type = "button";
       enviar.addEventListener("click", async () => {
-        const invalidas = linhas.filter((l) => paraCentavos(l.preco) === null || !String(l.nome || "").trim());
-        if (invalidas.length && !confirm(invalidas.length + " linha(s) sem nome ou preço serão recusadas pelo caixa. Enviar mesmo assim?")) return;
+        const envio = linhas.filter(comPreco);
+        if (!envio.length) { recado("Coloque o preço de pelo menos um produto."); return; }
         enviar.disabled = true;
         try {
-          for (let i = 0; i < linhas.length; i += lote) {
-            const parte = linhas.slice(i, i + lote);
+          for (let i = 0; i < envio.length; i += lote) {
+            const parte = envio.slice(i, i + lote);
             await api("/comandos", "POST", { tipo: "produtos.importar", dados: { linhas: parte },
               resumo: "Planilha: " + parte.length + " produtos (" + (i + 1) + " a " + (i + parte.length) + ")" });
           }
-          recado("Planilha enviada. Acompanhe em Alterações enviadas.");
+          recado(envio.length + " produtos enviados. Acompanhe em Alterações enviadas.");
           linhas = [];
           arquivo.value = "";
           desenhar();
@@ -749,51 +766,119 @@
     });
     return raiz;
   }
+  async function apiCentral(caminho, metodo, corpo) {
+    const base = estado.base;
+    estado.base = "/v1/fornecedor/servicos";
+    try { return await api(caminho, metodo, corpo); } finally { estado.base = base; }
+  }
+  function botaoPequeno(texto, acao, classe) {
+    const b = el("button", texto, "botao pequeno " + (classe || "secundario"));
+    b.type = "button";
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      try { await acao(); } catch (erro) { recado(erro.message); } finally { b.disabled = false; }
+    });
+    return b;
+  }
+  async function copiar(texto) {
+    try { await navigator.clipboard.writeText(texto); recado("Copiado."); }
+    catch (_) { recado("Não consegui copiar: selecione o texto e copie."); }
+  }
   async function telaServicos() {
-    const dados = await api("/servicos");
+    const [dados, tabela] = await Promise.all([api("/servicos"), apiCentral("/precos")]);
     const raiz = el("section");
     raiz.append(el("h1", "Serviços cobrados desta loja"));
     raiz.append(el("p", "Cadastros em massa e ajustes feitos por você, cobrados à parte da mensalidade. A receber: " +
       dinheiro(dados.a_receber_cent) + ".", "suave"));
+
+    // lançar: da tabela de preços (com quantidade) ou avulso
     const form = el("div", null, "cartao");
+    form.append(el("h2", "Lançar serviço"));
+    const escolha = el("select");
+    escolha.append(new Option("Avulso (digitar)", ""));
+    tabela.precos.forEach((p) => escolha.append(new Option(p.descricao + " · " + dinheiro(p.valor_cent) +
+      (p.por_unidade ? " cada" : ""), String(p.id))));
+    const quantidade = el("input");
+    quantidade.placeholder = "Quantidade";
+    quantidade.inputMode = "numeric";
     const descricao = el("input");
-    descricao.placeholder = "Ex.: cadastro de 120 produtos da tabacaria";
+    descricao.placeholder = "Descrição (ex.: cadastro de 120 produtos da tabacaria)";
     descricao.maxLength = 200;
     const valor = el("input");
-    valor.placeholder = "Valor (R$)";
+    valor.placeholder = "Valor total (R$)";
     valor.inputMode = "decimal";
-    const lancar = el("button", "Lançar serviço", "botao");
-    lancar.type = "button";
-    lancar.addEventListener("click", async () => {
+    function preencher() {
+      const p = tabela.precos.find((x) => String(x.id) === escolha.value);
+      quantidade.hidden = !(p && p.por_unidade);
+      if (!p) return;
+      const q = p.por_unidade ? Math.max(parseInt(quantidade.value, 10) || 0, 0) : 1;
+      descricao.value = p.por_unidade ? p.descricao + " (" + q + " × " + dinheiro(p.valor_cent) + ")" : p.descricao;
+      valor.value = reais(p.valor_cent * q);
+    }
+    escolha.addEventListener("change", preencher);
+    quantidade.addEventListener("input", preencher);
+    quantidade.hidden = true;
+    const lancar = botaoPequeno("Lançar", async () => {
       const cent = paraCentavos(valor.value);
       if (!descricao.value.trim() || !cent || cent <= 0) { recado("Informe a descrição e o valor."); return; }
-      lancar.disabled = true;
-      try { await api("/servicos", "POST", { descricao: descricao.value, valor_cent: cent }); recarregar(); }
-      catch (erro) { recado(erro.message); lancar.disabled = false; }
-    });
-    form.append(descricao, valor, lancar);
+      await api("/servicos", "POST", { descricao: descricao.value, valor_cent: cent });
+      recarregar();
+    }, "");
+    form.append(escolha, quantidade, descricao, valor, lancar);
     raiz.append(form);
-    if (!dados.servicos.length) { raiz.append(el("p", "Nenhum serviço lançado ainda.", "vazio cartao")); return raiz; }
-    const lista = el("ul", null, "lista");
-    dados.servicos.forEach((sv) => {
+
+    // lista
+    if (!dados.servicos.length) raiz.append(el("p", "Nenhum serviço lançado ainda.", "vazio cartao"));
+    else {
+      const lista = el("ul", null, "lista");
+      dados.servicos.forEach((sv) => {
+        const li = el("li");
+        const principal = el("div", null, "principal");
+        principal.append(el("strong", sv.descricao),
+          el("span", dataBr(sv.criado_em) + (sv.pago_em ? " · pago em " + dataBr(sv.pago_em) :
+            sv.pix_copia_cola ? " · Pix enviado, aguardando" : " · a receber"), "suave"));
+        li.append(principal, el("span", dinheiro(sv.valor_cent), "valor"));
+        if (!sv.pago_em) {
+          li.append(botaoPequeno(sv.pix_copia_cola ? "Pix de novo" : "Cobrar no Pix", async () => {
+            const r = await api("/servicos/" + sv.id + "/pix", "POST", {});
+            await copiar(r.texto);
+            if (r.whatsapp) window.open(r.whatsapp, "_blank", "noopener");
+            else recado("Pix copiado. A loja não tem WhatsApp no plano: cole na conversa com o dono.");
+            recarregar();
+          }, ""));
+          if (sv.pix_copia_cola) li.append(botaoPequeno("Conferir pagamento", async () => {
+            const r = await api("/servicos/" + sv.id + "/conferir", "POST", {});
+            recado(r.servico.pago_em ? "Pago! Baixa feita." : "Ainda não foi pago.");
+            recarregar();
+          }));
+          li.append(botaoPequeno("Recebi", async () => { await api("/servicos/" + sv.id + "/pago", "POST", {}); recarregar(); }));
+        }
+        lista.append(li);
+      });
+      raiz.append(lista);
+    }
+
+    // tabela de preços (vale para todas as lojas)
+    const precos = el("div", null, "cartao");
+    precos.append(el("h2", "Sua tabela de preços"), el("p", "Vale para todas as lojas. \"Por unidade\" multiplica pela " +
+      "quantidade no lançamento (ex.: R$ 1,50 por produto cadastrado).", "suave"));
+    const lp = el("ul", null, "lista");
+    tabela.precos.forEach((p) => {
       const li = el("li");
-      const principal = el("div", null, "principal");
-      principal.append(el("strong", sv.descricao),
-        el("span", dataBr(sv.criado_em) + (sv.pago_em ? " · pago em " + dataBr(sv.pago_em) : " · a receber"), "suave"));
-      li.append(principal, el("span", dinheiro(sv.valor_cent), "valor"));
-      if (!sv.pago_em) {
-        const pago = el("button", "Recebi", "botao pequeno secundario");
-        pago.type = "button";
-        pago.addEventListener("click", async () => {
-          pago.disabled = true;
-          try { await api("/servicos/" + sv.id + "/pago", "POST", {}); recarregar(); }
-          catch (erro) { recado(erro.message); pago.disabled = false; }
-        });
-        li.append(pago);
-      }
-      lista.append(li);
+      li.append(el("strong", p.descricao), el("span", dinheiro(p.valor_cent) + (p.por_unidade ? " por unidade" : ""), "valor"),
+        botaoPequeno("Excluir", async () => { await apiCentral("/precos/" + p.id + "/excluir", "POST", {}); recarregar(); }, "perigo"));
+      lp.append(li);
     });
-    raiz.append(lista);
+    const nd = el("input"); nd.placeholder = "Serviço (ex.: Cadastro por produto)"; nd.maxLength = 120;
+    const nv = el("input"); nv.placeholder = "Valor (R$)"; nv.inputMode = "decimal";
+    const nu = el("label"); const caixa = el("input"); caixa.type = "checkbox"; nu.append(caixa, " por unidade");
+    precos.append(lp, nd, nv, nu, botaoPequeno("Adicionar preço", async () => {
+      const cent = paraCentavos(nv.value);
+      if (!nd.value.trim() || !cent || cent <= 0) { recado("Informe o serviço e o valor."); return; }
+      await apiCentral("/precos", "POST", { descricao: nd.value, valor_cent: cent, por_unidade: caixa.checked });
+      recarregar();
+    }, ""));
+    raiz.append(precos);
     return raiz;
   }
 

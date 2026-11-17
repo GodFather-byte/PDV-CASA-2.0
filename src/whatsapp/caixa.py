@@ -83,7 +83,13 @@ def montar(banco, dia: str | None = None) -> dict:
         "sangrias_cent": int(sangrias or 0),
         "conferencias": conferencias,
         "perdas": perdas_recentes(banco),
+        "acabando": _acabando(banco),
     }
+
+
+def _acabando(banco) -> list[dict]:
+    from src.controllers.estoque_controller import acabando
+    return acabando(banco)
 
 
 def _dia_menos(dia: str, dias: int) -> str:
