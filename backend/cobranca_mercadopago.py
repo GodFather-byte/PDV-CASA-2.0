@@ -912,6 +912,15 @@ def _aplicar_dados(db: Session, dados: dict, evento_id: str | None, cobranca: Co
 def aplicar(db: Session, dados: dict, evento_id: str | None, *, confirmar: bool = True) -> str:
     pagamento_id = _id_pagamento(dados.get("id"))
     referencia = dados.get("external_reference")
+    if isinstance(referencia, str) and referencia.startswith("servico-"):     # serviço avulso da retaguarda
+        from backend.retaguarda import aplicar_pagamento_servico
+        if evento_id and db.get(Evento, evento_id):
+            return "repetido"
+        situacao = aplicar_pagamento_servico(db, dados)
+        _registrar_evento(db, evento_id, pagamento_id)
+        if confirmar:
+            db.commit()
+        return situacao
     cobranca = db.get(Cobranca, referencia) if isinstance(referencia, str) else None
     if cobranca is None:
         _registrar_evento(db, evento_id, pagamento_id)
