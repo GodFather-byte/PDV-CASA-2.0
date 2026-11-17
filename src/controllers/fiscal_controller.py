@@ -153,8 +153,16 @@ class FiscalController:
         if resposta.situacao is None:
             self._adiar(nota, resposta.mensagem or "Sem resposta do provedor fiscal.")
             return nota["situacao"]
+        if resposta.situacao == "contingencia":
+            # Emitida off-line: continua pendente (será transmitida), mas o cupom sai agora para o cliente.
+            from dataclasses import replace
+            self._aplicar(nota, replace(resposta, situacao="pendente"))
+            self._gravar(nota_id, contingencia_em=fmt.agora(), tentativas=0,
+                         proxima_tentativa=(fmt.agora_dt() + timedelta(minutes=2)).strftime("%Y-%m-%d %H:%M:%S"))
+            self._imprimir(nota_id)
+            return "pendente"
         situacao = self._aplicar(nota, resposta)
-        if situacao == "autorizada":
+        if situacao == "autorizada" and not nota["contingencia_em"]:    # a de contingência já foi impressa
             self._imprimir(nota_id)
         return situacao
 
@@ -191,9 +199,53 @@ class FiscalController:
         return feitas
 
     # ------------------------------------------------------------ ações do gerente
+    def testar_sefaz(self) -> str:
+        """Pergunta à SEFAZ se o serviço está no ar, com o certificado da loja. Devolve a mensagem para a tela."""
+        transmissor = self.transmissor()
+        if not hasattr(transmissor, "testar"):
+            raise ErroNegocio("O teste da SEFAZ é da emissão própria (com o provedor, o teste é no site dele).")
+        resposta = transmissor.testar()
+        if resposta.situacao != "ok":
+            raise ErroNegocio(resposta.mensagem or "A SEFAZ não respondeu. Confira a internet e tente de novo.")
+        return resposta.mensagem
+
+    def contingencias(self) -> dict:
+        """Notas emitidas em contingência ainda não autorizadas: quantas e desde quando (prazo: próximo dia útil)."""
+        linha = self.banco.um("""SELECT COUNT(*) AS n, MIN(contingencia_em) AS desde FROM nfce_notas
+                                  WHERE contingencia_em IS NOT NULL AND situacao = 'pendente'""")
+        return {"pendentes": int(linha["n"] or 0), "desde": linha["desde"]}
+
+    def inutilizar(self, nota_id: int, justificativa: str) -> str:
+        """Inutiliza na SEFAZ o número de uma nota rejeitada ou com erro que não será corrigida."""
+        nota = self.banco.um("SELECT * FROM nfce_notas WHERE id = ?", (nota_id,))
+        if nota is None or nota["situacao"] not in ("rejeitada", "erro") or not nota["numero"]:
+            raise ErroNegocio("Só se inutiliza o número de uma nota rejeitada (ou com erro) que já tem número.")
+        if nota["inutilizada_em"]:
+            raise ErroNegocio("Este número já foi inutilizado.")
+        return self.inutilizar_faixa(int(nota["serie"] or 1), int(nota["numero"]), int(nota["numero"]),
+                                     justificativa, nota_id)
+
+    def inutilizar_faixa(self, serie: int, inicio: int, fim: int, justificativa: str, nota_id: int | None = None) -> str:
+        """Inutiliza uma faixa de números da série (salto na numeração). Só na emissão própria."""
+        if not 15 <= len(" ".join((justificativa or "").split())) <= 255:
+            raise ErroNegocio("Escreva o motivo da inutilização (15 a 255 letras).")
+        transmissor = self.transmissor()
+        if not hasattr(transmissor, "inutilizar"):
+            raise ErroNegocio("A inutilização é feita pelo site do provedor fiscal (só a emissão própria faz por aqui).")
+        resposta = transmissor.inutilizar(serie, inicio, fim, justificativa)
+        if resposta.situacao != "inutilizada":
+            raise ErroNegocio(f"A SEFAZ não inutilizou: {resposta.mensagem or 'sem resposta, tente de novo.'}")
+        if nota_id is not None:
+            protocolo = (resposta.dados or {}).get("protocolo") or ""
+            self._gravar(nota_id, inutilizada_em=fmt.agora(),
+                         mensagem=f"Número inutilizado na SEFAZ (protocolo {protocolo}).".replace(" ()", "")[:300])
+        return "inutilizada"
+
     def reenviar(self, nota_id: int) -> str:
         """Depois de corrigir o cadastro: volta a nota rejeitada ou com erro para a fila e envia."""
         nota = self.banco.um("SELECT * FROM nfce_notas WHERE id = ?", (nota_id,))
+        if nota is not None and nota["inutilizada_em"]:
+            raise ErroNegocio("O número desta nota foi inutilizado: ela não pode ser reenviada.")
         if nota is None or nota["situacao"] not in ("rejeitada", "erro", "pendente"):
             raise ErroNegocio("Só nota rejeitada, com erro ou pendente pode ser reenviada.")
         self._gravar(nota_id, situacao="pendente", proxima_tentativa=None, tentativas=0)

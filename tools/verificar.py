@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-FUMACA = ("tests.test_caixa", "tests.test_propriedades_dinheiro", "tests.test_qt_trocar_forma",
+FUMACA = ("tests.test_caixa", "tests.test_propriedades_dinheiro", "tests.test_e2e_caixa", "tests.test_qt_trocar_forma",
           "tests.test_qt_pagamento_direto")
 IGNORAR = re.compile(r"^(\.ai/|docs/|.*\.md$)")
 

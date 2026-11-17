@@ -44,6 +44,11 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install --require-hashes -r requirements.txt -r requirements-build.txt
+      - name: Código já compilado (mesmo cache do "Gerar instalador")
+        uses: actions/cache@v4
+        with:
+          path: build/nuitka
+          key: nuitka-windows-py312-${{ hashFiles('src/**/*.py', 'tools/compilar_nuitka.py', 'requirements.txt', 'requirements-build.txt') }}
       - name: Inno Setup
         run: |
           $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"

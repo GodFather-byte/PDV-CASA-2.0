@@ -22,8 +22,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  compilar:
+    # O código de src/ é o mesmo nas edições: compila uma vez e guarda no cache (não em artifacts, que têm cota).
+    # Se o código não mudou desde a última versão, nem compila. Os jobs das edições só restauram.
+    name: Compilar o código (Nuitka, uma vez para as edições)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Dependências e Nuitka
+        run: |
+          python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements.txt -r requirements-build.txt
+
+      - name: Compilação guardada
+        id: guardada
+        uses: actions/cache@v4
+        with:
+          path: build/nuitka
+          key: nuitka-windows-py312-${{ hashFiles('src/**/*.py', 'tools/compilar_nuitka.py', 'requirements.txt', 'requirements-build.txt') }}
+
+      - name: Compilar (python -m tools.compilar_nuitka)
+        run: python -m tools.compilar_nuitka
+
   build:
     name: Programa e instalador
+    needs: compilar
     runs-on: windows-latest
     timeout-minutes: 60          # o Nuitka compila o código (~20 min); um programa travado ainda vira falha, não horas
     defaults:
@@ -61,6 +96,12 @@ jobs:
           }
           if (-not (Test-Path $iscc)) { throw "Inno Setup não foi encontrado depois da instalação." }
           Write-Host "Inno Setup: $iscc"
+
+      - name: Restaurar o código já compilado (job Compilar)
+        uses: actions/cache/restore@v4
+        with:
+          path: build/nuitka
+          key: nuitka-windows-py312-${{ hashFiles('src/**/*.py', 'tools/compilar_nuitka.py', 'requirements.txt', 'requirements-build.txt') }}
 
       - name: Gerar o programa e o instalador (python build_pdv.py)
         run: python build_pdv.py
@@ -352,6 +393,7 @@ jobs:
   # atualização por cima com o programa aberto.
   adega:
     name: Programa e instalador (Will Adega)
+    needs: compilar
     runs-on: windows-latest
     timeout-minutes: 60          # inclui a compilação com o Nuitka
     defaults:
@@ -388,6 +430,12 @@ jobs:
             choco install innosetup -y --no-progress
           }
           if (-not (Test-Path $iscc)) { throw "Inno Setup não foi encontrado depois da instalação." }
+
+      - name: Restaurar o código já compilado (job Compilar)
+        uses: actions/cache/restore@v4
+        with:
+          path: build/nuitka
+          key: nuitka-windows-py312-${{ hashFiles('src/**/*.py', 'tools/compilar_nuitka.py', 'requirements.txt', 'requirements-build.txt') }}
 
       - name: Gerar o programa e o instalador (python build_pdv.py --edicao willadega)
         run: python build_pdv.py --edicao willadega

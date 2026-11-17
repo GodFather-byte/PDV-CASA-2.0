@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
-from tests.test_nuvem import TestClient, nuvem, preparar_lojas, cabecalho, ADMIN
+from tests.test_nuvem import TestClient, nuvem, preparar_lojas, cabecalho, ADMIN, TOKENS
 from backend import central_fornecedor as central, licencas_fornecedor as emissao, ponte
 from backend import cobranca_mercadopago as cobranca
 from src.core import ed25519, licenca
@@ -49,6 +49,40 @@ class TesteCentralFornecedor(unittest.TestCase):
 
     def post(self, rota, dados):
         return self.http.post("/v1/fornecedor" + rota, json=dados, headers={"X-Central-CSRF": self.csrf})
+
+    def test_lojas_em_teste_sem_vender_aparecem_para_ligar(self):
+        from backend.painel import PainelVenda
+        lojas = sorted(TOKENS)
+        nova, paga = lojas[0], lojas[1]
+        hoje = date.today()
+        with nuvem.SessionLocal() as db:
+            for chave in (nova, paga):
+                loja = db.query(nuvem.Loja).filter_by(chave_loja=chave).one()
+                loja.criada_em = (hoje - timedelta(days=5)).isoformat() + " 10:00:00"
+                loja.licenca_ate = (hoje + timedelta(days=2)).isoformat()
+            db.add(cobranca.Plano(id="p-teste", chave_loja=paga, valor_cent=9900, email_pagador="x@exemplo.com",
+                                  criado_em=central.agora()))
+            db.add(cobranca.Cobranca(id="c-teste", plano="p-teste", chave_loja=paga, chave_vencimento="p-teste-1",
+                                     valor_cent=9900, vencimento=hoje.isoformat(), status="aprovada", consultada_em=central.agora(),
+                                     criada_em=central.agora()))
+            db.add(PainelVenda(chave_loja=paga, uuid=str(uuid4()), dia=(hoje - timedelta(days=1)).isoformat(),
+                               status="fechada", modalidade="balcao", dados="{}", recebida_em=central.agora()))
+            db.commit()
+        self.addCleanup(self._limpar_vendas)
+        r = self.http.get("/v1/fornecedor/lojas").json()
+        por_chave = {l["chave"]: l for l in r["lojas"]}
+        self.assertTrue(por_chave[nova]["em_teste"])
+        self.assertTrue(por_chave[nova]["teste_parado"])                 # nunca vendeu
+        self.assertIsNone(por_chave[nova]["uso"]["ultima_venda"])
+        self.assertFalse(por_chave[paga]["em_teste"])                    # já pagou pelo Mercado Pago
+        self.assertEqual(por_chave[paga]["uso"]["vendas_7d"], 1)
+        self.assertEqual((r["resumo"]["em_teste"], r["resumo"]["teste_parado"]), (1, 1))
+
+    def _limpar_vendas(self):
+        from backend.painel import PainelVenda
+        with nuvem.SessionLocal() as db:
+            db.query(PainelVenda).delete()
+            db.commit()
 
     def test_cookie_protegido_hash_no_banco_e_logout_revoga(self):
         valor = self.http.cookies.get(central.COOKIE)

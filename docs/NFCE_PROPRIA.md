@@ -53,11 +53,30 @@ banco:
 | `<chave>-nfe.xml` | O nfeProc: guardar por 5 anos |
 | `<chave>-cancelamento.xml` | O evento de cancelamento |
 
+## Contingência e inutilização
+
+- **Contingência off-line:** se a SEFAZ não responde ao status antes do primeiro envio de uma nota, ela sai em
+  contingência (tpEmis 9) com o QR Code v3 assinado pelo A1 (RSA-SHA1 de `chave|3|tpAmb|dia|vNF|tp_idDest|idDest`).
+  O cupom sai na hora com "EMITIDA EM CONTINGÊNCIA / Pendente de autorização" e a nota é transmitida sozinha, com o
+  mesmo XML, quando a SEFAZ volta. Prazo legal: até o fim do primeiro dia útil seguinte. A tela Notas fiscais mostra
+  quantas estão em contingência. Desligar: `nfce_contingencia = 0`.
+- **Inutilização:** na tela Notas fiscais, selecione a nota rejeitada que não será corrigida > "Inutilizar número"
+  (motivo de 15 a 255 letras). O protocolo fica na mensagem da nota e o XML em `nfce/<ambiente>/`.
+
+## Roteiro da homologação (piloto DeliciOz)
+
+1. Com o contador: credenciamento da NFC-e na SEFAZ-SP, IE, série e último número usado, CFOP/CSOSN dos produtos.
+2. No caixa: Configurações > Integrações > NFC-e > emissão própria, certificado A1 (.pfx) e senha digitados ali
+   (nunca mandados por chat), código do município, número do endereço.
+3. Notas fiscais > **Testar SEFAZ**. Esperado: "SEFAZ-SP em operação (107)". Erro de SSL: avisar o suporte (cadeia
+   ICP-Brasil).
+4. Ligar em **homologação**, fazer 3 vendas (dinheiro, cartão, Pix) e uma com CPF; conferir "Autorizada" e o cupom.
+5. Cancelar uma delas (até 30 min) e conferir "Cancelada".
+6. Tirar o cabo de rede, vender, conferir o cupom de contingência; religar e conferir que vira "Autorizada".
+7. Contador conferiu: ligar em **produção** e acertar `nfce_proximo_numero_producao` com o último número + 1.
+
 ## Ainda falta
 
-- **Contingência off-line** (tpEmis 9, QR Code v3 assinado). Antes de fazer, confirmar no Manual do DANFE NFC-e v6
-  quais campos a assinatura cobre.
-- **Inutilização** de números que nunca viraram nota.
 - **Cópia dos XMLs na nuvem.**
 - **IBS/CBS** na emissão própria. É obrigatório para o Simples a partir de 2027; o regime normal já deveria informar.
 - **Primeiro teste real em homologação.** Se aparecer erro de SSL, é preciso incluir a cadeia de certificados

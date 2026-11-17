@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 54
+VERSAO_ESQUEMA = 55
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -183,7 +183,9 @@ TABELAS = [
         autorizada_em TEXT,
         cancelada_em TEXT,
         justificativa TEXT,
-        impressa INTEGER NOT NULL DEFAULT 0
+        impressa INTEGER NOT NULL DEFAULT 0,
+        contingencia_em TEXT,
+        inutilizada_em TEXT
     )""",
     "CREATE INDEX IF NOT EXISTS ix_nfce_situacao ON nfce_notas(situacao)",
     # Pix integrado (Mercado Pago): cada QR Code gerado no caixa. O pagamento só entra na venda depois que o banco
@@ -1175,6 +1177,9 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v55: NFC-e em contingência off-line (impressa antes de autorizar) e números inutilizados na SEFAZ.
+    55: [("coluna", "nfce_notas", "contingencia_em", "TEXT"),
+         ("coluna", "nfce_notas", "inutilizada_em", "TEXT")],
     # v54: drinks da garota descontados no acerto (a tabela consumos_garotas nasce em TABELAS).
     54: [("coluna", "acertos_garotas", "consumo_cent", "INTEGER NOT NULL DEFAULT 0")],
     # v52: NFC-e (Will Fiscal). Dados fiscais do produto e da forma de pagamento; a tabela nfce_notas nasce em TABELAS.

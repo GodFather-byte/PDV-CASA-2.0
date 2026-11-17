@@ -19,6 +19,15 @@ SITUACOES = {
     "pendente": "Aguardando envio", "processando": "Na SEFAZ", "autorizada": "Autorizada",
     "rejeitada": "Rejeitada", "erro": "Cadastro incompleto", "cancelada": "Cancelada",
 }
+
+
+def _situacao(nota) -> str:
+    chaves = nota.keys() if hasattr(nota, "keys") else ()
+    if "inutilizada_em" in chaves and nota["inutilizada_em"]:
+        return "Número inutilizado"
+    if "contingencia_em" in chaves and nota["contingencia_em"] and nota["situacao"] == "pendente":
+        return "Contingência (a transmitir)"
+    return SITUACOES.get(nota["situacao"], nota["situacao"])
 AMBIENTES = {"desligada": "Desligada", "homologacao": "Homologação (teste, sem valor fiscal)",
              "producao": "Produção (vale como nota)"}
 
@@ -63,6 +72,8 @@ class JanelaNotasFiscais(QDialog):
             ("btn_cpf", "CPF na nota", self.informar_cpf),
             ("btn_reimprimir", "Reimprimir cupom fiscal", self.reimprimir),
             ("btn_cancelar", "Cancelar nota", self.cancelar),
+            ("btn_inutilizar", "Inutilizar número", self.inutilizar),
+            ("btn_testar", "Testar SEFAZ", self.testar_sefaz),
             ("btn_ligar", "Ligar / desligar emissão", self.ligar),
             ("btn_fechar", "Fechar (Esc)", self.close),
         )):
@@ -79,6 +90,10 @@ class JanelaNotasFiscais(QDialog):
         ambiente = self.fiscal.ambiente() or "desligada"
         resumo = self.fiscal.resumo()
         partes = [f"{SITUACOES[s]}: {resumo[s]}" for s in SITUACOES if resumo.get(s)]
+        cont = self.fiscal.contingencias()
+        if cont["pendentes"]:
+            partes.append(f"{cont['pendentes']} em contingência desde {fmt.fmt_datahora(cont['desde'])} "
+                          "(transmissão automática; prazo: próximo dia útil)")
         self.estado.setText(f"Emissão: {AMBIENTES.get(ambiente, ambiente)}"
                             + (" • " + " • ".join(partes) if partes else ""))
         try:
@@ -89,7 +104,7 @@ class JanelaNotasFiscais(QDialog):
         self.grade.setRowCount(len(notas))
         for linha, nota in enumerate(notas):
             valores = (nota["cupom"] or "", fmt.fmt_datahora(nota["fechada_em"]), fmt.fmt_num(nota["total_cent"]),
-                       SITUACOES.get(nota["situacao"], nota["situacao"]),
+                       _situacao(nota),
                        f"{nota['numero'] or ''}/{nota['serie'] or ''}".strip("/"), nota["cpf"] or "",
                        nota["tentativas"], nota["mensagem"] or "")
             for coluna, valor in enumerate(valores):
@@ -145,6 +160,23 @@ class JanelaNotasFiscais(QDialog):
             "Motivo do cancelamento (15 a 255 letras). Só dá até 30 minutos depois da autorização:")
         if ok and self._executar(self.fiscal.cancelar, nota_id, motivo):
             self.mensagem.setText("Nota cancelada na SEFAZ.")
+
+    def testar_sefaz(self):
+        mensagem = self._executar(self.fiscal.testar_sefaz)
+        if mensagem:
+            self.mensagem.setText(mensagem)
+            QMessageBox.information(self, "Teste da SEFAZ", mensagem)
+
+    def inutilizar(self):
+        nota_id = self._selecionada()
+        if nota_id is None:
+            return
+        motivo, ok = QInputDialog.getText(
+            self, "Inutilizar número da NFC-e",
+            "Para nota rejeitada que não será corrigida: o número fica registrado na SEFAZ como não usado.\n"
+            "Motivo (15 a 255 letras):")
+        if ok and self._executar(self.fiscal.inutilizar, nota_id, motivo):
+            self.mensagem.setText("Número inutilizado na SEFAZ.")
 
     def ligar(self):
         opcoes = list(AMBIENTES.values())
