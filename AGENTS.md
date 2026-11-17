@@ -25,6 +25,12 @@ python -m unittest discover -s tests       # suíte inteira
 python -m unittest tests.test_caixa        # um arquivo só (prefira isto durante o trabalho)
 ```
 
+## Verificar antes do commit
+
+`python -m tools.verificar` (skill `.claude/skills/verify`): fumaça do caixa, testes do que mudou e `node --check`.
+Cole a linha `Verificado: ...` no commit. Revisão segue o `REVIEW.md` da main. Três tentativas sem passar: pare e
+explique ao dono. Teste instável não se pula nem se repete até passar.
+
 ## Erros do caixa
 
 O caixa grava a exceção localmente e sobe no lote da nuvem (não é uma chamada à parte). Para ver o que já chegou, sem imprimir token, senha ou a URL do banco:

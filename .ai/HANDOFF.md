@@ -1,3 +1,13 @@
+# Handoff (17/11/2026, 08h): verificação (branch `verificacao`)
+
+- `python -m tools.verificar`: fumaça do caixa (test_caixa, propriedades, troca de forma, recebimento direto) +
+  testes que importam o que mudou + `node --check`; `--telas` fotografa; imprime `Verificado: ...` para o commit.
+- Skill `.claude/skills/verify/SKILL.md` (como verificar e quando parar), `REVIEW.md` na raiz (regras + lista por
+  gatilho tirada de bugs reais; ler sempre o da main).
+- `tests/test_propriedades_dinheiro.py`: vendas sorteadas com semente fixa (pago − troco = total, estoque baixa o
+  vendido, cancelar devolve tudo, dividir soma o que falta, centavos ida e volta). Sem dependência nova;
+  `WILLPDV_CASOS=500` para sortear mais. Com 600 casos não achou furo.
+
 # Handoff (17/11/2026, manhã): 1.14.11, serviços do fornecedor e estoque no resumo (branch `melhorias-vendas`)
 
 - Combos e atacado já existiam (`produto_controller.criar_combo`, campos `atacado_qtd`/`preco_atacado_cent`); não mexi.
