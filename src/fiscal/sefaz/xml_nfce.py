@@ -106,8 +106,9 @@ def _sub(pai, nome: str, texto=None):
 
 def montar(dados: dict, emit: Emitente, num: Numeracao, ambiente: str, tp_emis: int = 1,
            resp_tec: ResponsavelTecnico | None = None, ver_proc: str = "WillPDV",
-           contingencia: tuple[datetime, str] | None = None) -> tuple[etree._Element, str]:
-    """Elemento <NFe> sem assinatura (com infNFeSupl) e a chave de acesso."""
+           contingencia: tuple[datetime, str] | None = None, assinar_qrcode=None) -> tuple[etree._Element, str]:
+    """Elemento <NFe> sem assinatura (com infNFeSupl) e a chave de acesso. Em contingência (`tp_emis=9`) exige
+    `contingencia=(quando, justificativa)` e `assinar_qrcode` (bytes -> assinatura RSA-SHA1 do certificado)."""
     if ambiente not in TP_AMB:
         raise ValueError("Ambiente da NFC-e inválido.")
     emit.conferir()
@@ -229,7 +230,13 @@ def montar(dados: dict, emit: Emitente, num: Numeracao, ambiente: str, tp_emis: 
         _sub(resp, "fone", _digitos(resp_tec.fone))
 
     supl = _sub(nfe, "infNFeSupl")
-    _sub(supl, "qrCode", qrcode.url_online(chave, ambiente))
+    if tp_emis == 9:
+        if assinar_qrcode is None:
+            raise ErroFiscal("NFC-e em contingência precisa do certificado para assinar o QR Code.")
+        _sub(supl, "qrCode", qrcode.url_offline(chave, ambiente, emissao.day, reais(v_nf),
+                                                dados.get("cpf_destinatario") or "", assinar_qrcode))
+    else:
+        _sub(supl, "qrCode", qrcode.url_online(chave, ambiente))
     _sub(supl, "urlChave", qrcode.url_chave(ambiente))
     return nfe, chave
 

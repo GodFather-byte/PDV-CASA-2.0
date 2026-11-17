@@ -29,7 +29,9 @@ SERVICOS = {
     "autorizacao": ("NFeAutorizacao4.asmx", "NFeAutorizacao4", "nfeAutorizacaoLote"),
     "consulta": ("NFeConsultaProtocolo4.asmx", "NFeConsultaProtocolo4", "nfeConsultaNF"),
     "evento": ("NFeRecepcaoEvento4.asmx", "NFeRecepcaoEvento4", "nfeRecepcaoEvento"),
+    "inutilizacao": ("NFeInutilizacao4.asmx", "NFeInutilizacao4", "nfeInutilizacaoNF"),
 }
+INUTILIZADA = {"102"}                        # inutilização de número homologada
 EVENTO_REGISTRADO = {"135", "155"}           # 155: cancelamento fora do prazo (homologado)
 AUTORIZADA = {"100", "150"}                  # 150: autorizada fora do prazo
 EM_PROCESSAMENTO = {"103", "105"}            # lote recebido / em processamento: consultar depois
@@ -116,6 +118,32 @@ def evento_cancelamento(chave: str, cnpj: str, protocolo: str, justificativa: st
     return envio
 
 
+def corpo_inutilizacao(cnpj: str, serie: int, inicio: int, fim: int, justificativa: str, ambiente: str, ano: int,
+                       certificado: Certificado, modelo: str = "65"):
+    """<inutNFe> assinado: avisa a SEFAZ que os números de `inicio` a `fim` da série não serão usados.
+    Id = ID + cUF + AA + CNPJ + modelo + série(3) + início(9) + fim(9)."""
+    import re
+    from src.fiscal.sefaz.assinatura import assinar
+    cnpj = re.sub(r"\D", "", cnpj or "")
+    just = " ".join((justificativa or "").split())
+    if len(cnpj) != 14:
+        raise ValueError("CNPJ do emitente inválido.")
+    if not (0 <= int(serie) <= 999 and 1 <= int(inicio) <= int(fim) <= 999_999_999):
+        raise ValueError("Faixa de números inválida.")
+    if not 15 <= len(just) <= 255:
+        raise ValueError("A justificativa da inutilização precisa ter de 15 a 255 letras.")
+    aa = f"{int(ano) % 100:02d}"
+    inut = _no("inutNFe", versao=VERSAO)
+    inf = _sub(inut, "infInut")
+    inf.set("Id", f"ID{UF_SP}{aa}{cnpj}{modelo}{int(serie):03d}{int(inicio):09d}{int(fim):09d}")
+    for nome, valor in (("tpAmb", TP_AMB[ambiente]), ("xServ", "INUTILIZAR"), ("cUF", UF_SP), ("ano", aa),
+                        ("CNPJ", cnpj), ("mod", modelo), ("serie", str(int(serie))), ("nNFIni", str(int(inicio))),
+                        ("nNFFin", str(int(fim))), ("xJust", just)):
+        _sub(inf, nome, valor)
+    assinar(inut, inf, certificado)
+    return inut
+
+
 def _achar(raiz, nome: str):
     return raiz.find(f".//{{{NS}}}{nome}")
 
@@ -139,6 +167,14 @@ def ler_retorno(conteudo: bytes, http: int = 200) -> Retorno:
         return Retorno(situacao, cstat, (inf.findtext(f"{{{NS}}}xMotivo") or "").strip(),
                        (inf.findtext(f"{{{NS}}}nProt") or "").strip(), (inf.findtext(f"{{{NS}}}dhRegEvento") or "").strip(),
                        etree.tostring(ret_evento, encoding="utf-8"), http)
+    ret_inut = _achar(raiz, "retInutNFe")
+    if ret_inut is not None:
+        inf = ret_inut.find(f"{{{NS}}}infInut")
+        cstat = (inf.findtext(f"{{{NS}}}cStat") or "").strip()
+        return Retorno("inutilizada" if cstat in INUTILIZADA else "rejeitada", cstat,
+                       (inf.findtext(f"{{{NS}}}xMotivo") or "").strip(), (inf.findtext(f"{{{NS}}}nProt") or "").strip(),
+                       (inf.findtext(f"{{{NS}}}dhRecbto") or "").strip(), etree.tostring(ret_inut, encoding="utf-8"),
+                       http)
     prot = _achar(raiz, "protNFe")
     if prot is not None:
         inf = prot.find(f"{{{NS}}}infProt")
@@ -190,6 +226,10 @@ class ClienteSefaz:
     def cancelar(self, chave: str, cnpj: str, protocolo: str, justificativa: str, quando) -> Retorno:
         return self._postar("evento", evento_cancelamento(chave, cnpj, protocolo, justificativa, self.ambiente, quando,
                                                           self.certificado))
+
+    def inutilizar(self, cnpj: str, serie: int, inicio: int, fim: int, justificativa: str, ano: int) -> Retorno:
+        return self._postar("inutilizacao", corpo_inutilizacao(cnpj, serie, inicio, fim, justificativa, self.ambiente,
+                                                               ano, self.certificado))
 
 
 def nfe_proc(nfe_assinada, xml_protocolo: bytes) -> bytes:

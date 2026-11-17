@@ -80,6 +80,9 @@ def texto(banco, nota: dict, largura: int | None = None) -> tuple[str, str]:
     a += _centro("DANFE NFC-e - Documento Auxiliar da Nota Fiscal de Consumidor Eletrônica", largura)
     if nota["ambiente"] == "homologacao":
         a += _centro("EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO - SEM VALOR FISCAL", largura)
+    if _em_contingencia(nota):
+        a += _centro("EMITIDA EM CONTINGÊNCIA", largura)
+        a += _centro("Pendente de autorização", largura)
     a.append(traco)
     a.append(_linha("Item  Descrição", "Total", largura))
     for n, item in enumerate(itens, start=1):
@@ -118,11 +121,18 @@ def texto(banco, nota: dict, largura: int | None = None) -> tuple[str, str]:
     a += _centro(f"NFC-e nº {nota.get('numero') or '-'}  Série {nota.get('serie') or '-'}  "
                  f"{fmt.fmt_datahora(nota.get('autorizada_em'))}",
                  largura)
+    if _em_contingencia(nota):
+        a += _centro("EMITIDA EM CONTINGÊNCIA", largura)
+        a += _centro("Pendente de autorização", largura)
     a += _centro("Consulta via leitor de QR Code", largura)
     depois = [""]
     if nota["ambiente"] == "homologacao":
         depois += _centro("SEM VALOR FISCAL", largura)
     return "\n".join(a), "\n".join(depois)
+
+
+def _em_contingencia(nota: dict) -> bool:
+    return bool(nota.get("contingencia_em")) and not nota.get("autorizada_em")
 
 
 def escpos(banco, nota: dict) -> bytes:

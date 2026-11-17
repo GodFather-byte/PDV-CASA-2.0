@@ -285,6 +285,17 @@ class ClienteFalso:
 
     def __init__(self, *respostas):
         self.respostas, self.enviadas, self.consultas, self.cancelamentos = list(respostas), [], [], []
+        self.status_respostas, self.inutilizacoes = [], []
+
+    def status(self):
+        if self.status_respostas:
+            return self.status_respostas.pop(0)
+        return cliente.Retorno("em_servico", "107", "Servico em Operacao")
+
+    def inutilizar(self, cnpj, serie, inicio, fim, justificativa, ano):
+        self.inutilizacoes.append((cnpj, serie, inicio, fim, justificativa, ano))
+        return self._proxima(cliente.Retorno("inutilizada", "102", "Inutilizacao de numero homologado",
+                                             "135260000000999"))
 
     def _proxima(self, padrao):
         return self.respostas.pop(0) if self.respostas else padrao
@@ -370,6 +381,61 @@ class TestEmissaoPropriaNaFila(BaseNfce):
         self.fiscal.processar()
         self.assertEqual(self.nota(vid2)["situacao"], "erro")
         self.assertIn("código do município", self.nota(vid2)["mensagem"])
+
+    def test_sefaz_fora_emite_em_contingencia_imprime_e_transmite_o_mesmo_xml_depois(self):
+        self.sefaz.status_respostas = [cliente.Retorno(None, motivo="Sem conexão com a SEFAZ (ConnectionError).")]
+        self.banco.cfg_set("nfce_imprimir", "1")
+        vid = self.fechar((self.skol, 2))
+        self.fiscal.processar()
+        nota = self.nota(vid)
+        self.assertEqual((nota["situacao"], nota["numero"]), ("pendente", "41"))
+        self.assertTrue(nota["contingencia_em"])
+        self.assertEqual(nota["chave"][34], "9")
+        self.assertEqual(self.sefaz.enviadas, [])                         # nada foi enviado on-line
+        self.assertIn("|3|2|", nota["qrcode_url"])
+        self.assertEqual(len(nota["qrcode_url"].split("?p=")[1].split("|")), 8)
+        self.assertEqual(nota["impressa"], 1)                             # cupom saiu na hora
+        from src.fiscal import danfe
+        self.assertIn("EMITIDA EM CONTINGÊNCIA", danfe.texto(self.banco, dict(nota))[0])
+        self.assertEqual(self.fiscal.contingencias()["pendentes"], 1)
+        impressos = self.banco.valor("SELECT COUNT(*) FROM fila_impressao")
+        # a internet voltou: consulta (não consta), envia o XML guardado e autoriza sem reimprimir
+        self.banco.executar("UPDATE nfce_notas SET proxima_tentativa = NULL")
+        self.fiscal.processar()
+        depois = self.nota(vid)
+        self.assertEqual((depois["situacao"], depois["chave"]), ("autorizada", nota["chave"]))
+        enviada = self.sefaz.enviadas[0]
+        self.assertEqual(enviada.find(f"{{{NS}}}infNFe").get("Id"), "NFe" + nota["chave"])
+        self.assertEqual(enviada.findtext(f".//{{{NS}}}tpEmis"), "9")
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM fila_impressao"), impressos)
+        self.assertEqual(self.fiscal.contingencias()["pendentes"], 0)
+        self.assertEqual(self.banco.cfg("nfce_proximo_numero_homologacao"), "42")
+
+    def test_contingencia_desligada_continua_tentando_on_line(self):
+        self.banco.cfg_set("nfce_contingencia", "0")
+        self.sefaz.status_respostas = [cliente.Retorno(None, motivo="Sem conexão")]
+        vid = self.fechar((self.skol, 1))
+        self.fiscal.processar()
+        nota = self.nota(vid)
+        self.assertFalse(nota["contingencia_em"])
+        self.assertEqual(nota["chave"][34], "1")
+
+    def test_numero_de_nota_rejeitada_e_inutilizado_e_nao_volta_para_a_fila(self):
+        self.sefaz.respostas = [cliente.Retorno("rejeitada", "778", "Informado NCM inexistente")]
+        vid = self.fechar((self.skol, 1))
+        self.fiscal.processar()
+        nota = self.nota(vid)
+        with self.assertRaisesRegex(ErroNegocio, "15 a 255"):
+            self.fiscal.inutilizar(nota["id"], "curto")
+        self.assertEqual(self.fiscal.inutilizar(nota["id"], "Nota rejeitada que nao sera corrigida"), "inutilizada")
+        self.assertEqual(self.sefaz.inutilizacoes[0][1:4], (1, 41, 41))
+        nota = self.nota(vid)
+        self.assertTrue(nota["inutilizada_em"])
+        self.assertIn("135260000000999", nota["mensagem"])
+        with self.assertRaisesRegex(ErroNegocio, "inutilizado"):
+            self.fiscal.reenviar(nota["id"])
+        with self.assertRaisesRegex(ErroNegocio, "já foi inutilizado"):
+            self.fiscal.inutilizar(nota["id"], "Nota rejeitada que nao sera corrigida")
 
     def test_ligar_exige_certificado_e_dados_da_loja(self):
         fiscal = FiscalController(self.banco)

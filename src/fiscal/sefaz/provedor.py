@@ -7,9 +7,18 @@ reenviar (nunca gasta dois números com a mesma venda, nunca autoriza duas vezes
 
 XMLs: a nota assinada e, depois de autorizada, o nfeProc (nota + protocolo) ficam em `nfce/<ambiente>/` ao lado do
 banco. A loja é obrigada a guardar o nfeProc por 5 anos.
+
+Contingência off-line (tpEmis 9): se a SEFAZ não responde ao status ANTES do primeiro envio da nota, ela é gerada em
+contingência (QR Code v3 assinado), impressa na hora e transmitida depois, sempre o MESMO XML assinado (prazo legal:
+até o primeiro dia útil seguinte). Nota que já foi enviada on-line nunca vira contingência (evita duas notas da mesma
+venda). Liga/desliga em `nfce_contingencia` (padrão ligado).
+
+Inutilização: número que não vai ser usado (nota rejeitada que não será corrigida, salto na numeração) é comunicado
+à SEFAZ com `inutilizar`.
 """
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from lxml import etree
@@ -25,6 +34,8 @@ from src.fiscal.sefaz.assinatura import Certificado, ErroCertificado, assinar
 NAO_CONSTA = {"217"}                          # NF-e não consta na base da SEFAZ: pode enviar
 DUPLICIDADE = {"204", "539"}                  # já autorizada com essa chave/número: consultar
 CRT = {"simples_nacional": "1", "mei": "4", "lucro_presumido": "3", "lucro_real": "3"}
+JUSTIFICATIVA_CONTINGENCIA = "SEFAZ sem resposta: NFC-e emitida em contingencia off-line"
+STATUS_VALIDO_SEG = 120                       # status "em serviço" vale 2 min (não consulta a cada nota)
 
 
 class EmissaoPropria:
@@ -94,6 +105,64 @@ class EmissaoPropria:
             dados["caminho_xml_nota_fiscal"] = str(proc)
         return Resposta("autorizada", f"{ret.cstat} - {ret.motivo}".strip(" -"), 200, dados)
 
+    # ------------------------------------------------------------ contingência
+    _online_ate = 0.0
+
+    def _sefaz_fora(self, cliente) -> bool:
+        """A SEFAZ não respondeu ao status (rede, internet, SEFAZ fora). Sem `status` no cliente: considera no ar."""
+        if not self.banco.cfg_bool("nfce_contingencia", True) or not hasattr(cliente, "status"):
+            return False
+        if time.monotonic() < self._online_ate:
+            return False
+        ret = cliente.status()
+        if ret.situacao is None:
+            return True
+        self._online_ate = time.monotonic() + STATUS_VALIDO_SEG
+        return False
+
+    def _emitir_contingencia(self, nota, dados: dict) -> Resposta:
+        serie = int(nota["serie"] or self.banco.cfg_int("nfce_serie", 1))
+        numero = self._proximo_numero()
+        from src.versao import VERSAO
+        cert = self.certificado()
+        nfe, chave = xml_nfce.montar(dados, self.emitente(), xml_nfce.Numeracao(serie, numero,
+                                                                                chave_mod.codigo_numerico(numero)),
+                                     self.ambiente, tp_emis=9, resp_tec=self.responsavel(), ver_proc=f"WillPDV {VERSAO}",
+                                     contingencia=(fmt.agora_dt().astimezone(), JUSTIFICATIVA_CONTINGENCIA),
+                                     assinar_qrcode=cert.assinar_bytes)
+        assinar(nfe, nfe.find(f"{{{xml_nfce.NS}}}infNFe"), cert)
+        self._arquivo(chave, "assinada").write_bytes(xml_nfce.texto(nfe))
+        self.banco.executar("UPDATE nfce_notas SET numero = ?, serie = ?, chave = ? WHERE id = ?",
+                            (str(numero), str(serie), chave, nota["id"]))
+        qr = nfe.findtext(f"{{{xml_nfce.NS}}}infNFeSupl/{{{xml_nfce.NS}}}qrCode")
+        return Resposta("contingencia", "SEFAZ sem resposta: emitida em contingência off-line. Será transmitida sozinha "
+                        "quando a internet voltar (prazo: próximo dia útil).", 200,
+                        {"numero": numero, "serie": serie, "chave_nfe": chave, "qrcode_url": qr,
+                         "url_consulta_nf": qrcode.url_chave(self.ambiente)})
+
+    def _transmitir_contingencia(self, nota, cliente) -> Resposta:
+        """Nota de contingência: manda o XML assinado na emissão (nunca remonta: o papel já foi entregue)."""
+        chave = nota["chave"]
+        ret = cliente.consultar(chave)
+        if ret.situacao == "autorizada":
+            return self._concluir(chave, nota["numero"], nota["serie"], ret)
+        if ret.situacao is None:
+            return Resposta(None, "Contingência: aguardando a SEFAZ voltar. " + (ret.motivo or ""))
+        assinada = self._arquivo(chave, "assinada")
+        if not assinada.exists():
+            return Resposta("erro", "XML da nota de contingência não encontrado: não dá para transmitir.")
+        nfe = etree.parse(str(assinada)).getroot()
+        ret = cliente.autorizar(nfe)
+        if ret.situacao == "rejeitada" and ret.cstat in DUPLICIDADE:
+            ret = cliente.consultar(chave)
+        if ret.situacao == "autorizada":
+            return self._concluir(chave, nota["numero"], nota["serie"], ret)
+        if ret.situacao is None:
+            return Resposta(None, "Contingência: aguardando a SEFAZ voltar. " + (ret.motivo or ""))
+        return Resposta("rejeitada", f"{ret.cstat} - {ret.motivo}", 200,
+                        {"numero": nota["numero"], "serie": nota["serie"], "chave_nfe": chave,
+                         "status_sefaz": ret.cstat})
+
     # ------------------------------------------------------------ interface do provedor
     def emitir(self, ref: str, dados: dict) -> Resposta:
         nota = self.banco.um("SELECT * FROM nfce_notas WHERE ref = ?", (ref,))
@@ -101,6 +170,10 @@ class EmissaoPropria:
             return Resposta("erro", "Nota não encontrada na fila.")
         try:
             cliente = self.cliente()
+            if nota["chave"] and nota["chave"][34] == "9":   # emitida em contingência: só transmitir
+                return self._transmitir_contingencia(nota, cliente)
+            if not nota["chave"] and self._sefaz_fora(cliente):
+                return self._emitir_contingencia(nota, dados)
             if nota["chave"]:                               # já foi enviada: a SEFAZ tem essa nota?
                 ret = cliente.consultar(nota["chave"])
                 if ret.situacao == "autorizada":
@@ -163,6 +236,20 @@ class EmissaoPropria:
             if ret.xml_protocolo:
                 self._arquivo(nota["chave"], "cancelamento").write_bytes(ret.xml_protocolo)
             return Resposta("cancelada", f"{ret.cstat} - {ret.motivo}", 200, {"status_sefaz": ret.cstat})
+        return Resposta(None if ret.situacao is None else "erro", f"{ret.cstat} - {ret.motivo}".strip(" -"))
+
+    def inutilizar(self, serie: int, inicio: int, fim: int, justificativa: str) -> Resposta:
+        """Comunica à SEFAZ que os números de `inicio` a `fim` da série não serão usados."""
+        try:
+            ret = self.cliente().inutilizar(self.emitente().cnpj, int(serie), int(inicio), int(fim), justificativa,
+                                            fmt.agora_dt().year)
+        except (ErroCertificado, ErroFiscal, ValueError) as erro:
+            return Resposta("erro", str(erro))
+        if ret.situacao == "inutilizada":
+            self.pasta.mkdir(parents=True, exist_ok=True)
+            if ret.xml_protocolo:
+                (self.pasta / f"inutilizacao-{int(serie):03d}-{int(inicio)}-{int(fim)}.xml").write_bytes(ret.xml_protocolo)
+            return Resposta("inutilizada", f"{ret.cstat} - {ret.motivo}", 200, {"protocolo": ret.protocolo})
         return Resposta(None if ret.situacao is None else "erro", f"{ret.cstat} - {ret.motivo}".strip(" -"))
 
     def _protocolo(self, chave: str) -> str:
