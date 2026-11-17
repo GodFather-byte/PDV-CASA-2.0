@@ -2,12 +2,13 @@
 
     python build_pdv.py                  -> dist/WillPDV/WillPDV.exe  e  instalador/saida/WillPDV-Setup-<versão>.exe
     python build_pdv.py --sem-instalador -> só o executável
-    python build_pdv.py --sem-nuitka     -> sem compilar o código (só em emergência: o .exe leva o código legível)
+    python build_pdv.py --com-nuitka     -> compila os pacotes de src com o Nuitka antes (opcional; precisa de compilador C)
     python build_pdv.py --edicao willadega
                                          -> dist/WillAdega/WillAdega.exe  e  instalador/saida/WillAdega-Setup-<versão>.exe
                                             (edição só de adega; ver src/core/edicao.py)
 
-Por padrão os pacotes de `src/` são compilados com o Nuitka antes (tools/compilar_nuitka.py, docs/PROTEGER_CODIGO.md).
+Por padrão o código vai como Python (o repositório é público; a proteção é a licença assinada, não esconder o código).
+Com --com-nuitka os pacotes de `src/` são compilados antes (tools/compilar_nuitka.py, docs/PROTEGER_CODIGO.md).
 
 Requisitos (uma vez, na máquina que gera a versão): pip install -r requirements-build.txt, um compilador C (no Windows,
 o Visual Studio com "Desenvolvimento para desktop com C++") e o Inno Setup 6 (jrsoftware.org).
@@ -55,7 +56,7 @@ def gerar_executavel(ed) -> None:
                "--windowed",                                # sem a janela preta do CMD atrás do caixa
                "--name", nome, "--paths", str(RAIZ)]        # a raiz no caminho: os imports são "from src..."
     from src.autoteste import MODULOS
-    comando += argumentos_codigo(MODULOS, compilar="--sem-nuitka" not in sys.argv[1:])
+    comando += argumentos_codigo(MODULOS, compilar="--com-nuitka" in sys.argv[1:])
     comando += ["--collect-data", "tzdata"]  # fuso de Brasília também no Windows
     icone = PASTA_INSTALADOR / ed.icone
     if icone.exists():
