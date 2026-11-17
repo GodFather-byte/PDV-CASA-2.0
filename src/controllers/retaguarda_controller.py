@@ -14,6 +14,8 @@ Vale a alteração que chega por último, na retaguarda ou no caixa.
 """
 from __future__ import annotations
 
+import re
+
 import hashlib
 import json
 import logging
@@ -46,7 +48,7 @@ SECOES_CONFIG_FORA = {"Nuvem", "E-mail", "Utilitários", "Integrações"}
 TIPOS_ESTOQUE = ("entrada", "saida", "contagem", "quebra", "descarte")
 LIMITE_LOTE_PRODUTOS = 200
 CAMPOS_LOTE = ("codigo", "nome", "preco", "custo", "grupo", "unidade", "quantidade", "estoque_minimo", "codigo_barras",
-               "controla_estoque")
+               "controla_estoque", "preco_gelada", "atacado_qtd", "preco_atacado", "ncm")
 TIPOS_COMANDO = ("cadastro.salvar", "cadastro.excluir", "estoque.movimento", "config.salvar", "produtos.importar",
                  "conta.incluir", "conta.alterar", "conta.quitar", "conta.desfazer", "conta.excluir")
 
@@ -234,7 +236,14 @@ class RetaguardaController:
         recusadas = [l for l in previa.linhas if l.acao == "recusar"]
         if not previa.importaveis:
             raise ErroNegocio("Nenhum produto importado: " + "; ".join(f"{l.linha}: {l.motivo}" for l in recusadas[:5]))
-        resultado = imp.importar(previa)
+        with self.banco.transacao():
+            resultado = imp.importar(previa)
+            for item in tabela:                         # NCM do catálogo: só preenche quem ainda não tem
+                ncm = re.sub(r"\D", "", item.get("ncm") or "")
+                if len(ncm) == 8 and item["nome"]:
+                    self.banco.executar(
+                        "UPDATE produtos SET ncm = ? WHERE nome = ? COLLATE NOCASE AND COALESCE(ncm, '') = ''",
+                        (ncm, item["nome"]))
         self.ultimo_detalhe = (f"{resultado['criados']} criado(s), {resultado['atualizados']} atualizado(s)"
                                + (f"; {len(recusadas)} recusado(s): "
                                   + "; ".join(f"{l.linha} {l.nome or ''}: {l.motivo}" for l in recusadas[:4])

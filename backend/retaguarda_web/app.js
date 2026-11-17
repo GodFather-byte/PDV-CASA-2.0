@@ -673,15 +673,31 @@
     const arquivo = el("input");
     arquivo.type = "file";
     arquivo.accept = ".csv,.xlsx,.xlsm,.txt";
+    const catalogo = botaoPequeno("Carregar catálogo da adega (274 produtos)", async () => {
+      const r = await apiCentral("/catalogo");
+      linhas = r.linhas;
+      filtro = "";
+      desenhar();
+    });
     const area = el("div");
-    raiz.append(arquivo, area);
-    let linhas = [], lote = 200;
+    raiz.append(arquivo, catalogo, area);
+    let linhas = [], lote = 200, filtro = "";
+    const comPreco = (l) => paraCentavos(l.preco) !== null && paraCentavos(l.preco) > 0 && String(l.nome || "").trim();
     function desenhar() {
       limpar(area);
       if (!linhas.length) return;
-      const semPreco = linhas.filter((l) => paraCentavos(l.preco) === null).length;
-      area.append(el("p", linhas.length + " produtos lidos" + (semPreco ? "; " + semPreco + " sem preço válido (em destaque)." : "."),
-        semPreco ? "aviso" : "suave"));
+      const prontos = linhas.filter(comPreco).length;
+      area.append(el("p", linhas.length + " produtos na lista; " + prontos + " com preço vão para o caixa. " +
+        "Os sem preço ficam de fora.", "suave"));
+      const grupos = [...new Set(linhas.map((l) => l.grupo).filter(Boolean))].sort();
+      if (grupos.length > 1) {
+        const sel = el("select");
+        sel.append(new Option("Todos os grupos", ""));
+        grupos.forEach((g) => sel.append(new Option(g, g)));
+        sel.value = filtro;
+        sel.addEventListener("change", () => { filtro = sel.value; desenhar(); });
+        area.append(sel);
+      }
       const rolagem = el("div", null, "tabela-rolagem");
       const tabela = el("table");
       const cab = el("tr");
@@ -691,6 +707,7 @@
       tabela.append(el("thead")).firstChild.append(cab);
       const corpo = el("tbody");
       linhas.forEach((l, i) => {
+        if (filtro && l.grupo !== filtro) return;
         const tr = el("tr");
         tr.append(el("td", i + 1));
         COLUNAS_LOTE.forEach(([c]) => {
@@ -717,16 +734,16 @@
       const enviar = el("button", "Enviar para o caixa", "botao");
       enviar.type = "button";
       enviar.addEventListener("click", async () => {
-        const invalidas = linhas.filter((l) => paraCentavos(l.preco) === null || !String(l.nome || "").trim());
-        if (invalidas.length && !confirm(invalidas.length + " linha(s) sem nome ou preço serão recusadas pelo caixa. Enviar mesmo assim?")) return;
+        const envio = linhas.filter(comPreco);
+        if (!envio.length) { recado("Coloque o preço de pelo menos um produto."); return; }
         enviar.disabled = true;
         try {
-          for (let i = 0; i < linhas.length; i += lote) {
-            const parte = linhas.slice(i, i + lote);
+          for (let i = 0; i < envio.length; i += lote) {
+            const parte = envio.slice(i, i + lote);
             await api("/comandos", "POST", { tipo: "produtos.importar", dados: { linhas: parte },
               resumo: "Planilha: " + parte.length + " produtos (" + (i + 1) + " a " + (i + parte.length) + ")" });
           }
-          recado("Planilha enviada. Acompanhe em Alterações enviadas.");
+          recado(envio.length + " produtos enviados. Acompanhe em Alterações enviadas.");
           linhas = [];
           arquivo.value = "";
           desenhar();

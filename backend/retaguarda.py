@@ -44,7 +44,7 @@ SO_FORNECEDOR = ("produtos.importar",)      # cadastro em massa é serviço do f
 LIMITE_PLANILHA_BYTES = 3 * 1024 * 1024
 LIMITE_LOTE = 200                           # produtos por comando (o caixa aplica numa transação só)
 CAMPOS_LOTE = ("codigo", "nome", "preco", "custo", "grupo", "unidade", "quantidade", "estoque_minimo", "codigo_barras",
-               "controla_estoque")
+               "controla_estoque", "preco_gelada", "atacado_qtd", "preco_atacado", "ncm")
 
 
 class RetaguardaEspelho(Base):
@@ -544,6 +544,13 @@ def instalar_fornecedor(app: FastAPI, sessao, obter, auditar) -> APIRouter:
         auditar(db, "servico", chave_loja, f"{descricao} ({valor / 100:.2f})"[:500])
         db.commit()
         return {"servico": _servico_publico(servico)}
+
+    @router.get("/v1/fornecedor/servicos/catalogo")
+    def catalogo(_=Depends(sessao)):
+        from src.controllers.catalogo import CATALOGO_ADEGA
+        linhas = [{**{c: "" for c in CAMPOS_LOTE}, "nome": i.nome, "grupo": i.subgrupo, "ncm": i.ncm, "unidade": "UN"}
+                  for i in CATALOGO_ADEGA]
+        return {"linhas": linhas}
 
     @router.get("/v1/fornecedor/servicos/precos")
     def precos(_=Depends(sessao), db: Session = Depends(get_db)):

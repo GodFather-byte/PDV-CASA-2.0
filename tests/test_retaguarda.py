@@ -468,6 +468,22 @@ class TesteFornecedor(BaseNuvem):
             db.query(nuvem_retaguarda.PrecoServico).delete()
             db.commit()
 
+    def test_catalogo_da_adega_vai_com_ncm_e_so_os_que_tem_preco(self):
+        retaguarda.sincronizar(self.banco, self.ponte)
+        r = self.fornecedor.get("/v1/fornecedor/servicos/catalogo")
+        self.assertEqual(r.status_code, 200, r.text)
+        linhas = r.json()["linhas"]
+        self.assertGreater(len(linhas), 270)
+        zomo = next(l for l in linhas if l["nome"] == "ESSENCIA NARGUILE ZOMO 50G")
+        self.assertEqual(zomo["preco"], "")
+        zomo["preco"] = "25,00"
+        corpo = {"tipo": "produtos.importar", "dados": {"linhas": [zomo]}, "resumo": "catálogo"}
+        self.assertEqual(self.fornecedor.post("/v1/fornecedor/lojas/ADEGA-1/retaguarda/comandos", json=corpo,
+                                              headers=self.csrf).status_code, 200)
+        retaguarda.sincronizar(self.banco, self.ponte, forcar=True)
+        p = self.banco.um("SELECT preco_cent, ncm FROM produtos WHERE nome = ? COLLATE NOCASE", (zomo["nome"],))
+        self.assertEqual((p["preco_cent"], p["ncm"]), (2500, zomo["ncm"]))
+
     def test_sem_sessao_da_central_nao_entra_e_loja_inexistente_da_404(self):
         base = "/v1/fornecedor/lojas/ADEGA-1/retaguarda"
         self.assertEqual(self.http.get(base).status_code, 401)
