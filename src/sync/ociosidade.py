@@ -94,6 +94,9 @@ def ha_pendencia(banco) -> bool:
     from src.core import erros_caixa
     if erros_caixa.pendentes(banco):
         return True
+    from src.sync import nfce_xmls
+    if nfce_xmls.ha_pendente(banco):
+        return True
     return False
 
 

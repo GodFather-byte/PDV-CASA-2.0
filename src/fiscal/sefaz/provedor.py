@@ -95,6 +95,12 @@ class EmissaoPropria:
         self.pasta.mkdir(parents=True, exist_ok=True)
         return self.pasta / f"{chave}-{tipo}.xml"
 
+    def _avisar_nuvem(self) -> None:
+        """XML de produção novo: o sincronizador copia para a nuvem (a loja guarda 5 anos)."""
+        if self.ambiente == "producao":
+            from src.sync import nfce_xmls
+            nfce_xmls.avisar(self.banco)
+
     def _concluir(self, chave: str, numero, serie, ret) -> Resposta:
         dados = {"numero": numero, "serie": serie, "chave_nfe": chave, "status_sefaz": ret.cstat,
                  "qrcode_url": qrcode.url_online(chave, self.ambiente), "url_consulta_nf": qrcode.url_chave(self.ambiente)}
@@ -103,6 +109,7 @@ class EmissaoPropria:
             proc = self._arquivo(chave, "nfe")
             proc.write_bytes(cliente_mod.nfe_proc(etree.parse(str(assinada)).getroot(), ret.xml_protocolo))
             dados["caminho_xml_nota_fiscal"] = str(proc)
+            self._avisar_nuvem()
         return Resposta("autorizada", f"{ret.cstat} - {ret.motivo}".strip(" -"), 200, dados)
 
     # ------------------------------------------------------------ contingência
@@ -235,6 +242,7 @@ class EmissaoPropria:
         if ret.situacao == "cancelada":
             if ret.xml_protocolo:
                 self._arquivo(nota["chave"], "cancelamento").write_bytes(ret.xml_protocolo)
+                self._avisar_nuvem()
             return Resposta("cancelada", f"{ret.cstat} - {ret.motivo}", 200, {"status_sefaz": ret.cstat})
         return Resposta(None if ret.situacao is None else "erro", f"{ret.cstat} - {ret.motivo}".strip(" -"))
 
@@ -264,6 +272,7 @@ class EmissaoPropria:
             self.pasta.mkdir(parents=True, exist_ok=True)
             if ret.xml_protocolo:
                 (self.pasta / f"inutilizacao-{int(serie):03d}-{int(inicio)}-{int(fim)}.xml").write_bytes(ret.xml_protocolo)
+                self._avisar_nuvem()
             return Resposta("inutilizada", f"{ret.cstat} - {ret.motivo}", 200, {"protocolo": ret.protocolo})
         return Resposta(None if ret.situacao is None else "erro", f"{ret.cstat} - {ret.motivo}".strip(" -"))
 

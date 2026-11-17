@@ -146,6 +146,7 @@ class Sincronizador:
         painel = self._enviar_painel(forcar)
         self._buscar_notas()
         self._retaguarda()
+        self._xmls_nfce()
         return painel and sucesso
 
     def _ponte(self) -> None:
@@ -198,6 +199,16 @@ class Sincronizador:
             retaguarda.sincronizar(self.banco, self._http)
         except Exception:
             log.exception("Falha na retaguarda na nuvem.")
+
+    def _xmls_nfce(self) -> None:
+        """Cópia dos XMLs da NFC-e de produção na nuvem (obrigação de guardar 5 anos). Só usa a rede quando há arquivo
+        novo em nfce/producao. Falha aqui não segura o resto: a próxima rodada tenta de novo."""
+        try:
+            from src.sync import nfce_xmls
+            if nfce_xmls.ha_pendente(self.banco):
+                nfce_xmls.sincronizar(self.banco, self._http)
+        except Exception:
+            log.exception("Falha ao copiar os XMLs da NFC-e para a nuvem.")
 
     def _buscar_notas(self) -> None:
         """Notas de compra que o dono subiu pelo painel. Só usa a rede quando o envio do painel avisou que há nota
