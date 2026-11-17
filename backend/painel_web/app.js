@@ -2068,6 +2068,20 @@
     const itens = itensAbaixoDoMinimo(est);
     $("vazio-estoque").hidden = itens.length > 0;
     for (const li of itens) listaEst.append(li);
+    const listaParados = $("lista-parados");
+    limpar(listaParados);
+    const parados = itensParados(est);
+    $("vazio-parados").hidden = parados.length > 0 || !Array.isArray(est.parados);
+    for (const li of parados) listaParados.append(li);
+  }
+
+  function itensParados(est) {
+    return (Array.isArray(est.parados) ? est.parados : []).map((i) => el("li", null,
+      el("div", { class: "nome" },
+        el("strong", { text: i.nome || "—" }),
+        el("span", { class: "sec", text: formatarQuantidade(i.qt_atual) + " em estoque · " +
+          (i.ultima_venda ? "última venda " + i.ultima_venda.split("-").reverse().join("/") : "nunca vendeu") })),
+      el("span", { class: "valor", text: formatarCentavos(i.valor_cent) })));
   }
 
   function itensAbaixoDoMinimo(est) {
@@ -2100,7 +2114,8 @@
         el("span", null, "Zerados: ", el("strong", { text: formatarInteiro(est.zerados) }))
       ),
       el("h3", { text: "Abaixo do mínimo" }),
-      itens.length ? el("ul", { class: "lista" }, itens) : el("p", { class: "vazio", text: "Nenhum produto abaixo do mínimo." })
+      itens.length ? el("ul", { class: "lista" }, itens) : el("p", { class: "vazio", text: "Nenhum produto abaixo do mínimo." }),
+      ...(itensParados(est).length ? [el("h3", { text: "Parados há 30 dias" }), el("ul", { class: "lista" }, itensParados(est))] : [])
     );
   }
 

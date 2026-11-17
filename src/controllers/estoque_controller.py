@@ -897,3 +897,31 @@ class EstoqueController:
             for linha in linhas:
                 self.adicionar_item(lanc, linha["produto_id"], linha["contado"])
         return {"lancamento_id": lanc, "linhas": linhas, "perda_cent": sum(l["perda_cent"] for l in linhas)}
+
+
+def acabando(banco, limite: int = 12) -> list[dict]:
+    """Produtos controlados no mínimo ou abaixo, zerados primeiro (resumo da noite e lista de compra)."""
+    return [dict(r) for r in banco.todos(
+        """SELECT p.nome, p.qt_atual, p.estoque_minimo FROM produtos p
+           WHERE p.ativo = 1 AND p.controla_estoque = 1 AND p.qt_atual <= p.estoque_minimo
+           ORDER BY (p.qt_atual <= 0) DESC, p.nome LIMIT ?""", (limite,))]
+
+
+def parados(banco, dias: int = 30, limite: int = 15, hoje: str | None = None) -> list[dict]:
+    """Produtos com estoque e sem venda fechada há `dias` dias (dinheiro parado na prateleira), maior valor primeiro.
+    `valor_cent` é o estoque pelo último custo (ou pelo preço, se não houver custo)."""
+    corte = fmt.somar_dias((hoje or fmt.agora())[:10], -dias) + " 00:00:00"
+    linhas = banco.todos(
+        """SELECT p.id, p.nome, p.qt_atual, COALESCE(NULLIF(p.ult_preco_cent, 0), p.preco_cent, 0) AS unit_cent,
+                  (SELECT MAX(COALESCE(v.fechada_em, v.aberta_em)) FROM itens_venda i JOIN vendas v ON v.id = i.venda_id
+                    WHERE i.produto_id = p.id AND i.cancelado = 0 AND v.status = 'fechada') AS ultima
+           FROM produtos p
+           WHERE p.ativo = 1 AND p.controla_estoque = 1 AND p.qt_atual > 0""")
+    saida = []
+    for r in linhas:
+        if r["ultima"] and r["ultima"] >= corte:
+            continue
+        saida.append({"nome": r["nome"], "qt_atual": r["qt_atual"], "ultima_venda": (r["ultima"] or "")[:10] or None,
+                      "valor_cent": int(round(float(r["qt_atual"]) * int(r["unit_cent"] or 0)))})
+    saida.sort(key=lambda x: -x["valor_cent"])
+    return saida[:limite]
