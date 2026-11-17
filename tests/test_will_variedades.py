@@ -9,6 +9,7 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
+from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication
 
 from src.atualizacao import manifesto
@@ -282,19 +283,33 @@ class TesteTelas(BaseTeste):
     @classmethod
     def setUpClass(cls):
         cls.aplicacao = QApplication.instance() or QApplication([])
+        cls.aplicacao.setQuitOnLastWindowClosed(False)
 
     def setUp(self):
         super().setUp()
         self.ctx = Contexto(self.banco)
         self.ctx.operador = self.ctx.acesso.operador(self.operador_adm())
+        self.janelas = []
+        self.addCleanup(self._fechar_janelas)
+
+    def _fechar_janelas(self):
+        """Fecha e destrói as janelas ainda com o banco aberto: janela viva na saída do processo derruba o Qt no Windows."""
+        for janela in self.janelas:
+            janela.close()
+            janela.deleteLater()
+        self.janelas.clear()
+        self.aplicacao.processEvents()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def aberta(self, janela):
+        self.janelas.append(janela)
+        return janela
 
     def janela_etiquetas(self, *ids):
         from src.ui_qt.etiquetas import JanelaEtiquetas
         produtos = [dict(r) for r in self.banco.todos("SELECT id, codigo, nome FROM produtos WHERE id IN (%s)"
                                                       % ",".join("?" * len(ids)), ids)]
-        janela = JanelaEtiquetas(self.ctx, produtos, list(ids))
-        self.addCleanup(janela.close)
-        return janela
+        return self.aberta(JanelaEtiquetas(self.ctx, produtos, list(ids)))
 
     def test_folha_com_codigo_de_barras_gera_o_codigo_e_grava_o_arquivo(self):
         meia = self.novo_produto("MEIA SOQUETE", preco=990)
@@ -343,12 +358,10 @@ class TesteTelas(BaseTeste):
 
     def test_cadastro_de_produto_sem_gelada_nem_casco_e_com_a_aba_atacado(self):
         from src.ui_qt.cadastros import FormularioCadastro
-        completo = FormularioCadastro(self.ctx, "produtos")
-        self.addCleanup(completo.close)
+        completo = self.aberta(FormularioCadastro(self.ctx, "produtos"))
         self.assertIn("preco_gelada_cent", completo.campos)
         na_edicao(self)
-        f = FormularioCadastro(self.ctx, "produtos")
-        self.addCleanup(f.close)
+        f = self.aberta(FormularioCadastro(self.ctx, "produtos"))
         for campo in ("preco_gelada_cent", "atacado_gelada_qtd", "preco_atacado_gelada_cent", "casco_produto_id",
                       "promo_gelada_cent"):
             self.assertNotIn(campo, f.campos)
@@ -374,8 +387,7 @@ class TesteTelas(BaseTeste):
         na_edicao(self)
         edicao.preparar(self.banco)
         from src.ui_qt.catalogo import JanelaCatalogo
-        janela = JanelaCatalogo(self.ctx)
-        self.addCleanup(janela.close)
+        janela = self.aberta(JanelaCatalogo(self.ctx))
         self.assertIn("FONES E ÁUDIO", [janela.cmb_subgrupo.itemText(i) for i in range(janela.cmb_subgrupo.count())])
         janela.ent_busca.setText("meia soquete masculina")
         self.assertEqual(janela.tabela.rowCount(), 1)
