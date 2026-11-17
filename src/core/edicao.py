@@ -1,4 +1,5 @@
-"""Edição do programa: o mesmo código gera o WillPDV (completo, nasceu boate) e o Will Adega (só adega).
+"""Edição do programa: o mesmo código gera o WillPDV (completo, nasceu boate), o Will Adega (só adega), o Will Restaurante
+e o Will Variedades (loja de eletrônicos, utilidades e presentes: balcão, etiqueta com código de barras, sem bebida gelada).
 
 A edição define a marca (nome, ícone, logotipo), a pasta dos dados no Windows e, na adega, o perfil de operação aplicado na
 primeira entrada, as configurações que ficam sempre com o mesmo valor (sem mesas, garotas, portaria, rodízio nem pré-pago) e
@@ -58,6 +59,8 @@ class Edicao:
     # Perfis disponíveis dentro da edição; vazio mantém o comportamento de perfil fixo da Adega.
     perfis: frozenset = frozenset()
     padroes: dict = field(default_factory=dict)  # aplicados somente na primeira entrada da edição
+    sem_gelada: bool = False           # loja que não vende bebida: preço gelada e casco somem do cadastro, do caixa e da etiqueta
+    recebimento_direto: bool = False   # balcão: na primeira entrada sai a taxa do crédito da boate e o recebimento é o direto
 
     def perfil_fixo(self) -> bool:
         return bool(self.perfil and not self.perfis)
@@ -75,8 +78,17 @@ EDICOES = {
         "WILL-ADEGA", perfil="adega",
         fixas={"usar_mesas": "N", "usar_garotas": "N", "usar_portaria": "N", "usar_rodizio": "N", "usar_prepago": "N",
                "usar_quartos": "N"},
-        ocultas=CHAVES_CASA_NOTURNA, menu_oculto=frozenset({"cozinha", "quartos"}),
+        ocultas=CHAVES_CASA_NOTURNA, menu_oculto=frozenset({"cozinha", "quartos"}), recebimento_direto=True,
         executavel="WillAdega", script_instalador="WillAdega.iss"),
+    "willvariedades": Edicao(
+        "willvariedades", "Will Variedades", "WILL VARIEDADES", "willvariedades.ico", "willvariedades-logo.png",
+        "WILL-VARIEDADES", perfil="variedades",
+        fixas={"usar_mesas": "N", "usar_garotas": "N", "usar_portaria": "N", "usar_rodizio": "N", "usar_prepago": "N",
+               "usar_quartos": "N", "usar_cozinha_bar": "N", "porteiro_ativo": "N"},
+        ocultas=CHAVES_CASA_NOTURNA | CHAVES_PEDIDO_ONLINE,
+        menu_oculto=frozenset({"cozinha", "quartos", "porteiro", "retornaveis"}),
+        sem_gelada=True, recebimento_direto=True,
+        executavel="WillVariedades", script_instalador="WillVariedades.iss"),
     "willrestaurante": Edicao(
         "willrestaurante", "Will Restaurante", "WILL RESTAURANTE", "willpdv.ico", None,
         "WILL-RESTAURANTE", perfil="hamburgueria",
@@ -133,7 +145,7 @@ def preparar(banco, operador_id: int | None = None) -> list[dict]:
     for chave, valor in ed.fixas.items():
         if banco.cfg(chave) != valor:
             banco.cfg_set(chave, valor)
-    if ed.chave == "willadega" and banco.cfg(AJUSTE_ADEGA) != "S":
+    if ed.recebimento_direto and banco.cfg(AJUSTE_ADEGA) != "S":
         _ajustar_recebimento_da_adega(banco)
     return mudancas
 
@@ -143,7 +155,7 @@ TAXA_CREDITO_DA_BOATE = 500
 
 
 def _ajustar_recebimento_da_adega(banco) -> None:
-    """Uma única vez em cada adega (nova ou já instalada): a taxa de R$ 5,00 do crédito é costume da boate e sai das formas
+    """Uma única vez em cada loja de balcão (adega ou variedades, nova ou já instalada): a taxa de R$ 5,00 do crédito é costume da boate e sai das formas
     de pagamento (um acréscimo de outro valor foi o dono quem pôs e fica); e o recebimento passa a ser o direto. Depois
     disso o dono manda: pode pôr a taxa de volta em Tipos de Pagamento e desligar o recebimento direto em Configurações."""
     banco.executar("UPDATE tipos_pagamento SET acrescimo_cent = 0 WHERE acrescimo_cent = ?", (TAXA_CREDITO_DA_BOATE,))

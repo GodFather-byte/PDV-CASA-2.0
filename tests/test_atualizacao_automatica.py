@@ -131,7 +131,7 @@ class TesteNuvem(unittest.TestCase):
     def test_pausa_na_nuvem_nao_oferece_pacotes(self):
         from unittest.mock import patch
         with patch.dict(os.environ, {"PDV_ATUALIZACAO_PAUSADA": "1"}):
-            for edicao in ("willpdv", "willadega", "willrestaurante"):
+            for edicao in ("willpdv", "willadega", "willrestaurante", "willvariedades"):
                 resposta = self.http.get("/v1/atualizacao/ultima", params={"edicao": edicao}).json()
                 self.assertFalse(resposta["disponivel"])
                 self.assertIsNone(resposta["pacote"])
