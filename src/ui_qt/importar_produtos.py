@@ -4,7 +4,7 @@ import re
 import sqlite3
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QLineEdit,
     QHBoxLayout, QHeaderView, QLabel, QMessageBox, QPushButton, QRadioButton,
@@ -46,8 +46,9 @@ class JanelaImportarProdutos(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(texto("Importar produtos por planilha", "titulo"))
         layout.addWidget(texto(
-            "Escolha CSV ou Excel, confira a prévia e confirme para gravar. "
-            "As linhas recusadas não serão importadas; os preços são mantidos em centavos.",
+            "Escolha CSV ou Excel, confira a prévia e confirme para gravar. Dá para digitar ou corrigir o "
+            "PREÇO e o ESTOQUE de cada produto direto na prévia (clique na célula e digite; Enter vai para o "
+            "próximo). As linhas recusadas não serão importadas.",
             "suave"))
 
         arquivos = QHBoxLayout()
@@ -100,8 +101,14 @@ class JanelaImportarProdutos(QDialog):
         layout.addWidget(self.resumo)
         self.grade = QTableWidget(0, len(self.COLUNAS))
         self.grade.setHorizontalHeaderLabels(self.COLUNAS)
-        self.grade.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.grade.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        # Preço e estoque se editam na própria prévia (planilha feita com IA costuma vir sem preço): o valor digitado
+        # volta para a linha da planilha e a prévia é refeita pelas mesmas regras da importação.
+        self.grade.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked
+                                   | QAbstractItemView.EditTrigger.EditKeyPressed
+                                   | QAbstractItemView.EditTrigger.AnyKeyPressed)
+        self.grade.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
+        self._preenchendo = False
+        self.grade.itemChanged.connect(self._celula_editada)
         self.grade.setAlternatingRowColors(True)
         self.grade.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.grade.horizontalHeader().setStretchLastSection(True)
@@ -216,6 +223,7 @@ class JanelaImportarProdutos(QDialog):
             return False
 
         self.previa = previa
+        self._preenchendo = True
         self.grade.setRowCount(len(previa.linhas))
         for linha, item in enumerate(previa.linhas):
             codigo = str(int(item.codigo)) if item.codigo.isdigit() else item.codigo
@@ -234,7 +242,14 @@ class JanelaImportarProdutos(QDialog):
                 if coluna in (0, 2, 4, 5, 7):
                     celula.setTextAlignment(
                         Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                if coluna in self.EDITAVEIS:
+                    celula.setToolTip("Clique e digite para mudar antes de importar.")
+                    if not valor:
+                        celula.setBackground(QColor(255, 210, 138, 90))     # falta preencher
+                else:
+                    celula.setFlags(celula.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self.grade.setItem(linha, coluna, celula)
+        self._preenchendo = False
         recusados = previa.contar("recusar")
         self.resumo.setText(
             f"Prévia: {previa.resumo()}." +
@@ -244,6 +259,26 @@ class JanelaImportarProdutos(QDialog):
         self.btn_importar.setText(f"Importar {len(previa.importaveis)} produto(s)")
         self.btn_importar.setEnabled(bool(previa.importaveis))
         return True
+
+    EDITAVEIS = {4: "preco", 7: "quantidade"}       # coluna da prévia -> coluna da planilha
+
+    def _celula_editada(self, celula: QTableWidgetItem):
+        """Preço ou estoque digitado na prévia: grava na linha da planilha e refaz a prévia (mesmas regras)."""
+        if self._preenchendo or self.previa is None or self.tabela is None:
+            return
+        campo = self.EDITAVEIS.get(celula.column())
+        if campo is None or celula.row() >= len(self.previa.linhas):
+            return
+        numero = self.previa.linhas[celula.row()].linha
+        origem = next((l for l in self.tabela if l.get("_linha") == numero), None)
+        if origem is None:
+            return
+        origem[campo] = celula.text().strip()
+        linha, coluna = celula.row(), celula.column()
+        self.analisar()
+        proxima = min(linha + 1, self.grade.rowCount() - 1)      # digitar preço atrás de preço, só com Enter
+        if proxima >= 0:
+            self.grade.setCurrentCell(proxima, coluna)
 
     def importar(self):
         previa = self.previa

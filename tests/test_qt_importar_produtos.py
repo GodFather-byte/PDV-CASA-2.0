@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
-from PySide6.QtCore import QCoreApplication, QEvent
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from src.core.erros import ErroNegocio, ErroPermissao
@@ -72,6 +72,35 @@ class TestImportarProdutosQt(BaseTeste):
         self.assertIn("Falta o preço", janela.grade.item(2, 8).text())
         self.assertTrue(janela.btn_importar.isEnabled())
         self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM produtos"), 0)
+
+    def test_preco_e_estoque_digitados_na_previa_valem_na_importacao(self):
+        """Planilha feita com IA sem preço: o dono digita na prévia, a linha deixa de ser recusada e grava o valor."""
+        janela = self.janela()
+        arquivo = self.planilha("Produto;Quantidade\nSEDA ZOMO;200\nISQUEIRO BIC;24\n")
+        self.assertTrue(janela.carregar(str(arquivo)))
+        self.assertEqual(janela.grade.item(0, 1).text(), "Recusado")
+        self.assertFalse(janela.btn_importar.isEnabled())
+        self.assertFalse(janela.grade.item(0, 3).flags() & Qt.ItemFlag.ItemIsEditable)   # nome não se edita aqui
+        janela.grade.item(0, 4).setText("3,50")
+        self.assertEqual(janela.grade.item(0, 1).text(), "Criar")
+        self.assertEqual(janela.grade.currentRow(), 1)                  # Enter: próximo preço
+        janela.grade.item(1, 4).setText("8")
+        janela.grade.item(1, 7).setText("30")
+        self.assertEqual(janela.btn_importar.text(), "Importar 2 produto(s)")
+        with patch("src.ui_qt.importar_produtos.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes), \
+             patch("src.ui_qt.importar_produtos.QMessageBox.information"):
+            self.assertTrue(janela.importar())
+        produtos = {r["nome"]: (r["preco_cent"], r["estoque"]) for r in self.banco.todos(
+            "SELECT nome, preco_cent, qt_atual AS estoque FROM produtos")}
+        self.assertEqual(produtos["SEDA ZOMO"], (350, 200))
+        self.assertEqual(produtos["ISQUEIRO BIC"], (800, 30))
+
+    def test_preco_invalido_na_previa_recusa_a_linha_com_o_motivo(self):
+        janela = self.janela()
+        self.assertTrue(janela.carregar(str(self.planilha("Produto;Preço\nCARVAO;10\n"))))
+        janela.grade.item(0, 4).setText("dez")
+        self.assertEqual(janela.grade.item(0, 1).text(), "Recusado")
+        self.assertIn("Preço inválido", janela.grade.item(0, 8).text())
 
     def test_importa_somente_apos_confirmacao_e_atualiza_lista(self):
         recarregamentos = []
