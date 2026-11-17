@@ -68,6 +68,7 @@ O CI (`.github/workflows/testes.yml`) roda em Windows e Linux, Python 3.10 e 3.1
 | `backend/` | Antigravity | API na nuvem (FastAPI). |
 | `src/sync/sincronizador.py` | Antigravity | Cliente HTTP. |
 | Qualquer área, quando chamado | Codex | Reserva: testes, mudança mecânica, diagnóstico e revisão de diff. Não decide regra de negócio. |
+| Vídeo e música (geração por IA) | Gemini | Só quando a tarefa precisa. Abre pelo Claude in Chrome (conta Google do dono já está lá). Confira os créditos de IA antes de gerar. |
 
 Regra de ouro: **não sobrescrever arquivo inteiro de outro dono**; edição pontual apenas.
 Antes de criar um arquivo, confira se ele já existe. Pedido para outro dono: escreva em
