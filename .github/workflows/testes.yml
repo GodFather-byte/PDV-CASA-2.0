@@ -2,8 +2,9 @@
 # Sem runner próprio (repositório privado): PR = Linux inteiro + 2 trabalhos curtos de Windows + PostgreSQL;
 # merge = só a suíte inteira no Windows 3.12. Cada minuto de Windows conta em dobro na cota.
 # Windows é onde o PDV roda nas lojas; o Linux pega o que depende de sistema operacional sem querer.
-# Trabalhos de Windows: no PC do dono (runner próprio, sem custo de minutos) quando o repositório é privado e a variável
-# RUNNER_PC existe (ex.: ["self-hosted","Windows"]); senão no windows-latest do GitHub. Em repositório público o
+# Com runner próprio (repositório privado e a variável RUNNER_PC, ex.: ["self-hosted","Windows"]): TUDO roda no PC do
+# dono, sem gastar minutos do GitHub: no PR, a suíte inteira no Windows 3.12 (ela já contém os trabalhos curtos, e as
+# cobranças rodam em SQLite); o Linux e o PostgreSQL ficam de fora. Sem RUNNER_PC, como abaixo, no GitHub. Em repositório público o
 # runner próprio NUNCA é usado: qualquer PR de fora rodaria código no PC. Ver docs/PROTEGER_CODIGO.md.
 name: Testes
 
@@ -27,7 +28,8 @@ concurrency:
 jobs:
   tutorial-windows:
     name: Tutorial e telas mínimas / Windows
-    if: github.event_name != 'push'          # já rodou no PR; depois do merge basta a suíte inteira
+    # já rodou no PR; depois do merge basta a suíte inteira. Com o PC, a suíte inteira já cobre.
+    if: github.event_name != 'push' && !(github.event.repository.private && vars.RUNNER_PC)
     runs-on: ${{ github.event.repository.private && vars.RUNNER_PC && fromJSON(vars.RUNNER_PC) || 'windows-latest' }}
     timeout-minutes: 10
     env:
@@ -42,7 +44,7 @@ jobs:
 
   publicacao-windows:
     name: Publicação assinada / Windows
-    if: github.event_name != 'push'          # já rodou no PR; depois do merge basta a suíte inteira
+    if: github.event_name != 'push' && !(github.event.repository.private && vars.RUNNER_PC)
     runs-on: ${{ github.event.repository.private && vars.RUNNER_PC && fromJSON(vars.RUNNER_PC) || 'windows-latest' }}
     timeout-minutes: 10
     env:
@@ -57,7 +59,8 @@ jobs:
 
   cobrancas-postgres:
     name: Mercado Pago / PostgreSQL 16
-    if: github.event_name != 'push'          # já rodou no PR; depois do merge basta a suíte inteira
+    # Precisa do contêiner do PostgreSQL (só no Linux do GitHub): com o PC, as mesmas regras rodam em SQLite na suíte.
+    if: github.event_name != 'push' && !(github.event.repository.private && vars.RUNNER_PC)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -87,6 +90,8 @@ jobs:
 
   testes:
     name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    # Com o PC, a suíte inteira roda no PR; depois do merge não repete (o PC fica livre para o próximo PR).
+    if: ${{ !(github.event.repository.private && vars.RUNNER_PC && github.event_name == 'push') }}
     runs-on: ${{ matrix.os == 'windows-latest' && (github.event.repository.private && vars.RUNNER_PC && fromJSON(vars.RUNNER_PC) || 'windows-latest') || matrix.os }}
     timeout-minutes: 30          # um teste de tela travado (janela esperando resposta) vira falha, não horas de espera
     env:
@@ -100,7 +105,9 @@ jobs:
         # dois trabalhos curtos de Windows acima) e a suíte inteira no Windows roda uma vez, no 3.12, depois do merge.
         # Depois do merge (push na main) o Linux não repete: o PR já rodou a suíte inteira nele.
         include: ${{ fromJSON(
-          (github.event.repository.private && !vars.RUNNER_PC && github.event_name == 'pull_request')
+          (github.event.repository.private && vars.RUNNER_PC)
+            && '[{"os":"windows-latest","python":"3.12"}]'
+          || (github.event.repository.private && !vars.RUNNER_PC && github.event_name == 'pull_request')
             && '[{"os":"ubuntu-latest","python":"3.12"}]'
           || (github.event.repository.private && !vars.RUNNER_PC && github.event_name == 'push')
             && '[{"os":"windows-latest","python":"3.12"}]'
