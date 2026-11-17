@@ -289,6 +289,35 @@ def instalar(app, Loja):
         response.delete_cookie(COOKIE, path="/v1/fornecedor")
         return {"ok": True}
 
+    def uso_das_lojas(db) -> dict:
+        """Por loja: vendas fechadas nos últimos 7 dias e o dia da última (só contagem, nunca valores)."""
+        from sqlalchemy import func
+        from backend.painel import PainelVenda
+        corte = (date.today() - timedelta(days=7)).isoformat()
+        uso = {}
+        for chave, ultima in (db.query(PainelVenda.chave_loja, func.max(PainelVenda.dia))
+                              .filter(PainelVenda.status == "fechada").group_by(PainelVenda.chave_loja)):
+            uso[chave] = {"ultima_venda": ultima, "vendas_7d": 0}
+        for chave, n in (db.query(PainelVenda.chave_loja, func.count(PainelVenda.id))
+                         .filter(PainelVenda.status == "fechada", PainelVenda.dia >= corte).group_by(PainelVenda.chave_loja)):
+            uso.setdefault(chave, {"ultima_venda": None, "vendas_7d": 0})["vendas_7d"] = n
+        return uso
+
+    def marcar_teste(resumo: dict, loja, pagantes: set, uso: dict) -> dict:
+        """Em teste: ativa, licença valendo, nunca pagou pelo Mercado Pago e criada há até 60 dias."""
+        u = uso.get(loja.chave_loja) or {"ultima_venda": None, "vendas_7d": 0}
+        criada = (loja.criada_em or "")[:10]
+        try:
+            idade = (date.today() - date.fromisoformat(criada)).days
+        except ValueError:
+            idade = None
+        dias_sem_venda = (date.today() - date.fromisoformat(u["ultima_venda"])).days if u["ultima_venda"] else None
+        resumo["uso"] = {**u, "dias_sem_venda": dias_sem_venda, "idade_dias": idade}
+        resumo["em_teste"] = bool(loja.ativa and resumo["situacao"] in ("vigente", "a_vencer")
+                                  and loja.chave_loja not in pagantes and idade is not None and idade <= 60)
+        resumo["teste_parado"] = resumo["em_teste"] and (dias_sem_venda is None or dias_sem_venda >= 3)
+        return resumo
+
     def resumo_loja(db, loja, plano, ultima_ponte, modo_ponte, saude=None):
         validade = ultima_ponte.expira_em if modo_ponte and ultima_ponte else None if modo_ponte else loja.licenca_ate
         dias = (date.fromisoformat(validade) - date.today()).days if validade else None
@@ -320,8 +349,10 @@ def instalar(app, Loja):
         for p in db.query(ponte.PonteLicenca).order_by(ponte.PonteLicenca.expira_em, ponte.PonteLicenca.seq):
             ultimas[p.chave_loja] = p
         saude = saude_das_lojas(db)
-        lojas = [resumo_loja(db, l, planos.get(l.chave_loja), ultimas.get(l.chave_loja), l.chave_loja in modos,
-                             dict(saude[l.chave_loja]) if l.chave_loja in saude else None)
+        uso = uso_das_lojas(db)
+        pagantes = {c for (c,) in db.query(cobranca.Cobranca.chave_loja).filter_by(status="aprovada").distinct()}
+        lojas = [marcar_teste(resumo_loja(db, l, planos.get(l.chave_loja), ultimas.get(l.chave_loja), l.chave_loja in modos,
+                                          dict(saude[l.chave_loja]) if l.chave_loja in saude else None), l, pagantes, uso)
                  for l in db.query(Loja).order_by(Loja.chave_loja)]
         return {"lojas": lojas, "resumo": {"total": len(lojas),
                 "vigentes": sum(l["situacao"] in ("vigente", "a_vencer") for l in lojas),
@@ -332,7 +363,9 @@ def instalar(app, Loja):
                 "paradas": sum(l["saude"]["conexao"] == "parada" for l in lojas if l["ativa"]),
                 "com_erros": sum(l["saude"]["erros_7d"] > 0 for l in lojas),
                 "desatualizadas": sum(l["saude"]["desatualizada"] for l in lojas),
-                "chamados_abertos": sum(l["saude"]["chamados_abertos"] for l in lojas)},
+                "chamados_abertos": sum(l["saude"]["chamados_abertos"] for l in lojas),
+                "em_teste": sum(l["em_teste"] for l in lojas),
+                "teste_parado": sum(l["teste_parado"] for l in lojas)},
                 "chave_emissao_pronta": emissao.chave_pronta(),
                 "vencimentos": avisos.vencimentos(db),
                 "avisos_email": bool(avisos.destino()),
