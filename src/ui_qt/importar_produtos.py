@@ -54,7 +54,7 @@ class JanelaImportarProdutos(QDialog):
         arquivos = QHBoxLayout()
         self.btn_catalogo = QPushButton("Produtos prontos…")
         self.btn_catalogo.setObjectName("primario")
-        self.btn_catalogo.setToolTip("Mais de 200 produtos de adega com nome, subgrupo e NCM: é só digitar o preço.")
+        self.btn_catalogo.setToolTip("Mais de 270 produtos de adega e tabacaria com nome, subgrupo e NCM: é só digitar o preço.")
         self.btn_catalogo.clicked.connect(self.abrir_catalogo)
         arquivos.addWidget(self.btn_catalogo)
         self.btn_escolher = QPushButton("Escolher planilha…")
