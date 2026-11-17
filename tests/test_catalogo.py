@@ -30,6 +30,15 @@ class TestCatalogo(BaseTeste):
         self.assertGreaterEqual(len(CATALOGO_ADEGA), 200)
         self.assertEqual({i.subgrupo for i in CATALOGO_ADEGA}, set(SUBGRUPOS))
 
+    def test_tabacaria_tem_essencias_sedas_piteiras_e_isqueiros(self):
+        tabacaria = [i for i in CATALOGO_ADEGA if i.subgrupo == "TABACARIA"]
+        for prefixo, minimo in (("ESSENCIA NARGUILE", 10), ("SEDA ", 10), ("PITEIRA ", 6), ("ISQUEIRO ", 4)):
+            self.assertGreaterEqual(sum(i.nome.startswith(prefixo) for i in tabacaria), minimo, prefixo)
+        ncm_de = {i.nome: i.ncm for i in tabacaria}
+        self.assertEqual(ncm_de["PITEIRA TONABE MEGA LONGA"], "48139000")
+        self.assertEqual(ncm_de["PAPEL ALUMINIO NARGUILE VULCAN"], "76071990")
+        self.assertEqual(ncm_de["ISQUEIRO CLIPPER"], "96132000")
+
     def test_ncm_do_catalogo_bate_com_a_sugestao_pelo_nome(self):
         """O catálogo e a sugestão do cadastro manual não podem discordar (o dono veria dois NCM para o mesmo produto)."""
         divergentes = [i.nome for i in CATALOGO_ADEGA if (ncm.sugerir(i.nome) or ("",))[0] != i.ncm]

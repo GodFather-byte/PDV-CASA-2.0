@@ -33,6 +33,25 @@ class TesteControleDoCaixa(BaseTeste):
     def produto(self, ident=None):
         return dict(self.banco.um("SELECT * FROM produtos WHERE id = ?", (ident or self.skol,)))
 
+    def test_lote_de_produtos_cria_atualiza_e_conta_as_recusas(self):
+        r = self.aplicar(900, "produtos.importar", {"linhas": [
+            {"nome": "Seda Zomo", "preco": "3,50", "quantidade": "200", "grupo": "TABACARIA"},
+            {"nome": "SKOL", "preco": "9,00"},
+            {"nome": "Sem preço", "preco": "abc"},
+        ]})
+        self.assertEqual(r["situacao"], "aplicado", r)
+        self.assertIn("1 criado(s), 1 atualizado(s); 1 recusado(s)", r["detalhe"])
+        self.assertEqual(self.banco.valor("SELECT preco_cent FROM produtos WHERE nome = 'SEDA ZOMO'"), 350)
+        self.assertEqual(self.produto()["preco_cent"], 900)
+        self.assertEqual(self.aplicar(900, "produtos.importar", {"linhas": []})["detalhe"], r["detalhe"])   # uma vez só
+
+    def test_lote_sem_nenhum_produto_valido_e_recusado(self):
+        r = self.aplicar(901, "produtos.importar", {"linhas": [{"nome": "", "preco": "1"}]})
+        self.assertEqual(r["situacao"], "recusado")
+        self.assertIn("Nenhum produto importado", r["detalhe"])
+        r = self.aplicar(902, "produtos.importar", {"linhas": [{"nome": "X"}] * 201})
+        self.assertIn("Lote grande demais", r["detalhe"])
+
     def test_nasce_desligada_e_aparece_nas_configuracoes(self):
         self.assertEqual(CONFIG_PADRAO["retaguarda_nuvem"], "N")
         self.assertIn("retaguarda_nuvem", [c[0] for c in CAMPOS_CONFIG])
@@ -334,7 +353,7 @@ class TesteFornecedor(BaseNuvem):
         from backend import central_fornecedor as central
         self.central = central
         with nuvem.SessionLocal() as db:
-            for modelo in (nuvem_retaguarda.RetaguardaEspelho, nuvem_retaguarda.RetaguardaComando,
+            for modelo in (nuvem_retaguarda.RetaguardaEspelho, nuvem_retaguarda.RetaguardaComando, nuvem_retaguarda.RetaguardaServico,
                            central.SessaoFornecedor, central.AuditoriaFornecedor):
                 db.query(modelo).delete()
             db.commit()
@@ -373,6 +392,34 @@ class TesteFornecedor(BaseNuvem):
         with nuvem.SessionLocal() as db:
             evento = db.query(self.central.AuditoriaFornecedor).filter_by(acao="retaguarda").one()
             self.assertEqual((evento.loja, evento.motivo), ("ADEGA-1", "cadastro.salvar: Produtos: ITAIPAVA, preço 12,00"))
+
+    def test_planilha_vira_lote_que_so_o_fornecedor_envia(self):
+        import base64
+        retaguarda.sincronizar(self.banco, self.ponte)
+        base = "/v1/fornecedor/lojas/ADEGA-1/retaguarda"
+        csv = "Produto;Preço;Quantidade\nSeda Bem Bolado;4,00;50\nIsqueiro BIC;8,50;30\n".encode("utf-8")
+        r = self.fornecedor.post(base + "/planilha", headers=self.csrf,
+                                 json={"nome": "lista.csv", "conteudo": base64.b64encode(csv).decode()})
+        self.assertEqual(r.status_code, 200, r.text)
+        linhas = r.json()["linhas"]
+        self.assertEqual([(l["nome"], l["preco"]) for l in linhas], [("Seda Bem Bolado", "4,00"), ("Isqueiro BIC", "8,50")])
+        corpo = {"tipo": "produtos.importar", "dados": {"linhas": linhas}, "resumo": "2 produtos"}
+        self.assertEqual(self.http.post("/v1/painel/retaguarda/comandos", json=corpo, headers=self.entrar()).status_code, 403)
+        self.assertEqual(self.fornecedor.post(base + "/comandos", headers=self.csrf,
+                                              json={**corpo, "dados": {"linhas": [{}] * 201}}).status_code, 422)
+        self.assertEqual(self.fornecedor.post(base + "/comandos", json=corpo, headers=self.csrf).status_code, 200)
+        retaguarda.sincronizar(self.banco, self.ponte, forcar=True)
+        self.assertEqual(self.banco.valor("SELECT qt_atual FROM produtos WHERE nome = 'ISQUEIRO BIC'"), 30)
+
+    def test_servico_avulso_fica_registrado_a_receber_e_pago(self):
+        base = "/v1/fornecedor/lojas/ADEGA-1/retaguarda/servicos"
+        self.assertEqual(self.fornecedor.post(base, json={"descricao": "x", "valor_cent": 0}, headers=self.csrf).status_code, 422)
+        r = self.fornecedor.post(base, json={"descricao": "Cadastro de 120 produtos", "valor_cent": 15000}, headers=self.csrf)
+        self.assertEqual(r.status_code, 200, r.text)
+        ident = r.json()["servico"]["id"]
+        self.assertEqual(self.fornecedor.get(base).json()["a_receber_cent"], 15000)
+        self.assertTrue(self.fornecedor.post(f"{base}/{ident}/pago", headers=self.csrf).json()["servico"]["pago_em"])
+        self.assertEqual(self.fornecedor.get(base).json()["a_receber_cent"], 0)
 
     def test_sem_sessao_da_central_nao_entra_e_loja_inexistente_da_404(self):
         base = "/v1/fornecedor/lojas/ADEGA-1/retaguarda"

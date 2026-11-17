@@ -135,7 +135,12 @@ def ler_tabela(caminho: str | Path) -> list[dict]:
         dados = caminho.read_bytes()
     except OSError as e:
         raise ErroNegocio(f"Não consegui ler o arquivo: {e}") from e
-    linhas = _ler_xlsx(dados) if caminho.suffix.lower() in (".xlsx", ".xlsm") else _ler_csv(dados)
+    return ler_tabela_dados(dados, caminho.name)
+
+
+def ler_tabela_dados(dados: bytes, nome: str) -> list[dict]:
+    """O mesmo de `ler_tabela`, a partir do conteúdo (a central recebe a planilha pelo navegador)."""
+    linhas = _ler_xlsx(dados) if Path(nome).suffix.lower() in (".xlsx", ".xlsm") else _ler_csv(dados)
     linhas = [l for l in linhas if any(c.strip() for c in l)]
     if not linhas:
         raise ErroNegocio("A planilha está vazia.")
