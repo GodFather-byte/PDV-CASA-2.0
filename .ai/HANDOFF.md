@@ -1,3 +1,17 @@
+# Handoff (17/11/2026, manhã): 1.14.11, serviços do fornecedor e estoque no resumo (branch `melhorias-vendas`)
+
+- Combos e atacado já existiam (`produto_controller.criar_combo`, campos `atacado_qtd`/`preco_atacado_cent`); não mexi.
+- Central > retaguarda da loja > Serviços cobrados: tabela de preços global (`retaguarda_precos_servico`, "por unidade"
+  multiplica pela quantidade), lançar, "Cobrar no Pix" (Mercado Pago, `external_reference = servico-<id>`, pagador =
+  e-mail do plano da loja; abre o WhatsApp do plano com o texto e o copia e cola), "Conferir pagamento" e baixa
+  automática pelo webhook (`cobranca_mercadopago.aplicar` desvia `servico-*` para `retaguarda.aplicar_pagamento_servico`).
+  Colunas pix_* entram por `retaguarda.garantir_colunas` (a tabela nasceu sem elas no deploy do #113).
+- Importar planilha (central): botão "Carregar catálogo da adega", filtro por grupo; só vão as linhas com preço. O lote
+  aceita `ncm`, `preco_gelada`, `atacado_qtd`, `preco_atacado`; o caixa preenche o NCM de quem ainda não tem.
+- Resumo da noite (WhatsApp) ganhou "Acabando (comprar)" (`estoque_controller.acabando`); o painel do dono mostra
+  "Parados há 30 dias" com o valor parado (`estoque_controller.parados`, enviado em `estoque.parados`).
+- Versão 1.14.11. Publicar WillPDV e Will Adega e manter `PDV_ATUALIZACAO_PAUSADA=0` (todas as lojas).
+
 # Handoff (17/11/2026): adega e serviço de cadastro em massa (branch `vendas-adega`)
 
 - Importar produtos (caixa): na prévia, Preço e Estoque são editáveis (duplo clique ou digitar); vazio fica laranja e
