@@ -7,6 +7,8 @@
   PR de fora no PC). A variável `RUNNER_PC` ficou, mas os workflows a ignoram em repositório público.
 - `tools/rodar_testes.py`: suíte em paralelo por módulo, com limite e tempo de cada; o CI do Windows usa ele.
 - Pendências: merge do PR #119 (XMLs na nuvem, teste grátis pelo site, IBS/CBS) e publicar 1.14.13.
+- Gemini entrou na equipe para código pesado (17/11, ver AGENTS.md). Pendência: conferir os créditos de IA para gerar
+  vídeo e música na conta Google do dono; não deu na sessão da nuvem (sem Claude in Chrome e sem computador conectado).
 
 # Handoff (17/11/2026, tarde 2): XMLs na nuvem, teste grátis pelo site e IBS/CBS (branch `xml-nuvem-e-teste`)
 
