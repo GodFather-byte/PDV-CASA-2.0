@@ -12,10 +12,16 @@ O PyInstaller não enxerga os `import` de dentro de uma extensão. Por isso `imp
 o que eles importam de fora de `src`; o build passa isso como `--hidden-import`.
 
     python -m tools.compilar_nuitka            # só compila (para conferir)
+
+Uma compilação serve às três edições (o código de `src/` é o mesmo; a edição é só o `edicao.txt`). Ao terminar, grava
+`build/nuitka/chave.txt` com a impressão digital do que foi compilado (código, este arquivo, Python e Nuitka). Na
+próxima vez, se a chave bate, as extensões são reaproveitadas sem compilar de novo. No GitHub, o job "Compilar o
+código" guarda `build/nuitka` no cache e os jobs das edições só restauram.
 """
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib.util
 import os
 import shutil
@@ -61,8 +67,42 @@ def eh_modulo(nome: str) -> bool:
         return False
 
 
-def compilar(saida: Path = SAIDA, nomes: list[str] | None = None) -> list[Path]:
-    """Compila cada pacote e devolve as extensões geradas (em `saida/src`). Para no primeiro erro."""
+def chave() -> str:
+    """Impressão digital do que entra na compilação: muda se qualquer .py dos pacotes, este arquivo, o Python ou o
+    Nuitka mudarem."""
+    h = hashlib.sha256()
+    try:
+        from importlib.metadata import version
+        nuitka = version("nuitka")
+    except Exception:
+        nuitka = "?"
+    h.update(f"{sys.version}|{sys.platform}|{nuitka}\n".encode())
+    h.update(Path(__file__).read_bytes())
+    for nome in pacotes():
+        for arquivo in sorted((SRC / nome).rglob("*.py")):
+            h.update(arquivo.relative_to(RAIZ).as_posix().encode() + b"\0")
+            h.update(arquivo.read_bytes())
+    return h.hexdigest()
+
+
+def prontas(saida: Path = SAIDA) -> list[Path] | None:
+    """As extensões já compiladas, se a chave gravada bate com o código de agora (senão None)."""
+    carimbo, destino = saida / "chave.txt", saida / "src"
+    if not carimbo.is_file() or not destino.is_dir() or carimbo.read_text(encoding="utf-8").strip() != chave():
+        return None
+    extensoes = sorted(destino.iterdir())
+    nomes = {e.name.split(".", 1)[0] for e in extensoes}
+    return extensoes if nomes == set(pacotes()) and len(extensoes) == len(nomes) else None
+
+
+def compilar(saida: Path = SAIDA, nomes: list[str] | None = None, reaproveitar: bool = True) -> list[Path]:
+    """Compila cada pacote e devolve as extensões geradas (em `saida/src`). Para no primeiro erro.
+    Com `reaproveitar` (e todos os pacotes), usa a compilação anterior se a chave bater."""
+    if reaproveitar and nomes is None:
+        extensoes = prontas(saida)
+        if extensoes:
+            print(f"Nuitka: reaproveitando {len(extensoes)} pacotes já compilados (chave igual)", flush=True)
+            return extensoes
     destino = saida / "src"
     if saida.exists():
         shutil.rmtree(saida)
@@ -85,6 +125,8 @@ def compilar(saida: Path = SAIDA, nomes: list[str] | None = None) -> list[Path]:
         shutil.move(str(gerados[0]), destino / gerados[0].name)
     shutil.rmtree(trabalho, ignore_errors=True)
     extensoes = sorted(destino.iterdir())
+    if nomes is None:
+        (saida / "chave.txt").write_text(chave() + "\n", encoding="utf-8")
     print(f"Nuitka: {len(extensoes)} pacotes compilados em {destino}")
     return extensoes
 

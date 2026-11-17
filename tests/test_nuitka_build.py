@@ -11,6 +11,26 @@ RAIZ = Path(__file__).resolve().parent.parent
 
 
 class TestNuitkaBuild(unittest.TestCase):
+
+    def test_compilacao_guardada_so_vale_com_a_mesma_chave_e_todos_os_pacotes(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            saida = Path(tmp)
+            (saida / "src").mkdir()
+            for nome in compilar_nuitka.pacotes():
+                (saida / "src" / f"{nome}.pyd").write_bytes(b"x")
+            self.assertIsNone(compilar_nuitka.prontas(saida))                       # sem chave gravada
+            (saida / "chave.txt").write_text(compilar_nuitka.chave() + "\n", encoding="utf-8")
+            self.assertEqual(len(compilar_nuitka.prontas(saida)), len(compilar_nuitka.pacotes()))
+            with mock.patch.object(compilar_nuitka.subprocess, "run") as nuitka:
+                self.assertEqual(len(compilar_nuitka.compilar(saida)), len(compilar_nuitka.pacotes()))
+                nuitka.assert_not_called()                                         # reaproveitou, não compilou
+            (saida / "chave.txt").write_text("outra\n", encoding="utf-8")
+            self.assertIsNone(compilar_nuitka.prontas(saida))                       # código mudou
+            (saida / "chave.txt").write_text(compilar_nuitka.chave() + "\n", encoding="utf-8")
+            next((saida / "src").iterdir()).unlink()
+            self.assertIsNone(compilar_nuitka.prontas(saida))                       # faltou um pacote
+
     def test_toda_pasta_de_codigo_vira_pacote_compilado(self):
         pastas = {p.name for p in (RAIZ / "src").iterdir() if p.is_dir() and any(p.glob("*.py"))}
         self.assertEqual(set(compilar_nuitka.pacotes()), pastas)      # pasta nova sem __init__.py iria como .py
