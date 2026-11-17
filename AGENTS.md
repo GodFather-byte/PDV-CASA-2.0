@@ -23,6 +23,7 @@ python -m src.app                          # abre o PDV (Windows: iniciar_pdv.ba
 python -m licenciador.app                  # abre o gerador de licenças
 python -m unittest discover -s tests       # suíte inteira
 python -m unittest tests.test_caixa        # um arquivo só (prefira isto durante o trabalho)
+python -m tools.rodar_testes               # suíte em paralelo, um processo por módulo, mostra o que travou
 ```
 
 ## Verificar antes do commit
