@@ -44,7 +44,10 @@ GRUPOS = {
 # Configurações que a nuvem não lê nem altera: endereço e credenciais da nuvem, e-mail e pastas do computador da loja.
 SECOES_CONFIG_FORA = {"Nuvem", "E-mail", "Utilitários", "Integrações"}
 TIPOS_ESTOQUE = ("entrada", "saida", "contagem", "quebra", "descarte")
-TIPOS_COMANDO = ("cadastro.salvar", "cadastro.excluir", "estoque.movimento", "config.salvar",
+LIMITE_LOTE_PRODUTOS = 200
+CAMPOS_LOTE = ("codigo", "nome", "preco", "custo", "grupo", "unidade", "quantidade", "estoque_minimo", "codigo_barras",
+               "controla_estoque")
+TIPOS_COMANDO = ("cadastro.salvar", "cadastro.excluir", "estoque.movimento", "config.salvar", "produtos.importar",
                  "conta.incluir", "conta.alterar", "conta.quitar", "conta.desfazer", "conta.excluir")
 
 
@@ -174,10 +177,12 @@ class RetaguardaController:
         tipo = str(comando.get("tipo") or "")
         dados = comando.get("dados") if isinstance(comando.get("dados"), dict) else {}
         situacao, detalhe, novo_id = "aplicado", "", None
+        self.ultimo_detalhe = ""
         try:
             if not self.ligada():
                 raise ErroNegocio("A retaguarda na nuvem está desligada neste caixa (Configurações > Nuvem).")
             novo_id = self._executar(tipo, dados)
+            detalhe = self.ultimo_detalhe[:300]
         except ErroNegocio as erro:                 # ErroValidacao e ErroPermissao são ErroNegocio
             situacao, detalhe = "recusado", str(erro)[:300]
         except Exception:                           # erro de programa não pode travar a fila: recusa e registra
@@ -203,7 +208,38 @@ class RetaguardaController:
             return self._salvar_config(dados)
         if tipo.startswith("conta."):
             return self._conta(tipo, dados)
+        if tipo == "produtos.importar":
+            return self._importar_produtos(dados)
         raise ErroNegocio("Este caixa não conhece este tipo de alteração. Atualize o programa da loja.")
+
+    def _importar_produtos(self, dados: dict):
+        """Lote de produtos (planilha enviada pela central): mesmas regras da importação do caixa, numa transação só.
+        Linhas recusadas não travam as outras; o motivo volta no detalhe. Nenhuma importável: recusa o lote."""
+        from src.controllers.importacao_produtos import ImportacaoProdutos
+        linhas = dados.get("linhas")
+        if not isinstance(linhas, list) or not linhas:
+            raise ErroNegocio("Lote de produtos vazio.")
+        if len(linhas) > LIMITE_LOTE_PRODUTOS:
+            raise ErroNegocio(f"Lote grande demais (máximo {LIMITE_LOTE_PRODUTOS} produtos por envio).")
+        tabela = []
+        for n, linha in enumerate(linhas, start=1):
+            if not isinstance(linha, dict):
+                raise ErroNegocio("Lote de produtos inválido.")
+            item = {c: str(linha.get(c) if linha.get(c) is not None else "").strip() for c in CAMPOS_LOTE}
+            item["_linha"] = n
+            tabela.append(item)
+        imp = ImportacaoProdutos(self.banco, self._gerente())
+        previa = imp.analisar(tabela, atualizar_existentes=bool(dados.get("atualizar_existentes", True)),
+                              usar_codigo_da_planilha=True, maiusculas=True)
+        recusadas = [l for l in previa.linhas if l.acao == "recusar"]
+        if not previa.importaveis:
+            raise ErroNegocio("Nenhum produto importado: " + "; ".join(f"{l.linha}: {l.motivo}" for l in recusadas[:5]))
+        resultado = imp.importar(previa)
+        self.ultimo_detalhe = (f"{resultado['criados']} criado(s), {resultado['atualizados']} atualizado(s)"
+                               + (f"; {len(recusadas)} recusado(s): "
+                                  + "; ".join(f"{l.linha} {l.nome or ''}: {l.motivo}" for l in recusadas[:4])
+                                  if recusadas else ""))
+        return None
 
     def _entidade(self, dados: dict):
         chave = str(dados.get("entidade") or "")

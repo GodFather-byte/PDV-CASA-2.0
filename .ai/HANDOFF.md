@@ -1,3 +1,19 @@
+# Handoff (17/11/2026): adega e serviço de cadastro em massa (branch `vendas-adega`)
+
+- Importar produtos (caixa): na prévia, Preço e Estoque são editáveis (duplo clique ou digitar); vazio fica laranja e
+  a análise refaz a cada célula (`ui_qt/importar_produtos.py`, `_celula_editada`). A janela de NF-e não mudou.
+- Catálogo da adega com 274 itens: tabacaria completa (essências, sedas, piteiras, isqueiros, alumínio, carvão, fumo),
+  mais energéticos, refrigerantes, ices e águas. NCMs novos em `fiscal/ncm.py`.
+- Serviço do fornecedor (cobrado à parte), só pela central (`/retaguarda/?loja=CHAVE`):
+  - "Importar planilha de produtos": a nuvem lê CSV/XLSX (`POST .../retaguarda/planilha`, mesmas regras de
+    `ler_tabela_dados`), o fornecedor corrige preços na tela e envia em lotes de 200 como comando `produtos.importar`.
+    O dono não pode mandar esse tipo (403). O caixa aplica com `ImportacaoProdutos` numa transação e devolve
+    "N criado(s), N atualizado(s); N recusado(s): motivos" no detalhe do comando.
+  - "Serviços cobrados": tabela `retaguarda_servicos` (descrição, valor_cent, pago_em), lançar e marcar "Recebi".
+    Cada lançamento entra na auditoria da central. Ainda não gera cobrança no Mercado Pago (próximo passo possível).
+  - Caixa antigo recusa `produtos.importar` ("Atualize o programa da loja"): precisa da próxima versão.
+- Pendências: publicar a versão com isso; ideias de caixa (tarefa #28) aguardando o dono escolher.
+
 # Handoff (16/11/2026, noite): 1.14.10, recebimento direto na adega
 
 - Pedido do dono: receber na adega estava complicado (Enter, forma, Enter, valor, Enter, Enter) e a taxa de R$ 5,00 do

@@ -184,6 +184,11 @@
       itens.sort((x, y) => (y.chave === "produtos") - (x.chave === "produtos"));       // Produtos primeiro no seu grupo
       itens.forEach((e) => botao("cadastro:" + e.chave, tituloCurto(e)));
     });
+    if (estado.modo === "fornecedor") {
+      menu.append(el("h3", "Suporte"));
+      botao("planilha", "Importar planilha de produtos");
+      botao("servicos", "Serviços cobrados");
+    }
     menu.append(el("h3", "Loja"));
     botao("config", "Configurações");
     botao("alteracoes", "Alterações enviadas", estado.visao.pendentes || null);
@@ -203,6 +208,8 @@
       else if (secao === "contas") no = await telaContas();
       else if (secao === "caderneta") no = await telaCaderneta();
       else if (secao === "config") no = telaConfig();
+      else if (secao === "planilha") no = telaPlanilha();
+      else if (secao === "servicos") no = await telaServicos();
       else no = await telaAlteracoes();
       if (pedido !== estado.pedido) return;
       limpar(alvo).append(no);
@@ -640,6 +647,150 @@
       const principal = el("div", null, "principal");
       principal.append(el("strong", d.nome));
       li.append(principal, el("span", dinheiro(Math.abs(d.saldo_cent)), "valor"));
+      lista.append(li);
+    });
+    raiz.append(lista);
+    return raiz;
+  }
+
+  // ---------------------------------------------------------------- suporte (só pela central)
+  const COLUNAS_LOTE = [["nome", "Produto"], ["preco", "Preço (R$)"], ["quantidade", "Estoque"], ["custo", "Custo (R$)"],
+    ["grupo", "Grupo"], ["unidade", "Un."], ["codigo_barras", "Código de barras"]];
+  function lerArquivo(arquivo) {
+    return new Promise((ok, falha) => {
+      const leitor = new FileReader();
+      leitor.onload = () => ok(String(leitor.result).split(",")[1] || "");
+      leitor.onerror = () => falha(new Error("Não consegui ler o arquivo."));
+      leitor.readAsDataURL(arquivo);
+    });
+  }
+  function telaPlanilha() {
+    const raiz = el("section");
+    raiz.append(el("h1", "Importar planilha de produtos"));
+    raiz.append(el("p", "Escolha a planilha (Excel ou CSV, com títulos como Produto, Preço, Quantidade). Confira e corrija " +
+      "os preços aqui antes de enviar. O caixa aplica na próxima sincronização, pelas mesmas regras da importação do caixa: " +
+      "produto com o mesmo nome ou código é atualizado, os outros são criados.", "suave"));
+    const arquivo = el("input");
+    arquivo.type = "file";
+    arquivo.accept = ".csv,.xlsx,.xlsm,.txt";
+    const area = el("div");
+    raiz.append(arquivo, area);
+    let linhas = [], lote = 200;
+    function desenhar() {
+      limpar(area);
+      if (!linhas.length) return;
+      const semPreco = linhas.filter((l) => paraCentavos(l.preco) === null).length;
+      area.append(el("p", linhas.length + " produtos lidos" + (semPreco ? "; " + semPreco + " sem preço válido (em destaque)." : "."),
+        semPreco ? "aviso" : "suave"));
+      const rolagem = el("div", null, "tabela-rolagem");
+      const tabela = el("table");
+      const cab = el("tr");
+      cab.append(el("th", "#"));
+      COLUNAS_LOTE.forEach(([, t]) => cab.append(el("th", t)));
+      cab.append(el("th", ""));
+      tabela.append(el("thead")).firstChild.append(cab);
+      const corpo = el("tbody");
+      linhas.forEach((l, i) => {
+        const tr = el("tr");
+        tr.append(el("td", i + 1));
+        COLUNAS_LOTE.forEach(([c]) => {
+          const td = el("td");
+          const campo = el("input");
+          campo.value = l[c] || "";
+          campo.setAttribute("aria-label", c + " da linha " + (i + 1));
+          if (c === "preco" && paraCentavos(campo.value) === null) campo.style.outline = "2px solid var(--vermelho)";
+          campo.addEventListener("change", () => {
+            l[c] = campo.value.trim();
+            if (c === "preco") campo.style.outline = paraCentavos(l.preco) === null ? "2px solid var(--vermelho)" : "";
+          });
+          td.append(campo);
+          tr.append(td);
+        });
+        const tirar = el("button", "Tirar", "botao pequeno secundario");
+        tirar.type = "button";
+        tirar.addEventListener("click", () => { linhas.splice(i, 1); desenhar(); });
+        tr.append(el("td")).lastChild.append(tirar);
+        corpo.append(tr);
+      });
+      tabela.append(corpo);
+      rolagem.append(tabela);
+      const enviar = el("button", "Enviar para o caixa", "botao");
+      enviar.type = "button";
+      enviar.addEventListener("click", async () => {
+        const invalidas = linhas.filter((l) => paraCentavos(l.preco) === null || !String(l.nome || "").trim());
+        if (invalidas.length && !confirm(invalidas.length + " linha(s) sem nome ou preço serão recusadas pelo caixa. Enviar mesmo assim?")) return;
+        enviar.disabled = true;
+        try {
+          for (let i = 0; i < linhas.length; i += lote) {
+            const parte = linhas.slice(i, i + lote);
+            await api("/comandos", "POST", { tipo: "produtos.importar", dados: { linhas: parte },
+              resumo: "Planilha: " + parte.length + " produtos (" + (i + 1) + " a " + (i + parte.length) + ")" });
+          }
+          recado("Planilha enviada. Acompanhe em Alterações enviadas.");
+          linhas = [];
+          arquivo.value = "";
+          desenhar();
+          atualizarContador();
+        } catch (erro) { recado(erro.message); }
+        finally { enviar.disabled = false; }
+      });
+      area.append(rolagem, enviar);
+    }
+    arquivo.addEventListener("change", async () => {
+      const f = arquivo.files && arquivo.files[0];
+      if (!f) return;
+      limpar(area).append(el("p", "Lendo…", "suave"));
+      try {
+        const r = await api("/planilha", "POST", { nome: f.name, conteudo: await lerArquivo(f) });
+        linhas = r.linhas;
+        lote = r.lote || 200;
+        desenhar();
+      } catch (erro) { limpar(area).append(el("p", erro.message, "aviso")); }
+    });
+    return raiz;
+  }
+  async function telaServicos() {
+    const dados = await api("/servicos");
+    const raiz = el("section");
+    raiz.append(el("h1", "Serviços cobrados desta loja"));
+    raiz.append(el("p", "Cadastros em massa e ajustes feitos por você, cobrados à parte da mensalidade. A receber: " +
+      dinheiro(dados.a_receber_cent) + ".", "suave"));
+    const form = el("div", null, "cartao");
+    const descricao = el("input");
+    descricao.placeholder = "Ex.: cadastro de 120 produtos da tabacaria";
+    descricao.maxLength = 200;
+    const valor = el("input");
+    valor.placeholder = "Valor (R$)";
+    valor.inputMode = "decimal";
+    const lancar = el("button", "Lançar serviço", "botao");
+    lancar.type = "button";
+    lancar.addEventListener("click", async () => {
+      const cent = paraCentavos(valor.value);
+      if (!descricao.value.trim() || !cent || cent <= 0) { recado("Informe a descrição e o valor."); return; }
+      lancar.disabled = true;
+      try { await api("/servicos", "POST", { descricao: descricao.value, valor_cent: cent }); recarregar(); }
+      catch (erro) { recado(erro.message); lancar.disabled = false; }
+    });
+    form.append(descricao, valor, lancar);
+    raiz.append(form);
+    if (!dados.servicos.length) { raiz.append(el("p", "Nenhum serviço lançado ainda.", "vazio cartao")); return raiz; }
+    const lista = el("ul", null, "lista");
+    dados.servicos.forEach((sv) => {
+      const li = el("li");
+      const principal = el("div", null, "principal");
+      principal.append(el("strong", sv.descricao),
+        el("span", dataBr(sv.criado_em) + (sv.pago_em ? " · pago em " + dataBr(sv.pago_em) : " · a receber"), "suave"));
+      li.append(principal, el("span", dinheiro(sv.valor_cent), "valor"));
+      if (!sv.pago_em) {
+        const pago = el("button", "Recebi", "botao pequeno secundario");
+        pago.type = "button";
+        pago.addEventListener("click", async () => {
+          pago.disabled = true;
+          try { await api("/servicos/" + sv.id + "/pago", "POST", {}); recarregar(); }
+          catch (erro) { recado(erro.message); pago.disabled = false; }
+        });
+        li.append(pago);
+      }
       lista.append(li);
     });
     raiz.append(lista);

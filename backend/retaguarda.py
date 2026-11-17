@@ -37,9 +37,14 @@ LOTE_ENTREGA = 20
 PAGINA = 100
 DIAS_HISTORICO = 90
 SECAO_VALIDA = re.compile(r"^(esquema|financeiro|cadastro:[a-z_]{1,40})$")
-TIPOS_COMANDO = ("cadastro.salvar", "cadastro.excluir", "estoque.movimento", "config.salvar",
+TIPOS_COMANDO = ("cadastro.salvar", "cadastro.excluir", "estoque.movimento", "config.salvar", "produtos.importar",
                  "conta.incluir", "conta.alterar", "conta.quitar", "conta.desfazer", "conta.excluir")
 SITUACOES_FINAIS = ("aplicado", "recusado")
+SO_FORNECEDOR = ("produtos.importar",)      # cadastro em massa é serviço do fornecedor (cobrado à parte)
+LIMITE_PLANILHA_BYTES = 3 * 1024 * 1024
+LIMITE_LOTE = 200                           # produtos por comando (o caixa aplica numa transação só)
+CAMPOS_LOTE = ("codigo", "nome", "preco", "custo", "grupo", "unidade", "quantidade", "estoque_minimo", "codigo_barras",
+               "controla_estoque")
 
 
 class RetaguardaEspelho(Base):
@@ -51,6 +56,17 @@ class RetaguardaEspelho(Base):
     digital = Column(String, nullable=False, default="")
     dados = Column(Text, nullable=False)                # JSON comprimido (zlib) em base64
     atualizado_em = Column(String, nullable=False)
+
+
+class RetaguardaServico(Base):
+    """Serviço avulso do fornecedor numa loja (ex.: cadastro de 120 produtos), para cobrar à parte da mensalidade."""
+    __tablename__ = "retaguarda_servicos"
+    id = Column(Integer, primary_key=True)
+    chave_loja = Column(String, index=True, nullable=False)
+    descricao = Column(String, nullable=False)
+    valor_cent = Column(Integer, nullable=False)
+    criado_em = Column(String, nullable=False)
+    pago_em = Column(String, nullable=True)
 
 
 class RetaguardaComando(Base):
@@ -180,6 +196,12 @@ def criar(db: Session, chave_loja: str, corpo: dict, autor: str) -> RetaguardaCo
     dados = corpo.get("dados")
     if tipo not in TIPOS_COMANDO or not isinstance(dados, dict):
         raise HTTPException(status_code=422, detail="Alteração inválida.")
+    if tipo in SO_FORNECEDOR and autor != "fornecedor":
+        raise HTTPException(status_code=403, detail="O cadastro em massa é feito pelo suporte.")
+    if tipo == "produtos.importar":
+        linhas = dados.get("linhas")
+        if not isinstance(linhas, list) or not 0 < len(linhas) <= LIMITE_LOTE or not all(isinstance(l, dict) for l in linhas):
+            raise HTTPException(status_code=422, detail=f"Envie de 1 a {LIMITE_LOTE} produtos por vez.")
     texto = json.dumps(dados, ensure_ascii=False, separators=(",", ":"))
     if len(texto.encode("utf-8")) > LIMITE_COMANDO_BYTES:
         raise HTTPException(status_code=413, detail="Alteração grande demais.")
@@ -352,9 +374,33 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
     return router
 
 
+def ler_planilha(nome: str, conteudo_b64: str) -> list[dict]:
+    """Planilha (CSV ou Excel) enviada pela central -> linhas com as colunas que o caixa importa. Pelas mesmas regras de
+    leitura do caixa (títulos reconhecidos: Produto, Preço, Quantidade...)."""
+    from src.controllers.importacao_produtos import ler_tabela_dados
+    from src.core.erros import ErroNegocio
+    try:
+        dados = base64.b64decode(conteudo_b64 or "", validate=True)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Arquivo inválido.") from None
+    if not dados or len(dados) > LIMITE_PLANILHA_BYTES:
+        raise HTTPException(status_code=413, detail="Planilha vazia ou maior que 3 MB.")
+    try:
+        tabela = ler_tabela_dados(dados, str(nome or "planilha.csv"))
+    except ErroNegocio as erro:
+        raise HTTPException(status_code=422, detail=str(erro)) from None
+    return [{c: str(l.get(c) or "") for c in CAMPOS_LOTE} for l in tabela]
+
+
+def _servico_publico(s: RetaguardaServico) -> dict:
+    return {"id": s.id, "descricao": s.descricao, "valor_cent": s.valor_cent, "criado_em": s.criado_em,
+            "pago_em": s.pago_em}
+
+
 def instalar_fornecedor(app: FastAPI, sessao, obter, auditar) -> APIRouter:
     """Rotas da central: o fornecedor mexe em qualquer loja. Cada alteração pedida entra na auditoria da central."""
     router = APIRouter()
+    prefixo = "/v1/fornecedor/lojas/{chave}/retaguarda"
 
     def loja_escolhida(chave: str, _=Depends(sessao), db: Session = Depends(get_db)) -> str:
         return obter(db, chave).chave_loja
@@ -363,6 +409,42 @@ def instalar_fornecedor(app: FastAPI, sessao, obter, auditar) -> APIRouter:
         auditar(db, "retaguarda", chave_loja, f"{comando.tipo}: {comando.resumo}"[:500])
         db.commit()
 
-    _rotas_de_leitura_e_escrita(router, "/v1/fornecedor/lojas/{chave}/retaguarda", loja_escolhida, "fornecedor", registrar)
+    @router.post(prefixo + "/planilha")
+    def planilha(corpo: dict = Body(...), chave_loja: str = Depends(loja_escolhida)):
+        linhas = ler_planilha(corpo.get("nome", ""), corpo.get("conteudo", ""))
+        return {"linhas": linhas, "lote": LIMITE_LOTE}
+
+    @router.get(prefixo + "/servicos")
+    def servicos(chave_loja: str = Depends(loja_escolhida), db: Session = Depends(get_db)):
+        lista = (db.query(RetaguardaServico).filter_by(chave_loja=chave_loja)
+                 .order_by(RetaguardaServico.id.desc()).limit(100).all())
+        return {"servicos": [_servico_publico(s) for s in lista],
+                "a_receber_cent": sum(s.valor_cent for s in lista if not s.pago_em)}
+
+    @router.post(prefixo + "/servicos")
+    def novo_servico(corpo: dict = Body(...), chave_loja: str = Depends(loja_escolhida), db: Session = Depends(get_db)):
+        descricao = re.sub(r"\s+", " ", str(corpo.get("descricao") or "")).strip()[:200]
+        valor = corpo.get("valor_cent")
+        if not descricao or not isinstance(valor, int) or isinstance(valor, bool) or not 0 < valor <= 10_000_000:
+            raise HTTPException(status_code=422, detail="Informe a descrição e um valor maior que zero.")
+        servico = RetaguardaServico(chave_loja=chave_loja, descricao=descricao, valor_cent=valor, criado_em=_agora())
+        db.add(servico)
+        db.commit()
+        auditar(db, "servico", chave_loja, f"{descricao} ({valor / 100:.2f})"[:500])
+        db.commit()
+        return {"servico": _servico_publico(servico)}
+
+    @router.post(prefixo + "/servicos/{servico_id}/pago")
+    def servico_pago(servico_id: int, chave_loja: str = Depends(loja_escolhida), db: Session = Depends(get_db)):
+        servico = db.query(RetaguardaServico).filter_by(id=servico_id, chave_loja=chave_loja).first()
+        if servico is None:
+            raise HTTPException(status_code=404, detail="Serviço não encontrado.")
+        if not servico.pago_em:
+            servico.pago_em = _agora()
+            auditar(db, "servico_pago", chave_loja, servico.descricao[:500])
+            db.commit()
+        return {"servico": _servico_publico(servico)}
+
+    _rotas_de_leitura_e_escrita(router, prefixo, loja_escolhida, "fornecedor", registrar)
     app.include_router(router)
     return router
