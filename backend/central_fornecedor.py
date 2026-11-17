@@ -303,7 +303,7 @@ def instalar(app, Loja):
             uso.setdefault(chave, {"ultima_venda": None, "vendas_7d": 0})["vendas_7d"] = n
         return uso
 
-    def marcar_teste(resumo: dict, loja, pagantes: set, uso: dict) -> dict:
+    def marcar_teste(resumo: dict, loja, pagantes: set, uso: dict, contatos: dict) -> dict:
         """Em teste: ativa, licença valendo, nunca pagou pelo Mercado Pago e criada há até 60 dias."""
         u = uso.get(loja.chave_loja) or {"ultima_venda": None, "vendas_7d": 0}
         criada = (loja.criada_em or "")[:10]
@@ -316,6 +316,7 @@ def instalar(app, Loja):
         resumo["em_teste"] = bool(loja.ativa and resumo["situacao"] in ("vigente", "a_vencer")
                                   and loja.chave_loja not in pagantes and idade is not None and idade <= 60)
         resumo["teste_parado"] = resumo["em_teste"] and (dias_sem_venda is None or dias_sem_venda >= 3)
+        resumo["contato"] = contatos.get(loja.chave_loja)
         return resumo
 
     def resumo_loja(db, loja, plano, ultima_ponte, modo_ponte, saude=None):
@@ -351,8 +352,11 @@ def instalar(app, Loja):
         saude = saude_das_lojas(db)
         uso = uso_das_lojas(db)
         pagantes = {c for (c,) in db.query(cobranca.Cobranca.chave_loja).filter_by(status="aprovada").distinct()}
+        from backend import site_teste
+        contatos = site_teste.contatos(db)
         lojas = [marcar_teste(resumo_loja(db, l, planos.get(l.chave_loja), ultimas.get(l.chave_loja), l.chave_loja in modos,
-                                          dict(saude[l.chave_loja]) if l.chave_loja in saude else None), l, pagantes, uso)
+                                          dict(saude[l.chave_loja]) if l.chave_loja in saude else None), l, pagantes, uso,
+                              contatos)
                  for l in db.query(Loja).order_by(Loja.chave_loja)]
         return {"lojas": lojas, "resumo": {"total": len(lojas),
                 "vigentes": sum(l["situacao"] in ("vigente", "a_vencer") for l in lojas),
@@ -852,3 +856,5 @@ def instalar(app, Loja):
     # Retaguarda da loja pela central: as mesmas telas do dono, com a sessão do fornecedor (backend/retaguarda.py).
     from backend import retaguarda
     retaguarda.instalar_fornecedor(app, sessao, obter, auditar)
+    from backend import nfce_xmls
+    nfce_xmls.instalar_fornecedor(app, sessao, obter, auditar)

@@ -84,6 +84,32 @@ class TesteCentralFornecedor(unittest.TestCase):
             db.query(PainelVenda).delete()
             db.commit()
 
+    def test_central_baixa_o_zip_de_xmls_da_loja_e_fica_na_auditoria(self):
+        import gzip, io, zipfile
+        from backend import nfce_xmls
+        loja = sorted(TOKENS)[0]
+        with nuvem.SessionLocal() as db:
+            db.query(nfce_xmls.NfceXml).delete()
+            db.add(nfce_xmls.NfceXml(chave_loja=loja, nome="1-nfe.xml", tipo="nfe", mes="2026-11",
+                                     conteudo=gzip.compress(b"<nfeProc/>"), tamanho=10, recebido_em=central.agora()))
+            db.commit()
+        self.addCleanup(self._sem_xmls)
+        self.assertEqual(self.http.get(f"/v1/fornecedor/lojas/{loja}/nfce/meses").json()["meses"][0]["nfe"], 1)
+        r = self.http.get(f"/v1/fornecedor/lojas/{loja}/nfce/xmls", params={"mes": "2026-11"})
+        self.assertEqual(r.status_code, 200, r.text)
+        with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+            self.assertEqual(z.read("autorizadas/1-nfe.xml"), b"<nfeProc/>")
+        with nuvem.SessionLocal() as db:
+            self.assertTrue(db.query(central.AuditoriaFornecedor).filter_by(acao="baixar_xmls_nfce").count())
+        self.http.cookies.clear()
+        self.assertEqual(self.http.get(f"/v1/fornecedor/lojas/{loja}/nfce/meses").status_code, 401)
+
+    def _sem_xmls(self):
+        from backend import nfce_xmls
+        with nuvem.SessionLocal() as db:
+            db.query(nfce_xmls.NfceXml).delete()
+            db.commit()
+
     def test_cookie_protegido_hash_no_banco_e_logout_revoga(self):
         valor = self.http.cookies.get(central.COOKIE)
         with nuvem.SessionLocal() as db:

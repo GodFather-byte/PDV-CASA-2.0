@@ -63,6 +63,16 @@ banco:
 - **Inutilização:** na tela Notas fiscais, selecione a nota rejeitada que não será corrigida > "Inutilizar número"
   (motivo de 15 a 255 letras). O protocolo fica na mensagem da nota e o XML em `nfce/<ambiente>/`.
 
+## XMLs na nuvem e IBS/CBS
+
+- **XMLs:** o caixa copia para a nuvem, comprimidos, os XMLs de produção (nota autorizada, cancelamento e
+  inutilização). O dono baixa o ZIP do mês no painel (aba Produtos > Notas fiscais emitidas) para mandar ao contador;
+  o fornecedor também, pela central (loja > XMLs da NFC-e). Homologação não sobe.
+- **IBS/CBS (NT 2025.002):** no regime normal (lucro presumido ou real) o grupo IBSCBS vai sempre; no Simples, só se
+  ligar "enviar IBS/CBS também no Simples" (obrigatório a partir de 2027). CST e cClassTrib vêm do produto ou do
+  padrão (000 / 000001). Alíquotas em Configurações > Integrações (padrão 2026: IBS estadual 0,10%, municipal 0,00%,
+  CBS 0,90%). **Na virada de 2027, conferir as alíquotas novas com o contador.**
+
 ## Roteiro da homologação (piloto DeliciOz)
 
 1. Com o contador: credenciamento da NFC-e na SEFAZ-SP, IE, série e último número usado, CFOP/CSOSN dos produtos.
@@ -77,7 +87,7 @@ banco:
 
 ## Ainda falta
 
-- **Cópia dos XMLs na nuvem.**
-- **IBS/CBS** na emissão própria. É obrigatório para o Simples a partir de 2027; o regime normal já deveria informar.
+- **IBS/CBS:** só CST 000 (tributação integral), 400 e 410. Redução de alíquota (200 etc.), diferimento e
+  monofásico ainda não.
 - **Primeiro teste real em homologação.** Se aparecer erro de SSL, é preciso incluir a cadeia de certificados
   ICP-Brasil para conferir o servidor da SEFAZ.

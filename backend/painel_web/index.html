@@ -490,6 +490,14 @@
             O caixa aplica na próxima sincronização. Precisa estar ligada no caixa (Configurações &gt; Nuvem).</p>
           <a class="botao-arquivo" href="/retaguarda/">Abrir a retaguarda</a>
         </section>
+        <section class="bloco" id="bloco-xmls" hidden>
+          <h2>Notas fiscais emitidas (XML para o contador)</h2>
+          <p class="legenda">Cópia dos XMLs das NFC-e da loja guardada na nuvem (a lei manda guardar por 5 anos).
+            Escolha o mês e baixe o arquivo ZIP para mandar ao contador.</p>
+          <select id="mes-xmls" aria-label="Mês das notas"></select>
+          <button id="baixar-xmls" type="button" class="botao-arquivo">Baixar ZIP do mês</button>
+          <p id="aviso-xmls" class="aviso" role="status" hidden></p>
+        </section>
         <section class="bloco" id="bloco-notas">
           <h2>Notas de compra</h2>
           <p class="legenda">Envie o XML da nota do fornecedor (o arquivo que chega por e-mail, não a foto nem o PDF).

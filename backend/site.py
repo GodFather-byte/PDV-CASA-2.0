@@ -100,3 +100,10 @@ def instalar(app: FastAPI) -> None:
     @app.get("/site/estilo.css", include_in_schema=False)
     def site_css():
         return FileResponse(PASTA / "estilo.css", media_type="text/css", headers=cabecalho_css)
+
+    @app.get("/site/teste.js", include_in_schema=False)
+    def site_js():
+        return FileResponse(PASTA / "teste.js", media_type="text/javascript", headers=cabecalho_html)
+
+    from backend import site_teste
+    site_teste.instalar(app)

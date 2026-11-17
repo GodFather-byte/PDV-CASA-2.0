@@ -122,7 +122,9 @@ def montar(banco, venda_id: int, ambiente: str, cpf: str | None = None, agora: d
     if total != int(venda["total_cent"]):
         raise ErroFiscal(f"O total da venda ({reais(int(venda['total_cent']))}) não bate com os itens "
                          f"({reais(total)}). Confira descontos e taxas desta venda.")
-    enviar_ibscbs = banco.cfg_bool("nfce_ibscbs_enviar", False)
+    # Regime normal: a SEFAZ exige o grupo IBS/CBS (NT 2025.002), então vai sempre. Simples: só se ligado (2027).
+    normal = (banco.cfg("nfce_regime_tributario") or "").strip() in ("lucro_presumido", "lucro_real")
+    enviar_ibscbs = normal or banco.cfg_bool("nfce_ibscbs_enviar", False)
     saida_itens = []
     for n, (item, bruto, desc, outra) in enumerate(zip(itens, brutos, descontos, outras), start=1):
         qtd = float(item["quantidade"])

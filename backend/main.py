@@ -522,6 +522,11 @@ _painel_lojas.instalar(app, Loja)
 from backend import retaguarda as _retaguarda  # noqa: E402
 
 _retaguarda.instalar(app, Loja, autenticar)
+
+# XMLs da NFC-e (emissão própria): cópia na nuvem e ZIP do mês para o contador (backend/nfce_xmls.py).
+from backend import nfce_xmls as _nfce_xmls  # noqa: E402
+
+_nfce_xmls.instalar(app, Loja, autenticar)
 _ponte.instalar(app, Loja, hash_token)
 
 # Porteiro no celular pelo 4G: retrato das comandas abertas e a mesma página em /porteiro/.

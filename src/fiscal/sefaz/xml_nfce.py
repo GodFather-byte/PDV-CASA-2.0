@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal
 from datetime import datetime
 
 from lxml import etree
@@ -106,9 +107,12 @@ def _sub(pai, nome: str, texto=None):
 
 def montar(dados: dict, emit: Emitente, num: Numeracao, ambiente: str, tp_emis: int = 1,
            resp_tec: ResponsavelTecnico | None = None, ver_proc: str = "WillPDV",
-           contingencia: tuple[datetime, str] | None = None, assinar_qrcode=None) -> tuple[etree._Element, str]:
+           contingencia: tuple[datetime, str] | None = None, assinar_qrcode=None,
+           ibscbs: dict | None = None) -> tuple[etree._Element, str]:
     """Elemento <NFe> sem assinatura (com infNFeSupl) e a chave de acesso. Em contingência (`tp_emis=9`) exige
-    `contingencia=(quando, justificativa)` e `assinar_qrcode` (bytes -> assinatura RSA-SHA1 do certificado)."""
+    `contingencia=(quando, justificativa)` e `assinar_qrcode` (bytes -> assinatura RSA-SHA1 do certificado).
+    `ibscbs` = alíquotas em % {"ibs_uf", "ibs_mun", "cbs"} (texto): os itens com `ibs_cbs_situacao_tributaria`
+    ganham o grupo IBSCBS e a nota o IBSCBSTot (NT 2025.002)."""
     if ambiente not in TP_AMB:
         raise ValueError("Ambiente da NFC-e inválido.")
     emit.conferir()
@@ -165,6 +169,7 @@ def montar(dados: dict, emit: Emitente, num: Numeracao, ambiente: str, tp_emis: 
         _sub(dest, "indIEDest", "9")
 
     total_prod = total_desc = total_outro = 0
+    tot_ibscbs: dict = {}
     for item in dados["items"]:
         bruto, desc = _cent(item["valor_bruto"]), _cent(item.get("valor_desconto", "0.00"))
         outro = _cent(item.get("valor_outras_despesas", "0.00"))
@@ -196,6 +201,10 @@ def montar(dados: dict, emit: Emitente, num: Numeracao, ambiente: str, tp_emis: 
         _icms(_sub(imposto, "ICMS"), item, emit.crt)
         _pis_cofins(_sub(imposto, "PIS"), "PIS", item["pis_situacao_tributaria"], item["descricao"])
         _pis_cofins(_sub(imposto, "COFINS"), "COFINS", item["cofins_situacao_tributaria"], item["descricao"])
+        if item.get("ibs_cbs_situacao_tributaria"):
+            soma = _ibscbs(imposto, item, bruto - desc + outro, ibscbs)
+            for chave_tot, valor in soma.items():
+                tot_ibscbs[chave_tot] = tot_ibscbs.get(chave_tot, 0) + valor
 
     v_nf = total_prod - total_desc + total_outro
     tot = _sub(_sub(inf, "total"), "ICMSTot")
@@ -204,6 +213,8 @@ def montar(dados: dict, emit: Emitente, num: Numeracao, ambiente: str, tp_emis: 
                         ("vDesc", total_desc), ("vII", 0), ("vIPI", 0), ("vIPIDevol", 0), ("vPIS", 0), ("vCOFINS", 0),
                         ("vOutro", total_outro), ("vNF", v_nf)):
         _sub(tot, nome, reais(valor))
+    if tot_ibscbs:
+        _ibscbs_total(tot.getparent(), tot_ibscbs)
 
     _sub(_sub(inf, "transp"), "modFrete", "9")
 
@@ -289,3 +300,78 @@ def _pis_cofins(no, tributo: str, cst: str, descricao: str) -> None:
 def texto(no) -> bytes:
     """XML sem declaração e sem espaços entre as tags (como a SEFAZ espera)."""
     return etree.tostring(no, encoding="utf-8")
+
+
+# IBS/CBS (reforma tributária, NT 2025.002). CST que leva o grupo de valores e CST de não incidência/isenção.
+CST_IBSCBS_TRIBUTADO = {"000"}
+CST_IBSCBS_SEM_VALOR = {"400", "410"}
+
+
+def _pct(texto) -> Decimal:
+    try:
+        valor = Decimal(str(texto).replace(",", "."))
+    except Exception:
+        raise ErroFiscal(f"Alíquota de IBS/CBS inválida: {texto}.") from None
+    if not Decimal(0) <= valor < Decimal(100):
+        raise ErroFiscal(f"Alíquota de IBS/CBS fora da faixa: {texto}.")
+    return valor
+
+
+def _pct_xml(valor: Decimal) -> str:
+    texto = f"{valor:.4f}".rstrip("0")
+    inteiro, _, frac = texto.partition(".")
+    return f"{inteiro}.{frac.ljust(2, '0')}"
+
+
+def _parte(base_cent: int, pct: Decimal) -> int:
+    return int((Decimal(base_cent) * pct / Decimal(100)).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+
+def _ibscbs(imposto, item: dict, base_cent: int, aliquotas: dict | None) -> dict:
+    cst = _digitos(item["ibs_cbs_situacao_tributaria"]).zfill(3)
+    classe = _digitos(item.get("ibs_cbs_classificacao_tributaria") or "")
+    if len(classe) != 6:
+        raise ErroFiscal(f"cClassTrib do IBS/CBS inválido em {item['descricao']} (6 números).")
+    grupo = _sub(imposto, "IBSCBS")
+    _sub(grupo, "CST", cst)
+    _sub(grupo, "cClassTrib", classe)
+    if cst in CST_IBSCBS_SEM_VALOR:
+        return {"vBC": 0}
+    if cst not in CST_IBSCBS_TRIBUTADO:
+        raise ErroFiscal(f"CST {cst} do IBS/CBS ainda não é emitido aqui (use 000, 400 ou 410) em {item['descricao']}.")
+    if not aliquotas:
+        raise ErroFiscal("Alíquotas do IBS/CBS não configuradas.")
+    p_uf, p_mun, p_cbs = (_pct(aliquotas.get(c, "0")) for c in ("ibs_uf", "ibs_mun", "cbs"))
+    v_uf, v_mun, v_cbs = _parte(base_cent, p_uf), _parte(base_cent, p_mun), _parte(base_cent, p_cbs)
+    g = _sub(grupo, "gIBSCBS")
+    _sub(g, "vBC", reais(base_cent))
+    uf = _sub(g, "gIBSUF")
+    _sub(uf, "pIBSUF", _pct_xml(p_uf))
+    _sub(uf, "vIBSUF", reais(v_uf))
+    mun = _sub(g, "gIBSMun")
+    _sub(mun, "pIBSMun", _pct_xml(p_mun))
+    _sub(mun, "vIBSMun", reais(v_mun))
+    _sub(g, "vIBS", reais(v_uf + v_mun))
+    cbs = _sub(g, "gCBS")
+    _sub(cbs, "pCBS", _pct_xml(p_cbs))
+    _sub(cbs, "vCBS", reais(v_cbs))
+    return {"vBC": base_cent, "vIBSUF": v_uf, "vIBSMun": v_mun, "vCBS": v_cbs}
+
+
+def _ibscbs_total(total, soma: dict) -> None:
+    t = _sub(total, "IBSCBSTot")
+    _sub(t, "vBCIBSCBS", reais(soma.get("vBC", 0)))
+    g = _sub(t, "gIBS")
+    uf = _sub(g, "gIBSUF")
+    for nome, valor in (("vDif", 0), ("vDevTrib", 0), ("vIBSUF", soma.get("vIBSUF", 0))):
+        _sub(uf, nome, reais(valor))
+    mun = _sub(g, "gIBSMun")
+    for nome, valor in (("vDif", 0), ("vDevTrib", 0), ("vIBSMun", soma.get("vIBSMun", 0))):
+        _sub(mun, nome, reais(valor))
+    for nome, valor in (("vIBS", soma.get("vIBSUF", 0) + soma.get("vIBSMun", 0)), ("vCredPres", 0),
+                        ("vCredPresCondSus", 0)):
+        _sub(g, nome, reais(valor))
+    c = _sub(t, "gCBS")
+    for nome, valor in (("vDif", 0), ("vDevTrib", 0), ("vCBS", soma.get("vCBS", 0)), ("vCredPres", 0),
+                        ("vCredPresCondSus", 0)):
+        _sub(c, nome, reais(valor))

@@ -118,6 +118,14 @@ class TesteMontagem(BaseNfce):
         self.assertEqual((skol["ibs_cbs_situacao_tributaria"], skol["ibs_cbs_classificacao_tributaria"]), ("200", "200001"))
         self.assertEqual((agua["ibs_cbs_situacao_tributaria"], agua["ibs_cbs_classificacao_tributaria"]), ("000", "000001"))
 
+    def test_regime_normal_manda_ibs_cbs_sempre_e_simples_so_se_ligado(self):
+        vid = self.fechar((self.skol, 1))
+        self.assertNotIn("ibs_cbs_situacao_tributaria", nfce.montar(self.banco, vid, "producao")["items"][0])
+        self.banco.cfg_set("nfce_regime_tributario", "lucro_presumido")
+        item = nfce.montar(self.banco, vid, "producao")["items"][0]
+        self.assertEqual((item["ibs_cbs_situacao_tributaria"], item["ibs_cbs_classificacao_tributaria"]),
+                         ("000", "000001"))
+
     def test_o_que_impede_a_emissao(self):
         vid = self.fechar((self.skol, 1))
         self.banco.executar("UPDATE produtos SET ncm = '' WHERE id = ?", (self.skol,))

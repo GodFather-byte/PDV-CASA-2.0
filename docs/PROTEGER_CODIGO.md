@@ -106,17 +106,16 @@ máquina virtual**: a geração instala o programa no Windows, cria a tarefa de 
 teste e mexe nos direitos do sistema. Um usuário separado do Windows não isola isso (vale para o PC inteiro). Outra
 saída é juntar vários PRs antes de cada merge na main.
 
-## Código compilado (Nuitka)
+## Código compilado (Nuitka): desligado
 
-Desde esta mudança o instalador não leva mais o código Python legível. O `build_pdv.py` compila cada pacote de `src/`
-(core, controllers, ui_qt, fiscal, sync...) com o Nuitka (`tools/compilar_nuitka.py`) e o PyInstaller empacota as
-extensões nativas (`.pyd`) no lugar dos `.py`. Só ficam em Python os arquivos soltos de `src/` (entrada, autoteste,
-versão), que não têm regra de negócio. O autoteste do executável e do instalado continua conferindo tudo.
+Em 17/11/2026 o dono decidiu deixar o repositório **público** (Actions de graça) e parar de compilar com o Nuitka: o
+código já é público, então compilar só custava tempo (uns 15 minutos por edição). O instalador volta a levar o código
+Python. A proteção do negócio continua sendo a **licença assinada (ed25519)** e a **nuvem**, que só atende loja com
+token válido. A chave privada da licença e os segredos nunca estiveram no repositório (conferido no histórico inteiro).
 
-- Custo: a compilação leva uns 15 minutos por edição no GitHub (Windows, conta em dobro na cota do privado).
-- Pasta nova em `src/` precisa de `__init__.py` (um teste cobra): sem ele ela iria como `.py`.
-- Emergência (o Nuitka quebrou e a loja precisa da versão já): `python build_pdv.py --sem-nuitka` gera como antes,
-  com o código legível. Não deixe isso no workflow.
+- Para voltar a compilar: `python build_pdv.py --com-nuitka` (precisa de compilador C) e o job no workflow.
+- Repositório público: o runner do PC do dono nunca é usado (os workflows conferem `repository.private`). Mantenha em
+  Settings > Actions a aprovação obrigatória para workflows de PRs de fora.
 
 ## O que ainda não resolve
 
