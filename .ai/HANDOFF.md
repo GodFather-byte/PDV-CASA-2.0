@@ -1,3 +1,18 @@
+# Handoff (17/11/2026, tarde 2): XMLs na nuvem, teste grátis pelo site e IBS/CBS (branch `xml-nuvem-e-teste`)
+
+- XMLs da NFC-e: emissão própria em produção avisa (`nfce_xmls.avisar`) e o sincronizador sobe em lotes de 20
+  (gzip+Base64) para `POST /v1/nfce/xmls`; confirmados vão para `nfce_xmls_enviados` (esquema v56). A nuvem
+  guarda por loja e mês (`nfce_xmls`), recusa DOCTYPE/ENTITY, nome estranho e gzip ruim. ZIP do mês:
+  `/v1/painel/nfce/xmls?mes=` (dono) e `/v1/fornecedor/lojas/{chave}/nfce/xmls?mes=` (central, auditado).
+- Teste grátis: formulário no site cria loja (chave `NOME-XXXX`), edição, licença até hoje+7, senha do painel e
+  código de instalação. Limites: isca `site`, 3 por IP/dia, 1 por WhatsApp, teto diário `PDV_SITE_TESTES_DIA`
+  (30); desliga com `PDV_SITE_TESTE=0`. A central mostra responsável/WhatsApp e botão para chamar quem não vende.
+- IBS/CBS na emissão própria: grupo IBSCBS por item (CST 000 com valores; 400/410 sem) e IBSCBSTot, validados no
+  XSD oficial. Regime normal manda sempre; Simples só ligado. Alíquotas configuráveis (padrão 2026).
+- Corrigido teste antigo: `tests/test_ponte_pdv.TesteTelaQt` só fechava a janela e o Qt quebrava ao sair do
+  processo (malloc_consolidate) quando o módulo rodava sozinho; agora apaga no teardown.
+- Pendências: homologação DeliciOz (roteiro em docs/NFCE_PROPRIA.md); conferir alíquotas IBS/CBS de 2027.
+
 # Handoff (17/11/2026, tarde): lojas em teste, implantação, E2E, build único e NFC-e (branch `central-teste`)
 
 - Central: `listar` marca `em_teste` (ativa, licença valendo, nunca pagou pelo Mercado Pago, criada há até 60 dias)

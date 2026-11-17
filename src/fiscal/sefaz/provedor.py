@@ -83,6 +83,12 @@ class EmissaoPropria:
         return xml_nfce.ResponsavelTecnico(cfg("nfce_resp_cnpj"), cfg("nfce_resp_contato") or "SUPORTE",
                                            cfg("nfce_resp_email") or "suporte@willpdv.com.br", cfg("nfce_resp_fone"))
 
+    def aliquotas_ibscbs(self) -> dict:
+        """Alíquotas do IBS/CBS em % (padrão: as de teste de 2026, IBS 0,1% estadual e CBS 0,9%)."""
+        cfg = lambda chave, padrao: (self.banco.cfg(chave) or "").strip() or padrao
+        return {"ibs_uf": cfg("nfce_ibs_uf_aliquota", "0.10"), "ibs_mun": cfg("nfce_ibs_mun_aliquota", "0.00"),
+                "cbs": cfg("nfce_cbs_aliquota", "0.90")}
+
     def _proximo_numero(self) -> int:
         chave = f"nfce_proximo_numero_{self.ambiente}"
         with self.banco.transacao():
@@ -135,6 +141,7 @@ class EmissaoPropria:
         nfe, chave = xml_nfce.montar(dados, self.emitente(), xml_nfce.Numeracao(serie, numero,
                                                                                 chave_mod.codigo_numerico(numero)),
                                      self.ambiente, tp_emis=9, resp_tec=self.responsavel(), ver_proc=f"WillPDV {VERSAO}",
+                                     ibscbs=self.aliquotas_ibscbs(),
                                      contingencia=(fmt.agora_dt().astimezone(), JUSTIFICATIVA_CONTINGENCIA),
                                      assinar_qrcode=cert.assinar_bytes)
         assinar(nfe, nfe.find(f"{{{xml_nfce.NS}}}infNFe"), cert)
@@ -192,7 +199,8 @@ class EmissaoPropria:
             cnf = nota["chave"][35:43] if nota["chave"] else chave_mod.codigo_numerico(numero)
             from src.versao import VERSAO
             nfe, chave = xml_nfce.montar(dados, self.emitente(), xml_nfce.Numeracao(serie, numero, cnf),
-                                         self.ambiente, resp_tec=self.responsavel(), ver_proc=f"WillPDV {VERSAO}")
+                                         self.ambiente, resp_tec=self.responsavel(), ver_proc=f"WillPDV {VERSAO}",
+                                         ibscbs=self.aliquotas_ibscbs())
             assinar(nfe, nfe.find(f"{{{xml_nfce.NS}}}infNFe"), self.certificado())
         except (ErroFiscal, ErroCertificado) as erro:
             return Resposta("erro", str(erro))
