@@ -9,6 +9,9 @@
 - Will Adega, uma vez por banco (`edicao.preparar`, marca `adega_recebimento_simples`): zera acréscimo de 500 nas formas
   e liga `pagamento_direto`. Depois o dono manda. WillPDV e Restaurante não mudam. Teste em `tests/test_edicao.py`.
 - Com o recebimento direto a venda fecha ao pagar, então a troca de forma do #104 só vale no fluxo clássico.
+- 1.14.10 publicada em 16/11 (WillPDV e Will Adega, pacote assinado). Em 17/11 o dono mandou liberar para todas as
+  lojas: `PDV_ATUALIZACAO_PAUSADA=0` no Render (willpdv-nuvem); `PDV_ATUALIZACAO_PILOTO` ficou como estava. Para segurar
+  de novo, volte a pausa para 1. Will Restaurante tem build próprio (`will-restaurante.yml`) e não saiu nesta versão.
 
 # Handoff (16/11/2026)
 
@@ -101,4 +104,4 @@ Rede (`backend/grupos.py`): login único no painel, central da rede, volta para 
 - Tutoriais: próximos no caixa de treino (fechar caixa, desconto, cancelar item) em `ui_qt/treino.py`.
 - Empório: conta Focus, certificado e CSC no painel da Focus, token de homologação (`docs/NFCE.md`).
 - Pix integrado: testar com o Mercado Pago real (Pix de R$ 0,01), `docs/PIX.md`.
-- Atualização sem UAC (#85): teste em PC real pendente; Render segue com PDV_ATUALIZACAO_PAUSADA=1.
+- Atualização sem UAC (#85): teste em PC real pendente; pausa retirada em 17/11 (acompanhar as lojas).
