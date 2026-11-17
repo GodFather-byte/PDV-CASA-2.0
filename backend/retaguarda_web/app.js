@@ -748,6 +748,7 @@
           arquivo.value = "";
           desenhar();
           atualizarContador();
+          await oferecerCobranca(area, envio.length);
         } catch (erro) { recado(erro.message); }
         finally { enviar.disabled = false; }
       });
@@ -783,6 +784,29 @@
   async function copiar(texto) {
     try { await navigator.clipboard.writeText(texto); recado("Copiado."); }
     catch (_) { recado("Não consegui copiar: selecione o texto e copie."); }
+  }
+  async function oferecerCobranca(area, quantidade) {
+    // Depois de um envio: lança a implantação (preço fixo) ou o cadastro por produto com um clique.
+    let tabela;
+    try { tabela = await apiCentral("/precos"); } catch (_) { return; }
+    const opcoes = tabela.precos.filter((p) => /implanta|cadastr/i.test(p.descricao));
+    if (!opcoes.length) {
+      area.append(el("p", "Dica: cadastre em Serviços cobrados um preço de \"Implantação\" ou \"Cadastro por produto\" " +
+        "para lançar a cobrança com um clique depois de cada envio.", "suave"));
+      return;
+    }
+    const caixa = el("div", null, "cartao");
+    caixa.append(el("strong", "Cobrar este serviço?"));
+    opcoes.forEach((p) => {
+      const q = p.por_unidade ? quantidade : 1;
+      const descricao = p.por_unidade ? p.descricao + " (" + q + " × " + dinheiro(p.valor_cent) + ")" : p.descricao;
+      caixa.append(botaoPequeno("Lançar " + descricao + " · " + dinheiro(p.valor_cent * q), async () => {
+        await api("/servicos", "POST", { descricao: descricao, valor_cent: p.valor_cent * q });
+        recado("Serviço lançado. Cobre pelo Pix em Serviços cobrados.");
+        caixa.remove();
+      }, ""));
+    });
+    area.append(caixa);
   }
   async function telaServicos() {
     const [dados, tabela] = await Promise.all([api("/servicos"), apiCentral("/precos")]);

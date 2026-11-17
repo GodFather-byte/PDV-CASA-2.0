@@ -545,6 +545,15 @@ def instalar_fornecedor(app: FastAPI, sessao, obter, auditar) -> APIRouter:
         db.commit()
         return {"servico": _servico_publico(servico)}
 
+    @router.get("/v1/fornecedor/servicos/a-receber")
+    def a_receber(_=Depends(sessao), db: Session = Depends(get_db)):
+        """Serviços ainda não pagos de todas as lojas, somados por loja (para a tela inicial da central)."""
+        from sqlalchemy import func
+        linhas = (db.query(RetaguardaServico.chave_loja, func.count(RetaguardaServico.id), func.sum(RetaguardaServico.valor_cent))
+                  .filter(RetaguardaServico.pago_em.is_(None)).group_by(RetaguardaServico.chave_loja).all())
+        lojas = [{"chave": c, "servicos": n, "valor_cent": int(v or 0)} for c, n, v in linhas]
+        return {"lojas": sorted(lojas, key=lambda x: -x["valor_cent"]), "total_cent": sum(l["valor_cent"] for l in lojas)}
+
     @router.get("/v1/fornecedor/servicos/catalogo")
     def catalogo(_=Depends(sessao)):
         from src.controllers.catalogo import CATALOGO_ADEGA

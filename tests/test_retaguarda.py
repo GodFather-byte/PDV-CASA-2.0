@@ -418,6 +418,8 @@ class TesteFornecedor(BaseNuvem):
         self.assertEqual(r.status_code, 200, r.text)
         ident = r.json()["servico"]["id"]
         self.assertEqual(self.fornecedor.get(base).json()["a_receber_cent"], 15000)
+        geral = self.fornecedor.get("/v1/fornecedor/servicos/a-receber").json()
+        self.assertEqual((geral["total_cent"], geral["lojas"][0]["chave"]), (15000, "ADEGA-1"))
         self.assertTrue(self.fornecedor.post(f"{base}/{ident}/pago", headers=self.csrf).json()["servico"]["pago_em"])
         self.assertEqual(self.fornecedor.get(base).json()["a_receber_cent"], 0)
 
