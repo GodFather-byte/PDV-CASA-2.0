@@ -835,6 +835,57 @@
     return item;
   }
 
+  const NOMES_MES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
+    "outubro", "novembro", "dezembro"];
+
+  async function carregarXmls() {
+    if (!estado.token) return;
+    let dados;
+    try {
+      dados = await chamarApi("/nfce/meses");
+    } catch (e) {
+      $("bloco-xmls").hidden = true;                      // nuvem antiga ou sem NFC-e própria
+      return;
+    }
+    const meses = Array.isArray(dados && dados.meses) ? dados.meses : [];
+    $("bloco-xmls").hidden = meses.length === 0;
+    const sel = $("mes-xmls");
+    limpar(sel);
+    for (const m of meses) {
+      const [ano, mes] = String(m.mes).split("-");
+      const op = document.createElement("option");
+      op.value = m.mes;
+      op.textContent = NOMES_MES[Number(mes) - 1] + " de " + ano + " · " + m.nfe + " nota(s)" +
+        (m.cancelamento ? ", " + m.cancelamento + " cancelada(s)" : "") +
+        (m.inutilizacao ? ", " + m.inutilizacao + " inutilização(ões)" : "");
+      sel.append(op);
+    }
+  }
+
+  async function baixarXmls() {
+    const mes = $("mes-xmls").value;
+    if (!mes || !estado.token) return;
+    const aviso = $("aviso-xmls");
+    aviso.hidden = false;
+    aviso.textContent = "Preparando o arquivo…";
+    try {
+      const r = await fetch(API_BASE + "/nfce/xmls?mes=" + encodeURIComponent(mes), {
+        headers: { Authorization: "Bearer " + estado.token }, cache: "no-store", credentials: "same-origin" });
+      if (!r.ok) throw new Error(r.status === 404 ? "Nenhum XML neste mês." : "Não consegui baixar (HTTP " + r.status + ").");
+      const url = URL.createObjectURL(await r.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "nfce-" + mes + ".zip";
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      aviso.textContent = "Arquivo baixado. Mande o ZIP ao contador.";
+    } catch (e) {
+      aviso.textContent = e.message || "Não consegui baixar.";
+    }
+  }
+
   async function carregarNotas() {
     if (!estado.token) return;
     let dados;
@@ -897,6 +948,7 @@
       const arquivos = campo.files;
       enviarNotas(arquivos).finally(() => { campo.value = ""; });
     });
+    $("baixar-xmls").addEventListener("click", baixarXmls);
   }
 
   // ------------------------------------------------------------------
@@ -2235,7 +2287,7 @@
     if (nome === "vendas" && estado.token) carregarVendas();
     if (nome === "periodo" && estado.token) carregarPeriodo();
     if (nome === "lucro" && estado.token) carregarLucro();
-    if (nome === "produtos" && estado.token) carregarNotas();
+    if (nome === "produtos" && estado.token) { carregarNotas(); carregarXmls(); }
   }
 
   function mudarDia(novoDia) {

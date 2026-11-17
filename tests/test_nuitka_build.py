@@ -57,15 +57,15 @@ class TestNuitkaBuild(unittest.TestCase):
         self.assertNotIn("src.core.licenca", ocultos)
         self.assertNotIn("src.ui_qt.caixa", ocultos)
 
-    def test_sem_nuitka_e_so_emergencia(self):
+    def test_nuitka_e_opcional_e_o_build_publicado_nao_compila(self):
         argumentos = build_pdv.argumentos_codigo(["src.core.licenca"], compilar=False)
         self.assertEqual(argumentos, ["--hidden-import", "src.core.licenca"])
+        self.assertIn('compilar="--com-nuitka" in sys.argv[1:]', (RAIZ / "build_pdv.py").read_text(encoding="utf-8"))
         for arquivo in ("build-windows.yml", "will-restaurante.yml", "will-variedades.yml"):
             texto = (RAIZ / ".github" / "workflows" / arquivo).read_text(encoding="utf-8")
             self.assertIn("python build_pdv.py", texto)
-            self.assertNotIn("--sem-nuitka", texto, arquivo)
-        self.assertIn("nuitka", (RAIZ / "requirements-build.in").read_text(encoding="utf-8"))
-
+            self.assertNotIn("build/nuitka", texto, arquivo)
+            self.assertNotIn("--com-nuitka", texto, arquivo)
 
 if __name__ == "__main__":
     unittest.main()

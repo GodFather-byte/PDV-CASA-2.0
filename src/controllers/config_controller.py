@@ -161,9 +161,12 @@ CAMPOS_CONFIG = [
     ("nfce_cfop_padrao", "NFC-e: CFOP padrão dos produtos (confirmar com o contador)", "texto", "Integrações"),
     ("nfce_icms_padrao", "NFC-e: CSOSN ou CST do ICMS padrão (Simples: 102)", "texto", "Integrações"),
     ("nfce_pis_cofins_padrao", "NFC-e: CST de PIS e COFINS padrão (Simples: 49)", "texto", "Integrações"),
-    ("nfce_ibscbs_enviar", "NFC-e: enviar IBS/CBS (reforma tributária; obrigatório no regime normal)", "sn", "Integrações"),
+    ("nfce_ibscbs_enviar", "NFC-e: enviar IBS/CBS também no Simples (no regime normal vai sempre)", "sn", "Integrações"),
     ("nfce_ibscbs_cst_padrao", "NFC-e: CST do IBS/CBS padrão", "texto", "Integrações"),
     ("nfce_ibscbs_class_padrao", "NFC-e: classificação tributária (cClassTrib) padrão", "texto", "Integrações"),
+    ("nfce_ibs_uf_aliquota", "NFC-e própria: alíquota do IBS estadual em % (2026: 0.10)", "texto", "Integrações"),
+    ("nfce_ibs_mun_aliquota", "NFC-e própria: alíquota do IBS municipal em % (2026: 0.00)", "texto", "Integrações"),
+    ("nfce_cbs_aliquota", "NFC-e própria: alíquota da CBS em % (2026: 0.90)", "texto", "Integrações"),
     ("usar_caderneta", "Caderneta: venda a prazo para clientes (F5) e cadastro de clientes", "sn", "Módulos"),
     ("usar_contas", "Contas a pagar/receber, plano de contas e relatórios financeiros", "sn", "Módulos"),
     ("usar_cozinha_bar", "Cozinha/Bar: imprimir por setor (impressoras nomeadas) e acompanhar o preparo dos itens "

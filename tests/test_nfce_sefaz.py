@@ -113,6 +113,40 @@ class TestXmlNfce(unittest.TestCase):
         self.assertIsNotNone(nfe.find(".//n:detPag/n:card", namespaces={"n": NS}))      # débito leva o grupo card
         self.assertTrue(esquema().validate(self._assinado(nfe)))
 
+    def test_ibs_cbs_no_regime_normal_valido_no_schema_e_somado(self):
+        itens = dados()["items"]
+        itens[0].update(ibs_cbs_situacao_tributaria="000", ibs_cbs_classificacao_tributaria="000001")
+        itens[1].update(ibs_cbs_situacao_tributaria="410", ibs_cbs_classificacao_tributaria="410001")
+        normal = xml_nfce.Emitente(**{**EMIT.__dict__, "crt": "3"})
+        itens[0]["icms_situacao_tributaria"] = "40"
+        itens[1]["icms_situacao_tributaria"] = "41"
+        aliq = {"ibs_uf": "0.10", "ibs_mun": "0.00", "cbs": "0.90"}
+        nfe, _ = xml_nfce.montar(dados(items=itens), normal, xml_nfce.Numeracao(1, 7, "12345678"), "homologacao",
+                                 ibscbs=aliq)
+        g = nfe.find(f".//{{{NS}}}det/{{{NS}}}imposto/{{{NS}}}IBSCBS")
+        self.assertEqual((g.findtext(f"{{{NS}}}CST"), g.findtext(f"{{{NS}}}cClassTrib")), ("000", "000001"))
+        # item 1: 9,00 - 0,50 de desconto = 8,50 de base; IBS 0,1% = 0,01 (0,0085 arredonda); CBS 0,9% = 0,08
+        self.assertEqual(g.findtext(f".//{{{NS}}}vBC"), "8.50")
+        self.assertEqual(g.findtext(f".//{{{NS}}}pIBSUF"), "0.10")
+        self.assertEqual(g.findtext(f".//{{{NS}}}vIBSUF"), "0.01")
+        self.assertEqual(g.findtext(f".//{{{NS}}}vCBS"), "0.08")
+        tot = nfe.find(f".//{{{NS}}}IBSCBSTot")
+        self.assertEqual(tot.findtext(f"{{{NS}}}vBCIBSCBS"), "8.50")              # item imune (410) não soma base
+        self.assertEqual(tot.findtext(f"{{{NS}}}gCBS/{{{NS}}}vCBS"), "0.08")
+        assinatura.assinar(nfe, nfe.find(f"{{{NS}}}infNFe"), assinatura.Certificado.do_pfx(certificado_teste(), "1234"))
+        self.assertTrue(esquema().validate(nfe), esquema().error_log)
+
+    def test_ibs_cbs_cst_sem_suporte_e_classe_invalida_avisam(self):
+        itens = dados()["items"]
+        itens[0].update(ibs_cbs_situacao_tributaria="200", ibs_cbs_classificacao_tributaria="200001")
+        with self.assertRaisesRegex(ErroFiscal, "CST 200"):
+            xml_nfce.montar(dados(items=itens), EMIT, xml_nfce.Numeracao(1, 7, "12345678"), "homologacao",
+                            ibscbs={"ibs_uf": "0.10", "ibs_mun": "0", "cbs": "0.90"})
+        itens[0].update(ibs_cbs_situacao_tributaria="000", ibs_cbs_classificacao_tributaria="1")
+        with self.assertRaisesRegex(ErroFiscal, "cClassTrib"):
+            xml_nfce.montar(dados(items=itens), EMIT, xml_nfce.Numeracao(1, 7, "12345678"), "homologacao",
+                            ibscbs={"ibs_uf": "0.10", "ibs_mun": "0", "cbs": "0.90"})
+
     def _assinado(self, nfe):
         assinatura.assinar(nfe, nfe.find(f"{{{NS}}}infNFe"), assinatura.Certificado.do_pfx(certificado_teste(), "1234"))
         return nfe

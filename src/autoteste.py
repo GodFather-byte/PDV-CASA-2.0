@@ -33,6 +33,7 @@ MODULOS = [
     'src.controllers.custos_venda',
     'src.sync.cardapio_envio', 'src.sync.pedidos_online',
     'src.sync.devolucoes_envio',
+    'src.sync.nfce_xmls',
     'src.sync.ociosidade',
     'src.core.erros_caixa',
     'src.whatsapp.alertas',

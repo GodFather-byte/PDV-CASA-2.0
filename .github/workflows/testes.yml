@@ -93,7 +93,7 @@ jobs:
     # Com o PC, a suíte inteira roda no PR; depois do merge não repete (o PC fica livre para o próximo PR).
     if: ${{ !(github.event.repository.private && vars.RUNNER_PC && github.event_name == 'push') }}
     runs-on: ${{ matrix.os == 'windows-latest' && (github.event.repository.private && vars.RUNNER_PC && fromJSON(vars.RUNNER_PC) || 'windows-latest') || matrix.os }}
-    timeout-minutes: 30          # um teste de tela travado (janela esperando resposta) vira falha, não horas de espera
+    timeout-minutes: 60          # o PC do dono é mais lento; o tools.rodar_testes já encerra módulo travado (15 min)
     env:
       QT_QPA_PLATFORM: offscreen
     strategy:
@@ -129,7 +129,9 @@ jobs:
           python -c "from fastapi.testclient import TestClient; import sqlalchemy, psycopg, PySide6"
       - name: Testes (Windows)
         if: runner.os == 'Windows'
-        run: python -m unittest discover -s tests
+        # Um processo por módulo, em paralelo, com limite por módulo: no PC do dono a suíte em série passa de 30 min
+        # e um teste travado só aparecia como silêncio. Aqui sai o tempo de cada módulo e o nome do que travou.
+        run: python -m tools.rodar_testes --limite 900
       - name: Instalação da PWA do porteiro (iPhone, iPad e Android)
         run: node --test tests/test_porteiro_instalacao.cjs tests/test_pdf_painel.cjs
       - name: Testes (Linux, telas num X virtual)

@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 55
+VERSAO_ESQUEMA = 56
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -188,6 +188,11 @@ TABELAS = [
         inutilizada_em TEXT
     )""",
     "CREATE INDEX IF NOT EXISTS ix_nfce_situacao ON nfce_notas(situacao)",
+    # XMLs da NFC-e (produção) já copiados para a nuvem, pelo nome do arquivo em nfce/producao/.
+    """CREATE TABLE IF NOT EXISTS nfce_xmls_enviados (
+        arquivo TEXT PRIMARY KEY,
+        enviado_em TEXT NOT NULL
+    )""",
     # Pix integrado (Mercado Pago): cada QR Code gerado no caixa. O pagamento só entra na venda depois que o banco
     # confirma; `pagamento_id` liga a cobrança ao pagamento lançado. `referencia` é a chave de idempotência enviada.
     """CREATE TABLE IF NOT EXISTS pix_cobrancas (
@@ -1177,6 +1182,7 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    56: [],  # tabela aditiva nfce_xmls_enviados (cópia dos XMLs da NFC-e na nuvem)
     # v55: NFC-e em contingência off-line (impressa antes de autorizar) e números inutilizados na SEFAZ.
     55: [("coluna", "nfce_notas", "contingencia_em", "TEXT"),
          ("coluna", "nfce_notas", "inutilizada_em", "TEXT")],

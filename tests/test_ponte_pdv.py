@@ -553,8 +553,17 @@ class TesteTelaQt(BasePonte):
         self.ctx.operador = self.ctx.acesso.operador(self.operador_adm())
         self.banco.cfg_set(ponte.CHAVE_ATIVA, "N")
         self.janela = JanelaConfiguracoes(self.ctx)
-        self.addCleanup(self.janela.close)
+        self.addCleanup(self._descartar_janela)
         self.janela.abas.setCurrentIndex(SECOES.index("nuvem"))
+
+    def _descartar_janela(self):
+        # Fechar não basta: a janela viva até o fim do processo é destruída depois do QApplication e o Python
+        # quebra na saída (malloc_consolidate/segfault, depois do "OK"). Apaga agora, com o app ainda de pé.
+        from PySide6.QtCore import QCoreApplication, QEvent
+        self.janela.close()
+        self.janela.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        self.janela = None
 
     def test_token_do_caixa_oculto_copiar_id_e_apagar(self):
         campo = self.janela.campos["nuvem"][ponte.CHAVE_TOKEN]

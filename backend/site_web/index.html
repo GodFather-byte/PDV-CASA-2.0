@@ -25,6 +25,7 @@
       <h1>O caixa da casa, no Windows, mesmo sem internet.</h1>
       <p class="lead">Adega, bar e boate. Venda, estoque, fechamento e impressora no balcão. O dono acompanha pelo celular. A boate não recebe pedido online; a adega recebe.</p>
       <div class="acoes">
+        <a class="botao" href="#teste">Testar grátis agora</a>
         <a class="zap" href="{{zap_contato}}">Falar no WhatsApp</a>
         <a class="fantasma" href="#planos">Ver planos</a>
       </div>
@@ -105,6 +106,40 @@
       <p class="miudo">Assinar abre o WhatsApp. O pagamento automático entra numa etapa seguinte.</p>
     </section>
 
+    <section id="teste">
+      <h2>Teste grátis de {{dias_teste}} dias</h2>
+      <p class="lead">Preencha e receba na hora o instalador, o código que configura o caixa e a senha do painel do dono. Sem cartão.</p>
+      <form id="form-teste" class="form-teste" novalidate>
+        <label>Programa
+          <select name="edicao">
+            <option value="willadega">Will Adega (adega, depósito, conveniência)</option>
+            <option value="willpdv">WillPDV (boate e bar)</option>
+          </select>
+        </label>
+        <label>Nome da loja <input name="nome_loja" required minlength="3" maxlength="80" autocomplete="organization"></label>
+        <label>Seu nome <input name="responsavel" required minlength="3" maxlength="80" autocomplete="name"></label>
+        <label>WhatsApp com DDD <input name="whatsapp" required inputmode="tel" autocomplete="tel" placeholder="11 91234-5678"></label>
+        <label>Cidade <input name="cidade" maxlength="60" autocomplete="address-level2"></label>
+        <label class="isca" aria-hidden="true">Não preencha <input name="site" tabindex="-1" autocomplete="off"></label>
+        <label class="aceite"><input type="checkbox" name="aceite" required> Entendi: o teste dura {{dias_teste}} dias, o cupom é não fiscal e meus dados ficam no computador da loja.</label>
+        <button class="botao" type="submit">Criar meu teste</button>
+        <p id="teste-aviso" class="miudo" role="status"></p>
+      </form>
+      <div id="teste-pronto" class="cartao" hidden>
+        <h3>Pronto! Seu teste vai até <span data-campo="validade"></span>.</h3>
+        <ol>
+          <li>Baixe e instale o programa no computador do caixa: <a data-campo="instalador" class="botao">Baixar o <span data-campo="programa"></span></a></li>
+          <li>Abra o programa, clique em "Ativar licença ou instalar loja" e cole o código abaixo (ou leia o QR):
+            <textarea data-campo="codigo_instalacao" rows="3" readonly></textarea>
+            <button type="button" class="fantasma" id="copiar-codigo">Copiar código</button>
+            <div data-campo="qr_instalacao" class="qr"></div></li>
+          <li>No celular, o painel do dono: <a data-campo="painel"></a> · loja <strong data-campo="loja"></strong> · senha <strong data-campo="senha_painel"></strong>
+            <br><span class="miudo">Anote a senha: ela aparece só agora.</span></li>
+        </ol>
+        <a class="zap" data-campo="zap_ajuda">Quero ajuda para instalar</a>
+      </div>
+    </section>
+
     <section id="faq">
       <h2>Dúvidas</h2>
       <details>
@@ -131,5 +166,6 @@
     <a class="zap" href="{{zap_contato}}">Chamar no WhatsApp</a>
   </footer>
   <a class="zap fixo" href="{{zap_contato}}">WhatsApp</a>
+  <script src="/site/teste.js" defer></script>
 </body>
 </html>
