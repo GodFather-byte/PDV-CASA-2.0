@@ -1,3 +1,13 @@
+# Handoff (17/11/2026, 13h30): repositório PÚBLICO, sem Nuitka, sem runner do PC
+
+- O dono mandou abrir o código (Actions de graça): o repositório está **público** desde 17/11. Antes, o histórico
+  inteiro (438 commits, todas as branches) foi varrido: sem token, senha de banco, chave privada ou dado de cliente.
+- Build sem Nuitka (`build_pdv.py --com-nuitka` é opcional); job "Compilar" e caches saíram dos workflows.
+- O runner do PC (PC-WILLYANPHP) foi **excluído** do repositório (runner próprio em repositório público roda código de
+  PR de fora no PC). A variável `RUNNER_PC` ficou, mas os workflows a ignoram em repositório público.
+- `tools/rodar_testes.py`: suíte em paralelo por módulo, com limite e tempo de cada; o CI do Windows usa ele.
+- Pendências: merge do PR #119 (XMLs na nuvem, teste grátis pelo site, IBS/CBS) e publicar 1.14.13.
+
 # Handoff (17/11/2026, tarde 2): XMLs na nuvem, teste grátis pelo site e IBS/CBS (branch `xml-nuvem-e-teste`)
 
 - XMLs da NFC-e: emissão própria em produção avisa (`nfce_xmls.avisar`) e o sincronizador sobe em lotes de 20
