@@ -44,6 +44,10 @@ PERFIS = {
               "delivery, caderneta (fiado) e desconto liberado",
               {**_SEM_BOATE, "usar_mesas": "N", "usar_delivery": "S", "usar_caderneta": "S", "cobra_servico_mesa": "N",
                "cobra_servico_comanda": "N", "agrupar_itens_balcao": "S"}),
+    "variedades": ("Loja de variedades / eletrônicos", "venda só no balcão pelo leitor de código de barras, etiqueta com "
+                   "código de barras próprio, atacado, caderneta (fiado) e desconto liberado",
+                   {**_SEM_BOATE, "usar_mesas": "N", "usar_caderneta": "S", "cobra_servico_mesa": "N",
+                    "cobra_servico_comanda": "N", "agrupar_itens_balcao": "S"}),
     "hamburgueria": ("Hamburgueria", "mesas, cozinha, delivery e pedido online; sem recursos da casa noturna",
                     {**_RESTAURANTE, "pergunta_pessoas": "N"}),
     "pizzaria": ("Pizzaria", "mesas, cozinha, delivery e pedido online",
@@ -63,6 +67,11 @@ CATEGORIAS = {
     "rodizio": {"COZINHA": ["RODÍZIO", "EXTRAS", "SOBREMESAS"]},
     "adega": {"BEBIDAS": ["CERVEJAS", "DESTILADOS", "VINHOS E ESPUMANTES", "REFRIGERANTES", "ÁGUAS E SUCOS", "ENERGÉTICOS"],
               "CONVENIÊNCIA": ["GELO E CARVÃO", "TABACARIA", "PETISCOS", "DESCARTÁVEIS"]},
+    "variedades": {"ELETRÔNICOS": ["FONES E ÁUDIO", "CABOS E CARREGADORES", "ACESSÓRIOS DE CELULAR", "INFORMÁTICA",
+                                   "PILHAS E LANTERNAS"],
+                   "CASA": ["COZINHA", "ORGANIZAÇÃO E LIMPEZA", "FERRAMENTAS"],
+                   "PESSOAL": ["VESTUÁRIO", "BELEZA", "BRINQUEDOS", "PAPELARIA"],
+                   "PRESENTES": ["PERSONALIZADOS", "DECORAÇÃO"]},
 }
 _OPCOES = {c[0]: dict(c[4]) for c in CAMPOS_CONFIG if c[0] in ITENS and len(c) > 4}
 

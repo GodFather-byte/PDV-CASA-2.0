@@ -49,7 +49,9 @@ def rodar(modulo: str, limite: int) -> tuple[str, str, float, str]:
             return modulo, "TRAVOU", time.monotonic() - inicio, saida[-4000:]
     saida = (r.stdout or "") + (r.stderr or "")
     situacao = "OK" if r.returncode == 0 else "FALHOU"
-    return modulo, situacao, time.monotonic() - inicio, saida[-6000:] if situacao != "OK" else ""
+    if situacao != "OK":        # testes "OK" com saída diferente de zero = o processo caiu ao encerrar (ex.: Qt no Windows)
+        saida = saida[-6000:] + f"\n(código de saída do processo: {r.returncode})"
+    return modulo, situacao, time.monotonic() - inicio, saida if situacao != "OK" else ""
 
 
 def main(argv: list[str] | None = None) -> int:

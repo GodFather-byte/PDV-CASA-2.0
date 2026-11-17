@@ -61,7 +61,7 @@ class TestNuitkaBuild(unittest.TestCase):
         argumentos = build_pdv.argumentos_codigo(["src.core.licenca"], compilar=False)
         self.assertEqual(argumentos, ["--hidden-import", "src.core.licenca"])
         self.assertIn('compilar="--com-nuitka" in sys.argv[1:]', (RAIZ / "build_pdv.py").read_text(encoding="utf-8"))
-        for arquivo in ("build-windows.yml", "will-restaurante.yml"):
+        for arquivo in ("build-windows.yml", "will-restaurante.yml", "will-variedades.yml"):
             texto = (RAIZ / ".github" / "workflows" / arquivo).read_text(encoding="utf-8")
             self.assertIn("python build_pdv.py", texto)
             self.assertNotIn("build/nuitka", texto, arquivo)

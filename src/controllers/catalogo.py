@@ -1,4 +1,5 @@
 """Produtos prontos: um catálogo com o que mais se vende numa adega em São Paulo, para cadastrar a loja em minutos.
+A loja de variedades (Will Variedades) tem o seu, com os dados em `catalogo_variedades.py`; a edição escolhe qual abre.
 
 Cada item traz o nome padronizado, o subgrupo (os mesmos do perfil Adega) e o NCM. Não traz preço, porque cada loja cobra
 o seu, nem código de barras: um número errado faria o leitor puxar o produto errado no caixa. O código de barras entra
@@ -11,6 +12,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from src.controllers import catalogo_variedades
 from src.controllers.cadastro_controller import CadastroController
 from src.controllers.importacao_produtos import ImportacaoProdutos, Previa
 from src.core import formatacao as fmt
@@ -154,33 +156,65 @@ _SECOES = (
 )
 
 
-def _montar() -> tuple[ItemCatalogo, ...]:
-    itens = [ItemCatalogo(f"CERVEJA {marca} {emb}", "CERVEJAS", CERVEJA) for marca, embs in _CERVEJAS for emb in embs]
-    for subgrupo, padrao, nomes in _SECOES:
+def _montar(secoes, inicio=()) -> tuple[ItemCatalogo, ...]:
+    itens = list(inicio)
+    for subgrupo, padrao, nomes in secoes:
         for item in nomes:
             nome, ncm = (item, padrao) if isinstance(item, str) else item
             itens.append(ItemCatalogo(nome, subgrupo, ncm))
     return tuple(itens)
 
 
-CATALOGO_ADEGA = _montar()
+CATALOGO_ADEGA = _montar(_SECOES, [ItemCatalogo(f"CERVEJA {marca} {emb}", "CERVEJAS", CERVEJA)
+                                   for marca, embs in _CERVEJAS for emb in embs])
 # Ordem das abas/filtros na tela (a mesma do perfil Adega).
 SUBGRUPOS = ("CERVEJAS", "DESTILADOS", "VINHOS E ESPUMANTES", "REFRIGERANTES", "ÁGUAS E SUCOS", "ENERGÉTICOS",
              "GELO E CARVÃO", "TABACARIA", "PETISCOS", "DESCARTÁVEIS")
+CATALOGO_VARIEDADES = _montar(catalogo_variedades.SECOES)
+
+
+@dataclass(frozen=True)
+class Catalogo:
+    tipo: str
+    titulo: str                        # "Produtos prontos de ..."
+    exemplo: str                       # dica do campo de busca
+    itens: tuple[ItemCatalogo, ...]
+    subgrupos: tuple[str, ...]
+
+
+CATALOGOS = {
+    "adega": Catalogo("adega", "adega", "skol, lata, whisky...", CATALOGO_ADEGA, SUBGRUPOS),
+    "variedades": Catalogo("variedades", "loja de variedades", "fone, cabo, meia, copo...", CATALOGO_VARIEDADES,
+                           catalogo_variedades.SUBGRUPOS),
+}
+
+
+def tipo_da_edicao() -> str:
+    """O catálogo que o programa abre: o de variedades no Will Variedades, o da adega nas outras edições."""
+    from src.core import edicao
+    return edicao.atual().perfil if edicao.atual().perfil in CATALOGOS else "adega"
+
+
+def catalogo(tipo: str | None = None) -> Catalogo:
+    tipo = tipo or tipo_da_edicao()
+    if tipo not in CATALOGOS:
+        raise ErroNegocio(f"Catálogo desconhecido: {tipo}.")
+    return CATALOGOS[tipo]
 
 
 class CatalogoController:
-    def __init__(self, banco, operador_id: int | None = None):
+    def __init__(self, banco, operador_id: int | None = None, tipo: str | None = None):
         self.banco = banco
         self.operador_id = operador_id
         self.cad = CadastroController(banco)
+        self.catalogo = catalogo(tipo)
 
     def itens(self, subgrupo: str | None = None, busca: str = "") -> list[dict]:
         """O catálogo com `ja_cadastrado` (mesmo nome já existe na loja), filtrado por subgrupo e por texto."""
         existentes = {r["nome"].casefold() for r in self.banco.todos("SELECT nome FROM produtos")}
         termos = [t for t in _sem_acento(busca).split() if t]
         saida = []
-        for i, item in enumerate(CATALOGO_ADEGA):
+        for i, item in enumerate(self.catalogo.itens):
             if subgrupo and item.subgrupo != subgrupo:
                 continue
             if termos and not all(t in _sem_acento(item.nome) for t in termos):
@@ -196,9 +230,9 @@ class CatalogoController:
             raise ErroNegocio("Marque pelo menos um produto.")
         tabela, ncms = [], {}
         for indice, preco in escolhidos.items():
-            if not 0 <= indice < len(CATALOGO_ADEGA):
+            if not 0 <= indice < len(self.catalogo.itens):
                 raise ErroNegocio("Produto do catálogo inválido.")
-            item = CATALOGO_ADEGA[indice]
+            item = self.catalogo.itens[indice]
             if type(preco) is not int or preco <= 0:
                 raise ErroValidacao(f"Informe o preço de {item.nome}.", {"preco": "obrigatório"})
             tabela.append({"_linha": len(tabela) + 1, "nome": item.nome, "preco": fmt.fmt_num(preco),
@@ -246,16 +280,16 @@ def _sem_acento(texto: str) -> str:
     return "".join(c for c in base if not unicodedata.combining(c)).casefold()
 
 
-def conferir_catalogo() -> list[str]:
+def conferir_catalogo(tipo: str = "adega") -> list[str]:
     """Problemas do catálogo (usado nos testes): nome repetido, longo demais, NCM inválido ou subgrupo fora da lista."""
     problemas, vistos = [], set()
-    for item in CATALOGO_ADEGA:
+    for item in catalogo(tipo).itens:
         if item.nome in vistos:
             problemas.append(f"repetido: {item.nome}")
         vistos.add(item.nome)
         if len(item.nome) > 50:
             problemas.append(f"nome com mais de 50 letras: {item.nome}")
-        if item.subgrupo not in SUBGRUPOS:
+        if item.subgrupo not in catalogo(tipo).subgrupos:
             problemas.append(f"subgrupo desconhecido: {item.nome}")
         try:
             ncm_mod.validar(item.ncm)

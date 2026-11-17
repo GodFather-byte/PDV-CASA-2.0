@@ -1,4 +1,4 @@
-"""Produtos prontos (catálogo de adega) e vínculo de código de barras pelo leitor. As regras ficam em CatalogoController."""
+"""Produtos prontos (catálogo de adega ou de variedades, conforme a edição) e vínculo de código de barras pelo leitor. As regras ficam em CatalogoController."""
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
 
-from src.controllers.catalogo import SUBGRUPOS, CatalogoController
+from src.controllers.catalogo import CatalogoController, catalogo
 from src.controllers.config_controller import modulos_desligados
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao, ErroValidacao
@@ -44,19 +44,22 @@ class JanelaCatalogo(QDialog):
         self.escolhidos: dict[int, int] = {}          # índice do catálogo -> preço em centavos
         self._carregando = False
         layout = QVBoxLayout(self)
-        titulo = texto("Produtos prontos de adega", "titulo")
+        self.catalogo = catalogo()
+        titulo = texto(f"Produtos prontos de {self.catalogo.titulo}", "titulo")
         layout.addWidget(titulo)
         ajuda = texto("Digite o preço dos produtos que a loja vende: eles ficam marcados. Depois clique em "
                       "\"Adicionar\". Nome, subgrupo e NCM já vêm prontos. O código de barras você grava depois, "
-                      "passando o produto no leitor.", "aviso")
+                      "passando o produto no leitor" + (" (ou imprime a etiqueta com código próprio em Estoque > "
+                                                        "Etiquetas)." if self.catalogo.tipo == "variedades" else "."),
+                      "aviso")
         ajuda.setWordWrap(True)
         layout.addWidget(ajuda)
         filtros = QHBoxLayout()
         self.cmb_subgrupo = QComboBox()
-        self.cmb_subgrupo.addItems((TODOS, *SUBGRUPOS))
+        self.cmb_subgrupo.addItems((TODOS, *self.catalogo.subgrupos))
         self.cmb_subgrupo.currentIndexChanged.connect(self.atualizar)
         self.ent_busca = QLineEdit()
-        self.ent_busca.setPlaceholderText("Procurar: skol, lata, whisky...")
+        self.ent_busca.setPlaceholderText("Procurar: " + self.catalogo.exemplo)
         self.ent_busca.textChanged.connect(self.atualizar)
         filtros.addWidget(QLabel("Subgrupo:"))
         filtros.addWidget(self.cmb_subgrupo)

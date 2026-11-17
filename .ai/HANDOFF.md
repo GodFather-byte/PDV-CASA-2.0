@@ -1,3 +1,33 @@
+# Handoff (17/11/2026, noite): Will Variedades, etapa 1 (branch `claude/inspiring-bohr-cp5miu`)
+
+Edição nova para loja de eletrônicos, utilidades e presentes ("loja de chinês"): `python -m src.app --edicao willvariedades`.
+
+- Edição `willvariedades` em `src/core/edicao.py`: perfil fixo `variedades` (balcão, caderneta, desconto, agrupa iguais),
+  sem mesas/garotas/cozinha/quartos/porteiro/retornáveis/pedido online, recebimento direto e sem a taxa do crédito
+  (`recebimento_direto`, o mesmo ajuste da adega). `sem_gelada=True` esconde preço gelada e casco no cadastro (a aba
+  "Adega" vira "Atacado"), nas promoções, no cadastro rápido do caixa e nas etiquetas.
+- Perfil e categorias em `perfil_controller.py` (ELETRÔNICOS, CASA, PESSOAL, PRESENTES; 14 subgrupos).
+- Catálogo: `src/controllers/catalogo_variedades.py` (282 itens sem marca, 35 sem NCM de propósito: pilha, fita, boné,
+  mouse pad). `catalogo.py` virou multi-catálogo (`CATALOGOS`, `tipo_da_edicao`); a tela e a central escolhem
+  (`GET /v1/fornecedor/servicos/catalogo?tipo=variedades`, botão novo na importação de planilha da retaguarda).
+  Sugestão de NCM (`fiscal/ncm.py`) ganhou os mesmos produtos; teste garante que catálogo e sugestão não discordam.
+- Etiqueta com código de barras (`etiqueta_controller.py`, `ui_qt/etiquetas.py`, Estoque > Etiquetas > "Com código de
+  barras..."): produto sem código ganha EAN-13 próprio `200 + id + dígito` (faixa interna GS1), gravado em `cbarra`; a folha
+  sai em HTML no navegador (A4 com 33 ou 65 etiquetas, rolo 40x25 e 50x30; "pular" para folha já usada). Vale em todas as
+  edições. Barras conferidas com leitor independente (zxing) sobre a folha renderizada no Chromium.
+- Empacotamento: `instalador/WillVariedades.iss` (AppId próprio), logotipo (`tools/gerar_logos.gravar_variedades`),
+  `iniciar_will_variedades.bat`, workflow manual `.github/workflows/will-variedades.yml` (cópia do restaurante; release
+  `ultima-versao-variedades`). `manifesto.EDICOES` aceita a edição.
+- Testes: `tests/test_will_variedades.py`.
+
+Pendências:
+- Nunca rodou no Windows: gerar o instalador pelo workflow "Will Variedades" e conferir a etiqueta em papel de verdade
+  (medidas das folhas A4 vêm do padrão Pimaco A4356/A4351; imprimir em escala 100%).
+- Antigravity (`backend/`): depois da primeira publicação, pôr o link em `central_fornecedor.INSTALADORES`
+  (`willvariedades`); até lá vale a variável `PDV_INSTALADOR_WILLVARIEDADES`. Preço do plano no site (`site_precos.py`)
+  e página de vendas ainda não citam a edição. Edições pontuais feitas: rota do catálogo e botão em `retaguarda_web/app.js`.
+- Etapa 2 (não começada): garantia e nº de série/IMEI na venda; encomenda de personalizado (sinal, prazo, retirada).
+  Grade (tamanho/cor) fica fora até alguém pedir.
 # Handoff (17/11/2026, 13h30): repositório PÚBLICO, sem Nuitka, sem runner do PC
 
 - O dono mandou abrir o código (Actions de graça): o repositório está **público** desde 17/11. Antes, o histórico

@@ -673,14 +673,16 @@
     const arquivo = el("input");
     arquivo.type = "file";
     arquivo.accept = ".csv,.xlsx,.xlsm,.txt";
-    const catalogo = botaoPequeno("Carregar catálogo da adega (274 produtos)", async () => {
-      const r = await apiCentral("/catalogo");
+    const carregarCatalogo = (tipo) => async () => {
+      const r = await apiCentral("/catalogo?tipo=" + tipo);
       linhas = r.linhas;
       filtro = "";
       desenhar();
-    });
+    };
+    const catalogo = botaoPequeno("Carregar catálogo da adega", carregarCatalogo("adega"));
+    const variedades = botaoPequeno("Carregar catálogo de variedades e eletrônicos", carregarCatalogo("variedades"));
     const area = el("div");
-    raiz.append(arquivo, catalogo, area);
+    raiz.append(arquivo, catalogo, variedades, area);
     let linhas = [], lote = 200, filtro = "";
     const comPreco = (l) => paraCentavos(l.preco) !== null && paraCentavos(l.preco) > 0 && String(l.nome || "").trim();
     function desenhar() {
