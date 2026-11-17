@@ -1,3 +1,22 @@
+# Handoff (17/11/2026, tarde): lojas em teste, implantação, E2E, build único e NFC-e (branch `central-teste`)
+
+- Central: `listar` marca `em_teste` (ativa, licença valendo, nunca pagou pelo Mercado Pago, criada há até 60 dias)
+  e `teste_parado` (sem venda fechada há 3+ dias ou nunca), com `uso` (vendas_7d, ultima_venda; só contagem).
+  Indicador "Em teste", filtros e aviso no quadro de atenção.
+- Implantação: depois de enviar planilha/catálogo, a retaguarda oferece lançar o serviço da tabela de preços cujo
+  nome tem "implanta" ou "cadastr" (por unidade multiplica pelos itens). Central mostra "Serviços a receber"
+  (`GET /v1/fornecedor/servicos/a-receber`).
+- `tests/test_e2e_caixa.py`: caixa só no teclado (turno, bipar, pagar com troco, fechar) e está na fumaça do
+  `tools/verificar`.
+- Build: job "Compilar o código" no `build-windows.yml` compila o Nuitka uma vez e guarda `build/nuitka` no cache
+  (chave = hash de src/**/*.py + compilar_nuitka + requirements); WillPDV e Adega `needs: compilar` e só restauram;
+  Restaurante usa o mesmo cache (`actions/cache`). `compilar_nuitka.compilar()` reaproveita se `build/nuitka/chave.txt`
+  bater. Era ~94 min de Windows por versão.
+- NFC-e própria: contingência off-line automática (status sem resposta antes do 1º envio; QR v3 assinado RSA-SHA1;
+  DANFE "EMITIDA EM CONTINGÊNCIA"; transmite o mesmo XML depois), inutilização (nota rejeitada ou faixa),
+  botão "Testar SEFAZ". Esquema v55. Roteiro da homologação em `docs/NFCE_PROPRIA.md`.
+- Pendências: homologação real na DeliciOz (precisa do A1 na loja: seguir o roteiro); XMLs na nuvem; IBS/CBS.
+
 # Handoff (17/11/2026, 08h): verificação (branch `verificacao`)
 
 - `python -m tools.verificar`: fumaça do caixa (test_caixa, propriedades, troca de forma, recebimento direto) +

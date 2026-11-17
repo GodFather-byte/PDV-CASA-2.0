@@ -73,6 +73,7 @@ class JanelaNotasFiscais(QDialog):
             ("btn_reimprimir", "Reimprimir cupom fiscal", self.reimprimir),
             ("btn_cancelar", "Cancelar nota", self.cancelar),
             ("btn_inutilizar", "Inutilizar número", self.inutilizar),
+            ("btn_testar", "Testar SEFAZ", self.testar_sefaz),
             ("btn_ligar", "Ligar / desligar emissão", self.ligar),
             ("btn_fechar", "Fechar (Esc)", self.close),
         )):
@@ -159,6 +160,12 @@ class JanelaNotasFiscais(QDialog):
             "Motivo do cancelamento (15 a 255 letras). Só dá até 30 minutos depois da autorização:")
         if ok and self._executar(self.fiscal.cancelar, nota_id, motivo):
             self.mensagem.setText("Nota cancelada na SEFAZ.")
+
+    def testar_sefaz(self):
+        mensagem = self._executar(self.fiscal.testar_sefaz)
+        if mensagem:
+            self.mensagem.setText(mensagem)
+            QMessageBox.information(self, "Teste da SEFAZ", mensagem)
 
     def inutilizar(self):
         nota_id = self._selecionada()

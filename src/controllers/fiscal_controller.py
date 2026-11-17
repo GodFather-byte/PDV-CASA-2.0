@@ -199,6 +199,16 @@ class FiscalController:
         return feitas
 
     # ------------------------------------------------------------ ações do gerente
+    def testar_sefaz(self) -> str:
+        """Pergunta à SEFAZ se o serviço está no ar, com o certificado da loja. Devolve a mensagem para a tela."""
+        transmissor = self.transmissor()
+        if not hasattr(transmissor, "testar"):
+            raise ErroNegocio("O teste da SEFAZ é da emissão própria (com o provedor, o teste é no site dele).")
+        resposta = transmissor.testar()
+        if resposta.situacao != "ok":
+            raise ErroNegocio(resposta.mensagem or "A SEFAZ não respondeu. Confira a internet e tente de novo.")
+        return resposta.mensagem
+
     def contingencias(self) -> dict:
         """Notas emitidas em contingência ainda não autorizadas: quantas e desde quando (prazo: próximo dia útil)."""
         linha = self.banco.um("""SELECT COUNT(*) AS n, MIN(contingencia_em) AS desde FROM nfce_notas

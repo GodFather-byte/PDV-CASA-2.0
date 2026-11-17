@@ -238,6 +238,21 @@ class EmissaoPropria:
             return Resposta("cancelada", f"{ret.cstat} - {ret.motivo}", 200, {"status_sefaz": ret.cstat})
         return Resposta(None if ret.situacao is None else "erro", f"{ret.cstat} - {ret.motivo}".strip(" -"))
 
+    def testar(self) -> Resposta:
+        """Status do serviço da SEFAZ-SP com o certificado da loja: o primeiro passo da homologação."""
+        try:
+            ret = self.cliente().status()
+        except ErroCertificado as erro:
+            return Resposta("erro", str(erro))
+        if ret.situacao == "em_servico":
+            cert = self.certificado()
+            return Resposta("ok", f"SEFAZ-SP em operação ({ret.cstat}). Certificado de {cert.titular} válido até "
+                                  f"{cert.validade:%d/%m/%Y}.")
+        dica = (" Erro de SSL: falta a cadeia de certificados ICP-Brasil (avise o suporte)."
+                if "SSL" in (ret.motivo or "") else "")
+        return Resposta(None if ret.situacao is None else "erro",
+                        f"{ret.cstat} {ret.motivo}".strip() + dica)
+
     def inutilizar(self, serie: int, inicio: int, fim: int, justificativa: str) -> Resposta:
         """Comunica à SEFAZ que os números de `inicio` a `fim` da série não serão usados."""
         try:

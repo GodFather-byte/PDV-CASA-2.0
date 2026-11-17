@@ -437,6 +437,12 @@ class TestEmissaoPropriaNaFila(BaseNfce):
         with self.assertRaisesRegex(ErroNegocio, "já foi inutilizado"):
             self.fiscal.inutilizar(nota["id"], "Nota rejeitada que nao sera corrigida")
 
+    def test_testar_sefaz_mostra_operacao_e_o_certificado(self):
+        self.assertIn("SEFAZ-SP em operação (107)", self.fiscal.testar_sefaz())
+        self.sefaz.status_respostas = [cliente.Retorno(None, motivo="Sem conexão com a SEFAZ (SSLError).")]
+        with self.assertRaisesRegex(ErroNegocio, "cadeia de certificados ICP-Brasil"):
+            self.fiscal.testar_sefaz()
+
     def test_ligar_exige_certificado_e_dados_da_loja(self):
         fiscal = FiscalController(self.banco)
         fiscal.ligar("desligada")
