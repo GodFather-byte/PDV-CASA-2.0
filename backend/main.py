@@ -533,6 +533,10 @@ from backend import vendas_teste as _vendas_teste  # noqa: E402
 
 _vendas_teste.instalar(app, Loja)
 
+# IA nos caixas (recurso pago, ligado por loja na central): backend/ia.py. A chave da API fica só na nuvem.
+from backend import ia as _ia  # noqa: E402
+_ia.instalar(app, autenticar)
+
 _ponte.instalar(app, Loja, hash_token)
 
 # Porteiro no celular pelo 4G: retrato das comandas abertas e a mesma página em /porteiro/.

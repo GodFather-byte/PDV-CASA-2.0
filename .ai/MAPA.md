@@ -149,5 +149,6 @@ em `src/core/identidade_visual.py`. Configuração e limites em `docs/ADEGA.md`.
 
 | XMLs da NFC-e na nuvem (ZIP do mês para o contador) | caixa `src/sync/nfce_xmls.py` (chamado pelo sincronizador); nuvem `backend/nfce_xmls.py`; painel aba Produtos; central loja > XMLs |
 | Apagar vendas de teste (senha de segurança do dono) | regra `src/controllers/vendas_teste_controller.py`; telas `src/ui_qt/vendas_teste.py` (Utilitários); envio em `src/sync/painel_envio.py`; nuvem `backend/vendas_teste.py`; painel aba Produtos |
+| IA nos caixas (pago, por loja) | nuvem `backend/ia.py` (chave `ANTHROPIC_API_KEY`); cliente `src/sync/ia.py`; botões em `src/ui_qt/importar_produtos.py`; central: detalhe da loja > IA no caixa |
 | Teste grátis pelo site | `backend/site_teste.py` (POST `/v1/site/teste`), `backend/site_web/teste.js`; contato na central (`contato` em `/v1/fornecedor/lojas`) |
 | IBS/CBS na NFC-e própria | `src/fiscal/sefaz/xml_nfce.py` (`_ibscbs`, `_ibscbs_total`), alíquotas em `provedor.aliquotas_ibscbs` |

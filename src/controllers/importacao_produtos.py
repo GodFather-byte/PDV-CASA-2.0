@@ -553,6 +553,7 @@ class ItemNFe:
     fator: float = 1.0
     custo_atual_cent: int = 0
     preco_sugerido_cent: int = 0
+    nome_xml: str = ""          # nome como veio na nota, quando a IA padronizou `nome`
 
 
 @dataclass
@@ -788,7 +789,7 @@ class ImportacaoNFe:
                 self.banco.inserir("itens_importacao_nfe", {
                     "importacao_id": importacao_id, "produto_id": produto_id,
                     "codigo_xml": item.codigo, "ean": item.codigo_barras,
-                    "nome_xml": item.nome, "quantidade": qtd,
+                    "nome_xml": item.nome_xml or item.nome, "quantidade": qtd,
                     "custo_unit_cent": fmt.dividir_cent(item.custo_total_cent, qtd),
                     "custo_total_cent": item.custo_total_cent,
                     "resultado": resultado})

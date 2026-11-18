@@ -6,7 +6,7 @@ import sqlite3
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QLineEdit,
+    QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QLineEdit,
     QHBoxLayout, QHeaderView, QLabel, QMessageBox, QPushButton, QRadioButton,
     QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
@@ -63,6 +63,11 @@ class JanelaImportarProdutos(QDialog):
         self.btn_nfe = QPushButton("Importar NF-e XML…")
         self.btn_nfe.clicked.connect(self.escolher_nfe)
         arquivos.addWidget(self.btn_nfe)
+        self.btn_foto = QPushButton("Ler foto com IA…")
+        self.btn_foto.setToolTip("Foto de lista de preços, nota ou prateleira: a IA monta a prévia e você confere. "
+                                 "Recurso pago, ligado pelo fornecedor.")
+        self.btn_foto.clicked.connect(self.ler_foto)
+        arquivos.addWidget(self.btn_foto)
         self.arquivo = QLabel("Nenhuma planilha escolhida")
         self.arquivo.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         arquivos.addWidget(self.arquivo, 1)
@@ -180,6 +185,30 @@ class JanelaImportarProdutos(QDialog):
             return False
         janela = JanelaImportarNFe(self, previa)
         return janela.exec()
+
+    def ler_foto(self, caminho=None):
+        """Foto -> IA na nuvem -> mesma prévia da planilha (nada grava antes de Importar)."""
+        if not caminho:
+            caminho, _ = QFileDialog.getOpenFileName(self, "Foto dos produtos", "",
+                                                     "Fotos (*.jpg *.jpeg *.png *.webp)")
+        if not caminho:
+            return False
+        from src.sync import ia
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            self._exigir_acesso()
+            produtos = ia.produtos_da_foto(self.ctx.banco, caminho)
+        except (ErroNegocio, OSError, ValueError) as erro:
+            self.mensagem.setText(str(erro))
+            return False
+        finally:
+            QApplication.restoreOverrideCursor()
+        self.caminho = str(caminho)
+        self.tabela = ia.para_tabela(produtos)
+        self.arquivo.setText(f"{Path(caminho).name}  ({len(self.tabela)} produtos lidos pela IA: confira nome e "
+                             "preço antes de importar)")
+        self.mensagem.clear()
+        return self.analisar()
 
     def carregar(self, caminho):
         try:
@@ -404,6 +433,11 @@ class JanelaImportarNFe(QDialog):
             "Preço manual é opcional e só vale para produtos novos. Sem preço, o produto fica bloqueado para venda.",
             "aviso"))
         botoes = QHBoxLayout()
+        self.btn_nomes_ia = QPushButton("Arrumar nomes com IA")
+        self.btn_nomes_ia.setToolTip("Os nomes da nota vêm abreviados: a IA sugere nomes completos para os produtos "
+                                     "novos. Recurso pago, ligado pelo fornecedor.")
+        self.btn_nomes_ia.clicked.connect(self.arrumar_nomes)
+        botoes.addWidget(self.btn_nomes_ia)
         botoes.addStretch()
         self.btn_confirmar = QPushButton("Confirmar entrada")
         self.btn_confirmar.clicked.connect(self.confirmar)
@@ -448,6 +482,35 @@ class JanelaImportarNFe(QDialog):
                 preco.setText(fmt.fmt_num(item.preco_sugerido_cent))
             self.grade.setCellWidget(linha, 8, preco)
             self.precos_venda.append(preco)
+
+    def arrumar_nomes(self, http=None):
+        """Padroniza (pela IA) o nome dos itens que vão virar produto novo. Só muda a prévia."""
+        linhas = [i for i, combo in enumerate(self.associacoes) if combo.currentData() is None]
+        if not linhas:
+            QMessageBox.information(self, "Nomes", "Todos os itens já estão ligados a produtos do cadastro.")
+            return 0
+        from src.sync import ia
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            novos = ia.padronizar_nomes(self.ctx.banco, [self.previa.itens[i].nome_xml or self.previa.itens[i].nome
+                                                         for i in linhas], http)
+        except ErroNegocio as erro:
+            QMessageBox.warning(self, "IA", str(erro))
+            return 0
+        finally:
+            QApplication.restoreOverrideCursor()
+        trocados = 0
+        for i, novo in zip(linhas, novos):
+            if not novo:
+                continue
+            item = self.previa.itens[i]
+            item.nome_xml = item.nome_xml or item.nome
+            item.nome = novo["nome"]
+            self.associacoes[i].setItemText(0, f"Criar novo: {item.nome}")
+            self.grade.item(i, 0).setToolTip(f"Na nota: {item.nome_xml}")
+            trocados += 1
+        self.btn_nomes_ia.setText(f"Nomes arrumados ({trocados})")
+        return trocados
 
     def confirmar(self):
         try:
