@@ -31,7 +31,7 @@ MODULOS = [
     'src.controllers.caixa_divisao',
     'src.controllers.caixa_totais',
     'src.controllers.custos_venda',
-    'src.sync.cardapio_envio', 'src.sync.pedidos_online',
+    'src.sync.cardapio_envio', 'src.sync.pedidos_online', 'src.sync.insta_bdelivery',
     'src.sync.devolucoes_envio',
     'src.sync.nfce_xmls',
     'src.sync.ociosidade',

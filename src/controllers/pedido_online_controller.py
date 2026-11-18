@@ -12,9 +12,10 @@ from src.core.erros import ErroNegocio
 PAGAMENTOS = {"dinheiro": "Dinheiro", "pix": "Pix na entrega", "cartao": "Cartão na entrega"}
 
 
-def marca(numero) -> str:
-    """O que fica no recado da entrega e identifica o pedido online (também evita importar duas vezes)."""
-    return f"Pedido online #{int(numero)}"
+def marca(numero, canal: str = "") -> str:
+    """O que fica no recado da entrega e identifica o pedido online (também evita importar duas vezes).
+    O Insta-BDelivery tem numeração própria: a marca dele é outra, para o #12 de um canal não casar com o do outro."""
+    return f"Pedido Insta #{int(numero)}" if canal == "insta" else f"Pedido online #{int(numero)}"
 
 
 def _digitos(valor) -> str:
@@ -53,7 +54,8 @@ def resumo(pedido: dict) -> str:
             "Retira na loja" if pedido.get("retirada") else (pedido.get("bairro") or "Sem bairro"))
     itens = sum(_qtd(i) for i in pedido.get("itens") or [])
     texto_itens = _texto_qtd(itens)
-    return (f"#{pedido.get('numero')} · {pedido.get('nome', '')} · {onde} · {texto_itens} "
+    origem = "Insta " if pedido.get("canal") == "insta" else ""
+    return (f"{origem}#{pedido.get('numero')} · {pedido.get('nome', '')} · {onde} · {texto_itens} "
             f"ite{'ns' if itens != 1 else 'm'} · {fmt.fmt_brl(int(pedido.get('total_cent') or 0))}")
 
 
@@ -87,13 +89,13 @@ class PedidoOnlineController:
         self.produtos = produtos
         self.operador_id = operador_id
 
-    def ja_importado(self, numero, pedido_id=None) -> int | None:
-        """O número inteiro: '#1' não pode casar com '#10' nem com '#11'."""
-        if pedido_id is not None:
+    def ja_importado(self, numero, pedido_id=None, canal: str = "") -> int | None:
+        """O número inteiro: '#1' não pode casar com '#10' nem com '#11'. Cada canal tem a sua marca."""
+        if pedido_id is not None and canal != "insta":
             mesa = self.banco.um("SELECT venda_id FROM pedidos_mesa_importados WHERE pedido_id = ?", (pedido_id,))
             if mesa:
                 return mesa["venda_id"]
-        texto = marca(numero)
+        texto = marca(numero, canal)
         r = self.banco.um(
             "SELECT id FROM vendas WHERE modalidade = 'entrega' AND status <> 'cancelada' "
             "AND (mensagem = ? OR mensagem LIKE ?) ORDER BY id DESC LIMIT 1",
@@ -128,7 +130,8 @@ class PedidoOnlineController:
         if pedido.get("mesa") is not None:
             from src.controllers.pedido_mesa_controller import importar
             return importar(self, pedido)
-        existente = self.ja_importado(pedido.get("numero"))
+        canal = pedido.get("canal") or ""
+        existente = self.ja_importado(pedido.get("numero"), canal=canal)
         if existente:
             return {"venda_id": existente, "faltando": [], "ja_existia": True}
         faltando, linhas = [], []
@@ -154,7 +157,7 @@ class PedidoOnlineController:
             raise ErroNegocio(f"Não aceito: {lista}. Recuse o pedido e avise o cliente.")
         pagamento = PAGAMENTOS.get(pedido.get("pagamento"), "")
         recado = " · ".join(x for x in (
-            marca(pedido.get("numero")), "RETIRA NA LOJA" if pedido.get("retirada") else "", pagamento,
+            marca(pedido.get("numero"), canal), "RETIRA NA LOJA" if pedido.get("retirada") else "", pagamento,
             pedido.get("aviso") or "", pedido.get("observacao") or "") if x)
         forma = pedido.get("pagamento") if pedido.get("pagamento") in PAGAMENTOS else ""
         with self.banco.transacao():
@@ -172,5 +175,5 @@ class PedidoOnlineController:
                 **({"pedido_online_id": int(pedido["id"])} if pedido.get("id") else {}),
                 **aviso})
             self.caixa.estoque.reservar_venda(venda_id)
-        self.banco.log("pedido_online_aceito", f"{marca(pedido.get('numero'))}: venda {venda_id}", self.operador_id)
+        self.banco.log("pedido_online_aceito", f"{marca(pedido.get('numero'), canal)}: venda {venda_id}", self.operador_id)
         return {"venda_id": venda_id, "faltando": [], "ja_existia": False}
