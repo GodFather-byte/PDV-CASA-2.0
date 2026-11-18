@@ -52,7 +52,20 @@ def rodar(modulo: str, limite: int) -> tuple[str, str, float, str]:
     return modulo, situacao, time.monotonic() - inicio, saida[-6000:] if situacao != "OK" else ""
 
 
+def _saida_tolerante() -> None:
+    """No console do Windows (cp1252) a saída de um teste pode trazer caractere que o terminal não escreve. Sem isto o
+    `print` do relatório levanta UnicodeEncodeError e some justamente a causa da falha; com isto o caractere vira "?"."""
+    for fluxo in (sys.stdout, sys.stderr):
+        reconfigurar = getattr(fluxo, "reconfigure", None)
+        if callable(reconfigurar):
+            try:
+                reconfigurar(errors="replace")
+            except (OSError, ValueError):
+                pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _saida_tolerante()
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("modulos", nargs="*", help="módulos (padrão: todos)")
     p.add_argument("-j", "--paralelo", type=int, default=max(2, os.cpu_count() or 2))
