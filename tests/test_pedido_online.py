@@ -5,6 +5,7 @@ import os
 import unittest
 from datetime import datetime
 from unittest import mock
+import json
 from urllib.parse import unquote
 
 from src.controllers.config_controller import ConfigController
@@ -376,3 +377,35 @@ class TesteNuvemPedido(BasePedido):
             self.assertEqual(db.query(nuvem.Loja).filter_by(chave_loja="ADEGA-1").one().edicao, "willpdv")
         finally:
             db.close()
+
+
+class TesteEsgotado(TesteNuvemPedido):
+    """Produto que controla estoque e zerou: aparece como esgotado no cardápio e na vitrine e não entra no pedido."""
+
+    def zerar_agua(self):
+        self.banco.executar("UPDATE produtos SET controla_estoque = 1, qt_atual = 0 WHERE id = ?", (self.agua,))
+        from src.sync import cardapio_envio
+        cardapio_envio.enviar(self.banco, _Http(self.http))
+
+    def test_esgotado_aparece_e_nao_deixa_pedir(self):
+        from src.sync import cardapio_envio
+        self.zerar_agua()
+        itens = {p["nome"]: p for p in cardapio_envio.coletar(self.banco)["produtos"]}
+        self.assertTrue(itens["AGUA"]["esgotado"])
+        self.assertNotIn("esgotado", itens["SKOL"])               # sem controle de estoque não esgota
+        self.assertNotIn("qt_atual", json.dumps(itens))
+        produtos = {p["nome"]: p for g in self.cardapio()["grupos"] for s in g["subgrupos"] for p in s["produtos"]}
+        self.assertTrue(produtos["AGUA"]["esgotado"])
+        r = self.pedir()
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("AGUA esgotou", r.json()["detail"])
+
+    def test_volta_quando_entra_mercadoria(self):
+        from src.sync import cardapio_envio
+        self.zerar_agua()
+        self.banco.executar("UPDATE produtos SET qt_atual = 5 WHERE id = ?", (self.agua,))
+        self.assertTrue(cardapio_envio.precisa_enviar(self.banco))      # estoque mudou: o caixa reenvia
+        cardapio_envio.enviar(self.banco, _Http(self.http))
+        produtos = {p["nome"]: p for g in self.cardapio()["grupos"] for s in g["subgrupos"] for p in s["produtos"]}
+        self.assertNotIn("esgotado", produtos["AGUA"])
+        self.assertEqual(self.pedir().status_code, 200)

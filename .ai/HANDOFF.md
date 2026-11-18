@@ -1,23 +1,22 @@
-# Handoff (18/11/2026): IA nos caixas, recurso pago (branch `ia-nos-caixas`)
+# Handoff (18/11/2026): delivery Insta-BDelivery mais redondo (branch `delivery-esgotado-ia-insta`)
 
-No ar: 1.14.14 (apagar vendas de teste com a senha de segurança do dono).
+No ar: 1.14.15 (IA nos caixas: cadastro por foto e nomes da NF-e, ligada por loja na central).
 
-## O que entrou
-- **Nuvem** `backend/ia.py`: chave da API só na nuvem (`ANTHROPIC_API_KEY` no Render; `IA_MODELO` opcional, padrão
-  `claude-haiku-5-5`). Por loja: `ia_lojas` (ativa, desligada por padrão; cota de usos/mês, padrão 300; custo do mês
-  em nanodólares) e `ia_usos` (cada chamada). Rotas do caixa: `GET /v1/ia/situacao`, `POST /v1/ia/produtos/foto`,
-  `POST /v1/ia/produtos/nomes`. Saída forçada por ferramenta (JSON com esquema) e limpa antes de devolver.
-  403 não contratada, 429 cota, 503 sem chave. Central: `GET/POST /v1/fornecedor/lojas/{chave}/ia` (auditado) e
-  `GET /v1/fornecedor/ia/uso`; bloco "IA no caixa" no detalhe da loja.
-- **Caixa** `src/sync/ia.py` (cliente) e telas em `src/ui_qt/importar_produtos.py`: "Ler foto com IA…" (a foto vira
-  a mesma prévia da planilha; nada grava antes de Importar) e "Arrumar nomes com IA" na prévia da NF-e (só itens
-  novos; `ItemNFe.nome_xml` guarda o nome da nota).
-- Testes: `test_ia_nuvem`, `test_ia_caixa`.
+## O que entrou (junto com o PR do repositório GodFather-byte/Insta-BDelivery)
+- **Esgotado:** `src/sync/cardapio_envio.coletar` manda `esgotado: true` para produto que controla estoque e está
+  zerado (só o sim/não). A nossa nuvem (`backend/cardapio.py`) guarda e mostra; `backend/pedido_online.py` recusa o
+  pedido com item esgotado; o cardápio por QR mostra "Esgotado". O Insta deixa indisponível e volta sozinho.
+- **Insta pela central** (`backend/insta.py`): no detalhe da loja, "Delivery Insta-BDelivery" guarda endereço e chave
+  (`insta_lojas`). O caixa manda `insta_hash` no envio do painel; se for diferente, a resposta traz `insta` e o caixa
+  grava (`src/sync/insta_bdelivery.anotar_resposta`). Quando o hash bate, a chave em texto sai da nuvem.
+- **IA da vitrine paga:** `GET /v1/parceiro/insta/ia?h=<sha256 da chave>` responde `{liberada}` pelo liga/desliga de
+  "IA no caixa". O Insta consulta com `WILLPDV_NUVEM_URL` (Vercel) e cacheia 10 min.
+- Insta (outro repo): promoções do PDV no preço, taxa por bairro (do caixa e do painel), bairro vai ao caixa.
+- Testes: `test_insta_central`, `TesteEsgotado` em `test_pedido_online`. No Insta: `supabase/tests/promo_zonas_esgotado.sql`.
 
 ## Pendências
-- Dono: criar a chave na Claude Platform (organização ligada ao Max, para usar o crédito mensal) e colar em
-  `ANTHROPIC_API_KEY` no Render. Depois ligar a IA por loja na central.
-- Próximas ideias: "pergunte ao caixa" no painel (a IA só escolhe o relatório; o número vem do banco), resumo do dia
-  comentado no WhatsApp.
-- Backlog: homologação NFC-e DeliciOz; alíquotas IBS/CBS de 2027; Casa Verde na 1.14.5 (instalação manual);
-  mensalidade EA Superações.
+- Depois do merge dos dois PRs: aplicar a migração do Insta no Supabase e definir `WILLPDV_NUVEM_URL` na Vercel
+  (só depois de a nuvem 1.14.16 estar no ar, senão a IA das lojas ligadas fica bloqueada).
+- IA: criar a chave da Claude Platform e colar em `ANTHROPIC_API_KEY` no Render; ligar a Casa Verde na central
+  (ela precisa da instalação manual da 1.14.15+).
+- Backlog: homologação NFC-e DeliciOz; alíquotas IBS/CBS de 2027; mensalidade EA Superações.

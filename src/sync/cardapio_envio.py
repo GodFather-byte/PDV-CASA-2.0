@@ -1,7 +1,8 @@
 """Cardápio digital: o caixa publica o catálogo na nuvem (Configurações > Nuvem > `cardapio_digital`).
 
 Sobe só o que o celular pode mostrar: nome, grupo, preço e as regras de promoção/happy hour.
-Não sobe custo, estoque, produto inativo, fora de venda ou com "mostrar no cardápio" desmarcado.
+Não sobe custo, estoque, produto inativo, fora de venda ou com "mostrar no cardápio" desmarcado. Produto que controla
+estoque e está zerado sobe como `esgotado` (aparece, mas não dá para pedir) e volta sozinho quando entra mercadoria.
 Reenviar substitui o catálogo da loja. Se nada mudou, não chama a nuvem.
 """
 from __future__ import annotations
@@ -96,7 +97,7 @@ def coletar(banco) -> dict:
                       p.sem_inicial, p.sem_final, p.sem_preco_cent,
                       p.hora_ini, p.hora_fim, p.hora_preco_cent,
                       p.preco_gelada_cent, p.promo_gelada_cent, p.sem_gelada_cent, p.hora_gelada_cent,
-                      p.aceita_decimal, p.casco_produto_id,
+                      p.aceita_decimal, p.casco_produto_id, p.controla_estoque, p.qt_atual,
                       g.nome AS grupo, s.nome AS subgrupo, s.figura AS foto,
                       f.origem AS foto_origem, f.miniatura AS foto_miniatura
                FROM produtos p
@@ -124,6 +125,8 @@ def coletar(banco) -> dict:
             "fracionado": bool(r["aceita_decimal"]),
             "retornavel": bool(r["casco_produto_id"]),
         }
+        if r["controla_estoque"] and float(r["qt_atual"] or 0) <= 0:
+            item["esgotado"] = True                     # só o sim/não: a quantidade não sai do caixa
         from src.controllers.opcoes_produto_controller import OpcoesProdutoController
         grupos = OpcoesProdutoController(banco).grupos(r["produto_id"])
         if grupos:

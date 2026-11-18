@@ -537,6 +537,10 @@ _vendas_teste.instalar(app, Loja)
 from backend import ia as _ia  # noqa: E402
 _ia.instalar(app, autenticar)
 
+# Insta-BDelivery ligado pela central (implantação e liberação da IA da vitrine): backend/insta.py.
+from backend import insta as _insta  # noqa: E402
+_insta.instalar(app)
+
 _ponte.instalar(app, Loja, hash_token)
 
 # Porteiro no celular pelo 4G: retrato das comandas abertas e a mesma página em /porteiro/.
