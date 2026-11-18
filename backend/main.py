@@ -527,6 +527,12 @@ _retaguarda.instalar(app, Loja, autenticar)
 from backend import nfce_xmls as _nfce_xmls  # noqa: E402
 
 _nfce_xmls.instalar(app, Loja, autenticar)
+
+# Vendas de teste apagadas no caixa ou pelo painel, com a senha de segurança do dono (backend/vendas_teste.py).
+from backend import vendas_teste as _vendas_teste  # noqa: E402
+
+_vendas_teste.instalar(app, Loja)
+
 _ponte.instalar(app, Loja, hash_token)
 
 # Porteiro no celular pelo 4G: retrato das comandas abertas e a mesma página em /porteiro/.

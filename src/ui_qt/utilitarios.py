@@ -26,6 +26,8 @@ class JanelaUtilitarios(QDialog):
         ("excluir_produtos", "Excluir todos os produtos…", "util_excluir_produtos"),
         ("comunicacao", "Programa de comunicação", "util_comunicacao"),
         ("verificar_backup", "Verificar backup (teste de restauração)…", "util_backup"),
+        ("senha_seguranca", "Senha de segurança do dono…", "util_vendas_teste"),
+        ("vendas_teste", "Apagar vendas de teste…", "util_vendas_teste"),
     )
 
     def __init__(self, ctx, parent=None):
@@ -160,6 +162,26 @@ class JanelaUtilitarios(QDialog):
             return True
         return self._executar(acao)
 
+
+    def senha_seguranca(self):
+        def acao():
+            self._controlador("util_vendas_teste")
+            from src.ui_qt.vendas_teste import JanelaSenhaSeguranca
+            if JanelaSenhaSeguranca(self.ctx, self).exec():
+                self.status.setText("Senha de segurança do dono gravada. Ela sobe para o painel na próxima "
+                                    "sincronização.")
+                return True
+            return False
+        return self._executar(acao)
+
+    def vendas_teste(self):
+        def acao():
+            self._controlador("util_vendas_teste")
+            from src.ui_qt.vendas_teste import JanelaApagarVendasTeste
+            self.janela_vendas_teste = JanelaApagarVendasTeste(self.ctx, self)
+            self.janela_vendas_teste.open()
+            return True
+        return self._executar(acao)
 
     def excluir_produtos(self):
         def acao():
