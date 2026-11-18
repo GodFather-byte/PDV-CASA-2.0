@@ -53,6 +53,11 @@ class TesteSite(unittest.TestCase):
                 self.assertIn(
                     f"{site_precos.R2_BASE}/willadega/{VERSAO}/WillAdega-Setup-{VERSAO}.exe", texto)
                 self.assertIn("Assinar", texto)
+                self.assertIn('id="sob-medida"', texto)                       # serviços sob medida
+                for servico in ("Software sob medida", "Google Meu Negócio", "Bots de atendimento com IA",
+                                "Apps de gestão (PWA)", "Criação de sites", "pet shops"):
+                    self.assertIn(servico, texto)
+                self.assertIn("quero%20um%20bot%20de%20atendimento", texto.lower().replace("+", "%20"))
 
     def test_variavel_troca_o_numero(self):
         with mock.patch.dict(os.environ, {site.VAR_WHATSAPP: "(11) 98888-7777"}):

@@ -77,6 +77,9 @@ def _trocas() -> dict[str, str]:
         "{{zap_adega}}": link_whatsapp(f"Olá, quero assinar o Will Adega por {adega} por mês."),
         "{{zap_boate}}": link_whatsapp(f"Olá, quero assinar o WillPDV para boate ou bar por {boate} por mês."),
         "{{zap_instalacao}}": link_whatsapp(f"Olá, quero a instalação do WillPDV ({instalacao}, uma vez)."),
+        "{{zap_sob_medida}}": link_whatsapp("Olá, quero um orçamento de um projeto sob medida (software, site, app, "
+                                            "bot ou Google Meu Negócio)."),
+        "{{zap_bot}}": link_whatsapp("Olá, quero um bot de atendimento com IA para o meu negócio."),
     }
 
 
