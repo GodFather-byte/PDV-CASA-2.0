@@ -26,9 +26,10 @@ Este trabalho ainda **não** tem versão: é um PR em rascunho, sem merge.
 ## Pendências
 - Merge (pedir OK do dono) e decidir a versão. Não foi testado num caixa Windows instalado, nem contra a vitrine de
   produção com uma loja de verdade.
-- **Taxa de entrega diverge**: a vitrine cobra a taxa única dela e o caixa calcula a dele (no teste: R$ 5,00 x R$ 8,00).
-  Hoje o recado da entrega mostra o total que o cliente viu. Próximo passo sugerido: a vitrine adotar `taxa_padrao_cent`
-  e `minimo_cent` que já vão no envio do catálogo (mudança no outro repositório).
+- Taxa de entrega: a vitrine passou a adotar `taxa_padrao_cent` e `minimo_cent` do envio do catálogo (mudança no
+  repositório do Insta-BDelivery; cada valor só é aplicado quando muda no caixa). Conferido de ponta a ponta: total da
+  vitrine igual ao do caixa com a taxa padrão. **Taxa por bairro continua divergindo**: a vitrine só tem a padrão e
+  manda `bairro` vazio; o recado da entrega mostra o total que o cliente viu.
 - Promoção por horário/data e preço gelado não aparecem na vitrine (ela usa o preço base).
 - A aba Conexão com a nuvem não foi fotografada pelo `--telas` (a foto pega a primeira aba); os campos novos são
   desenhados pela lista `CAMPOS_CONFIG` como os demais.

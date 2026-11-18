@@ -36,9 +36,11 @@ Aceitar, recusar, saiu, entregue e cancelado sobem para o canal do pedido pela m
 
 - **Preço:** a vitrine usa o preço base do produto. Promoção por data, dia da semana ou horário e preço gelado não
   aparecem lá. O caixa recalcula ao aceitar, como já faz no pedido da nuvem.
-- **Taxa de entrega:** a vitrine cobra a taxa única configurada no Insta-BDelivery; o caixa calcula a dele (bairro ou
-  padrão). Se forem diferentes, o recado da entrega traz o total que o cliente viu
-  ("Insta-BDelivery: total cobrado R$ ..."). Mantenha as duas taxas iguais.
+- **Taxa de entrega e pedido mínimo:** a taxa padrão e o mínimo do caixa sobem com o catálogo e a vitrine passa a
+  usá-los, para o cliente e o caixa verem o mesmo total. Cada valor só é aplicado quando muda no caixa: um ajuste
+  feito depois no painel do Insta-BDelivery vale até o valor mudar de novo aqui. A vitrine não tem taxa por bairro;
+  se o caixa cobrar taxa de bairro diferente da padrão, o recado da entrega traz o total que o cliente viu
+  ("Insta-BDelivery: total cobrado R$ ...").
 - **Mesa:** o pedido da mesa continua só no cardápio da nuvem.
 - **Desligar:** apagar o endereço ou a chave no caixa para de publicar e de buscar, mas não tira o catálogo da vitrine.
   Para isso, desconecte o PDV no painel do Insta-BDelivery.
