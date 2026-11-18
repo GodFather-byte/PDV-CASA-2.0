@@ -1,6 +1,6 @@
 # Handoff (18/11/2026): Insta-BDelivery ligado ao caixa (branch `integracao-insta-bdelivery`)
 
-Estado geral: repositório **público** (Actions de graça), build sem Nuitka, sem runner do PC. Versão no ar 1.14.14.
+Estado geral: repositório **público** (Actions de graça), build sem Nuitka, sem runner do PC. Última versão no `main`: 1.14.14 (não conferi se já foi publicada).
 Este trabalho ainda **não** tem versão: é um PR em rascunho, sem merge.
 
 ## O que entrou
