@@ -60,11 +60,21 @@ def _trocas() -> dict[str, str]:
     instalacao = fmt_brl(precos.INSTALACAO_CENT)
     adega_ano = fmt_brl(precos.anual_cent(precos.ADEGA_MENSAL_CENT))
     boate_ano = fmt_brl(precos.anual_cent(precos.BOATE_MENSAL_CENT))
+    restaurante = fmt_brl(precos.RESTAURANTE_MENSAL_CENT)
+    variedades = fmt_brl(precos.VARIEDADES_MENSAL_CENT)
+    from backend.central_fornecedor import link_instalador
     return {
         "{{adega_mensal}}": adega,
         "{{adega_anual}}": adega_ano,
         "{{boate_mensal}}": boate,
         "{{boate_anual}}": boate_ano,
+        "{{restaurante_mensal}}": restaurante,
+        "{{restaurante_anual}}": fmt_brl(precos.anual_cent(precos.RESTAURANTE_MENSAL_CENT)),
+        "{{variedades_mensal}}": variedades,
+        "{{download_willrestaurante}}": link_instalador("willrestaurante"),
+        "{{zap_restaurante}}": link_whatsapp(f"Olá, quero assinar o Will Restaurante por {restaurante} por mês."),
+        "{{zap_variedades}}": link_whatsapp("Olá, quero ser avisado quando o Will Variedades (loja de variedades) "
+                                            "estiver pronto."),
         "{{instalacao}}": instalacao,
         "{{dias_teste}}": str(precos.DIAS_TESTE),
         "{{meses_gratis}}": str(precos.MESES_GRATIS_NO_ANUAL),

@@ -24,7 +24,7 @@ from backend.database import Base, SessionLocal, engine
 from src.core.edicao import EDICOES
 
 POR_IP_DIA = 3
-EDICOES_SITE = ("willpdv", "willadega")
+EDICOES_SITE = ("willpdv", "willadega", "willrestaurante")
 
 
 class SiteTeste(Base):

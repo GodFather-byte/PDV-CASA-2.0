@@ -6,6 +6,8 @@ wa.me; a variável PDV_SITE_WHATSAPP, se preenchida, troca o número.
 
 ADEGA_MENSAL_CENT = 14_990       # R$ 149,90
 BOATE_MENSAL_CENT = 24_999       # R$ 249,99
+RESTAURANTE_MENSAL_CENT = 14_990  # R$ 149,90
+VARIEDADES_MENSAL_CENT = 14_990   # R$ 149,90 (edição em breve)
 INSTALACAO_CENT = 30_000         # R$ 300, uma vez
 MESES_GRATIS_NO_ANUAL = 2
 DIAS_TESTE = 7

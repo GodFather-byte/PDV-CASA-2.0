@@ -3,50 +3,62 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>WillPDV — caixa para adega, bar e boate · software sob medida</title>
-  <meta name="description" content="WillPDV e Will Adega: caixa no Windows, painel do dono e atualização automática. E sob medida: software, sites, apps de gestão, bots de atendimento com IA e Google Meu Negócio para clínicas, salões, pet shops e lojas.">
-  <meta name="theme-color" content="#0c1220">
+  <title>WillPDV — caixa para boate, adega, restaurante e loja · software sob medida</title>
+  <meta name="description" content="WillPDV, Will Adega, Will Restaurante e Will Variedades: caixa no Windows que vende sem internet, painel do dono no celular e atualização automática. E sob medida: software, sites, apps de gestão, bots de atendimento com IA e Google Meu Negócio.">
+  <meta name="theme-color" content="#080c16">
   <link rel="stylesheet" href="/site/estilo.css">
 </head>
 <body>
   <header class="topo">
-    <a class="marca" href="#inicio">WillPDV</a>
-    <nav>
-      <a href="#edicoes">Edições</a>
+    <a class="marca" href="#inicio"><span class="logo" aria-hidden="true">W</span>WillPDV</a>
+    <nav aria-label="Seções">
+      <a href="#edicoes">Programas</a>
       <a href="#planos">Planos</a>
       <a href="#sob-medida">Sob medida</a>
       <a href="#faq">Dúvidas</a>
     </nav>
-    <a class="zap pequeno" href="{{zap_contato}}">WhatsApp</a>
+    <a class="botao pequeno" href="#teste">Testar grátis</a>
   </header>
 
   <main id="inicio">
     <section class="hero">
-      <p class="selo">Versão {{versao}} · teste grátis de {{dias_teste}} dias</p>
-      <h1>O caixa da casa, no Windows, mesmo sem internet.</h1>
-      <p class="lead">Adega, bar e boate. Venda, estoque, fechamento e impressora no balcão. O dono acompanha pelo celular. A boate não recebe pedido online; a adega recebe.</p>
-      <div class="acoes">
-        <a class="botao" href="#teste">Testar grátis agora</a>
-        <a class="zap" href="{{zap_contato}}">Falar no WhatsApp</a>
-        <a class="fantasma" href="#planos">Ver planos</a>
+      <div class="hero-texto">
+        <p class="selo">Versão {{versao}} · teste grátis de {{dias_teste}} dias</p>
+        <h1>O caixa da sua casa, <span class="destaque">rápido e sem depender da internet.</span></h1>
+        <p class="lead">Boate, adega, restaurante e loja de variedades. Venda, estoque, fechamento e impressora no balcão, e o dono acompanha tudo pelo celular.</p>
+        <div class="acoes">
+          <a class="botao" href="#teste">Testar grátis agora</a>
+          <a class="zap" href="{{zap_contato}}">Falar no WhatsApp</a>
+        </div>
+        <ul class="numeros" aria-label="Destaques">
+          <li><strong>Offline</strong><span>vende sem internet</span></li>
+          <li><strong>Celular</strong><span>painel do dono</span></li>
+          <li><strong>Automática</strong><span>atualização</span></li>
+        </ul>
       </div>
-      <p class="miudo">Precisa de outra coisa? Também fazemos <a href="#sob-medida">software sob medida, sites, apps e bots de atendimento</a>.</p>
-    </section>
-
-    <section id="recursos">
-      <h2>O que o caixa faz</h2>
-      <ul class="grade">
-        <li><strong>Balcão, mesa e comanda</strong><span>Lançamento rápido, pagamento e fechamento do turno.</span></li>
-        <li><strong>Estoque e impressora</strong><span>Baixa na venda, gaveta e cupom na térmica.</span></li>
-        <li><strong>Sem internet na venda</strong><span>O caixa vende offline. A nuvem entra no painel, no cardápio e na atualização.</span></li>
-        <li><strong>Licença da loja</strong><span>Cada casa com a própria licença, no WillPDV ou no Will Adega.</span></li>
-      </ul>
+      <div class="hero-tela" aria-hidden="true">
+        <div class="tela">
+          <div class="tela-topo"><span></span><span></span><span></span></div>
+          <div class="tela-linha"><b>2x Heineken 330ml</b><i>R$ 24,00</i></div>
+          <div class="tela-linha"><b>1x Porção de fritas</b><i>R$ 32,00</i></div>
+          <div class="tela-linha"><b>1x Gelo 5kg</b><i>R$ 12,00</i></div>
+          <div class="tela-total"><b>Total</b><i>R$ 68,00</i></div>
+          <div class="tela-pagar">Pix · Cartão · Dinheiro</div>
+        </div>
+        <div class="celular">
+          <p>Hoje</p>
+          <strong>R$ 4.870</strong>
+          <div class="barras"><span style="height:40%"></span><span style="height:65%"></span><span style="height:50%"></span><span style="height:85%"></span><span style="height:100%"></span></div>
+        </div>
+      </div>
     </section>
 
     <section id="edicoes">
-      <h2>Duas edições</h2>
-      <div class="edicoes">
+      <p class="olho">Programas</p>
+      <h2>Um caixa para cada tipo de negócio</h2>
+      <div class="edicoes quatro">
         <article class="cartao boate">
+          <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
           <p class="olho">Boate e bar</p>
           <h3>WillPDV</h3>
           <p>Casa com mesas, comandas e portaria. O cardápio no celular é só consulta: o pedido é feito no caixa. Não há pedido online.</p>
@@ -54,49 +66,87 @@
           <a class="botao" href="{{download_willpdv}}">Baixar instalador</a>
         </article>
         <article class="cartao adega">
+          <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 22h8M12 15v7M7 2h10l-1 7a4 4 0 0 1-8 0z"/></svg></span>
           <p class="olho">Adega</p>
           <h3>Will Adega</h3>
           <p>Pedido online pelo cardápio QR, entrega ou retirada na loja, e o pedido cai no caixa. Gelada, casco e quantidade fracionada quando o produto tem.</p>
           <p class="preco">{{adega_mensal}}<small>/mês</small></p>
           <a class="botao" href="{{download_willadega}}">Baixar instalador</a>
         </article>
+        <article class="cartao restaurante">
+          <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 2v8a3 3 0 0 0 6 0V2M7 2v20M17 2c-2 2-3 5-3 8h3v12"/></svg></span>
+          <p class="olho">Restaurante, pizzaria e lanchonete</p>
+          <h3>Will Restaurante</h3>
+          <p>Mesas, cozinha e cardápio digital. Pedido online com entrega e retirada caindo direto no caixa, delivery com taxa por bairro.</p>
+          <p class="preco">{{restaurante_mensal}}<small>/mês</small></p>
+          <a class="botao" href="{{download_willrestaurante}}">Baixar instalador</a>
+        </article>
+        <article class="cartao variedades">
+          <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0"/></svg></span>
+          <p class="olho">Loja de variedades</p>
+          <h3>Will Variedades <span class="breve">Em breve</span></h3>
+          <p>Para loja de variedades, utilidades e presentes: muitos produtos, código de barras, estoque e venda rápida no balcão.</p>
+          <p class="preco">{{variedades_mensal}}<small>/mês</small></p>
+          <a class="zap" href="{{zap_variedades}}">Quero ser avisado</a>
+        </article>
       </div>
     </section>
 
-    <section id="celular">
-      <h2>Dono e porteiro no celular</h2>
+    <section id="recursos">
+      <p class="olho">No balcão</p>
+      <h2>O que o caixa faz</h2>
+      <ul class="grade recursos">
+        <li><span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 22h10M12 18v4"/></svg></span><strong>Balcão, mesa e comanda</strong><span>Lançamento rápido, pagamento e fechamento do turno.</span></li>
+        <li><span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8"/></svg></span><strong>Estoque e impressora</strong><span>Baixa na venda, gaveta e cupom na térmica.</span></li>
+        <li><span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 2l20 20M8.5 16.5a5 5 0 0 1 7 0M2 8.8a15 15 0 0 1 4.2-2.7M22 8.8a15 15 0 0 0-7.6-3.7M5 12.6a10 10 0 0 1 3.5-2.2M12 20h.01"/></svg></span><strong>Sem internet na venda</strong><span>O caixa vende offline. A nuvem entra no painel, no cardápio e na atualização.</span></li>
+        <li><span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></svg></span><strong>Licença da loja</strong><span>Cada casa com a própria licença, no programa certo para o negócio.</span></li>
+      </ul>
+    </section>
+
+    <section id="celular" class="duas">
+      <div>
+        <p class="olho">Longe da loja</p>
+        <h2>Dono e porteiro no celular</h2>
+        <p class="lead">Sem instalar aplicativo: abre no navegador do celular.</p>
+      </div>
       <div class="edicoes">
         <article class="cartao">
           <h3>Painel do dono</h3>
-          <p>Vendas do dia, caixa, estoque baixo e o movimento da casa, no navegador do celular. Sem instalar aplicativo.</p>
+          <p>Vendas do dia, caixa, estoque baixo e o movimento da casa, em tempo real.</p>
         </article>
         <article class="cartao">
           <h3>Porteiro</h3>
-          <p>Na porta, o celular consulta a comanda: liberada ou devendo. Na rede da casa ou pelo 4G, na mesma página.</p>
+          <p>Na porta, o celular consulta a comanda: liberada ou devendo. Na rede da casa ou pelo 4G.</p>
+        </article>
+        <article class="cartao">
+          <h3>Atualização automática</h3>
+          <p>O Windows busca a versão nova, confere a assinatura e instala quando não há venda aberta. Os dados ficam no computador.</p>
         </article>
       </div>
     </section>
 
-    <section id="atualizacao">
-      <h2>Atualização automática</h2>
-      <p class="lead">O Windows busca a versão nova, confere a assinatura e instala quando não há venda aberta. Os dados da loja ficam no computador e não vão embora com a atualização.</p>
-    </section>
-
     <section id="planos">
-      <h2>Planos</h2>
+      <p class="olho">Planos</p>
+      <h2>Preço simples, sem fidelidade</h2>
       <p class="lead">Teste grátis de {{dias_teste}} dias. No plano anual, {{meses_gratis}} meses saem grátis: você paga {{meses_cobrados}}.</p>
-      <div class="edicoes">
+      <div class="edicoes quatro">
+        <article class="cartao boate">
+          <h3>WillPDV · boate e bar</h3>
+          <p class="preco">{{boate_mensal}}<small>/mês</small></p>
+          <p>Ano: {{boate_anual}} <span class="nota">({{meses_gratis}} meses grátis)</span></p>
+          <a class="zap" href="{{zap_boate}}">Assinar</a>
+        </article>
         <article class="cartao adega">
           <h3>Will Adega</h3>
           <p class="preco">{{adega_mensal}}<small>/mês</small></p>
           <p>Ano: {{adega_anual}} <span class="nota">({{meses_gratis}} meses grátis)</span></p>
           <a class="zap" href="{{zap_adega}}">Assinar</a>
         </article>
-        <article class="cartao boate">
-          <h3>WillPDV · boate e bar</h3>
-          <p class="preco">{{boate_mensal}}<small>/mês</small></p>
-          <p>Ano: {{boate_anual}} <span class="nota">({{meses_gratis}} meses grátis)</span></p>
-          <a class="zap" href="{{zap_boate}}">Assinar</a>
+        <article class="cartao restaurante">
+          <h3>Will Restaurante</h3>
+          <p class="preco">{{restaurante_mensal}}<small>/mês</small></p>
+          <p>Ano: {{restaurante_anual}} <span class="nota">({{meses_gratis}} meses grátis)</span></p>
+          <a class="zap" href="{{zap_restaurante}}">Assinar</a>
         </article>
         <article class="cartao">
           <h3>Instalação</h3>
@@ -105,40 +155,46 @@
           <a class="fantasma" href="{{zap_instalacao}}">Pedir instalação</a>
         </article>
       </div>
-      <p class="miudo">Assinar abre o WhatsApp. O pagamento automático entra numa etapa seguinte.</p>
+      <p class="miudo">Assinar abre o WhatsApp. O Will Variedades chega em breve pelo mesmo preço do Will Adega.</p>
     </section>
 
-    <section id="teste">
-      <h2>Teste grátis de {{dias_teste}} dias</h2>
-      <p class="lead">Preencha e receba na hora o instalador, o código que configura o caixa e a senha do painel do dono. Sem cartão.</p>
-      <form id="form-teste" class="form-teste" novalidate>
-        <label>Programa
-          <select name="edicao">
-            <option value="willadega">Will Adega (adega, depósito, conveniência)</option>
-            <option value="willpdv">WillPDV (boate e bar)</option>
-          </select>
-        </label>
-        <label>Nome da loja <input name="nome_loja" required minlength="3" maxlength="80" autocomplete="organization"></label>
-        <label>Seu nome <input name="responsavel" required minlength="3" maxlength="80" autocomplete="name"></label>
-        <label>WhatsApp com DDD <input name="whatsapp" required inputmode="tel" autocomplete="tel" placeholder="11 91234-5678"></label>
-        <label>Cidade <input name="cidade" maxlength="60" autocomplete="address-level2"></label>
-        <label class="isca" aria-hidden="true">Não preencha <input name="site" tabindex="-1" autocomplete="off"></label>
-        <label class="aceite"><input type="checkbox" name="aceite" required> Entendi: o teste dura {{dias_teste}} dias, o cupom é não fiscal e meus dados ficam no computador da loja.</label>
-        <button class="botao" type="submit">Criar meu teste</button>
-        <p id="teste-aviso" class="miudo" role="status"></p>
-      </form>
-      <div id="teste-pronto" class="cartao" hidden>
-        <h3>Pronto! Seu teste vai até <span data-campo="validade"></span>.</h3>
-        <ol>
-          <li>Baixe e instale o programa no computador do caixa: <a data-campo="instalador" class="botao">Baixar o <span data-campo="programa"></span></a></li>
-          <li>Abra o programa, clique em "Ativar licença ou instalar loja" e cole o código abaixo (ou leia o QR):
-            <textarea data-campo="codigo_instalacao" rows="3" readonly></textarea>
-            <button type="button" class="fantasma" id="copiar-codigo">Copiar código</button>
-            <div data-campo="qr_instalacao" class="qr"></div></li>
-          <li>No celular, o painel do dono: <a data-campo="painel"></a> · loja <strong data-campo="loja"></strong> · senha <strong data-campo="senha_painel"></strong>
-            <br><span class="miudo">Anote a senha: ela aparece só agora.</span></li>
-        </ol>
-        <a class="zap" data-campo="zap_ajuda">Quero ajuda para instalar</a>
+    <section id="teste" class="duas">
+      <div>
+        <p class="olho">Sem cartão</p>
+        <h2>Teste grátis de {{dias_teste}} dias</h2>
+        <p class="lead">Preencha e receba na hora o instalador, o código que configura o caixa e a senha do painel do dono.</p>
+      </div>
+      <div>
+        <form id="form-teste" class="form-teste cartao" novalidate>
+          <label>Programa
+            <select name="edicao">
+              <option value="willadega">Will Adega (adega, depósito, conveniência)</option>
+              <option value="willrestaurante">Will Restaurante (restaurante, pizzaria, lanchonete)</option>
+              <option value="willpdv">WillPDV (boate e bar)</option>
+            </select>
+          </label>
+          <label>Nome da loja <input name="nome_loja" required minlength="3" maxlength="80" autocomplete="organization"></label>
+          <label>Seu nome <input name="responsavel" required minlength="3" maxlength="80" autocomplete="name"></label>
+          <label>WhatsApp com DDD <input name="whatsapp" required inputmode="tel" autocomplete="tel" placeholder="11 91234-5678"></label>
+          <label>Cidade <input name="cidade" maxlength="60" autocomplete="address-level2"></label>
+          <label class="isca" aria-hidden="true">Não preencha <input name="site" tabindex="-1" autocomplete="off"></label>
+          <label class="aceite"><input type="checkbox" name="aceite" required> Entendi: o teste dura {{dias_teste}} dias, o cupom é não fiscal e meus dados ficam no computador da loja.</label>
+          <button class="botao" type="submit">Criar meu teste</button>
+          <p id="teste-aviso" class="miudo" role="status"></p>
+        </form>
+        <div id="teste-pronto" class="cartao" hidden>
+          <h3>Pronto! Seu teste vai até <span data-campo="validade"></span>.</h3>
+          <ol>
+            <li>Baixe e instale o programa no computador do caixa: <a data-campo="instalador" class="botao">Baixar o <span data-campo="programa"></span></a></li>
+            <li>Abra o programa, clique em "Ativar licença ou instalar loja" e cole o código abaixo (ou leia o QR):
+              <textarea data-campo="codigo_instalacao" rows="3" readonly></textarea>
+              <button type="button" class="fantasma" id="copiar-codigo">Copiar código</button>
+              <div data-campo="qr_instalacao" class="qr"></div></li>
+            <li>No celular, o painel do dono: <a data-campo="painel"></a> · loja <strong data-campo="loja"></strong> · senha <strong data-campo="senha_painel"></strong>
+              <br><span class="miudo">Anote a senha: ela aparece só agora.</span></li>
+          </ol>
+          <a class="zap" data-campo="zap_ajuda">Quero ajuda para instalar</a>
+        </div>
       </div>
     </section>
 
@@ -146,7 +202,7 @@
       <p class="olho">WB SISTEMAS</p>
       <h2>Também fazemos sob medida</h2>
       <p class="lead">Além do caixa, criamos a tecnologia que o seu negócio precisa: do cliente achar você no Google até o atendimento automático e o sistema de gestão.</p>
-      <ul class="grade">
+      <ul class="grade servicos">
         <li><strong>Software sob medida</strong><span>Sistema feito para o jeito que o seu negócio funciona: cadastros, controles, relatórios e ligação com o que você já usa.</span></li>
         <li><strong>Presença online</strong><span>Do cadastro no Google Meu Negócio, com fotos, horário e avaliações, ao Instagram e ao WhatsApp Business organizados para o cliente achar e chamar você.</span></li>
         <li><strong>Bots de atendimento com IA</strong><span>No WhatsApp, Instagram ou Telegram: responde dúvidas, agenda e confirma horários, manda lembretes e passa para você quando precisa.</span></li>
@@ -161,14 +217,19 @@
     </section>
 
     <section id="faq">
-      <h2>Dúvidas</h2>
+      <p class="olho">Dúvidas</p>
+      <h2>Perguntas frequentes</h2>
       <details>
         <summary>A venda para se a internet cair?</summary>
         <p>Não. O caixa vende, imprime e fecha o turno sem rede. O painel, o cardápio e a atualização usam a internet quando ela volta.</p>
       </details>
       <details>
+        <summary>Qual programa é o meu?</summary>
+        <p>Boate e bar: WillPDV. Adega, depósito e conveniência: Will Adega. Restaurante, pizzaria e lanchonete: Will Restaurante. Loja de variedades: Will Variedades, em breve.</p>
+      </details>
+      <details>
         <summary>A boate recebe pedido pelo celular?</summary>
-        <p>Não. No WillPDV o cardápio é só consulta. Pedido online, entrega e retirada são do Will Adega.</p>
+        <p>Não. No WillPDV o cardápio é só consulta. Pedido online, entrega e retirada são do Will Adega e do Will Restaurante.</p>
       </details>
       <details>
         <summary>Onde ficam as vendas?</summary>
@@ -186,7 +247,8 @@
   </main>
 
   <footer>
-    <p>WillPDV {{versao}} · {{telefone}}</p>
+    <a class="marca" href="#inicio"><span class="logo" aria-hidden="true">W</span>WillPDV</a>
+    <p>WillPDV {{versao}} · WB SISTEMAS · {{telefone}}</p>
     <a class="zap" href="{{zap_contato}}">Chamar no WhatsApp</a>
   </footer>
   <a class="zap fixo" href="{{zap_contato}}">WhatsApp</a>
