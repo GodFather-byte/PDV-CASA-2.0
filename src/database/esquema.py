@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 56
+VERSAO_ESQUEMA = 57
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -188,6 +188,37 @@ TABELAS = [
         inutilizada_em TEXT
     )""",
     "CREATE INDEX IF NOT EXISTS ix_nfce_situacao ON nfce_notas(situacao)",
+    # Senha de segurança do dono (só o hash), separada das senhas de entrada: autoriza apagar vendas de teste aqui e
+    # no painel. Fica fora de `config` de propósito: a retaguarda espelha e altera a config pela nuvem.
+    """CREATE TABLE IF NOT EXISTS seguranca_dono (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        senha_hash TEXT NOT NULL,
+        atualizada_em TEXT NOT NULL,
+        tentativas INTEGER NOT NULL DEFAULT 0,
+        bloqueada_ate TEXT,
+        enviada_em TEXT
+    )""",
+    # Vendas de teste apagadas (registro permanente: quem, quando, quanto). enviada_em: a nuvem confirmou e apagou lá.
+    """CREATE TABLE IF NOT EXISTS vendas_apagadas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT NOT NULL UNIQUE,
+        cupom INTEGER,
+        status TEXT,
+        total_cent INTEGER NOT NULL DEFAULT 0,
+        fechada_em TEXT,
+        turno_id INTEGER,
+        origem TEXT NOT NULL CHECK (origem IN ('caixa', 'painel')),
+        operador_id INTEGER,
+        apagada_em TEXT NOT NULL,
+        enviada_em TEXT
+    )""",
+    # Pedido do painel recusado pelo caixa (NFC-e, devolução, fiado, Pix): a nuvem mostra o motivo ao dono.
+    """CREATE TABLE IF NOT EXISTS vendas_apagar_recusadas (
+        uuid TEXT PRIMARY KEY,
+        motivo TEXT NOT NULL,
+        recusada_em TEXT NOT NULL,
+        enviada_em TEXT
+    )""",
     # XMLs da NFC-e (produção) já copiados para a nuvem, pelo nome do arquivo em nfce/producao/.
     """CREATE TABLE IF NOT EXISTS nfce_xmls_enviados (
         arquivo TEXT PRIMARY KEY,
@@ -1182,6 +1213,7 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    57: [],  # tabelas aditivas seguranca_dono, vendas_apagadas e vendas_apagar_recusadas (apagar vendas de teste com a senha de segurança)
     56: [],  # tabela aditiva nfce_xmls_enviados (cópia dos XMLs da NFC-e na nuvem)
     # v55: NFC-e em contingência off-line (impressa antes de autorizar) e números inutilizados na SEFAZ.
     55: [("coluna", "nfce_notas", "contingencia_em", "TEXT"),

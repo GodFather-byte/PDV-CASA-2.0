@@ -498,6 +498,22 @@
           <button id="baixar-xmls" type="button" class="botao-arquivo">Baixar ZIP do mês</button>
           <p id="aviso-xmls" class="aviso" role="status" hidden></p>
         </section>
+        <section class="bloco" id="bloco-vendas-teste">
+          <h2>Apagar vendas de teste</h2>
+          <p class="legenda">Para vendas feitas só para testar o caixa. Marque e confirme com a senha de segurança
+            (a que o dono criou no caixa, em Utilitários). O caixa confere e apaga na próxima sincronização; venda com
+            NFC-e, devolução, fiado ou Pix recebido ele não apaga.</p>
+          <label>De <input id="teste-de" type="date"></label>
+          <label>até <input id="teste-ate" type="date"></label>
+          <button id="teste-buscar" type="button" class="botao-arquivo">Buscar vendas</button>
+          <div id="teste-lista"></div>
+          <p id="teste-total" class="legenda"></p>
+          <label>Senha de segurança <input id="teste-senha" type="password" autocomplete="off"></label>
+          <button id="teste-apagar" type="button" class="botao-arquivo">Apagar marcadas</button>
+          <p id="aviso-teste" class="aviso" role="status" hidden></p>
+          <details id="teste-historico-bloco" hidden><summary>Apagadas recentemente</summary>
+            <div id="teste-historico"></div></details>
+        </section>
         <section class="bloco" id="bloco-notas">
           <h2>Notas de compra</h2>
           <p class="legenda">Envie o XML da nota do fornecedor (o arquivo que chega por e-mail, não a foto nem o PDF).

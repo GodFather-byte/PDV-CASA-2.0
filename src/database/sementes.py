@@ -52,6 +52,7 @@ ACESSOS = [
     ("rel_informativos", "Informativo, Horas, Cancelados, Custo médio", "Relatórios", 2),
     ("util_limpeza", "Limpeza do movimento", "Utilitários", 4),
     ("util_excluir_produtos", "Excluir todos os produtos", "Utilitários", 4),
+    ("util_vendas_teste", "Apagar vendas de teste (senha de segurança do dono)", "Utilitários", 4),
     ("util_comunicacao", "Programa de comunicação", "Utilitários", 2),
     ("util_backup", "Backup de dados", "Utilitários", 2),
     ("util_fila_impressao", "Fila de impressão", "Utilitários", 2),

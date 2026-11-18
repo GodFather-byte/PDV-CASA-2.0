@@ -83,7 +83,8 @@ def ha_pendencia(banco) -> bool:
     from src.sync import cardapio_envio, devolucoes_envio, painel_envio, painel_ritmo
     from src.porteiro import nuvem_envio
     if painel_envio.ligado(banco):
-        if painel_envio.pendentes(banco) or devolucoes_envio.pendentes(banco):
+        if painel_envio.pendentes(banco) or devolucoes_envio.pendentes(banco) \
+                or painel_envio.exclusoes_pendentes(banco):
             return True
         if painel_ritmo.desatualizado(banco):
             return True
