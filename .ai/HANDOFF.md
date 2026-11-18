@@ -1,22 +1,23 @@
-# Handoff (18/11/2026): delivery Insta-BDelivery mais redondo (branch `delivery-esgotado-ia-insta`)
+# Handoff (18/11/2026): backup do caixa na nuvem (branch `backup-nuvem`)
 
-No ar: 1.14.15 (IA nos caixas: cadastro por foto e nomes da NF-e, ligada por loja na central).
+No ar: 1.14.16 (delivery com esgotado, Insta pela central, IA da vitrine paga) e o site novo (4 programas, sob medida).
 
-## O que entrou (junto com o PR do repositório GodFather-byte/Insta-BDelivery)
-- **Esgotado:** `src/sync/cardapio_envio.coletar` manda `esgotado: true` para produto que controla estoque e está
-  zerado (só o sim/não). A nossa nuvem (`backend/cardapio.py`) guarda e mostra; `backend/pedido_online.py` recusa o
-  pedido com item esgotado; o cardápio por QR mostra "Esgotado". O Insta deixa indisponível e volta sozinho.
-- **Insta pela central** (`backend/insta.py`): no detalhe da loja, "Delivery Insta-BDelivery" guarda endereço e chave
-  (`insta_lojas`). O caixa manda `insta_hash` no envio do painel; se for diferente, a resposta traz `insta` e o caixa
-  grava (`src/sync/insta_bdelivery.anotar_resposta`). Quando o hash bate, a chave em texto sai da nuvem.
-- **IA da vitrine paga:** `GET /v1/parceiro/insta/ia?h=<sha256 da chave>` responde `{liberada}` pelo liga/desliga de
-  "IA no caixa". O Insta consulta com `WILLPDV_NUVEM_URL` (Vercel) e cacheia 10 min.
-- Insta (outro repo): promoções do PDV no preço, taxa por bairro (do caixa e do painel), bairro vai ao caixa.
-- Testes: `test_insta_central`, `TesteEsgotado` em `test_pedido_online`. No Insta: `supabase/tests/promo_zonas_esgotado.sql`.
+## O que entrou
+- **Nuvem** `backend/backup_nuvem.py`: `POST /v1/backup` (corpo = gzip do banco, cabeçalhos com hora, esquema e
+  SHA-256; confere que é SQLite), `GET /v1/backup/lista`, `GET /v1/backup/{id}` (token da loja, só a própria loja).
+  Tabela `backups_nuvem` no Postgres (Neon). Retenção: último de cada um dos 7 dias mais recentes + último de cada mês
+  (4 meses), até 80 MB por loja (o mais novo nunca sai). Central: lista e baixa (`baixar_backup_nuvem` na auditoria).
+- **Caixa** `src/sync/backup_nuvem.py`: no sincronizador, manda o backup local mais novo no máximo a cada 3 h (o caixa
+  já faz backup na troca de turno, saída e início). Caixa adicional não envia. `restaurar` baixa, confere SHA-256 e
+  banco, mantém endereço/token/licença da instalação atual e marca a restauração para o próximo início (o mesmo
+  caminho do backup local, com cópia de segurança do banco atual).
+- **Tela** `src/ui_qt/backup_nuvem.py`: Utilitários → "Recuperar a loja pelo backup da nuvem…".
+- Testes: `tests/test_backup_nuvem.py` (envio, intervalo, recuperação, isolamento entre lojas, retenção, central, tela).
 
 ## Pendências
-- Depois do merge dos dois PRs: aplicar a migração do Insta no Supabase e definir `WILLPDV_NUVEM_URL` na Vercel
-  (só depois de a nuvem 1.14.16 estar no ar, senão a IA das lojas ligadas fica bloqueada).
-- IA: criar a chave da Claude Platform e colar em `ANTHROPIC_API_KEY` no Render; ligar a Casa Verde na central
-  (ela precisa da instalação manual da 1.14.15+).
-- Backlog: homologação NFC-e DeliciOz; alíquotas IBS/CBS de 2027; mensalidade EA Superações.
+- Medir o tamanho real dos bancos (aparece na lista da central). O Neon tem limite de 1 GB (hoje 16 MB); se crescer,
+  trocar o armazenamento para o R2 mantendo as mesmas rotas.
+- IA: chave da Claude Platform em `ANTHROPIC_API_KEY` no Render; ligar lojas na central.
+- Ideias aprovadas para depois: RustDesk (suporte), sugestão de compra simples (Will Adega), etiquetas com código de
+  barras (python-barcode, para o Will Variedades). Headscale e statsforecast: não agora.
+- Backlog: homologação NFC-e DeliciOz; IBS/CBS 2027; Casa Verde na 1.14.5 (instalação manual); mensalidade EA.

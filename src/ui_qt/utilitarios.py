@@ -26,6 +26,7 @@ class JanelaUtilitarios(QDialog):
         ("excluir_produtos", "Excluir todos os produtos…", "util_excluir_produtos"),
         ("comunicacao", "Programa de comunicação", "util_comunicacao"),
         ("verificar_backup", "Verificar backup (teste de restauração)…", "util_backup"),
+        ("recuperar_nuvem", "Recuperar a loja pelo backup da nuvem…", "util_backup"),
         ("senha_seguranca", "Senha de segurança do dono…", "util_vendas_teste"),
         ("vendas_teste", "Apagar vendas de teste…", "util_vendas_teste"),
     )
@@ -110,6 +111,15 @@ class JanelaUtilitarios(QDialog):
             self.janela_verificacao = JanelaVerificarBackup(self.ctx, self)
             self.janela_verificacao.open()
             self.status.setText(self.ctx.utilitarios.situacao_teste_restauracao()[1])
+            return True
+        return self._executar(acao)
+
+    def recuperar_nuvem(self):
+        def acao():
+            self._controlador("util_backup")
+            from src.ui_qt.backup_nuvem import JanelaBackupNuvem
+            self.janela_backup_nuvem = JanelaBackupNuvem(self.ctx, self)
+            self.janela_backup_nuvem.open()
             return True
         return self._executar(acao)
 

@@ -862,3 +862,5 @@ def instalar(app, Loja):
     ia.instalar_fornecedor(app, sessao, obter, auditar)
     from backend import insta
     insta.instalar_fornecedor(app, sessao, obter, auditar)
+    from backend import backup_nuvem
+    backup_nuvem.instalar_fornecedor(app, sessao, obter, auditar)
