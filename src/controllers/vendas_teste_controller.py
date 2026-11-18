@@ -80,7 +80,7 @@ class VendasTesteController:
     def _conferir(self, senha: str) -> None:
         registro = self._registro()
         if registro is None:
-            raise ErroNegocio("Crie antes a senha de segurança do dono (Configurações > Segurança).")
+            raise ErroNegocio("Crie antes a senha de segurança do dono (Utilitários > Senha de segurança do dono).")
         agora = fmt.agora()
         if registro["bloqueada_ate"] and registro["bloqueada_ate"] > agora:
             raise ErroPermissao(f"Senha de segurança bloqueada por excesso de erros até "
@@ -164,6 +164,7 @@ class VendasTesteController:
             raise TurnoFechado(fechados)
         with self.banco.transacao():
             for v in vendas:
+                self._revalidar(v)                        # nada mudou entre a conferência e a exclusão
                 self._apagar_uma(v, "caixa")
         total = sum(int(v["total_cent"] or 0) for v in vendas if v["status"] == "fechada")
         self.banco.log("vendas_teste_apagadas", f"{len(vendas)} venda(s), R$ {total / 100:.2f}", self.operador_id)
@@ -187,12 +188,24 @@ class VendasTesteController:
                 self.banco.log("vendas_teste_recusada", f"cupom {v['cupom']}: {motivo}", None)
                 recusadas.append(uuid)
                 continue
-            with self.banco.transacao():
-                self._apagar_uma(v, "painel")
+            try:
+                with self.banco.transacao():
+                    self._revalidar(v)
+                    self._apagar_uma(v, "painel")
+            except ErroNegocio:
+                continue                                  # mudou agora (ex.: NFC-e emitida); a próxima rodada confere
             feitas.append(uuid)
         if feitas:
             self.banco.log("vendas_teste_apagadas", f"{len(feitas)} venda(s) pelo painel do dono", None)
         return {"apagadas": feitas, "recusadas": recusadas}
+
+    def _revalidar(self, v) -> None:
+        atual = self.banco.um("SELECT * FROM vendas WHERE id = ?", (v["id"],))
+        motivo = "não existe mais" if atual is None or atual["uuid"] != v["uuid"] else self.motivo_bloqueio(atual)
+        if motivo is None and atual["status"] != v["status"]:
+            motivo = "mudou de situação"
+        if motivo:
+            raise ErroNegocio(f"O cupom {v['cupom'] or v['id']} não pode ser apagado: {motivo}.")
 
     def _apagar_uma(self, v, origem: str) -> None:
         vid = v["id"]
