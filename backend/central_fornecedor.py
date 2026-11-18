@@ -858,3 +858,5 @@ def instalar(app, Loja):
     retaguarda.instalar_fornecedor(app, sessao, obter, auditar)
     from backend import nfce_xmls
     nfce_xmls.instalar_fornecedor(app, sessao, obter, auditar)
+    from backend import ia
+    ia.instalar_fornecedor(app, sessao, obter, auditar)
