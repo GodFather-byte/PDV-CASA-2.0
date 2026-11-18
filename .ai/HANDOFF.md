@@ -1,9 +1,16 @@
-# Handoff (18/11/2026): Insta-BDelivery ligado ao caixa (branch `integracao-insta-bdelivery`)
+# Handoff (18/11/2026): relatório do `rodar_testes` no Windows (branch `corrigir-rodar-testes-windows`)
 
-Estado geral: repositório **público** (Actions de graça), build sem Nuitka, sem runner do PC. Última versão no `main`: 1.14.14 (não conferi se já foi publicada).
-Este trabalho ainda **não** tem versão: é um PR em rascunho, sem merge.
+Estado geral: repositório **público** (Actions de graça), build sem Nuitka, sem runner do PC. Última versão no `main`:
+1.14.14 (não conferi se já foi publicada). A integração com o Insta-BDelivery (#124) está no `main`, **sem versão**.
 
-## O que entrou
+## Este trabalho
+- `tools/rodar_testes.py` quebrava no Windows com `UnicodeEncodeError` ao imprimir a saída de um módulo que falhou,
+  quando ela trazia caractere fora do cp1252 (o `\ufffd` da decodificação, por exemplo). O job caía no `print` e a causa
+  real da falha não aparecia no CI. Foi o que escondeu a falha de `test_autoteste` na primeira rodada do #124.
+- Correção: `_saida_tolerante()` no começo do `main` reconfigura `stdout`/`stderr` com `errors="replace"`; o caractere
+  que o terminal não escreve vira "?". Teste: `tests/test_rodar_testes.py` (saída em cp1252 estrito).
+
+## O que entrou no #124 (já no `main`)
 - **Segundo canal de pedido online: Insta-BDelivery** (vitrine de delivery com atendente de IA, outro repositório do
   dono: `GodFather-byte/Insta-BDelivery`). Ele fala o mesmo contrato do cardápio da nuvem (`/v1/cardapio/envio`,
   `/v1/pedidos-online`, `aceitar`, `recusar`, `situacao`), então o caixa só ganhou o endereço e a chave.
@@ -24,8 +31,9 @@ Este trabalho ainda **não** tem versão: é um PR em rascunho, sem merge.
   pedido virou entrega, aceito/saiu/entregue/recusado chegaram ao cliente, mudança de preço reenviou o catálogo.
 
 ## Pendências
-- Merge (pedir OK do dono) e decidir a versão. Não foi testado num caixa Windows instalado, nem contra a vitrine de
-  produção com uma loja de verdade.
+- Merge deste PR (pedir OK do dono).
+- **Decidir a versão** que leva o Insta-BDelivery às lojas. Não foi testado num caixa Windows instalado, nem contra a
+  vitrine de produção com uma loja de verdade.
 - Taxa de entrega: a vitrine passou a adotar `taxa_padrao_cent` e `minimo_cent` do envio do catálogo (mudança no
   repositório do Insta-BDelivery; cada valor só é aplicado quando muda no caixa). Conferido de ponta a ponta: total da
   vitrine igual ao do caixa com a taxa padrão. **Taxa por bairro continua divergindo**: a vitrine só tem a padrão e
