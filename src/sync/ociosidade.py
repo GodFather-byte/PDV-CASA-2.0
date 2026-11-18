@@ -98,6 +98,9 @@ def ha_pendencia(banco) -> bool:
     from src.sync import nfce_xmls
     if nfce_xmls.ha_pendente(banco):
         return True
+    from src.sync import backup_nuvem
+    if backup_nuvem.ha_pendente(banco):
+        return True
     return False
 
 

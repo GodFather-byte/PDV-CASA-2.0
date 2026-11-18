@@ -541,6 +541,10 @@ _ia.instalar(app, autenticar)
 from backend import insta as _insta  # noqa: E402
 _insta.instalar(app)
 
+# Backup do caixa na nuvem para recuperar a loja num computador novo: backend/backup_nuvem.py.
+from backend import backup_nuvem as _backup_nuvem  # noqa: E402
+_backup_nuvem.instalar(app, autenticar)
+
 _ponte.instalar(app, Loja, hash_token)
 
 # Porteiro no celular pelo 4G: retrato das comandas abertas e a mesma página em /porteiro/.

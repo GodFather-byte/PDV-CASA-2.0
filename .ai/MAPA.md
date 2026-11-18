@@ -151,5 +151,6 @@ em `src/core/identidade_visual.py`. Configuração e limites em `docs/ADEGA.md`.
 | Apagar vendas de teste (senha de segurança do dono) | regra `src/controllers/vendas_teste_controller.py`; telas `src/ui_qt/vendas_teste.py` (Utilitários); envio em `src/sync/painel_envio.py`; nuvem `backend/vendas_teste.py`; painel aba Produtos |
 | IA nos caixas (pago, por loja) | nuvem `backend/ia.py` (chave `ANTHROPIC_API_KEY`); cliente `src/sync/ia.py`; botões em `src/ui_qt/importar_produtos.py`; central: detalhe da loja > IA no caixa |
 | Insta-BDelivery pela central (implantação, IA da vitrine) | nuvem `backend/insta.py`; caixa `src/sync/insta_bdelivery.py` (`anotar_resposta`); esgotado em `src/sync/cardapio_envio.py` |
+| Backup do caixa na nuvem (recuperar a loja) | nuvem `backend/backup_nuvem.py`; caixa `src/sync/backup_nuvem.py`; tela `src/ui_qt/backup_nuvem.py` (Utilitários) |
 | Teste grátis pelo site | `backend/site_teste.py` (POST `/v1/site/teste`), `backend/site_web/teste.js`; contato na central (`contato` em `/v1/fornecedor/lojas`) |
 | IBS/CBS na NFC-e própria | `src/fiscal/sefaz/xml_nfce.py` (`_ibscbs`, `_ibscbs_total`), alíquotas em `provedor.aliquotas_ibscbs` |
