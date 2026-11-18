@@ -128,6 +128,7 @@
   }
 
   function botoesPedido(p) {
+    if (p.esgotado) return el("span", { class: "selo", text: "Esgotado" });
     if (!pedidoCfg || !p.codigo) return null;
     const qtd = carrinho.get(chaveDe(p));
     const menos = el("button", { class: "mais", type: "button", "aria-label": "Tirar " + p.nome, text: "−" });

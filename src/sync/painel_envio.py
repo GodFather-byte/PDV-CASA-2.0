@@ -488,6 +488,8 @@ def _postar(banco, corpo: dict, http=None) -> dict:
         from src.sync import retaguarda
         retaguarda.anotar_resposta(banco, dados)          # há alteração da retaguarda esperando este caixa
         _anotar_exclusoes(banco, dados, corpo.get("seguranca_hash"))
+        from src.sync import insta_bdelivery
+        insta_bdelivery.anotar_resposta(banco, dados)
         return dados
     except Exception:
         # Mensagem persistida sem URL, token ou conteúdo da exceção de rede.
@@ -538,6 +540,8 @@ def enviar(banco, http=None, *, foto=_FOTO_PADRAO) -> dict | None:
             recusadas = vendas_teste.recusadas_envio(banco)
             if recusadas:
                 corpo["vendas_recusadas"] = recusadas     # pedido do painel que as travas do caixa não deixaram
+            from src.sync import insta_bdelivery
+            corpo["insta_hash"] = insta_bdelivery.hash_config(banco)     # a central entrega o Insta se mudou
             senha_hash = vendas_teste.hash_para_enviar(banco)
             if senha_hash:
                 corpo["seguranca_hash"] = senha_hash      # só o hash da senha de segurança do dono

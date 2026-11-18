@@ -221,6 +221,8 @@ def montar_pedido(cfg: dict, catalogo: dict[str, dict], corpo: dict, quando: dat
         produto = catalogo.get(codigo) if _CODIGO.fullmatch(codigo) else None
         if produto is None:
             raise HTTPException(status_code=422, detail="Um produto do carrinho saiu do cardápio. Atualize a página.")
+        if produto.get("esgotado"):
+            raise HTTPException(status_code=422, detail=f"{produto['nome']} esgotou. Tire do carrinho para continuar.")
         fracionado = bool(produto.get("fracionado"))
         temperatura = str(linha.get("temperatura") or "natural")
         if temperatura not in ("natural", "gelada"):

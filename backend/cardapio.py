@@ -133,6 +133,8 @@ def produto_limpo(item: dict) -> dict | None:
         limpo["fracionado"] = True
     if item.get("retornavel"):
         limpo["retornavel"] = True
+    if item.get("esgotado") is True:
+        limpo["esgotado"] = True
     return limpo
 
 
@@ -178,6 +180,8 @@ def agrupar(produtos: list[dict], quando: datetime | None = None) -> list[dict]:
             publico["fracionado"] = True
         if item.get("retornavel"):
             publico["retornavel"] = True
+        if item.get("esgotado"):
+            publico["esgotado"] = True
         bloco["produtos"].append(publico)
     return grupos
 

@@ -20,6 +20,27 @@ def acesso(banco) -> tuple[str, str]:
     return (banco.cfg(CHAVE_URL) or "").strip().rstrip("/"), (banco.cfg(CHAVE_TOKEN) or "").strip()
 
 
+def hash_config(banco) -> str:
+    """O que o caixa já tem (mesmo cálculo de backend/insta.hash_config); vazio sem configuração."""
+    import hashlib
+    base, token = acesso(banco)
+    return hashlib.sha256(f"{base}|{token}".encode("utf-8")).hexdigest() if base and token else ""
+
+
+def anotar_resposta(banco, dados: dict) -> bool:
+    """A central cadastrou (ou trocou) o Insta-BDelivery desta loja: grava endereço e chave. Devolve se mudou."""
+    novo = dados.get("insta")
+    if not isinstance(novo, dict):
+        return False
+    url, token = str(novo.get("url") or "").strip().rstrip("/"), str(novo.get("token") or "").strip()
+    if not url.startswith("https://") or not token.startswith("ibd_") or len(url) > 200 or len(token) > 100:
+        return False
+    banco.cfg_set(CHAVE_URL, url)
+    banco.cfg_set(CHAVE_TOKEN, token)
+    banco.log("insta_bdelivery", f"configurado pela central: {url}", None)
+    return True
+
+
 def configurado(banco) -> bool:
     base, token = acesso(banco)
     return bool(base and token)

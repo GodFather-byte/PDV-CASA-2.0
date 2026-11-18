@@ -1204,6 +1204,8 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         if erros_aceitos:
             resposta["erros"] = erros_aceitos
         resposta.update(resposta_teste)
+        from backend import insta
+        resposta.update(insta.para_resposta(db, acesso.loja, dados))   # Insta-BDelivery cadastrado na central
         pedidos_teste = vendas_teste.pedidos_para_o_caixa(db, acesso.loja)
         if pedidos_teste:
             resposta["apagar_no_caixa"] = pedidos_teste  # o dono apagou pelo painel: o caixa confere e apaga
