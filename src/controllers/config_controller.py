@@ -198,6 +198,8 @@ CAMPOS_CONFIG = [
     ("smtp_servidor", "Servidor de e-mail (provedor)", "texto", "E-mail"),
     ("chave_loja", "Chave da loja (licença)", "texto", "Nuvem"), ("api_url", "Endereço da nuvem (licença e atualizações)", "texto", "Nuvem"),
     ("api_token", "Token da API", "texto", "Nuvem"),
+    ("instab_url", "Insta-BDelivery: endereço da integração (vazio = sem a vitrine de delivery)", "texto", "Nuvem"),
+    ("instab_token", "Insta-BDelivery: chave da loja (gerada no painel do Insta-BDelivery)", "segredo", "Nuvem"),
     ("sync_quase_tempo_real", "Sincronização automática com o PDV aberto (o lote sobe no intervalo abaixo; nasce desligada)", "sn", "Nuvem"),
     ("sync_intervalo_seg", "Espera depois de uma falha de rede, no modo normal (segundos, de 5 a 3600)", "int", "Nuvem"),
     ("sync_lote_seg", "Intervalo do lote enviado à nuvem (segundos, de 60 a 3600; 900 = 15 minutos). Abaixo de 300 o banco não dorme", "int", "Nuvem"),

@@ -119,6 +119,7 @@ CONFIG_PADRAO = {
     "agrupar_itens_balcao": "N",
     "margem_minima_pct": "0",
     "api_url": "", "api_token": "", "sync_intervalo_seg": "60",
+    "instab_url": "", "instab_token": "",     # Insta-BDelivery: vitrine de delivery ligada ao caixa (src/sync/insta_bdelivery.py)
     "sync_quase_tempo_real": "N",
     "sync_lote_seg": "900", "sync_expediente_de": "", "sync_expediente_ate": "",
     "whatsapp_dono": "",

@@ -59,6 +59,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 |---|---|
 | Cozinha web local e configuração Qt | `src/cozinha/{servidor,servico}.py`, `src/cozinha/web/`, `ui_qt/cozinha_web.py` |
 | Pedido online de mesa (v49), deduplicação e ACK | `controllers/pedido_mesa_controller.py`; tabela `pedidos_mesa_importados` |
+| Insta-BDelivery (vitrine de delivery com IA): catálogo sobe e pedido de entrega/retirada desce, ao lado do canal da nuvem | `sync/insta_bdelivery.py` (endereço, chave, `id` negativo), `sync/pedidos_online.py` (`fontes`, `consultar_fontes`, `_destino`), `sync/cardapio_envio.py` (`enviar_insta`); `docs/INSTA_BDELIVERY.md` |
 | Adicionais por produto e retrato por item (v48) | `core/opcoes_produto.py`, `controllers/opcoes_produto_controller.py`, `ui_qt/opcoes_produto.py` |
 | Venda, itens, pagamento, mesas e comandas | `caixa_controller.py` |
 | Divisão por itens e cálculo de totais (auxiliares do CaixaController) | `caixa_divisao.py`, `caixa_totais.py` |

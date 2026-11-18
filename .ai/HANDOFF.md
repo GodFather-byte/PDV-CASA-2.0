@@ -1,27 +1,36 @@
-# Handoff (17/11/2026, noite): apagar vendas de teste (branch `apagar-vendas-teste`)
+# Handoff (18/11/2026): Insta-BDelivery ligado ao caixa (branch `integracao-insta-bdelivery`)
 
-Estado geral: repositório **público** (Actions de graça), build sem Nuitka, sem runner do PC. Versão no ar 1.14.13.
+Estado geral: repositório **público** (Actions de graça), build sem Nuitka, sem runner do PC. Versão no ar 1.14.14.
+Este trabalho ainda **não** tem versão: é um PR em rascunho, sem merge.
 
 ## O que entrou
-- **Senha de segurança do dono** (`seguranca_dono`, só o hash, fora de `config` porque a retaguarda espelha a config).
-  Cria/troca em Utilitários > "Senha de segurança do dono…" (gerente; trocar pede a atual). Sobe para a nuvem
-  (`seguranca_hash` no envio do painel) e vale no painel.
-- **Apagar vendas de teste no caixa** (Utilitários > "Apagar vendas de teste…", módulo `util_vendas_teste`, nível 4):
-  período, marca, total, confirma com a senha. Regra em `src/controllers/vendas_teste_controller.py`.
-  Travas: só fechada/cancelada; bloqueia NFC-e (qualquer situação menos `erro`), devolução/troca, fiado, Pix aprovado;
-  turno fechado pede confirmação (`TurnoFechado`); 5 erros = 15 min de bloqueio. Tudo ou nada. Estoque volta
-  (`estornar_venda`, idempotente). Registro permanente em `vendas_apagadas` + `auditoria_eventos`.
-- **Nuvem** (`backend/vendas_teste.py`): `vendas_apagadas` do lote apaga `PainelVenda` e grava `painel_exclusoes`
-  (um reenvio atrasado do mesmo uuid é confirmado sem guardar). Painel: `GET /v1/painel/vendas-teste`,
-  `POST /v1/painel/vendas-teste/apagar` (sessão + senha de segurança, bloqueio próprio). O pedido do painel fica
-  "aguardando" e vai ao caixa em `apagar_no_caixa`; o caixa aplica as mesmas travas e confirma (aí some da nuvem) ou
-  recusa com motivo (`vendas_apagar_recusadas` -> `vendas_recusadas`). A nuvem não sabe de NFC-e, por isso quem
-  decide é o caixa. Bloco "Apagar vendas de teste" na aba Produtos do painel.
-- Esquema **v57** (tabelas aditivas). Testes: `test_vendas_teste`, `test_vendas_teste_nuvem`, `test_qt_vendas_teste`.
+- **Segundo canal de pedido online: Insta-BDelivery** (vitrine de delivery com atendente de IA, outro repositório do
+  dono: `GodFather-byte/Insta-BDelivery`). Ele fala o mesmo contrato do cardápio da nuvem (`/v1/cardapio/envio`,
+  `/v1/pedidos-online`, `aceitar`, `recusar`, `situacao`), então o caixa só ganhou o endereço e a chave.
+- **Dois canais convivem** (decisão do dono): a nuvem fica com o QR e o pedido da mesa; o Insta-BDelivery fica com
+  entrega e retirada. Config: `instab_url` e `instab_token` (segredo), aba Conexão com a nuvem.
+- `src/sync/insta_bdelivery.py`: endereço, chave e a regra do **`id` negativo**. Cada canal numera os seus pedidos, então
+  o do Insta-BDelivery entra no caixa com `canal = "insta"` e `id = -numero`; é isso que vai em
+  `vendas.pedido_online_id`. Sem coluna nova, sem migração (esquema segue v57).
+- `src/sync/pedidos_online.py`: `fontes` (lida na thread da tela), `consultar_fontes` (só rede; um canal fora do ar não
+  esconde o outro), `_destino` (id negativo vai para a vitrine). `ligado` = nuvem ou vitrine.
+- `src/sync/cardapio_envio.py`: `enviar` publica na nuvem e depois na vitrine (`enviar_insta`, hash próprio em
+  `instab_cardapio_hash`, que inclui endereço e chave); a falha de um destino não segura o outro. `sincronizador.py`
+  **não foi tocado**: ele já chama `cardapio_envio.enviar`.
+- `pedido_online_controller.marca(numero, canal)`: "Pedido Insta #N" x "Pedido online #N", para o #12 de um canal não
+  casar com o do outro em `ja_importado`. `resumo` mostra "Insta #N".
+- Testes: `test_insta_bdelivery` (13), `test_qt_insta_bdelivery` (2). Guia: `docs/INSTA_BDELIVERY.md`.
+- Conferido de ponta a ponta com o Insta-BDelivery rodando localmente e os controladores reais do caixa: catálogo subiu,
+  pedido virou entrega, aceito/saiu/entregue/recusado chegaram ao cliente, mudança de preço reenviou o catálogo.
 
 ## Pendências
-- Merge (pedir OK do dono) e publicar 1.14.14.
-- Loja com vários caixas: o pedido do painel vai a todos; só o caixa que tem a venda apaga. Se esse caixa sumiu,
-  o pedido fica "aguardando".
-- Backlog: homologação NFC-e DeliciOz (A1 na loja, roteiro em docs/NFCE_PROPRIA.md); alíquotas IBS/CBS de 2027;
-  instalação manual na Casa Verde (1.14.5); valor da mensalidade EA Superações.
+- Merge (pedir OK do dono) e decidir a versão. Não foi testado num caixa Windows instalado, nem contra a vitrine de
+  produção com uma loja de verdade.
+- **Taxa de entrega diverge**: a vitrine cobra a taxa única dela e o caixa calcula a dele (no teste: R$ 5,00 x R$ 8,00).
+  Hoje o recado da entrega mostra o total que o cliente viu. Próximo passo sugerido: a vitrine adotar `taxa_padrao_cent`
+  e `minimo_cent` que já vão no envio do catálogo (mudança no outro repositório).
+- Promoção por horário/data e preço gelado não aparecem na vitrine (ela usa o preço base).
+- A aba Conexão com a nuvem não foi fotografada pelo `--telas` (a foto pega a primeira aba); os campos novos são
+  desenhados pela lista `CAMPOS_CONFIG` como os demais.
+- Herdadas: publicar 1.14.14 se ainda não saiu; loja com vários caixas no "apagar vendas de teste"; backlog NFC-e
+  DeliciOz, IBS/CBS 2027, Casa Verde (1.14.5), mensalidade EA Superações.

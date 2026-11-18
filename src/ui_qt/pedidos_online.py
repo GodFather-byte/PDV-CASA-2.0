@@ -60,11 +60,11 @@ class VigiaPedidosOnline(QObject):
             return
         if self._buscando:
             return
-        base, token = rede.acesso(self.ctx.banco)
+        origens = rede.fontes(self.ctx.banco)      # nuvem (QR e mesa) e Insta-BDelivery (entrega e retirada)
 
         def trabalhar():
             try:
-                self.chegou.emit(rede.consultar(base, token, http), "")
+                self.chegou.emit(*rede.consultar_fontes(origens, http))
             except Exception as e:  # noqa: BLE001 - sem rede: tenta de novo na próxima volta
                 self.chegou.emit([], str(e))
 
@@ -77,12 +77,12 @@ class VigiaPedidosOnline(QObject):
     def _receber(self, pedidos: list, erro: str) -> None:
         self._buscando = False
         self.erro = erro
-        if erro:
+        if erro and not pedidos:                    # com um canal fora do ar, os pedidos do outro seguem na tela
             self._mostrar()
             return
         pendentes = []
         for p in pedidos:
-            if self.ctx.pedidos_online.ja_importado(p.get("numero"), p.get("id")):
+            if self.ctx.pedidos_online.ja_importado(p.get("numero"), p.get("id"), p.get("canal") or ""):
                 try:                                    # aceito no caixa, mas a nuvem não soube: avisa de novo
                     rede.aceitar(self.ctx.banco, p["id"])
                     continue
@@ -175,7 +175,7 @@ def atender(janela, vigia: VigiaPedidosOnline) -> None:
         if pedido.get("mesa"):
             if r.get("item_ids"):
                 janela._enviar_remoto(r["item_ids"])
-            janela.avisar(f"{marca(pedido['numero'])} lançado na mesa {pedido['mesa']}.")
+            janela.avisar(f"{marca(pedido['numero'], pedido.get('canal') or '')} lançado na mesa {pedido['mesa']}.")
             return
         emitido, _ = janela._executar(janela.ctx.entregas.emitir_pedido, r["venda_id"])
         if emitido:
@@ -185,7 +185,7 @@ def atender(janela, vigia: VigiaPedidosOnline) -> None:
             janela.venda_id = None
             janela._limpar_entrada()
             janela.recarregar()
-        janela.avisar(f"{marca(pedido['numero'])} aceito. O pedido de entrega "
+        janela.avisar(f"{marca(pedido['numero'], pedido.get('canal') or '')} aceito. O pedido de entrega "
                       f"{'foi impresso' if emitido else 'está na tela: emita com F8'}.")
     elif acao == "recusar":
         motivo = dialogos.pedir_texto("Recusar pedido", "Motivo (o cliente vê no cardápio):", padrao="Produto em falta")
@@ -197,4 +197,4 @@ def atender(janela, vigia: VigiaPedidosOnline) -> None:
             dialogos.erro("Pedido online", str(e))
             return
         vigia.retirar(pedido["id"])
-        janela.avisar(f"{marca(pedido['numero'])} recusado.")
+        janela.avisar(f"{marca(pedido['numero'], pedido.get('canal') or '')} recusado.")
