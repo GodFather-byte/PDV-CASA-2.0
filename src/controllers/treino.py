@@ -42,5 +42,6 @@ def criar_banco(banco_loja=None) -> tuple[BancoDados, Operador]:
     for codigo, nome, preco in PRODUTOS:
         cadastros.salvar("produtos", {"codigo": codigo, "nome": nome, "subgrupo_id": subgrupo, "unidade_id": unidade,
                                       "preco_cent": f"{preco // 100},{preco % 100:02d}", "controla_estoque": "N"})
-    TurnoController(banco).abrir(operador_id, 1, FUNDO_CENT)
+    # No executável a licença é sempre exigida, e o banco de treino nasce sem nenhuma: o turno abre como treino.
+    TurnoController(banco).abrir(operador_id, 1, FUNDO_CENT, treino=True)
     return banco, AcessoController(banco).operador(operador_id)

@@ -22,7 +22,7 @@ import math
 import sys
 
 from PySide6.QtCore import QEvent, QPoint, Qt
-from PySide6.QtGui import QColor, QFont, QKeySequence, QPixmap, QShortcut
+from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
                                QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy, QSpinBox, QStackedWidget,
@@ -289,6 +289,34 @@ def _rotulo(texto: str = "", nome: str | None = None) -> QLabel:
     lbl.setWordWrap(True)
     return lbl
 
+
+class RotuloAdaptavel(QLabel):
+    """Título de campo que mostra uma forma mais curta quando a coluna aperta (tela de 1024 pontos), em vez de ficar
+    cortado no meio da palavra. O texto guardado (`text()`) continua o inteiro."""
+
+    CURTOS = {"Código ou nome do produto:": ("Código ou nome:", "Produto:"), "Quantidade:": ("Qtd.:",),
+              "Preço da bebida (R$):": ("Preço (R$):",)}
+
+    def texto_exibido(self) -> str:
+        texto, medida = self.text(), self.fontMetrics()
+        largura = self.contentsRect().width()
+        if medida.horizontalAdvance(texto) <= largura:
+            return texto
+        for curto in self.CURTOS.get(texto, ()):
+            if medida.horizontalAdvance(curto) <= largura:
+                return curto
+        return medida.elidedText(texto, Qt.TextElideMode.ElideRight, largura)
+
+    def paintEvent(self, ev) -> None:
+        exibido = self.texto_exibido()
+        if exibido == self.text():
+            super().paintEvent(ev)
+            return
+        pintor = QPainter(self)
+        self.style().drawItemText(pintor, self.contentsRect(), int(self.alignment()), self.palette(), self.isEnabled(),
+                                  exibido, self.foregroundRole())
+        pintor.end()
+
 class JanelaCaixa(QMainWindow):
     """Caixa Qt. Contrato: `JanelaCaixa(ctx, parent=None).show()` não bloqueia; quem abre guarda a referência.
     Fechar a janela (inclusive na saída da sessão) nunca encerra o turno nem a venda de balcão: ela fica aberta para
@@ -455,6 +483,7 @@ class JanelaCaixa(QMainWindow):
         self.cartoes.digitou.connect(self._digitar_posicao)
         c_esq.addWidget(self.cartoes, 1)
         self._estilo_painel_cartoes()
+        self._largura_do_painel_de_mesas()
         grade.addWidget(esq)
         if not self.com_mesas:
             esq.hide()
@@ -495,9 +524,9 @@ class JanelaCaixa(QMainWindow):
         self.lbl_aviso_venda.hide()
         c_cen.addWidget(self.lbl_aviso_venda)
         entrada = QGridLayout()
-        self.lbl_cod_titulo = QLabel("Código ou nome do produto:")
+        self.lbl_cod_titulo = RotuloAdaptavel("Código ou nome do produto:")
         entrada.addWidget(self.lbl_cod_titulo, 0, 0)
-        self.lbl_qtd_titulo = QLabel("Quantidade:")
+        self.lbl_qtd_titulo = RotuloAdaptavel("Quantidade:")
         entrada.addWidget(self.lbl_qtd_titulo, 0, 1)
         for titulo in (self.lbl_cod_titulo, self.lbl_qtd_titulo):     # o título não decide a largura mínima do caixa
             titulo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
@@ -571,11 +600,13 @@ class JanelaCaixa(QMainWindow):
             cabecalho_itens.setSectionResizeMode(coluna, QHeaderView.Fixed)
             self.tabela.setColumnWidth(coluna, largura)
         cabecalho_itens.setSectionResizeMode(1, QHeaderView.Stretch)
+        self.tabela.installEventFilter(self)          # na tela estreita o código e a unidade cedem lugar ao produto
         c_cen.addWidget(self.tabela, 1)
         self.lbl_dica_nav = QWidget()                 # os atalhos como teclas, em vez da frase cinza
         dicas = QHBoxLayout(self.lbl_dica_nav)
         dicas.setContentsMargins(0, 2, 0, 2)
         dicas.setSpacing(4)
+        self._dicas_teclas: list[tuple[QLabel, QLabel]] = []      # na tela estreita as últimas saem (ver _acomodar_itens)
         for tecla, oque in TECLAS_DICA:
             rotulo_tecla = QLabel(tecla)
             rotulo_tecla.setObjectName("tecla")
@@ -584,6 +615,7 @@ class JanelaCaixa(QMainWindow):
             rotulo_dica.setObjectName("dica")
             dicas.addWidget(rotulo_dica)
             dicas.addSpacing(8)
+            self._dicas_teclas.append((rotulo_tecla, rotulo_dica))
         dicas.addStretch(1)
         c_cen.addWidget(self.lbl_dica_nav)
         botoes = QHBoxLayout()
@@ -2643,6 +2675,8 @@ class JanelaCaixa(QMainWindow):
         self.ent_pos.setCursorPosition(len(self.ent_pos.text()))
 
     def eventFilter(self, obj, ev):
+        if ev.type() == QEvent.Resize and obj is getattr(self, "tabela", None):
+            self._acomodar_itens(ev.size().width())           # o tamanho novo: a tabela ainda não se reorganizou
         if ev.type() == QEvent.KeyPress:
             tecla = ev.key()
             # Pagamento só no teclado vale com ou sem mesas (adega e restaurante no balcão também):
@@ -2682,12 +2716,51 @@ class JanelaCaixa(QMainWindow):
             if self.venda_id is not None or destino == "0":
                 self.ent_codigo.setFocus()
 
+    # Abaixo disto o nome do produto some da lista de itens (monitor de 1024 pontos): código e unidade saem da frente.
+    LARGURA_MINIMA_PRODUTO = 150
+    # Janela mais baixa que isto (notebook com a tela ampliada pelo Windows): a linha dos quartos fica com uma fileira.
+    ALTURA_BAIXA = 640
+
+    def _largura_do_painel_de_mesas(self) -> None:
+        """O quadro das mesas tem a largura dos cartões e nada mais. Sem isto, na tela estreita ele ficava com a
+        largura do texto de ajuda numa linha só e quem perdia espaço era a lista de itens."""
+        margens = self.painel_mesas.layout().contentsMargins()
+        largura = self.cartoes.maximumWidth() + margens.left() + margens.right() + 2
+        if self.painel_mesas.maximumWidth() != largura:
+            self.painel_mesas.setFixedWidth(largura)
+
+    def _acomodar_itens(self, largura: int | None = None) -> None:
+        """Esconde o código e a unidade da lista de itens enquanto a largura não der para o nome do produto.
+        `largura` é a da tabela (a que ela vai ter, quando chamado no meio de um redimensionamento)."""
+        cabecalho = self.tabela.horizontalHeader()
+        largura = self.tabela.width() if largura is None else largura
+        barra = self.tabela.verticalScrollBar()
+        util = largura - 2 * self.tabela.frameWidth() - (barra.width() if barra.isVisible() else 0)
+        sempre = sum(cabecalho.sectionSize(coluna) for coluna in (3, 5)) \
+            + max(cabecalho.sectionSizeHint(4), self.tabela.sizeHintForColumn(4))
+        opcionais = sum(max(cabecalho.sectionSizeHint(coluna), self.tabela.sizeHintForColumn(coluna)) for coluna in (0, 2))
+        apertado = util - sempre - opcionais < self.LARGURA_MINIMA_PRODUTO
+        for coluna in (0, 2):
+            if self.tabela.isColumnHidden(coluna) != apertado:
+                self.tabela.setColumnHidden(coluna, apertado)
+        # A fileira dos atalhos (Enter paga, F12 fecha...) mostra só os pares que cabem inteiros, do primeiro em diante.
+        usado = 0
+        for tecla, dica in self._dicas_teclas:
+            usado += tecla.sizeHint().width() + dica.sizeHint().width() + 16
+            cabe = usado - 8 <= largura
+            for rotulo in (tecla, dica):
+                if rotulo.isHidden() == cabe:
+                    rotulo.setVisible(cabe)
+
     def resizeEvent(self, ev) -> None:
         super().resizeEvent(ev)
         if getattr(self, "marca_dagua", None) is not None:
             self.marca_dagua.acompanhar()
         if getattr(self, "cartoes", None) is not None:
             self.cartoes.definir_colunas(3 if self.width() >= 1560 else 2 if self.width() >= 1300 else 1)
+            self._largura_do_painel_de_mesas()
+        if getattr(self, "painel_quartos", None) is not None:
+            self.painel_quartos.definir_linhas(1 if self.height() < self.ALTURA_BAIXA else 2)
 
     def ir_para_balcao(self) -> None:
         self.ent_pos.setText("0")

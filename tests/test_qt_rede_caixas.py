@@ -182,7 +182,7 @@ class TesteAberturaDoCaixaAdicional(BaseQtRede):
     def test_so_a_impressora_roda_e_o_que_e_do_principal_fica_desligado(self):
         remoto = self.adicional(terminal=2)
         app = App(remoto, self.aplicacao)
-        self.addCleanup(self.aplicacao.aboutToQuit.disconnect, app.finalizar)
+        self.addCleanup(self.aplicacao.aboutToQuit.disconnect, app._ao_sair)
         self.addCleanup(app.finalizar)
         with patch("src.ui_qt.app.ServicoFilaImpressao") as impressao, patch("src.ui_qt.app.ServicoPonte") as ponte, \
                 patch("src.ui_qt.app.ServicoPorteiro") as porteiro, \
@@ -207,7 +207,7 @@ class TesteAberturaDoCaixaAdicional(BaseQtRede):
     def test_principal_sobe_o_atendimento_junto_com_os_servicos(self):
         self.banco.cfg_set("rede_caixas", "S")
         app = App(self.banco, self.aplicacao)
-        self.addCleanup(self.aplicacao.aboutToQuit.disconnect, app.finalizar)
+        self.addCleanup(self.aplicacao.aboutToQuit.disconnect, app._ao_sair)
         self.addCleanup(app.finalizar)
         with patch("src.ui_qt.app.ServicoFilaImpressao"), patch("src.ui_qt.app.ServicoPonte"), \
                 patch("src.ui_qt.app.ServicoPorteiro"), patch("src.ui_qt.app.ServicoSincronizacao"), \

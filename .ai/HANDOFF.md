@@ -1,23 +1,36 @@
-# Handoff (18/11/2026): backup do caixa na nuvem (branch `backup-nuvem`)
+# Handoff (19/11/2026): correções do exe, RustDesk e telas que cabem (branch `correcoes-rustdesk-janelas`)
 
-No ar: 1.14.16 (delivery com esgotado, Insta pela central, IA da vitrine paga) e o site novo (4 programas, sob medida).
+No ar: 1.14.17 nos caixas. A **nuvem está parada no commit 649a06d**: o serviço do Render está ligado a uma cópia do
+repositório no Cursor (parou de acompanhar o GitHub), então o Deploy Hook republica o commit antigo e o workflow
+"Nuvem: testar e publicar" expira. Não há erro em tempo de execução. **Conserto é do dono, no painel do Render**:
+serviço > Settings > Build & Deploy > repositório do GitHub (`GodFather-byte/PDV-CASA-2.0`, ramo `main`).
 
 ## O que entrou
-- **Nuvem** `backend/backup_nuvem.py`: `POST /v1/backup` (corpo = gzip do banco, cabeçalhos com hora, esquema e
-  SHA-256; confere que é SQLite), `GET /v1/backup/lista`, `GET /v1/backup/{id}` (token da loja, só a própria loja).
-  Tabela `backups_nuvem` no Postgres (Neon). Retenção: último de cada um dos 7 dias mais recentes + último de cada mês
-  (4 meses), até 80 MB por loja (o mais novo nunca sai). Central: lista e baixa (`baixar_backup_nuvem` na auditoria).
-- **Caixa** `src/sync/backup_nuvem.py`: no sincronizador, manda o backup local mais novo no máximo a cada 3 h (o caixa
-  já faz backup na troca de turno, saída e início). Caixa adicional não envia. `restaurar` baixa, confere SHA-256 e
-  banco, mantém endereço/token/licença da instalação atual e marca a restauração para o próximo início (o mesmo
-  caminho do backup local, com cópia de segurança do banco atual).
-- **Tela** `src/ui_qt/backup_nuvem.py`: Utilitários → "Recuperar a loja pelo backup da nuvem…".
-- Testes: `tests/test_backup_nuvem.py` (envio, intervalo, recuperação, isolamento entre lojas, retenção, central, tela).
+- **Falha do exe (PySide 6.12 + Nuitka)**: sinal do Qt ligado direto a método de classe que não é QObject soltava a
+  função a cada conexão desfeita; depois de algumas trocas de operador, sair do PDV chamava outra função
+  (`TypeError ... unexpected keyword argument 'confirmar'` na Casa Verde e na Resenha, 1.14.9). `ui_qt/sinais.py`
+  (`ligar_metodo`) e `ui_qt/app.py`. `tests/test_qt_sinais.py` varre o código e reprova ligação direta nova; o
+  `--autoteste-qt` do exe confere que nenhuma função perdeu referência.
+- **Treino dentro do exe** pedia licença ("Nenhuma licença ativada"): `turnos.abrir(..., treino=True)` só vale no
+  banco de treino em memória.
+- **RustDesk**: Utilitários → "Suporte remoto (RustDesk)" abre o programa, lê o ID (`--get-id`), copia e guarda; o ID
+  sobe no retrato do caixa e aparece no suporte da central. Sem RustDesk instalado, oferece o site oficial.
+- **Telas cortadas**: caixa de 1024 a 1600 de largura sem nada cortado (abas das mesas em 2 linhas, colunas Código e
+  Un. somem quando o nome do produto ficaria espremido, quartos em 1 fileira em tela baixa); listas largas deixam o
+  nome elástico e quebram títulos em linhas; fechamento do turno cabe sem rolagem em 1366x768; linhas de muitos
+  botões quebram (`tema.LinhaFluida`). Medidor: `python -m tools.capturar_telas --largura 1366 --altura 728 --conferir`.
+- **Nuvem**: o Deploy Hook vai com `&ref=<commit>` (404 na hora se o Render estiver ligado ao repositório errado) e
+  `tools/verificar_nuvem.py` diz qual commit a nuvem continua servindo.
+
+## Limites conhecidos
+- Em 1024 de largura, a lista de produtos (12 colunas), a de estoque e a de NF-e ainda rolam de lado.
+- A validação no exe desta árvore final fica com o CI (`--autoteste-qt`); no sandbox foi feita na versão anterior às
+  mudanças de tela. `tests.test_central_ui` e `tests.test_licenciador` não rodam no sandbox (sem Tkinter).
+- `backend/central_fornecedor.py` e `backend/central_web/app.js` (Antigravity) receberam edição pontual: campo
+  `rustdesk_id` no suporte.
 
 ## Pendências
-- Medir o tamanho real dos bancos (aparece na lista da central). O Neon tem limite de 1 GB (hoje 16 MB); se crescer,
-  trocar o armazenamento para o R2 mantendo as mesmas rotas.
-- IA: chave da Claude Platform em `ANTHROPIC_API_KEY` no Render; ligar lojas na central.
-- Ideias aprovadas para depois: RustDesk (suporte), sugestão de compra simples (Will Adega), etiquetas com código de
-  barras (python-barcode, para o Will Variedades). Headscale e statsforecast: não agora.
-- Backlog: homologação NFC-e DeliciOz; IBS/CBS 2027; Casa Verde na 1.14.5 (instalação manual); mensalidade EA.
+- Dono: religar o Render ao GitHub (acima); `ANTHROPIC_API_KEY` no Render; instalar na Casa Verde.
+- Publicar 1.14.18 depois do merge (bump em `src/versao.py`, `build-windows.yml` e `will-restaurante.yml`).
+- Ideias aprovadas para depois: servidor próprio do RustDesk, sugestão de compra (Will Adega), etiquetas com código
+  de barras. Backlog: homologação NFC-e DeliciOz; IBS/CBS 2027; mensalidade EA; tamanho dos backups no Neon.

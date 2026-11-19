@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 from src.controllers import impressao_assistente as assistente
 from src.core.erros import ErroPermissao
 from src.hardware import impressoras_so
+from src.ui_qt import tema
 from src.ui_qt.tema import texto
 
 
@@ -53,7 +54,7 @@ class JanelaAssistenteImpressora(QDialog):
         self.achados.setMaximumHeight(175)
         layout.addWidget(self.achados, 1)
 
-        barra = QHBoxLayout()
+        barra = tema.LinhaFluida()            # sete botões: no monitor estreito continuam na linha de baixo
         self.btn_configurar = QPushButton("Configurar e enviar teste")
         self.btn_configurar.setObjectName("primario")
         self.btn_atualizar = QPushButton("Atualizar (F5)")

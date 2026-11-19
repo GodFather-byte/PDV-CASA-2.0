@@ -13,6 +13,7 @@ from uuid import uuid4
 from src.controllers import notificacoes
 from src.core import formatacao as fmt
 from src.core import registro
+from src.core import suporte_remoto
 from src.core.erros import ErroNegocio
 from src.database import protecao
 from src.database.conexao import RAIZ
@@ -564,3 +565,31 @@ class UtilitarioController:
                 raise ErroNegocio("Configure o programa de comunicação em Configurações > Configurações.")
         except OSError as e:
             raise ErroNegocio(f"Não foi possível abrir o programa: {e}") from e
+
+    # ------------------------------------------ suporte remoto (RustDesk)
+    def rustdesk_instalado(self) -> bool:
+        return suporte_remoto.localizar(self.banco.cfg("programa_comunicacao")) is not None
+
+    def abrir_rustdesk(self) -> None:
+        """Abre o RustDesk que a loja instalou. O PDV não configura nem aceita conexão: quem libera é quem está no caixa."""
+        executavel = suporte_remoto.localizar(self.banco.cfg("programa_comunicacao"))
+        if executavel is None:
+            raise ErroNegocio("O RustDesk não está instalado neste computador. Baixe em rustdesk.com, instale e clique "
+                              "aqui de novo. Se usa a versão portátil (sem instalar), aponte o arquivo dela em "
+                              "Configurações > Programa de comunicação.")
+        try:
+            suporte_remoto.abrir(executavel)
+        except OSError as e:
+            raise ErroNegocio(f"Não foi possível abrir o RustDesk: {e}") from e
+        self.banco.log("suporte_remoto", "RustDesk aberto pelo caixa")
+
+    def obter_id_rustdesk(self) -> str:
+        """O ID do RustDesk deste computador, ou "" se não está instalado ou não respondeu. A senha nunca é lida.
+
+        No caixa principal o ID lido fica guardado e segue no retrato para a central do fornecedor; num caixa adicional
+        não, porque as configurações são as do principal e o ID é de cada computador."""
+        executavel = suporte_remoto.localizar(self.banco.cfg("programa_comunicacao"))
+        lido = suporte_remoto.ler_id(executavel) if executavel is not None else ""
+        if lido and not self.banco.remoto:
+            suporte_remoto.guardar_id(self.banco, lido)
+        return lido

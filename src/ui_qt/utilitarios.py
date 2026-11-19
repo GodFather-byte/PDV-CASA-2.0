@@ -1,13 +1,14 @@
-"""Utilitários locais Qt; integração: ``JanelaUtilitarios(ctx, parent).exec()``.
-
-"""
+"""Utilitários locais Qt; integração: ``JanelaUtilitarios(ctx, parent).exec()``."""
 import sqlite3
 
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QDialog, QInputDialog, QLineEdit, QPushButton, QVBoxLayout,
+    QApplication, QDialog, QInputDialog, QLineEdit, QMessageBox, QPushButton, QVBoxLayout,
 )
 
 from src.core import formatacao as fmt
+from src.core import suporte_remoto
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.ui_qt.tema import texto
 
@@ -24,7 +25,7 @@ class JanelaUtilitarios(QDialog):
     ACOES = (
         ("backup", "Backup local manual", "util_backup"),
         ("suporte", "Pacote de suporte (log de erros)", "util_backup"),
-        ("rustdesk", "Suporte Remoto (RustDesk)", "util_comunicacao"),
+        ("rustdesk", "Suporte remoto (RustDesk)", "util_comunicacao"),
         ("limpeza", "Limpeza do movimento…", "util_limpeza"),
         ("excluir_produtos", "Excluir todos os produtos…", "util_excluir_produtos"),
         ("comunicacao", "Programa de comunicação", "util_comunicacao"),
@@ -136,20 +137,37 @@ class JanelaUtilitarios(QDialog):
         return self._executar(acao)
 
     def rustdesk(self):
+        """Abre o RustDesk e mostra o ID deste computador (já copiado). Sem o programa, oferece a página de download."""
         def acao():
             ctrl = self._controlador("util_comunicacao")
-            id_atual = ctrl.obter_id_rustdesk()
+            if not ctrl.rustdesk_instalado():
+                resposta = QMessageBox.question(
+                    self, "Suporte remoto",
+                    "O RustDesk não está instalado neste computador.\n\n"
+                    "É o programa que deixa o suporte ver esta tela, sempre com a sua liberação.\n"
+                    "Abrir a página rustdesk.com para baixar?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
+                if resposta == QMessageBox.StandardButton.Yes:
+                    QDesktopServices.openUrl(QUrl(suporte_remoto.SITE))
+                    self.status.setText("Página do RustDesk aberta no navegador. Baixe, instale e clique aqui de novo.")
+                    return False
+            ctrl.abrir_rustdesk()
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
             try:
-                ctrl.abrir_rustdesk()
-                msg = "RustDesk aberto."
-                if id_atual:
-                    msg += f"\n\nID deste caixa: {id_atual}\n\nPasse este ID e a senha (ou senha temporária) para o suporte."
-                else:
-                    msg += "\n\nAbra o RustDesk e anote o ID e a senha para passar ao suporte."
-                self.status.setText(msg)
-            except ErroNegocio as e:
-                self.mensagem.setText(str(e))
-                return False
+                id_atual = ctrl.obter_id_rustdesk()
+            finally:
+                QApplication.restoreOverrideCursor()
+            if id_atual:
+                QApplication.clipboard().setText(id_atual)
+                self.status.setText(
+                    f"RustDesk aberto.\n\nID deste computador: {suporte_remoto.formatar_id(id_atual)}\n"
+                    "(já copiado: é só colar na conversa com o suporte)\n\n"
+                    "Passe também a senha de uso único que aparece na janela do RustDesk, ou aceite a conexão "
+                    "quando ela chegar. Sem a sua liberação ninguém entra.")
+            else:
+                self.status.setText(
+                    "RustDesk aberto.\n\nPasse ao suporte o ID e a senha de uso único que aparecem na janela dele. "
+                    "Sem a sua liberação ninguém entra.")
             return True
         return self._executar(acao)
 

@@ -29,7 +29,7 @@ from src.fiscal.servico import ServicoFiscal
 from src.sync.ponte import ServicoPonte
 from src.sync.sincronizador import ServicoSincronizacao
 from src.controllers.contexto import Contexto
-from src.ui_qt import tema
+from src.ui_qt import sinais, tema
 from src.ui_qt.login import JanelaLogin
 from src.versao import VERSAO
 
@@ -1076,7 +1076,8 @@ class App:
         self._servicos_habilitados = False
         self._gancho_anterior = None
         self._gancho = None
-        self.aplicacao.aboutToQuit.connect(self.finalizar)
+        # A App não é QObject: sinal para método dela só por `ligar_metodo` (o porquê está em sinais.py).
+        self._ao_sair = sinais.ligar_metodo(self.aplicacao.aboutToQuit, self, "finalizar")
 
     def iniciar(self, servicos=True):
         if self._iniciada:
@@ -1140,8 +1141,8 @@ class App:
         if self._finalizada:
             return
         self.login = JanelaLogin(self.ctx)
-        self.login.accepted.connect(self._autenticado)
-        self.login.rejected.connect(self.encerrar)
+        sinais.ligar_metodo(self.login.accepted, self, "_autenticado")
+        sinais.ligar_metodo(self.login.rejected, self, "encerrar")
         self.login.show()
 
     def _autenticado(self):
@@ -1308,7 +1309,7 @@ def main():
         if existente is not None:
             # O hospedeiro já controla exec(); conserva o ciclo e a trava até aboutToQuit.
             aplicacao._willpdv_qt = app
-            aplicacao.aboutToQuit.connect(trava.liberar)
+            aplicacao.aboutToQuit.connect(lambda: trava.liberar())     # lambda: a trava não é QObject (sinais.py)
             ciclo_transferido = True
             return 0
         return aplicacao.exec()
@@ -1337,11 +1338,22 @@ def autoteste(pasta: Path) -> list[str]:
     if existente is None:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     aplicacao = existente or QApplication([])
+    foto = _fotografar_funcoes_do_executavel()
     banco = BancoDados(":memory:")
     app = None
     try:
         app = App(banco, aplicacao)
         tema.aplicar(aplicacao)
+        # A tela de entrada nasce e morre como em toda troca de operador: é quando as ligações com a App se desfazem.
+        for _ in range(2):
+            app.entrar()
+            aplicacao.processEvents()
+            entrada, app.login = app.login, None
+            if entrada is None or not entrada.isVisible():
+                raise RuntimeError("A tela de entrada Qt não abriu.")
+            entrada.cancelar_consulta()
+            entrada.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         app.ctx.operador = app.ctx.acesso.autenticar("ADM", "ADM")
         app.principal = JanelaPrincipal(app)
         app.principal.show()
@@ -1418,17 +1430,37 @@ def autoteste(pasta: Path) -> list[str]:
             raise RuntimeError("A saída Qt não liberou a comanda.")
         if app.ctx.comissoes.pendente(180) != 1500:
             raise RuntimeError("A saída alterou indevidamente a comissão pendente.")
-        return ["Qt Widgets: menu principal e cadastros de produtos/operadores abrem; "
-                "banco em memória, sem rede nem serviços",
-                "caixa Qt: comissão na linha, painel, diálogos de comissão/acerto e saída sem consumo conferidos",
-                "configurações, máquinas, acessos, utilitários, atualizações e estoque abrem sem rede nem hardware"]
+        resultado = ["Qt Widgets: entrada, menu principal e cadastros de produtos/operadores abrem; "
+                     "banco em memória, sem rede nem serviços",
+                     "caixa Qt: comissão na linha, painel, diálogos de comissão/acerto e saída sem consumo conferidos",
+                     "configurações, máquinas, acessos, utilitários, atualizações e estoque abrem sem rede nem hardware"]
     finally:
         if app is not None:
             app.finalizar()
-            aplicacao.aboutToQuit.disconnect(app.finalizar)
+            aplicacao.aboutToQuit.disconnect(app._ao_sair)
         aplicacao.processEvents()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         banco.fechar()
+    # Só depois de tudo fechado: é ao morrer a janela que emite o sinal que a referência a mais é solta.
+    soltas = sinais.funcoes_soltas(foto)
+    if soltas:
+        raise RuntimeError("Sinal do Qt ligado direto a método de objeto que não é QObject (use "
+                           "src.ui_qt.sinais.ligar_metodo): " + "; ".join(soltas[:10]))
+    if foto:
+        resultado.append(f"sinais do Qt: {len(foto)} funções de classe com a contagem de referências intacta")
+    return resultado
+
+
+def _fotografar_funcoes_do_executavel():
+    """No executável (código compilado), carrega todos os módulos e fotografa as funções antes de abrir telas; no
+    código-fonte devolve lista vazia, porque lá o defeito das ligações não existe (ver sinais.py)."""
+    if not sinais.compilado(App.encerrar):
+        return []
+    import importlib
+    from src.autoteste import MODULOS
+    for nome in MODULOS:
+        importlib.import_module(nome)
+    return sinais.fotografar_funcoes()
 
 
 if __name__ == "__main__":

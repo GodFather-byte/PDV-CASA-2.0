@@ -15,6 +15,7 @@ from src.controllers.importacao_produtos import ImportacaoNFe, ImportacaoProduto
 from src.controllers.config_controller import modulos_desligados
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao
+from src.ui_qt import tema
 from src.ui_qt.tema import texto
 
 
@@ -51,7 +52,7 @@ class JanelaImportarProdutos(QDialog):
             "próximo). As linhas recusadas não serão importadas.",
             "suave"))
 
-        arquivos = QHBoxLayout()
+        arquivos = tema.LinhaFluida()         # no monitor estreito a fileira continua na linha de baixo
         self.btn_catalogo = QPushButton("Produtos prontos…")
         self.btn_catalogo.setObjectName("primario")
         self.btn_catalogo.setToolTip("Mais de 270 produtos de adega e tabacaria com nome, subgrupo e NCM: é só digitar o preço.")

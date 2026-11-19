@@ -90,6 +90,74 @@ class TestUtilitariosQt(BaseCaixa):
         for trecho in ("suporte.zip", "log", "nunca as vendas"):
             self.assertIn(trecho, janela.status.text())
 
+    def _rustdesk_instalado(self):
+        programa = self.pasta / "rustdesk.exe"
+        programa.write_bytes(b"simulado")
+        self.banco.cfg_set("programa_comunicacao", str(programa))
+        return programa
+
+    def test_rustdesk_abre_mostra_o_id_e_deixa_copiado(self):
+        import subprocess
+        programa = self._rustdesk_instalado()
+        janela = self.janela()
+        lido = subprocess.CompletedProcess([], 0, stdout="123456789\n", stderr="")
+        with patch("src.core.suporte_remoto.subprocess.Popen") as abrir, \
+                patch("src.core.suporte_remoto.subprocess.run", return_value=lido), \
+                patch("src.ui_qt.utilitarios.QMessageBox.question") as perguntar:
+            self.assertTrue(janela.rustdesk())
+        abrir.assert_called_once_with([str(programa)])
+        perguntar.assert_not_called()
+        for trecho in ("RustDesk aberto", "123 456 789", "já copiado", "senha de uso único", "Sem a sua liberação"):
+            self.assertIn(trecho, janela.status.text())
+        self.assertEqual(QApplication.clipboard().text(), "123456789")
+        self.assertEqual(janela.mensagem.text(), "")
+        self.assertEqual(self.banco.cfg("rustdesk_id").split("|")[0], "123456789")
+        self.assertIsNone(QApplication.overrideCursor())
+
+    def test_rustdesk_sem_resposta_do_id_manda_olhar_na_janela_dele(self):
+        import subprocess
+        self._rustdesk_instalado()
+        janela = self.janela()
+        QApplication.clipboard().setText("o que já estava copiado")
+        with patch("src.core.suporte_remoto.subprocess.Popen"), \
+                patch("src.core.suporte_remoto.subprocess.run", side_effect=subprocess.TimeoutExpired("rustdesk", 4)):
+            self.assertTrue(janela.rustdesk())
+        self.assertIn("ID e a senha de uso único que aparecem na janela dele", janela.status.text())
+        self.assertNotIn("copiado", janela.status.text())
+        self.assertEqual(QApplication.clipboard().text(), "o que já estava copiado")
+        self.assertIsNone(QApplication.overrideCursor())
+
+    def test_rustdesk_nao_instalado_oferece_a_pagina_de_download(self):
+        from PySide6.QtWidgets import QMessageBox
+        from src.core import suporte_remoto
+        janela = self.janela()
+        with patch("src.core.suporte_remoto.localizar", return_value=None), \
+                patch("src.core.suporte_remoto.subprocess.Popen") as abrir, \
+                patch("src.ui_qt.utilitarios.QDesktopServices.openUrl") as navegador:
+            with patch("src.ui_qt.utilitarios.QMessageBox.question",
+                       return_value=QMessageBox.StandardButton.Yes) as perguntar:
+                self.assertFalse(janela.rustdesk())
+            self.assertIn("não está instalado", perguntar.call_args.args[2])
+            self.assertEqual(navegador.call_args.args[0].toString(), suporte_remoto.SITE)
+            self.assertIn("Baixe, instale e clique aqui de novo", janela.status.text())
+            navegador.reset_mock()
+            with patch("src.ui_qt.utilitarios.QMessageBox.question", return_value=QMessageBox.StandardButton.No):
+                self.assertFalse(janela.rustdesk())
+            navegador.assert_not_called()
+            for trecho in ("não está instalado", "rustdesk.com", "Programa de comunicação"):
+                self.assertIn(trecho, janela.mensagem.text())
+        abrir.assert_not_called()
+
+    def test_rustdesk_falha_ao_abrir_aparece_sem_anunciar_sucesso(self):
+        self._rustdesk_instalado()
+        janela = self.janela()
+        with patch("src.core.suporte_remoto.subprocess.Popen", side_effect=OSError("acesso negado")), \
+                patch("src.core.suporte_remoto.subprocess.run") as ler:
+            self.assertFalse(janela.rustdesk())
+        ler.assert_not_called()
+        self.assertIn("Não foi possível abrir o RustDesk", janela.mensagem.text())
+        self.assertIn("Nenhuma operação", janela.status.text())
+
     def test_comunicacao_delega_ao_controller_sem_executar_programa(self):
         programa = self.pasta / "comunicacao.exe"
         programa.write_bytes(b"simulado")
@@ -256,7 +324,7 @@ class TestUtilitariosQt(BaseCaixa):
         janela = self.janela()
         self.banco.executar("UPDATE operadores SET nivel = 1 WHERE id = ?", (self.adm,))
         self.banco.executar("UPDATE acessos SET nivel = 4 WHERE modulo LIKE 'util_%'")
-        metodos = ("backup", "pacote_suporte", "limpar_movimento",
+        metodos = ("backup", "pacote_suporte", "abrir_rustdesk", "limpar_movimento",
                    "resumo_exclusao_produtos", "abrir_programa_comunicacao")
         for (acao, _, _), metodo in zip(janela.ACOES, metodos):
             with self.subTest(acao=acao), patch.object(UtilitarioController, metodo) as executar, \

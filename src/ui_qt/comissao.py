@@ -499,14 +499,17 @@ class DialogoAcerto(QDialog):
         self.accept()
 
 
-def _tabela(colunas: list[str]) -> QTableWidget:
+def _tabela(colunas: list[str], elastica: int = 1) -> QTableWidget:
+    """As colunas ficam do tamanho do que mostram (título e dados inteiros); a `elastica` ocupa o que sobra. Antes
+    todas tinham a largura padrão e a elástica ficava com um resto que cortava o nome e a data."""
     t = QTableWidget(0, len(colunas))
     t.setHorizontalHeaderLabels(colunas)
     t.setEditTriggers(QAbstractItemView.NoEditTriggers)
     t.setSelectionBehavior(QAbstractItemView.SelectRows)
     t.setSelectionMode(QAbstractItemView.SingleSelection)
     t.verticalHeader().setVisible(False)
-    t.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+    t.horizontalHeader().setSectionResizeMode(elastica, QHeaderView.Stretch)
     return t
 
 
@@ -557,7 +560,7 @@ class JanelaComissoes(QDialog):
         QVBoxLayout(esq).addWidget(self.tabela_garotas)
         meio.addWidget(esq, 1)
         dir_ = QGroupBox("Lançamentos da garota escolhida")
-        self.tabela_lancamentos = _tabela(["Nº", "Quando", "Valor", "Operador", "Observação"])
+        self.tabela_lancamentos = _tabela(["Nº", "Quando", "Valor", "Operador", "Observação"], elastica=4)
         QVBoxLayout(dir_).addWidget(self.tabela_lancamentos)
         meio.addWidget(dir_, 1)
         geral.addLayout(meio, 1)
