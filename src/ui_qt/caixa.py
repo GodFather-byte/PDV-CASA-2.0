@@ -41,7 +41,7 @@ from src.hardware.impressora_termica import ErroImpressao
 from src.hardware.dispositivos import DispositivoIndisponivel
 from src.controllers.caixa_controller import LIMITE_PARTES_DIVISAO
 from src.core.valor_pagamento import LIMITE_TROCO_CENT, ler_valor_pagamento
-from src.ui_qt import comissao, tema
+from src.ui_qt import comissao
 from src.ui_qt.foto_produto import QuadroFoto
 from src.ui_qt.painel_mesas import CORES as CORES_MESAS, PainelMesas
 from src.ui_qt.relogio import RelogioCaixa
@@ -696,7 +696,8 @@ class JanelaCaixa(QMainWindow):
         colunas.addWidget(centro, 1)
 
         dir_, c_dir = _cartao()
-        dir_.setFixedWidth(360)
+        dir_.setFixedWidth(self.LARGURA_PAGAMENTO)
+        self.cartao_pagamento = dir_
         # Total e troco lado a lado: sobra altura para a linha dos quartos embaixo.
         valores = QGridLayout()
         valores.setHorizontalSpacing(10)
@@ -739,7 +740,7 @@ class JanelaCaixa(QMainWindow):
         c_dir.addWidget(self.lista_pagamentos)
         self.btn_remover_pag = QPushButton("Remover pagamento")
         self.btn_remover_pag.clicked.connect(self.remover_pagamento)
-        divisao = tema.LinhaFluida()         # com letra mais larga os três não cabem nos 360 pontos: quebra a linha
+        divisao = QHBoxLayout()
         divisao.addWidget(self.btn_remover_pag)
         self.btn_dividir = QPushButton("Dividir conta")
         self.btn_dividir.setToolTip("Divide o que falta em partes iguais (centavos exatos)")
@@ -2720,6 +2721,18 @@ class JanelaCaixa(QMainWindow):
     LARGURA_MINIMA_PRODUTO = 150
     # Janela mais baixa que isto (notebook com a tela ampliada pelo Windows): a linha dos quartos fica com uma fileira.
     ALTURA_BAIXA = 640
+    LARGURA_PAGAMENTO = 360
+
+    def _largura_do_cartao_de_pagamento(self) -> None:
+        """O cartão do pagamento tem largura fixa, medida para a letra do programa. Com letra mais larga (outra
+        fonte, tema do Windows) os três botões "Remover pagamento / Dividir conta / Pagar itens" pedem mais: o
+        cartão alarga o que eles pedem, em vez de cortar o texto."""
+        cartao = getattr(self, "cartao_pagamento", None)
+        if cartao is None or cartao.layout() is None:
+            return
+        largura = max(self.LARGURA_PAGAMENTO, cartao.layout().minimumSize().width())
+        if cartao.width() != largura or cartao.minimumWidth() != largura:
+            cartao.setFixedWidth(largura)
 
     def _largura_do_painel_de_mesas(self) -> None:
         """O quadro das mesas tem a largura dos cartões e nada mais. Sem isto, na tela estreita ele ficava com a
@@ -2761,6 +2774,7 @@ class JanelaCaixa(QMainWindow):
             self._largura_do_painel_de_mesas()
         if getattr(self, "painel_quartos", None) is not None:
             self.painel_quartos.definir_linhas(1 if self.height() < self.ALTURA_BAIXA else 2)
+        self._largura_do_cartao_de_pagamento()
 
     def ir_para_balcao(self) -> None:
         self.ent_pos.setText("0")

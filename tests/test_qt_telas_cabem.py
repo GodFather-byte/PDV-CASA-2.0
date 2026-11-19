@@ -144,20 +144,21 @@ class TesteCaixaCabe(BaseTelas):
             if tecla.isVisible():
                 self.assertGreaterEqual(tecla.width(), tecla.sizeHint().width() - 2)
 
-    def test_botoes_do_pagamento_quebram_a_linha_quando_a_letra_e_mais_larga(self):
+    def test_cartao_do_pagamento_alarga_quando_a_letra_e_mais_larga(self):
         botoes = (self.caixa.btn_remover_pag, self.caixa.btn_dividir, self.caixa.btn_pagar_itens)
+        cartao = self.caixa.cartao_pagamento
         self.tamanho(*NOTEBOOK)
+        self.assertGreaterEqual(cartao.width(), self.caixa.LARGURA_PAGAMENTO)
         for botao in botoes:
-            fonte = botao.font()
-            fonte.setPixelSize(17)
-            botao.setFont(fonte)
             botao.setStyleSheet("font-size: 17px;")
         self.eventos()
-        self.assertGreater(len({b.y() for b in botoes}), 1)
-        cartao = botoes[0].parentWidget()
+        self.tamanho(NOTEBOOK[0] - 2, NOTEBOOK[1])
+        self.assertGreater(cartao.width(), self.caixa.LARGURA_PAGAMENTO)
+        self.assertEqual(len({b.y() for b in botoes}), 1)                    # continuam numa linha só
         for botao in botoes:
-            self.assertGreaterEqual(botao.width(), botao.sizeHint().width(), botao.text())
+            self.assertGreaterEqual(botao.width(), botao.sizeHint().width() - 2, botao.text())    # folga do medidor
             self.assertLessEqual(botao.x() + botao.width(), cartao.width())
+        self.assertNadaCortado(self.caixa, "caixa com letra larga")
 
     def test_janela_baixa_deixa_os_quartos_numa_fileira_e_a_lista_de_itens_a_vista(self):
         grade = self.caixa.painel_quartos.grade
