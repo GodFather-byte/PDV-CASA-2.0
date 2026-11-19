@@ -1,4 +1,6 @@
-"""Utilitários locais Qt; integração: ``JanelaUtilitarios(ctx, parent).exec()``."""
+"""Utilitários locais Qt; integração: ``JanelaUtilitarios(ctx, parent).exec()``.
+
+"""
 import sqlite3
 
 from PySide6.QtWidgets import (
@@ -22,6 +24,7 @@ class JanelaUtilitarios(QDialog):
     ACOES = (
         ("backup", "Backup local manual", "util_backup"),
         ("suporte", "Pacote de suporte (log de erros)", "util_backup"),
+        ("rustdesk", "Suporte Remoto (RustDesk)", "util_comunicacao"),
         ("limpeza", "Limpeza do movimento…", "util_limpeza"),
         ("excluir_produtos", "Excluir todos os produtos…", "util_excluir_produtos"),
         ("comunicacao", "Programa de comunicação", "util_comunicacao"),
@@ -129,6 +132,24 @@ class JanelaUtilitarios(QDialog):
             self.status.setText(
                 f"Pacote de suporte gerado:\n{caminho}\n\nEnvie este arquivo ao fornecedor. "
                 "Ele leva só os registros de erro (log), nunca as vendas.")
+            return True
+        return self._executar(acao)
+
+    def rustdesk(self):
+        def acao():
+            ctrl = self._controlador("util_comunicacao")
+            id_atual = ctrl.obter_id_rustdesk()
+            try:
+                ctrl.abrir_rustdesk()
+                msg = "RustDesk aberto."
+                if id_atual:
+                    msg += f"\n\nID deste caixa: {id_atual}\n\nPasse este ID e a senha (ou senha temporária) para o suporte."
+                else:
+                    msg += "\n\nAbra o RustDesk e anote o ID e a senha para passar ao suporte."
+                self.status.setText(msg)
+            except ErroNegocio as e:
+                self.mensagem.setText(str(e))
+                return False
             return True
         return self._executar(acao)
 
