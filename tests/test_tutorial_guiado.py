@@ -319,6 +319,20 @@ class TestVendaDeTreino(BaseQt):
         self.assertIsNotNone(banco.um("SELECT id FROM turnos WHERE fechado_em IS NULL"))
         self.assertEqual(banco.valor("SELECT preco_cent FROM produtos WHERE CAST(codigo AS INTEGER) = 1"), 300)
 
+    def test_banco_de_treino_abre_no_executavel_sem_licenca(self):
+        """No executável a licença é sempre exigida, e o banco de treino nasce sem nenhuma: o tutorial de venda
+        falhava com "Nenhuma licença ativada neste caixa"."""
+        import sys
+        from unittest import mock
+        from src.controllers import treino
+        from src.core import licenca
+        with mock.patch.object(sys, "frozen", True, create=True):
+            banco, operador = treino.criar_banco(self.banco)
+            self.addCleanup(banco.fechar)
+            self.assertTrue(licenca.estado(banco).bloqueia)          # sem licença, como no executável
+        self.assertEqual(operador.nome, "TREINO")
+        self.assertIsNotNone(banco.um("SELECT id FROM turnos WHERE fechado_em IS NULL"))
+
     def test_venda_guiada_do_comeco_ao_fim_nas_tres_edicoes(self):
         import os
         from unittest.mock import patch

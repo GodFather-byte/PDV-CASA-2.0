@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao
+from src.ui_qt import tema
 from src.ui_qt.tema import texto
 
 
@@ -238,7 +239,7 @@ class JanelaEstoque(QDialog):
         self.grade.itemSelectionChanged.connect(self._selecionou)
         layout.addWidget(self.grade, 2)
         self.botoes = {}
-        acoes_produto = QHBoxLayout()
+        acoes_produto = tema.LinhaFluida()    # dez botões: no monitor estreito continuam na linha de baixo
         for tipo, rotulo in (
             ("entrada", "＋ Entrada"), ("saida", "－ Saída"),
             ("descarte", "Perda / quebra"), ("quebra", "Quebra"),

@@ -373,6 +373,11 @@ publicação ser aprovada. O endereço público pode ser definido na variável `
 o padrão desta instalação é `https://willpdv-nuvem-6sp0.onrender.com`. Veja [ENTREGA_1_10.md](ENTREGA_1_10.md). O
 Actions **não hospeda** a nuvem: ele testa e publica; quem fica no ar é o Render (ou o seu servidor da seção 2).
 
+O Deploy Hook é chamado com `&ref=<commit testado>`: o Render publica exatamente aquele commit. Se o serviço estiver
+ligado a outro repositório (ou a uma cópia que parou de acompanhar o GitHub), o Render responde 404 e o workflow diz
+isso na hora; quando a espera expira, a mensagem traz o commit que a nuvem continua servindo. Nos dois casos o conserto
+é em Render > serviço > Settings > Build & Deploy: repositório do GitHub, ramo `main`.
+
 ---
 
 ## Problemas comuns

@@ -168,15 +168,21 @@ class PainelFechamento(QDialog):
         self._emitir, self._mostrar, self._avisar = emitir, mostrar, avisar
         self.setWindowTitle("Fechamento do turno")
         raiz = QVBoxLayout(self)
+        # O resumo inteiro (até o resultado e os botões) tem de caber num notebook de 768 pontos de altura: linhas
+        # juntas e a maquininha na coluna da direita, embaixo dos recebimentos. Antes ela ia embaixo de tudo, a janela
+        # passava da tela e o resultado só aparecia rolando.
         quadros = QHBoxLayout()
         esq = QGroupBox("Turno")
         g_esq = QGridLayout(esq)
+        g_esq.setVerticalSpacing(3)
         for i, (rotulo, valor) in enumerate(dados_do_turno(ctx, res)):
             g_esq.addWidget(QLabel(rotulo), i, 0)
             g_esq.addWidget(_negrito(valor, direita=True), i, 1)
+        g_esq.setRowStretch(g_esq.rowCount(), 1)
         quadros.addWidget(esq)
         dir_ = QGroupBox("Recebimentos financeiros")
         g_dir = QGridLayout(dir_)
+        g_dir.setVerticalSpacing(3)
         for i, (rotulo, valor, destaque) in enumerate(dados_financeiros(ctx, res)):
             if not rotulo:
                 tracado = QFrame()
@@ -185,12 +191,17 @@ class PainelFechamento(QDialog):
                 continue
             g_dir.addWidget(_negrito(rotulo) if destaque else QLabel(rotulo), i, 0)
             g_dir.addWidget(_negrito(valor, direita=True), i, 1)
-        quadros.addWidget(dir_)
+        g_dir.setRowStretch(g_dir.rowCount(), 1)        # a sobra de altura fica embaixo, não entre as linhas
+        direita = QVBoxLayout()
+        direita.addWidget(dir_, 1)
+        quadros.addLayout(direita)
         raiz.addLayout(quadros)
         maq = res.get("maquininha") or (ctx.turnos.maquininha(res["turno"]["id"]) if res["turno"].get("id") else None)
         if maq and maq["linhas"]:
-            conferir = QGroupBox("Conferir na maquininha (cartão e Pix lançados neste turno)")
+            conferir = QGroupBox("Conferir na maquininha (cartão e Pix)")
+            conferir.setToolTip("Cartão e Pix lançados neste turno: confira com o relatório da maquininha.")
             g_maq = QGridLayout(conferir)
+            g_maq.setVerticalSpacing(3)
             for i, r in enumerate(maq["linhas"]):
                 g_maq.addWidget(QLabel(f"{r['tipo']}  ({r['qtd']})"), i, 0)
                 g_maq.addWidget(_negrito(fmt.fmt_num(r["valor"]), direita=True), i, 1)
@@ -200,7 +211,7 @@ class PainelFechamento(QDialog):
             total.setStyleSheet("font-weight: bold; font-size: 13pt;")
             g_maq.addWidget(total, fim, 1)
             g_maq.setColumnStretch(0, 1)
-            raiz.addWidget(conferir)
+            direita.addWidget(conferir)
         resultado = res["resultado"]
         cor = "#17805a" if resultado >= 0 else "#b83a45"
         self.faixa = QLabel(f"Resultado: {fmt.fmt_brl(resultado)}  -  {rotulo_do_resultado(resultado)}")

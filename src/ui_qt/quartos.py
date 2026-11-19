@@ -809,6 +809,15 @@ class GradeQuartos(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
+    def definir_linhas(self, linhas: int) -> bool:
+        """Quantas linhas de cartões a grade ocupa: duas no caixa de sempre, uma quando a janela é baixa (os outros
+        quartos ficam nas páginas ◀ ▶). Devolve se mudou."""
+        por_pagina = self.MAX_COLUNAS * max(1, min(2, linhas))
+        if por_pagina == self.POR_PAGINA:
+            return False
+        self.POR_PAGINA = por_pagina
+        return True
+
     def definir(self, itens: list[dict], modo: str) -> None:
         self.itens = itens
         self.modo = modo
@@ -922,6 +931,7 @@ class PainelQuartosCaixa(QFrame):
         lay.setContentsMargins(10, 5, 8, 5)
         lay.setSpacing(8)
         lateral = QVBoxLayout()
+        lateral.setContentsMargins(0, 0, 0, 0)        # com a margem padrão o "Painel completo" não cabia na lateral
         lateral.setSpacing(0)
         self.titulo = QLabel("Quartos")
         self.titulo.setStyleSheet("font-size: 15px; font-weight: 700;")
@@ -988,6 +998,11 @@ class PainelQuartosCaixa(QFrame):
     def mudar_pagina(self, passo):
         self.grade.pagina = max(0, min(self.grade.pagina + passo, (len(self.grade.itens) - 1) // self.grade.POR_PAGINA))
         self.atualizar()
+
+    def definir_linhas(self, linhas: int) -> None:
+        """A janela do caixa avisa quando ficou baixa: a linha dos quartos passa a ter uma fileira só."""
+        if self.grade.definir_linhas(linhas):
+            self.atualizar()
 
     def atualizar(self):
         try:

@@ -320,6 +320,23 @@ class TesteTurnoComLicenca(BaseTeste):
             self.turnos.abrir(self.adm, 1, 0)
         self.assertIsNone(self.turnos.atual())
 
+    def test_turno_de_treino_abre_sem_licenca_mas_so_no_banco_de_treino(self):
+        from src.database.conexao import BancoDados
+        self.banco.cfg_set("licenca_exigir", "S")
+        turno = self.turnos.abrir(self.adm, 1, 0, treino=True)       # o banco dos testes é na memória, como o de treino
+        self.assertEqual(self.turnos.atual()["id"], turno)
+        self.assertEqual(self.banco.cfg("licenca_ultimo_uso"), "")   # o treino não mexe no relógio da licença
+        with tempfile.TemporaryDirectory() as pasta:
+            loja = BancoDados(str(Path(pasta) / "loja.db"))          # banco em arquivo, como o de toda loja
+            try:
+                loja.cfg_set("licenca_exigir", "S")
+                operador = loja.valor("SELECT id FROM operadores ORDER BY id LIMIT 1")
+                with self.assertRaisesRegex(ErroNegocio, "só existe no caixa de treino"):
+                    TurnoController(loja).abrir(operador, 1, 0, treino=True)
+                self.assertIsNone(TurnoController(loja).atual())
+            finally:
+                loja.fechar()
+
     def test_licenca_em_dia_ou_em_carencia_abre_e_registra_o_uso(self):
         self.banco.cfg_set("licenca_exigir", "S")
         self.ativar(10)

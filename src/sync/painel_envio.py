@@ -25,7 +25,7 @@ import json
 import socket
 from uuid import uuid4
 
-from src.core import edicao, formatacao as fmt
+from src.core import edicao, formatacao as fmt, suporte_remoto
 from src.versao import VERSAO
 from src.core.erros import ErroNegocio
 from src.core.posicao import nome as nome_posicao
@@ -434,6 +434,7 @@ def retrato(banco) -> dict:
         "terminal_id": id_do_caixa(banco), "terminal": turnos.terminal,
         "terminal_rotulo": (maquina.get("descricao") or "").strip() or f"Caixa {turnos.terminal}",
         "terminal_computador": (maquina.get("nome_computador") or "").strip() or socket.gethostname(),
+        "rustdesk_id": suporte_remoto.id_guardado(banco),       # só o ID (nunca senha): o suporte vê na central
         "dia_operacional": hoje, "momento": fmt.agora(),
         "atualizacao_seg": 60,
         "devolucoes_suportadas": True, "devolucoes_pendentes_envio": devolucoes_envio.pendentes(banco),

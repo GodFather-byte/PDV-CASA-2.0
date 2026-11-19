@@ -399,8 +399,10 @@ class PainelMesas(QWidget):
         self.busca.textChanged.connect(lambda _: self._filtrar(reiniciar=True))
         self.busca.returnPressed.connect(self.focar)
         raiz.addWidget(self.busca)
-        faixa = QHBoxLayout()
-        faixa.setSpacing(4)
+        # Com um cartão por linha (tela estreita) as cinco abas não cabem lado a lado e viravam pedaços de palavra;
+        # `_arrumar_abas` distribui em quantas linhas a largura pedir.
+        self._faixa_abas = QVBoxLayout()
+        self._faixa_abas.setSpacing(4)
         self._abas: dict[str, QPushButton] = {}
         for valor, curto in self._lista_abas:
             botao = QPushButton(curto)
@@ -408,10 +410,8 @@ class PainelMesas(QWidget):
             botao.setCursor(Qt.PointingHandCursor)
             botao.setFocusPolicy(Qt.NoFocus)
             botao.clicked.connect(lambda _=False, v=valor: self._escolher_aba(v))
-            faixa.addWidget(botao)
             self._abas[valor] = botao
-        faixa.addStretch(1)
-        raiz.addLayout(faixa)
+        raiz.addLayout(self._faixa_abas)
         self.grade = GradeCartoes()
         self.area = QScrollArea()
         self.area.setWidgetResizable(True)
@@ -423,6 +423,7 @@ class PainelMesas(QWidget):
             getattr(self.grade, sinal).connect(getattr(self, sinal))
         raiz.addWidget(self.area, 1)
         self.lbl_resumo = QLabel("")
+        self.lbl_resumo.setWordWrap(True)             # no painel de um cartão a linha inteira não cabe: quebra em duas
         raiz.addWidget(self.lbl_resumo)
         self._estilizar()
         self.definir_colunas(colunas)
@@ -446,6 +447,30 @@ class PainelMesas(QWidget):
                 f"QPushButton:hover {{ background: {c['cartao2']}; }}"
                 f"QPushButton:checked {{ background: {c['azul']}; color: {c['sobre_marca']}; border-color: {c['azul']}; }}")
         self._marcar_abas()
+        self._arrumar_abas()
+
+    def _arrumar_abas(self) -> None:
+        """Distribui as abas pelas linhas que a largura do painel pede, sem cortar o texto de nenhuma."""
+        while self._faixa_abas.count():                # desmonta as linhas antigas (os botões continuam vivos)
+            antiga = self._faixa_abas.takeAt(0).layout()
+            if antiga is not None:
+                while antiga.count():
+                    antiga.takeAt(0)
+                antiga.deleteLater()
+        largura = self.colunas * LARGURA + self.RESERVA
+        linha, usado = None, 0
+        for botao in self._abas.values():
+            precisa = botao.sizeHint().width()
+            if linha is None or usado + linha.spacing() + precisa > largura:
+                if linha is not None:
+                    linha.addStretch(1)                # as abas ficam juntas à esquerda
+                linha, usado = QHBoxLayout(), 0
+                linha.setSpacing(4)
+                self._faixa_abas.addLayout(linha)
+            linha.addWidget(botao)
+            usado += precisa + (linha.spacing() if linha.count() > 1 else 0)
+        if linha is not None:
+            linha.addStretch(1)
 
     def _marcar_abas(self) -> None:
         for valor, botao in self._abas.items():
@@ -453,8 +478,12 @@ class PainelMesas(QWidget):
 
     def definir_colunas(self, colunas: int) -> None:
         """Muda a largura do painel para `colunas` cartões por linha (a janela do caixa chama ao ser redimensionada)."""
-        self.colunas = max(1, colunas)
-        self.setFixedWidth(self.colunas * LARGURA + self.RESERVA)
+        colunas = max(1, colunas)
+        mudou = colunas != self.colunas or self.maximumWidth() != colunas * LARGURA + self.RESERVA
+        self.colunas = colunas
+        if mudou:                                     # a janela do caixa chama a cada redimensionamento: só mexe se mudou
+            self.setFixedWidth(self.colunas * LARGURA + self.RESERVA)
+            self._arrumar_abas()
 
     # ------------------------------------------------------------ dados
     def _escolher_aba(self, valor: str) -> None:

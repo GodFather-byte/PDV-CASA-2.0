@@ -50,7 +50,7 @@ class BaseQt(unittest.TestCase):
     def tearDown(self):
         for app in self.apps:
             app.finalizar()
-            self.aplicacao.aboutToQuit.disconnect(app.finalizar)
+            self.aplicacao.aboutToQuit.disconnect(app._ao_sair)
         for janela in reversed(self.janelas):
             janela.close()
             janela.deleteLater()
