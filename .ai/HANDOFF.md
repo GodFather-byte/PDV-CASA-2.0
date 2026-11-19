@@ -1,9 +1,9 @@
 # Handoff (19/11/2026): correções do exe, RustDesk e telas que cabem (branch `correcoes-rustdesk-janelas`)
 
-No ar: 1.14.17 nos caixas. A **nuvem está parada no commit 649a06d**: o serviço do Render está ligado a uma cópia do
-repositório no Cursor (parou de acompanhar o GitHub), então o Deploy Hook republica o commit antigo e o workflow
-"Nuvem: testar e publicar" expira. Não há erro em tempo de execução. **Conserto é do dono, no painel do Render**:
-serviço > Settings > Build & Deploy > repositório do GitHub (`GodFather-byte/PDV-CASA-2.0`, ramo `main`).
+A publicar: 1.14.18 (1.14.17 nos caixas). **Nuvem religada em 19/11**: o serviço do Render estava ligado a uma cópia
+do repositório no Cursor e republicava o commit antigo; agora a origem é o repositório público do GitHub
+(`GodFather-byte/PDV-CASA-2.0`, ramo `main`). Nesse modo o Render não publica sozinho a cada push: quem publica é o
+workflow "Nuvem: testar e publicar", pelo Deploy Hook com o commit testado.
 
 ## O que entrou
 - **Falha do exe (PySide 6.12 + Nuitka)**: sinal do Qt ligado direto a método de classe que não é QObject soltava a
@@ -30,7 +30,6 @@ serviço > Settings > Build & Deploy > repositório do GitHub (`GodFather-byte/P
   `rustdesk_id` no suporte.
 
 ## Pendências
-- Dono: religar o Render ao GitHub (acima); `ANTHROPIC_API_KEY` no Render; instalar na Casa Verde.
-- Publicar 1.14.18 depois do merge (bump em `src/versao.py`, `build-windows.yml` e `will-restaurante.yml`).
+- Dono: `ANTHROPIC_API_KEY` no Render; instalar na Casa Verde.
 - Ideias aprovadas para depois: servidor próprio do RustDesk, sugestão de compra (Will Adega), etiquetas com código
   de barras. Backlog: homologação NFC-e DeliciOz; IBS/CBS 2027; mensalidade EA; tamanho dos backups no Neon.
