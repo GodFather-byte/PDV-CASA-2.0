@@ -41,7 +41,7 @@ from src.hardware.impressora_termica import ErroImpressao
 from src.hardware.dispositivos import DispositivoIndisponivel
 from src.controllers.caixa_controller import LIMITE_PARTES_DIVISAO
 from src.core.valor_pagamento import LIMITE_TROCO_CENT, ler_valor_pagamento
-from src.ui_qt import comissao
+from src.ui_qt import comissao, tema
 from src.ui_qt.foto_produto import QuadroFoto
 from src.ui_qt.painel_mesas import CORES as CORES_MESAS, PainelMesas
 from src.ui_qt.relogio import RelogioCaixa
@@ -739,7 +739,7 @@ class JanelaCaixa(QMainWindow):
         c_dir.addWidget(self.lista_pagamentos)
         self.btn_remover_pag = QPushButton("Remover pagamento")
         self.btn_remover_pag.clicked.connect(self.remover_pagamento)
-        divisao = QHBoxLayout()
+        divisao = tema.LinhaFluida()         # com letra mais larga os três não cabem nos 360 pontos: quebra a linha
         divisao.addWidget(self.btn_remover_pag)
         self.btn_dividir = QPushButton("Dividir conta")
         self.btn_dividir.setToolTip("Divide o que falta em partes iguais (centavos exatos)")
