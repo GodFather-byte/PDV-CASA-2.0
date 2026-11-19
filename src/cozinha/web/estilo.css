@@ -1,11 +1,110 @@
-:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#0b1220;color:#f8fafc}
-*{box-sizing:border-box}body{margin:0;padding:1.2rem}header,.filtros{display:flex;align-items:center;gap:1rem;justify-content:space-between;flex-wrap:wrap}
-button,input,select{font:inherit;padding:.8rem;border-radius:.6rem;border:1px solid #64748b;background:#172338;color:#fff}
-button{cursor:pointer;min-height:48px}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #5eead4;outline-offset:3px}
-button:disabled{opacity:.5;cursor:wait}form{max-width:420px;margin:3rem auto;display:grid;gap:1rem}form label{display:grid;gap:.5rem}
-#fila{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin-top:1.2rem}
-article{background:#172338;border:2px solid #fbbf24;border-radius:.8rem;padding:1.2rem}article.em_preparo{border-color:#38bdf8}
-article h2{margin:0 0 .5rem;font-size:1.4rem}article h3{font-size:1.5rem;margin:.6rem 0}.obs{font-size:1.15rem;white-space:pre-wrap;color:#fde68a}
-article button{width:100%;background:#065f46;border-color:#34d399}.idade{color:#cbd5e1}#aviso{color:#fde68a;font-weight:600}
-body.desatualizado #fila{opacity:.55}body.tv article{padding:1.6rem}body.tv article h3{font-size:1.9rem}
-[hidden]{display:none!important}
+:root {
+  color-scheme: dark;
+  --fundo: #101c20;
+  --cartao: #1b2b2e;
+  --tinta: #f3f5eb;
+  --suave: #b1c4be;
+  --linha: #39504f;
+  --jade: #55dfb0;
+  --ambar: #ffce81;
+  font-family: "Segoe UI", Roboto, system-ui, sans-serif;
+  color: var(--tinta);
+  background: var(--fundo);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input, select { font: inherit; }
+button, select, input {
+  min-height: 44px;
+  border: 1px solid var(--linha);
+  border-radius: 9px;
+  padding: .55rem 1rem;
+  background: var(--cartao);
+  color: var(--tinta);
+}
+button { cursor: pointer; font-weight: 650; touch-action: manipulation; }
+button:hover { border-color: var(--suave); }
+:focus-visible { outline: 3px solid var(--jade); outline-offset: 3px; }
+button:disabled { opacity: .55; cursor: wait; }
+[hidden] { display: none !important; }
+
+.topo { background: #152326; border-bottom: 1px solid var(--linha); }
+.barra, #painel { width: min(100% - 2.5rem, 100rem); margin-inline: auto; }
+.barra, .marca, .acoes, .cabecalho, .titulo, .ticket-topo, .filtro {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+}
+.barra, .cabecalho, .ticket-topo { justify-content: space-between; }
+.barra { min-height: 68px; padding-block: .5rem; flex-wrap: wrap; }
+.marca { font-size: 1.03rem; font-weight: 750; }
+.modulo { border-left: 1px solid var(--linha); padding-left: .7rem; color: var(--suave); font-weight: 450; }
+.icone-cozinha {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--jade);
+}
+.icone-cozinha::before, .icone-cozinha::after { content: ""; position: absolute; }
+.icone-cozinha::before {
+  width: 16px; height: 8px; top: 10px; left: 6px;
+  border: 2px solid #103b31; border-radius: 12px 12px 2px 2px;
+}
+.icone-cozinha::after { width: 22px; height: 2px; background: #103b31; left: 5px; top: 23px; }
+.acoes { gap: .45rem; }
+.acoes button { background: transparent; }
+
+h1, h2, h3, p { margin: 0; }
+h1 { line-height: 1.1; font-size: clamp(1.85rem, 3.5vw, 3rem); letter-spacing: -.045em; }
+#login {
+  display: grid; gap: 1.1rem; max-width: 27rem; margin: clamp(2rem, 9vh, 6rem) auto 0;
+  background: var(--cartao); border: 1px solid var(--linha); border-top: 3px solid var(--jade);
+  border-radius: 16px; padding: clamp(1.25rem, 4vw, 2.2rem);
+}
+#login h1 { font-size: 2rem; }
+#login p, #modo, #atualizado { color: var(--suave); line-height: 1.5; }
+#login label { display: grid; gap: .5rem; margin-top: .35rem; font-weight: 600; }
+#pin { background: var(--fundo); min-height: 50px; letter-spacing: .25em; }
+#entrar { border-color: transparent; background: var(--jade); color: #103b31; min-height: 50px; }
+#painel { padding-block: clamp(1.6rem, 4vw, 3.5rem); }
+.cabecalho { flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--linha); padding-bottom: 1.4rem; }
+.titulo { margin-bottom: .4rem; }
+#contagem { border-radius: 7px; background: #244138; color: var(--jade); padding: .22rem .65rem; font-weight: 750; }
+.filtro { font-weight: 600; }
+#atualizado { font-size: .9rem; margin: 1rem 0; }
+#fila { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: 1rem; }
+article {
+  --estado: var(--ambar);
+  display: flex; flex-direction: column; gap: .9rem; padding: 1.2rem;
+  min-width: 0; border: 1px solid var(--linha); border-top: 3px solid var(--estado);
+  background: var(--cartao); border-radius: 12px; overflow-wrap: anywhere;
+}
+article.em_preparo { --estado: var(--jade); }
+.ticket-topo { border-bottom: 1px dashed var(--linha); padding-bottom: .85rem; }
+.situacao { display: inline-flex; align-items: center; gap: .5rem; font-weight: 700; color: var(--estado); }
+.situacao::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.idade { font-variant-numeric: tabular-nums; color: var(--suave); }
+article h2 { font-size: 1rem; font-weight: 600; color: var(--suave); }
+article h3 { font-size: clamp(1.4rem, 2vw, 1.8rem); letter-spacing: -.035em; line-height: 1.18; }
+.qtd { color: var(--estado); white-space: nowrap; }
+.obs { border-left: 2px solid var(--ambar); padding-left: .65rem; white-space: pre-wrap; color: #ffe4b3; }
+article button { width: 100%; margin-top: auto; background: #263e3c; border-color: #4b7066; }
+article.em_preparo button { color: #103b31; background: var(--jade); border-color: transparent; }
+#vazio, #aviso:not(:empty) { border: 1px solid var(--linha); border-radius: 12px; padding: 1rem; }
+#vazio { text-align: center; color: var(--suave); padding: 2.4rem 1rem; }
+#aviso:not(:empty) { margin: 1rem auto; width: min(100% - 2rem, 40rem); color: var(--ambar); background: #302a1f; }
+body.desatualizado #fila { opacity: .65; }
+body.tv #fila { grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr)); }
+body.tv article { padding: 1.5rem; }
+body.tv article h3 { font-size: clamp(1.8rem, 2.8vw, 3rem); }
+
+@media (max-width: 32rem) {
+  .barra, #painel { width: calc(100% - 1.5rem); }
+  .barra { gap: .4rem; }
+  .acoes button { padding-inline: .6rem; }
+  .marca { gap: .45rem; font-size: .95rem; }
+  #login { margin-inline: .75rem; }
+}

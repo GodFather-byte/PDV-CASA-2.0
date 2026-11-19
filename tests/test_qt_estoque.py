@@ -84,6 +84,8 @@ class TestEstoqueQt(BaseTeste):
         self.assertEqual(janela.grade.item(0, 6).text(), "5,0000")
         self.assertEqual(janela.grade.item(0, 8).text(), "R$ 15,00")
         self.assertIn("R$ 45,00", janela.resumo.text())
+        self.assertEqual({chave: valor.text() for chave, valor in janela.alertas_estoque.items()},
+                         {"sem": "1", "ponto": "1"})
         self.assertEqual(
             [janela.grupo.itemData(i) for i in range(1, janela.grupo.count())],
             self.ctx.estoque.grupos())
@@ -296,6 +298,7 @@ class TestEstoqueQt(BaseTeste):
         self.assertEqual(janela.linhas, [])
         self.assertEqual(janela.grade.rowCount(), 0)
         self.assertEqual(janela.resumo.text(), "")
+        self.assertTrue(all(not valor.text() for valor in janela.alertas_estoque.values()))
         self.assertIn("não permite", janela.mensagem.text())
 
     def test_desativacao_e_fim_de_sessao_bloqueiam_historico(self):

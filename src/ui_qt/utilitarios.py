@@ -4,7 +4,8 @@ import sqlite3
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QInputDialog, QLineEdit, QMessageBox, QPushButton, QVBoxLayout,
+    QApplication, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QInputDialog, QLineEdit,
+    QMessageBox, QPushButton, QVBoxLayout,
 )
 
 from src.core import formatacao as fmt
@@ -39,8 +40,8 @@ class JanelaUtilitarios(QDialog):
         super().__init__(parent)
         self.ctx = ctx
         self._operador()
-        self.setWindowTitle("Utilitários • Qt")
-        self.resize(650, 500)
+        self.setWindowTitle("Utilitários")
+        self.resize(850, 490)
         layout = QVBoxLayout(self)
         layout.addWidget(texto("Utilitários locais", "titulo"))
         self.botoes = {}
@@ -49,7 +50,23 @@ class JanelaUtilitarios(QDialog):
             botao.setEnabled(ctx.acesso.pode(ctx.operador, permissao))
             botao.clicked.connect(getattr(self, chave))
             self.botoes[chave] = botao
-            layout.addWidget(botao)
+        grade = QGridLayout()
+        for indice, (titulo, chaves) in enumerate((
+            ("Backup e recuperação", ("backup", "verificar_backup", "recuperar_nuvem")),
+            ("Suporte e comunicação", ("suporte", "rustdesk", "comunicacao")),
+            ("Manutenção de dados", ("limpeza", "excluir_produtos", "vendas_teste")),
+            ("Acesso do dono", ("senha_seguranca",)),
+        )):
+            grupo = QGroupBox(titulo)
+            coluna = QVBoxLayout(grupo)
+            for chave in chaves:
+                botao = self.botoes[chave]
+                if chave in ("limpeza", "excluir_produtos", "vendas_teste"):
+                    botao.setObjectName("perigo")
+                coluna.addWidget(botao)
+            coluna.addStretch()
+            grade.addWidget(grupo, indice // 2, indice % 2)
+        layout.addLayout(grade)
         self.status = texto("Nenhuma operação executada nesta janela.", "suave")
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
@@ -58,7 +75,10 @@ class JanelaUtilitarios(QDialog):
         layout.addWidget(self.mensagem)
         fechar = QPushButton("Fechar")
         fechar.clicked.connect(self.reject)
-        layout.addWidget(fechar)
+        rodape = QHBoxLayout()
+        rodape.addStretch()
+        rodape.addWidget(fechar)
+        layout.addLayout(rodape)
 
     def _operador(self):
         if self.ctx.operador is None:

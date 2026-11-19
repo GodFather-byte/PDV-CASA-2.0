@@ -9,6 +9,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
+from licenciador import tema
 from licenciador.central import Central, ClientePonte, caminho_padrao
 from licenciador.central_bot import servir
 from src.core.erros import ErroNegocio
@@ -28,22 +29,29 @@ class JanelaCentral(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self.fechar)
         quadro = ttk.Frame(self, padding=16)
         quadro.pack(fill="both", expand=True)
-        ttk.Label(quadro, text="Somente no computador exclusivo do fornecedor.",
-                  font=("Segoe UI", 12, "bold")).pack(anchor="w")
-        ttk.Label(quadro, text="Sem faturamento das lojas. Nenhuma cobrança é criada por esta central.").pack(anchor="w")
+        ttk.Label(quadro, text="Central do fornecedor", style="Titulo.TLabel").pack(anchor="w")
+        ttk.Label(quadro, text="Uso exclusivo do fornecedor. A central não acessa o faturamento das lojas nem cria cobranças.",
+                  foreground=tema.COR["suave"], wraplength=710).pack(anchor="w", pady=(0, 8))
+        conexao = ttk.Frame(quadro)
+        conexao.pack(fill="x")
+        conexao.columnconfigure((0, 1), weight=1, uniform="campos")
         self.campos = {}
-        for chave, rotulo, valor, secreto in (
+        for indice, (chave, rotulo, valor, secreto) in enumerate((
             ("banco", "Banco próprio da central", str(caminho_padrao()), False),
             ("url", "Endereço HTTPS da API", os.environ.get("WILLCENTRAL_API_URL", ""), False),
             ("token", "Token exclusivo da central", os.environ.get("PDV_CENTRAL_TOKEN", ""), True),
             ("bot", "Token do bot administrativo", os.environ.get("WILLCENTRAL_TELEGRAM_TOKEN", ""), True),
-        ):
-            ttk.Label(quadro, text=rotulo).pack(anchor="w", pady=(6, 0))
+        )):
+            linha, coluna = divmod(indice, 2)
+            margem = (0, 8) if coluna == 0 else (8, 0)
+            ttk.Label(conexao, text=rotulo, style="Rotulo.TLabel").grid(
+                row=linha * 2, column=coluna, sticky="w", padx=margem, pady=(6, 2))
             variavel = tk.StringVar(value=valor)
-            ttk.Entry(quadro, textvariable=variavel, show="*" if secreto else "").pack(fill="x")
+            ttk.Entry(conexao, textvariable=variavel, show="*" if secreto else "").grid(
+                row=linha * 2 + 1, column=coluna, sticky="ew", padx=margem)
             self.campos[chave] = variavel
-        ttk.Label(quadro, text="Tokens usados apenas nesta sessão; não são gravados no banco ou enviados ao Telegram.",
-                  wraplength=800).pack(anchor="w", pady=6)
+        ttk.Label(quadro, text="Os tokens ficam apenas nesta sessão, fora do banco de dados e do Telegram.",
+                  wraplength=710, foreground=tema.COR["suave"]).pack(anchor="w", pady=(6, 12))
         linha = ttk.Frame(quadro)
         linha.pack(fill="x")
         for texto, acao in (("Cadastrar loja", self.cadastrar), ("Autorizar administrador", self.administrador),
@@ -62,7 +70,7 @@ class JanelaCentral(tk.Toplevel):
         self.lista.pack(fill="both", expand=True, pady=8)
         controles = ttk.Frame(quadro)
         controles.pack(fill="x")
-        ttk.Button(controles, text="Iniciar bot e sincronização", command=self.iniciar).pack(side="left")
+        ttk.Button(controles, text="Iniciar bot e sincronização", style="Ok.TButton", command=self.iniciar).pack(side="left")
         ttk.Button(controles, text="Parar", command=self.parar.set).pack(side="left", padx=8)
         self.status = tk.StringVar(value="Parada. Inicie e envie /start ao bot para ver seu ID; autorize-o localmente.")
         ttk.Label(quadro, textvariable=self.status, wraplength=800).pack(anchor="w", pady=8)
@@ -240,6 +248,7 @@ class JanelaCentral(tk.Toplevel):
 def main():
     root = tk.Tk()
     root.withdraw()
+    tema.aplicar_tema(root)
     janela = JanelaCentral(root)
     janela.bind("<Destroy>", lambda evento: root.destroy() if evento.widget is janela else None)
     root.mainloop()

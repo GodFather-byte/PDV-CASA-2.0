@@ -23,7 +23,7 @@ class JanelaRestaurarBackup(QDialog):
         super().__init__(parent)
         self.ctx = ctx
         self._controlador()
-        self.setWindowTitle("Preparar restauração de backup • Qt")
+        self.setWindowTitle("Preparar restauração de backup")
         self.resize(850, 570)
         layout = QVBoxLayout(self)
         layout.addWidget(texto("Preparar restauração de backup local", "titulo"))
@@ -147,7 +147,7 @@ class JanelaVerificarBackup(QDialog):
         super().__init__(parent)
         self.ctx = ctx
         self.exigir_acesso()
-        self.setWindowTitle("Verificar backup (teste de restauração) • Qt")
+        self.setWindowTitle("Verificar backup (teste de restauração)")
         self.resize(900, 640)
         layout = QVBoxLayout(self)
         layout.addWidget(texto("Verificar backup: integridade e teste de restauração", "titulo"))
@@ -177,6 +177,7 @@ class JanelaVerificarBackup(QDialog):
         layout.addWidget(self.mensagem)
         botoes = QHBoxLayout()
         self.btn_recente = QPushButton("Verificar o mais recente")
+        self.btn_recente.setObjectName("primario")
         self.btn_recente.clicked.connect(lambda: self.verificar())
         self.btn_selecionado = QPushButton("Verificar selecionado")
         self.btn_selecionado.setEnabled(False)

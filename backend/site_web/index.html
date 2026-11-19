@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>WillPDV — caixa para boate, adega, restaurante e loja · software sob medida</title>
   <meta name="description" content="WillPDV, Will Adega, Will Restaurante e Will Variedades: caixa no Windows que vende sem internet, painel do dono no celular e atualização automática. E sob medida: software, sites, apps de gestão, bots de atendimento com IA e Google Meu Negócio.">
-  <meta name="theme-color" content="#080c16">
+  <meta name="theme-color" content="#102322">
   <link rel="stylesheet" href="/site/estilo.css">
 </head>
 <body>
@@ -23,38 +23,18 @@
   <main id="inicio">
     <section class="hero">
       <div class="hero-texto">
-        <p class="selo">Versão {{versao}} · teste grátis de {{dias_teste}} dias</p>
-        <h1>O caixa da sua casa, <span class="destaque">rápido e sem depender da internet.</span></h1>
-        <p class="lead">Boate, adega, restaurante e loja de variedades. Venda, estoque, fechamento e impressora no balcão, e o dono acompanha tudo pelo celular.</p>
+        <p class="selo">Sistema de caixa para Windows</p>
+        <h1>O caixa da sua casa, <em>mesmo sem internet.</em></h1>
+        <p class="lead">Cuide das vendas, do estoque e do fechamento no balcão. Acompanhe o movimento da loja pelo celular.</p>
         <div class="acoes">
-          <a class="botao" href="#teste">Testar grátis agora</a>
+          <a class="botao" href="#teste">Testar por {{dias_teste}} dias <span aria-hidden="true">→</span></a>
           <a class="zap" href="{{zap_contato}}">Falar no WhatsApp</a>
         </div>
-        <ul class="numeros" aria-label="Destaques">
-          <li><strong>Offline</strong><span>vende sem internet</span></li>
-          <li><strong>Celular</strong><span>painel do dono</span></li>
-          <li><strong>Automática</strong><span>atualização</span></li>
-        </ul>
       </div>
-      <div class="hero-tela" aria-hidden="true">
-        <div class="tela">
-          <div class="tela-topo"><span></span><span></span><span></span></div>
-          <div class="tela-linha"><b>2x Heineken 330ml</b><i>R$ 24,00</i></div>
-          <div class="tela-linha"><b>1x Porção de fritas</b><i>R$ 32,00</i></div>
-          <div class="tela-linha"><b>1x Gelo 5kg</b><i>R$ 12,00</i></div>
-          <div class="tela-total"><b>Total</b><i>R$ 68,00</i></div>
-          <div class="tela-pagar">Pix · Cartão · Dinheiro</div>
-        </div>
-        <div class="celular">
-          <p>Hoje</p>
-          <strong>R$ 4.870</strong>
-          <div class="barras"><span style="height:40%"></span><span style="height:65%"></span><span style="height:50%"></span><span style="height:85%"></span><span style="height:100%"></span></div>
-        </div>
-      </div>
+      <img class="foto-balcao" src="/site/balcao.webp" alt="Terminal de caixa no balcão de madeira de um bistrô." width="1024" height="1280" fetchpriority="high">
     </section>
 
     <section id="edicoes">
-      <p class="olho">Programas</p>
       <h2>Um caixa para cada tipo de negócio</h2>
       <div class="edicoes quatro">
         <article class="cartao boate">
@@ -126,7 +106,6 @@
     </section>
 
     <section id="planos">
-      <p class="olho">Planos</p>
       <h2>Preço simples, sem fidelidade</h2>
       <p class="lead">Teste grátis de {{dias_teste}} dias. No plano anual, {{meses_gratis}} meses saem grátis: você paga {{meses_cobrados}}.</p>
       <div class="edicoes quatro">
@@ -217,7 +196,6 @@
     </section>
 
     <section id="faq">
-      <p class="olho">Dúvidas</p>
       <h2>Perguntas frequentes</h2>
       <details>
         <summary>A venda para se a internet cair?</summary>

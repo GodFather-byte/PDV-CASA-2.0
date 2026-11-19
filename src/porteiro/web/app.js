@@ -538,6 +538,9 @@ async function abrirCamera() {
 }
 
 document.addEventListener("keydown", (evento) => {
+  // Os campos de texto e os botões focados com Tab mantêm o teclado nativo.
+  if (evento.target.closest?.("input, #ajuda-instalar")) return;
+  if (evento.key === "Enter" && evento.target.closest?.("button:not([data-tecla])")) return;
   const tela = document.body.dataset.tela;
   if (evento.key === "Enter") evento.preventDefault();
   if (tela === "tela-pin") {

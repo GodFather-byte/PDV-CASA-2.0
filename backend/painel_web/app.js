@@ -1731,7 +1731,8 @@
     const diaAtual = estado.resumo && (estado.resumo.dia_operacional || estado.resumo.dia);
     const pontos = dias.map((d, i) => {
       const valor = Number(d.faturamento_cent) || 0;
-      const mostrar = i === 0 || i === dias.length - 1 || (d.dia && Number(d.dia.slice(8, 10)) % 5 === 0);
+      const longeDasPontas = i > 1 && i < dias.length - 2;
+      const mostrar = i === 0 || i === dias.length - 1 || (longeDasPontas && d.dia && Number(d.dia.slice(8, 10)) % 5 === 0);
       return {
         valor,
         rotulo: mostrar && d.dia ? d.dia.slice(8, 10) : "",

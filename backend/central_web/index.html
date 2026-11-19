@@ -12,29 +12,30 @@
 <aside>
   <a class="marca" href="/central/"><b>W</b><span>WILLPDV<small>CENTRAL DO FORNECEDOR</small></span></a>
   <nav aria-label="Principal">
-    <button data-view="lojas" class="selecionado">Lojas e licenças</button>
+    <button data-view="lojas" aria-current="page" class="selecionado">Lojas e licenças</button>
     <button data-view="redes">Redes</button>
     <button data-view="atualizacoes">Correções e atualizações</button>
     <button data-view="auditoria">Histórico de ações</button>
   </nav>
-  <footer>Seu sistema.<br>Suas lojas, por perto.</footer>
 </aside>
 <main>
 <header>
-  <div><span class="sobretitulo">GESTÃO E SUPORTE</span><h1>Minha central</h1></div>
+  <div><h1>Minha central</h1></div>
   <button id="sair" class="secundario" hidden>Sair</button>
 </header>
 
 <section id="entrada" class="cartao entrada">
-  <span class="sobretitulo">BEM-VINDO</span>
-  <h2>Cuide de todas as suas lojas.</h2>
-  <p>Licenças, mensalidades e atendimento em um só lugar, pelo celular ou computador.</p>
+  <div class="entrada-marca">
+    <span class="marca"><b>W</b>WillPDV</span>
+    <h1>Central do fornecedor</h1>
+  </div>
   <form method="post" id="login">
+    <h2>Acessar central</h2>
     <label for="credencial">Credencial administrativa</label>
-    <input id="credencial" type="password" required autocomplete="off" maxlength="1024">
+    <input id="credencial" aria-describedby="ajuda-credencial" type="password" required autocomplete="off" maxlength="1024">
+    <small id="ajuda-credencial">Use a credencial administrativa da sua nuvem.</small>
     <button>Entrar na central</button>
   </form>
-  <small>Use a credencial administrativa da sua nuvem. Ela não é a senha dos clientes.</small>
 </section>
 <p id="mensagem" role="status" aria-live="polite"></p>
 

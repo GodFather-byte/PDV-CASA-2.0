@@ -112,18 +112,19 @@ class JanelaConfiguracoes(QDialog):
             raise ErroPermissao("Seu acesso não permite as configurações gerais.")
         self.campos = {secao: {} for secao in SECOES}
         self._originais = {secao: {} for secao in SECOES}
-        self.setWindowTitle("Configurações gerais da loja • Qt")
+        self.setWindowTitle("Configurações da loja")
         self.resize(900, 700)
         layout = QVBoxLayout(self)
-        layout.addWidget(texto("Configurações gerais da loja", "titulo"))
-        layout.addWidget(texto(
-            "Cada aba salva só o que você alterou nela. Reabra o caixa para valer. "
-            "A nuvem não envia vendas nem contrata serviços sozinha.", "suave"))
+        cabecalho = QHBoxLayout()
+        cabecalho.addWidget(texto("Configurações da loja", "titulo"), 1)
         self.busca = QLineEdit()
-        self.busca.setPlaceholderText("Buscar uma opção nesta aba (ex.: comanda, serviço, estoque)…")
+        self.busca.setPlaceholderText("Buscar uma opção nesta aba")
+        self.busca.setAccessibleName("Buscar uma opção nesta aba")
         self.busca.setClearButtonEnabled(True)
         self.busca.textChanged.connect(self._filtrar)
-        layout.addWidget(self.busca)
+        cabecalho.addWidget(self.busca, 1)
+        layout.addLayout(cabecalho)
+        layout.addWidget(texto("Salve as alterações de cada aba e reabra o caixa para aplicá-las.", "suave"))
         self.abas = QTabWidget()
         fora_da_edicao = edicao.atual().fora_das_configuracoes()
         for secao, titulo in (("loja", "Identificação e contatos"),
@@ -229,8 +230,10 @@ class JanelaConfiguracoes(QDialog):
         self.btn_recarregar.clicked.connect(self.recarregar)
         fechar = QPushButton("Fechar")
         fechar.clicked.connect(self.close)
-        for botao in (self.btn_salvar, self.btn_recarregar, fechar):
-            barra.addWidget(botao)
+        barra.addWidget(self.btn_salvar)
+        barra.addWidget(self.btn_recarregar)
+        barra.addStretch(1)
+        barra.addWidget(fechar)
         layout.addLayout(barra)
         self._aplicar_permissoes(permissoes)
         for secao in SECOES:

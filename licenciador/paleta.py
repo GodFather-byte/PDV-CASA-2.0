@@ -12,22 +12,22 @@ CHAVE = "tema_visual"
 # ------------------------------------------------------------------ telas de cadastro, relatórios e janelas (tema.COR)
 COR = {
     "escuro": {
-        "fundo": "#101820", "painel": "#1a2735", "texto": "#f1f5f9", "suave": "#b3c2d1", "borda": "#2b3c4e",
-        "marinho": "#1c2b3d", "marinho2": "#2f5fd0", "rotulo": "#78abff", "titulo": "#f1f5f9",
-        "ok": "#52dfb4", "perigo": "#ff8d9b", "aviso": "#ffd078", "total": "#ff8d9b", "troco": "#78abff",
-        "ok_fundo": "#17805a", "perigo_fundo": "#b83a45", "ok_hover": "#126a49", "perigo_hover": "#a8303b", "aviso_fundo": "#ffd078",
-        "btn_hover": "#4170e0", "btn_off": "#34465a", "btn_off_texto": "#8497ad", "sobre": "#ffffff",
-        "campo": "#0f1822", "papel": "#0f1822", "linha_par": "#1a2736", "selecao": "#2a4fb0", "selecao_texto": "#ffffff",
-        "inativo": "#7d8da1", "virtual": "#7d8da1", "ok_linha": "#17382b", "ponto_linha": "#3d3414", "sem_linha": "#41191f",
+        "fundo": "#101c20", "painel": "#192a2d", "texto": "#eef5ee", "suave": "#b2c4bd", "borda": "#3d5654",
+        "marinho": "#153832", "marinho2": "#16684f", "rotulo": "#67e4b4", "titulo": "#eef5ee",
+        "ok": "#68dfb2", "perigo": "#ffa9aa", "aviso": "#ffd18a", "total": "#ffa9aa", "troco": "#67e4b4",
+        "ok_fundo": "#16694f", "perigo_fundo": "#9c3743", "ok_hover": "#208461", "perigo_hover": "#b24550", "aviso_fundo": "#ffd18a",
+        "btn_hover": "#207c61", "btn_off": "#263b3b", "btn_off_texto": "#93a9a3", "sobre": "#ffffff",
+        "campo": "#112123", "papel": "#112123", "linha_par": "#1a2d2e", "selecao": "#235e4e", "selecao_texto": "#ffffff",
+        "inativo": "#8ea49d", "virtual": "#8ea49d", "ok_linha": "#173f33", "ponto_linha": "#41341e", "sem_linha": "#492a2e",
     },
     "claro": {
-        "fundo": "#eef1f8", "painel": "#ffffff", "texto": "#1c2438", "suave": "#5b6785", "borda": "#c9d1e6",
-        "marinho": "#14234d", "marinho2": "#1f3a8a", "rotulo": "#1f3a8a", "titulo": "#14234d",
-        "ok": "#157347", "perigo": "#b32d2d", "aviso": "#8a5a00", "total": "#9b1c1c", "troco": "#1f3a8a",
-        "ok_fundo": "#157347", "perigo_fundo": "#b32d2d", "ok_hover": "#0f5c38", "perigo_hover": "#8f2323", "aviso_fundo": "#d9981e",
-        "btn_hover": "#2c52c4", "btn_off": "#9aa6c6", "btn_off_texto": "#e5e9f5", "sobre": "#ffffff",
-        "campo": "#ffffff", "papel": "#ffffff", "linha_par": "#f6f8fd", "selecao": "#cfe0ff", "selecao_texto": "#1c2438",
-        "inativo": "#8a93ab", "virtual": "#9aa3b8", "ok_linha": "#cdeedb", "ponto_linha": "#fff0b3", "sem_linha": "#f6c8c8",
+        "fundo": "#f2f3ed", "painel": "#ffffff", "texto": "#1b302e", "suave": "#475f58", "borda": "#bfccc3",
+        "marinho": "#163932", "marinho2": "#11694f", "rotulo": "#11694f", "titulo": "#163932",
+        "ok": "#126449", "perigo": "#a33640", "aviso": "#78500b", "total": "#9b3340", "troco": "#11694f",
+        "ok_fundo": "#126449", "perigo_fundo": "#a33640", "ok_hover": "#0c503a", "perigo_hover": "#852832", "aviso_fundo": "#e9ad4c",
+        "btn_hover": "#0c5840", "btn_off": "#dce3dc", "btn_off_texto": "#54645c", "sobre": "#ffffff",
+        "campo": "#ffffff", "papel": "#ffffff", "linha_par": "#f0f4ee", "selecao": "#d5ecdb", "selecao_texto": "#1b302e",
+        "inativo": "#677971", "virtual": "#6c7971", "ok_linha": "#d7eedf", "ponto_linha": "#fff0c8", "sem_linha": "#f9dcda",
     },
 }
 

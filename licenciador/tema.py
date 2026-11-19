@@ -1,6 +1,7 @@
 """Tema visual, componentes (Grade) e diálogos reutilizáveis da interface Tkinter."""
 from __future__ import annotations
 
+import sys
 import tkinter as tk
 from tkinter import ttk
 
@@ -9,10 +10,11 @@ from src.core.erros import ErroNegocio
 from licenciador import paleta
 
 COR = dict(paleta.COR[paleta.PADRAO])        # o conteúdo troca com o modo (claro/escuro): ver paleta.aplicar
-FONTE = ("Segoe UI", 10)
-FONTE_B = ("Segoe UI", 10, "bold")
-FONTE_G = ("Segoe UI", 14, "bold")
-FONTE_MONO = ("Consolas", 10)
+FAMILIA = "Segoe UI" if sys.platform == "win32" else "Helvetica"
+FONTE = (FAMILIA, 10)
+FONTE_B = (FAMILIA, 10, "bold")
+FONTE_G = (FAMILIA, 14, "bold")
+FONTE_MONO = ("Consolas" if sys.platform == "win32" else "Courier", 10)
 
 
 def aplicar_tema(root: tk.Misc) -> None:
@@ -31,16 +33,17 @@ def aplicar_tema(root: tk.Misc) -> None:
     s.configure("Painel.TFrame", background=c["painel"], relief="solid", borderwidth=1)
     s.configure("TLabel", background=c["fundo"], foreground=c["texto"])
     s.configure("Painel.TLabel", background=c["painel"])
-    s.configure("Rotulo.TLabel", font=("Segoe UI", 9, "bold"), foreground=c["rotulo"])
+    s.configure("Rotulo.TLabel", font=(FAMILIA, 9, "bold"), foreground=c["rotulo"])
     s.configure("Titulo.TLabel", font=FONTE_G, foreground=c["titulo"])
-    s.configure("TButton", padding=(10, 5), background=c["marinho2"], foreground=c["sobre"], borderwidth=0)
-    s.map("TButton", background=[("active", c["btn_hover"]), ("disabled", c["btn_off"])],
+    s.configure("TButton", padding=(10, 5), background=c["painel"], foreground=c["texto"], borderwidth=1,
+                relief="flat", bordercolor=c["borda"], focuscolor=c["rotulo"])
+    s.map("TButton", background=[("disabled", c["btn_off"]), ("active", c["selecao"])],
           foreground=[("disabled", c["btn_off_texto"])])
-    s.configure("Perigo.TButton", background=c["perigo_fundo"])
-    s.map("Perigo.TButton", background=[("active", c["perigo_hover"])])
-    s.configure("Ok.TButton", background=c["ok_fundo"])
-    s.map("Ok.TButton", background=[("active", c["ok_hover"])])
-    s.configure("Barra.TButton", padding=(8, 6), background=c["marinho"], foreground=c["sobre"], font=("Segoe UI", 9))
+    s.configure("Perigo.TButton", background=c["perigo_fundo"], foreground=c["sobre"])
+    s.map("Perigo.TButton", background=[("disabled", c["btn_off"]), ("active", c["perigo_hover"])])
+    s.configure("Ok.TButton", background=c["ok_fundo"], foreground=c["sobre"], font=FONTE_B)
+    s.map("Ok.TButton", background=[("disabled", c["btn_off"]), ("active", c["ok_hover"])])
+    s.configure("Barra.TButton", padding=(8, 6), background=c["marinho"], foreground=c["sobre"], font=(FAMILIA, 9))
     s.map("Barra.TButton", background=[("active", c["marinho2"])])
     s.configure("Sel.TButton", background=c["aviso_fundo"], foreground="black")
     for campo in ("TEntry", "TCombobox", "TSpinbox"):
@@ -49,7 +52,7 @@ def aplicar_tema(root: tk.Misc) -> None:
                     darkcolor=c["borda"])
         s.map(campo, fieldbackground=[("readonly", c["campo"]), ("disabled", c["fundo"])],
               foreground=[("disabled", c["suave"])], selectbackground=[("readonly", c["campo"])],
-              selectforeground=[("readonly", c["texto"])], bordercolor=[("focus", c["marinho2"])])
+              selectforeground=[("readonly", c["texto"])], bordercolor=[("focus", c["rotulo"])])
     root.option_add("*TCombobox*Listbox.background", c["campo"])           # a lista que abre no combo
     root.option_add("*TCombobox*Listbox.foreground", c["texto"])
     root.option_add("*TCombobox*Listbox.selectBackground", c["selecao"])
@@ -58,15 +61,15 @@ def aplicar_tema(root: tk.Misc) -> None:
     root.option_add("*Menu.foreground", c["texto"])
     root.option_add("*Menu.activeBackground", c["selecao"])
     root.option_add("*Menu.activeForeground", c["selecao_texto"])
-    s.configure("Treeview", rowheight=24, font=FONTE, background=c["campo"], fieldbackground=c["campo"], foreground=c["texto"],
+    s.configure("Treeview", rowheight=28, font=FONTE, background=c["campo"], fieldbackground=c["campo"], foreground=c["texto"],
                 bordercolor=c["borda"])
     s.configure("Treeview.Heading", font=FONTE_B, background=c["marinho"], foreground=c["sobre"], padding=5)
     s.map("Treeview.Heading", background=[("active", c["marinho2"])])
     s.map("Treeview", background=[("selected", c["selecao"])], foreground=[("selected", c["selecao_texto"])])
     s.configure("TNotebook", background=c["fundo"], bordercolor=c["borda"])
-    s.configure("TNotebook.Tab", padding=(12, 5), font=FONTE_B, background=c["painel"], foreground=c["suave"])
-    s.map("TNotebook.Tab", background=[("selected", c["campo"]), ("active", c["selecao"])],
-          foreground=[("selected", c["texto"]), ("active", c["selecao_texto"])])
+    s.configure("TNotebook.Tab", padding=(12, 8), font=FONTE_B, background=c["painel"], foreground=c["suave"])
+    s.map("TNotebook.Tab", background=[("selected", c["marinho2"]), ("active", c["selecao"])],
+          foreground=[("selected", c["sobre"]), ("active", c["selecao_texto"])])
     s.configure("TLabelframe", background=c["fundo"], bordercolor=c["borda"])
     s.configure("TLabelframe.Label", background=c["fundo"], font=FONTE_B, foreground=c["rotulo"])
     for nome in ("TCheckbutton", "TRadiobutton"):

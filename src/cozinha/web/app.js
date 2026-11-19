@@ -63,28 +63,38 @@
       $("painel").hidden = false;
       $("sair").hidden = false;
       $("modo").textContent = dados.modo === "tv" ? "TV — somente leitura" : "Operação da cozinha";
+      $("contagem").textContent = dados.total;
       $("atualizado").textContent = "Última leitura: " + dados.momento;
       $("aviso").textContent = dados.total > dados.itens.length ? "Exibindo os primeiros " + dados.itens.length + " de " + dados.total + " itens. Filtre por setor." : "";
       $("setor").replaceChildren(new Option("Todos", ""));
       for (const s of dados.setores) $("setor").append(new Option(s.nome, String(s.id)));
       $("setor").value = setor;
-      $("fila").replaceChildren();
+      const foco = document.activeElement?.dataset.item;
+      const fila = document.createDocumentFragment();
       $("vazio").hidden = !!dados.itens.length;
       for (const i of dados.itens) {
         const artigo = document.createElement("article");
         artigo.className = i.status_preparo;
-        artigo.append(no("h2", i.posicao_rotulo), no("p", i.status_preparo === "pendente" ? "Pendente" : "Em preparo"));
-        artigo.append(no("h3", String(i.quantidade).replace(".", ",") + " × " + i.produto));
+        const cabecalho = no("div", "", "ticket-topo");
+        cabecalho.append(no("span", i.status_preparo === "pendente" ? "Pendente" : "Em preparo", "situacao"),
+          no("span", i.minutos + " min", "idade"));
+        artigo.append(cabecalho, no("h2", i.posicao_rotulo));
+        const produto = no("h3", "");
+        produto.append(no("span", String(i.quantidade).replace(".", ",") + " ×", "qtd"),
+          document.createTextNode(" " + i.produto));
+        artigo.append(produto);
         if (i.observacao) artigo.append(no("p", i.observacao, "obs"));
-        artigo.append(no("p", i.minutos + " min", "idade"));
         if (dados.modo !== "tv" && !tv) {
           const botao = no("button", i.status_preparo === "pendente" ? "Iniciar preparo" : "Marcar pronto");
           botao.type = "button";
+          botao.dataset.item = String(i.id);
           botao.addEventListener("click", () => alterar(i));
           artigo.append(botao);
         }
-        $("fila").append(artigo);
+        fila.append(artigo);
       }
+      $("fila").replaceChildren(fila);
+      if (foco) $("fila").querySelector(`button[data-item="${CSS.escape(foco)}"]`)?.focus({ preventScroll: true });
     } catch (e) {
       if (e.status === 401 || e.status === 403) { entrada(e.message); return; }
       desatualizar(e.message || "Sem comunicação.");

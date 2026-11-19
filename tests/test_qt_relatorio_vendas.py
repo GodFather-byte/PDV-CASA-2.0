@@ -78,6 +78,8 @@ class TestRelatorioVendasQt(BaseTeste):
         self.assertEqual(totais["Total apurado"], "10,53")
         self.assertEqual(totais["Cupons (TC)"], "2")
         self.assertEqual(totais["Ticket médio (TM)"], "5,27")
+        self.assertEqual({chave: valor.text() for chave, valor in janela.valores.items()},
+                         {"Total apurado": "10,53", "Cupons (TC)": "2", "Ticket médio (TM)": "5,27"})
         self.assertEqual(esperado.linhas[0][3:], ["3,000", "3,51", "10,53"])
         self.assertEqual(janela.mensagem.text(), "")
         for grade in (janela.grade, janela.totais):
@@ -178,6 +180,7 @@ class TestRelatorioVendasQt(BaseTeste):
                     self.assertFalse(janela.atualizar())
                     consultar.assert_not_called()
                 self.assertIsNone(janela.rel)
+                self.assertTrue(all(valor.text() == "—" for valor in janela.valores.values()))
                 self.assertEqual(janela.grade.rowCount(), 0)
                 self.assertEqual(janela.totais.rowCount(), 0)
                 self.assertTrue(janela.mensagem.text())

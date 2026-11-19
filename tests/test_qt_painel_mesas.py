@@ -443,14 +443,15 @@ class TesteQuantidadeEFormaPadrao(BaseCaixaQt if BaseCaixaQt else object):
 @unittest.skipIf(BaseCaixaQt is None, "PySide6 indisponível")
 class TesteVisualNoiteDaBoate(BaseCaixaQt if BaseCaixaQt else object):
     def test_caixa_usa_o_estilo_noturno_no_modo_escuro_e_o_claro_no_claro(self):
+        from src.ui_qt.painel_mesas import CORES
         j = self.janela()
-        self.assertIn("#0a1029", j.styleSheet())
+        self.assertIn(CORES["escuro"]["fundo"], j.styleSheet())
         self.banco.cfg_set("tema_visual", "claro")
         j.carregar_mesas()
-        self.assertNotIn("#0a1029", j.styleSheet())
+        self.assertIn(CORES["claro"]["fundo"], j.styleSheet())
         self.banco.cfg_set("tema_visual", "escuro")
         j.carregar_mesas()
-        self.assertIn("#0a1029", j.styleSheet())
+        self.assertIn(CORES["escuro"]["fundo"], j.styleSheet())
 
     def test_comissao_marcada_tem_cor_de_fundo_e_de_texto_por_modo(self):
         from src.ui_qt.caixa import LINHAS_COMISSAO
@@ -458,6 +459,7 @@ class TesteVisualNoiteDaBoate(BaseCaixaQt if BaseCaixaQt else object):
             self.assertTrue(all(c.startswith("#") and len(c) == 7 for c in (a_pagar, paga, texto)), modo)
 
     def test_cliente_alterna_claro_e_escuro_no_menu_e_o_caixa_aberto_acompanha(self):
+        from src.ui_qt.painel_mesas import CORES
         from src.ui_qt.app import App, JanelaPrincipal
         app = App(self.banco, self.aplicacao)
         app.ctx = self.ctx
@@ -469,10 +471,10 @@ class TesteVisualNoiteDaBoate(BaseCaixaQt if BaseCaixaQt else object):
         menu.btn_tema.click()
         self.assertEqual(self.banco.cfg("tema_visual"), "claro")
         self.assertIn("escuro", menu.btn_tema.text())
-        self.assertNotIn("#0a1029", caixa.styleSheet())
+        self.assertIn(CORES["claro"]["fundo"], caixa.styleSheet())
         menu.btn_tema.click()
         self.assertEqual(self.banco.cfg("tema_visual"), "escuro")
-        self.assertIn("#0a1029", caixa.styleSheet())
+        self.assertIn(CORES["escuro"]["fundo"], caixa.styleSheet())
 
     def test_menu_mostra_os_numeros_da_noite(self):
         from src.ui_qt.app import App, JanelaPrincipal

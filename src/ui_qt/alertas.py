@@ -13,7 +13,8 @@ from src.core.erros import ErroPermissao
 from src.ui_qt.tema import texto
 
 ROTULO_SECAO = {"estoque": "estoque (Relatórios de estoque)", "operacao": "operação (Relatórios informativos)"}
-COR_NIVEL = {"critico": "#b42318", "aviso": "#a15c00", "info": "#5b6470"}
+CORES_NIVEL = {"critico": ("#6d343d", "#fff2ef"), "aviso": ("#f0cd87", "#382700"),
+               "info": ("#285657", "#f1faf5")}
 
 
 class JanelaAlertas(QDialog):
@@ -25,9 +26,11 @@ class JanelaAlertas(QDialog):
         self.setWindowTitle("Alertas da casa")
         self.resize(1100, 560)
         layout = QVBoxLayout(self)
-        layout.addWidget(texto("Alertas da casa", "titulo"))
-        self.resumo = texto("")
-        layout.addWidget(self.resumo)
+        cabecalho = QHBoxLayout()
+        cabecalho.addWidget(texto("Alertas da casa", "titulo"), 1)
+        self.resumo = texto("", "secao")
+        cabecalho.addWidget(self.resumo)
+        layout.addLayout(cabecalho)
         self.secoes_texto = texto("", "suave")
         layout.addWidget(self.secoes_texto)
         self.grade = QTableWidget(0, 4)
@@ -39,6 +42,7 @@ class JanelaAlertas(QDialog):
         layout.addWidget(self.grade)
         barra = QHBoxLayout()
         self.btn_atualizar = QPushButton("Atualizar (F5)")
+        self.btn_atualizar.setObjectName("primario")
         self.btn_atualizar.clicked.connect(self.atualizar)
         self.btn_fechar = QPushButton("Fechar (Esc)")
         self.btn_fechar.clicked.connect(self.close)
@@ -73,7 +77,13 @@ class JanelaAlertas(QDialog):
         for linha, a in enumerate(lista):
             for coluna, valor in enumerate((ROTULO_NIVEL[a["nivel"]], CATEGORIAS[a["categoria"]], a["titulo"], a["detalhe"])):
                 item = QTableWidgetItem(valor)
-                item.setForeground(QColor(COR_NIVEL[a["nivel"]]))
+                if coluna == 0:
+                    fundo, cor = CORES_NIVEL[a["nivel"]]
+                    item.setBackground(QColor(fundo))
+                    item.setForeground(QColor(cor))
+                    fonte = item.font()
+                    fonte.setBold(True)
+                    item.setFont(fonte)
                 self.grade.setItem(linha, coluna, item)
         self.grade.resizeColumnsToContents()
         c = self.alertas.contagem(lista)

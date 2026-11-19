@@ -10,6 +10,7 @@ class EstadoNuvem(QLabel):
     def __init__(self, banco, parent=None):
         super().__init__(parent)
         self.banco = banco
+        self.setObjectName("estado_nuvem")
         self.setAccessibleName("Estado do envio à nuvem")
         self.timer = QTimer(self)
         self.timer.setInterval(5000)
@@ -22,11 +23,18 @@ class EstadoNuvem(QLabel):
         except sqlite3.Error:
             self.timer.stop()
             self.setText("Estado da nuvem indisponível")
+            self._indicar("falha")
             return
         self.setText(f"{r['texto']} · {r['vendas_pendentes']} venda(s) e {r['devolucoes_pendentes']} devolução(ões) pendente(s)")
         self.setToolTip("Último envio confirmado: " + (r["ultimo_envio"] or "nenhum") +
                         ("\n" + r["erro"] if r["erro"] else ""))
-        self.setStyleSheet("color: " + ("#198754" if r["estado"] == "em_dia" else "#b45309") + ";")
+        self._indicar(r["estado"])
+
+    def _indicar(self, estado: str):
+        if self.property("estado") != estado:
+            self.setProperty("estado", estado)
+            self.style().unpolish(self)
+            self.style().polish(self)
 
     def showEvent(self, evento):
         self.atualizar()

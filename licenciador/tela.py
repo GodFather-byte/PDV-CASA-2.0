@@ -37,17 +37,19 @@ class Janela(tk.Tk):
         tema.aplicar_tema(self)
         icone.aplicar(self, "willlicencas.ico")
 
-        barra = tk.Frame(self, bg=COR["marinho"], padx=14, pady=10)
+        barra = tk.Frame(self, bg=COR["marinho"], padx=18, pady=12)
         barra.pack(fill="x")
-        tk.Label(barra, text="WillPDV Licenças", bg=COR["marinho"], fg="white", font=("Segoe UI", 16, "bold")).pack(side="left")
-        tk.Label(barra, text="emissão de licenças mensais e permanentes", bg=COR["marinho"], fg="#9fb3e8").pack(side="left", padx=12)
+        tk.Label(barra, text="WillPDV Licenças", bg=COR["marinho"], fg=COR["sobre"],
+                 font=(tema.FAMILIA, 18, "bold")).pack(side="left")
+        tk.Label(barra, text=nucleo.VERSAO, bg=COR["marinho"], fg=COR["sobre"],
+                 font=tema.FONTE).pack(side="left", padx=10)
 
         self.aviso_chave = tk.Label(self, text="", anchor="w", justify="left", wraplength=800, padx=14, pady=6)
         self.aviso_chave.pack(fill="x")
         self.aviso_venc = tk.Label(self, text="", anchor="w", justify="left", wraplength=800, padx=14, pady=6, cursor="hand2")
         self.aviso_venc.bind("<Button-1>", lambda _e: self.abas.select(self.aba_lojas))
         self.abas = ttk.Notebook(self)
-        self.abas.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        self.abas.pack(fill="both", expand=True, padx=12, pady=(10, 12))
         self._aba_emitir()
         self._aba_lojas()
         self._aba_conferir()
@@ -70,56 +72,72 @@ class Janela(tk.Tk):
     def _aba_emitir(self) -> None:
         f = ttk.Frame(self.abas, padding=16)
         self.abas.add(f, text="  Emitir licença  ")
-        ttk.Label(f, text="Loja (a mesma chave de loja do PDV)", style="Rotulo.TLabel").grid(row=0, column=0, sticky="w")
+        f.columnconfigure(0, weight=2, uniform="emissao")
+        f.columnconfigure(1, weight=3, uniform="emissao")
+        f.rowconfigure(0, weight=1)
+        dados = ttk.Frame(f, padding=(0, 0, 18, 0))
+        dados.grid(row=0, column=0, sticky="nsew")
+        dados.columnconfigure(0, weight=1)
+
+        ttk.Label(dados, text="Dados da licença", style="Titulo.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(dados, text="Chave da loja no PDV", style="Rotulo.TLabel").grid(row=1, column=0, sticky="w", pady=(14, 2))
         self.var_loja = tk.StringVar()
-        self.ent_loja = ttk.Combobox(f, textvariable=self.var_loja, values=self.historico.lojas(), width=42)
-        self.ent_loja.grid(row=1, column=0, columnspan=3, sticky="we", pady=(2, 12))
+        self.ent_loja = ttk.Combobox(dados, textvariable=self.var_loja, values=self.historico.lojas(), width=16)
+        self.ent_loja.grid(row=2, column=0, sticky="ew")
 
-        ttk.Label(f, text="Programa (a licença só abre este)", style="Rotulo.TLabel").grid(row=2, column=0, sticky="w")
+        ttk.Label(dados, text="Programa autorizado", style="Rotulo.TLabel").grid(row=3, column=0, sticky="w", pady=(12, 2))
         self.var_edicao = tk.StringVar(value=edicao.PADRAO)
-        programas = ttk.Frame(f)
-        programas.grid(row=3, column=0, columnspan=3, sticky="w", pady=(2, 8))
+        programas = ttk.Frame(dados)
+        programas.grid(row=4, column=0, sticky="w")
         for valor, nome in nucleo.PROGRAMAS.items():
-            ttk.Radiobutton(programas, text=nome, value=valor, variable=self.var_edicao).pack(side="left", padx=(0, 18))
+            ttk.Radiobutton(programas, text=nome, value=valor, variable=self.var_edicao).pack(anchor="w")
 
-        ttk.Label(f, text="Tipo de licença", style="Rotulo.TLabel").grid(row=4, column=0, sticky="w")
+        ttk.Label(dados, text="Tipo de licença", style="Rotulo.TLabel").grid(row=5, column=0, sticky="w", pady=(12, 2))
         self.var_tipo = tk.StringVar(value="mensal")
-        quadro = ttk.Frame(f)
-        quadro.grid(row=5, column=0, columnspan=3, sticky="w", pady=(2, 8))
+        quadro = ttk.Frame(dados)
+        quadro.grid(row=6, column=0, sticky="w")
         for valor in nucleo.TIPOS:
             ttk.Radiobutton(quadro, text=nucleo.ROTULO[valor], value=valor, variable=self.var_tipo,
-                            command=self.atualizar_validade).pack(side="left", padx=(0, 18))
+                            command=self.atualizar_validade).pack(anchor="w")
 
-        self.lbl_qtd = ttk.Label(f, text="Quantos meses", style="Rotulo.TLabel")
-        self.lbl_qtd.grid(row=6, column=0, sticky="w")
+        self.lbl_qtd = ttk.Label(dados, text="Quantos meses", style="Rotulo.TLabel")
+        self.lbl_qtd.grid(row=7, column=0, sticky="w", pady=(10, 2))
         self.var_qtd = tk.StringVar(value="1")
-        self.spin = ttk.Spinbox(f, from_=1, to=nucleo.MAX_MESES, textvariable=self.var_qtd, width=6, command=self.atualizar_validade)
-        self.spin.grid(row=7, column=0, sticky="w", pady=(2, 4))
+        self.spin = ttk.Spinbox(dados, from_=1, to=nucleo.MAX_MESES, textvariable=self.var_qtd,
+                                width=6, command=self.atualizar_validade)
+        self.spin.grid(row=8, column=0, sticky="w")
         self.var_qtd.trace_add("write", lambda *_: self.atualizar_validade())
-        self.lbl_validade = ttk.Label(f, text="", font=tema.FONTE_B, foreground=COR["marinho2"])
-        self.lbl_validade.grid(row=7, column=1, sticky="w", padx=14)
+        self.lbl_validade = ttk.Label(dados, text="", font=tema.FONTE_B, foreground=COR["rotulo"], wraplength=235)
+        self.lbl_validade.grid(row=9, column=0, sticky="w", pady=(4, 10))
+        self.btn_gerar = ttk.Button(dados, text="Gerar licença", style="Ok.TButton", command=self.gerar)
+        self.btn_gerar.grid(row=10, column=0, sticky="ew")
 
-        self.btn_gerar = ttk.Button(f, text="Gerar licença", style="Ok.TButton", command=self.gerar)
-        self.btn_gerar.grid(row=8, column=0, sticky="w", pady=(14, 8))
-
-        ttk.Label(f, text="Código para mandar ao cliente", style="Rotulo.TLabel").grid(row=9, column=0, sticky="w", pady=(8, 0))
-        self.txt_codigo = tk.Text(f, height=6, wrap="char", font=tema.FONTE_MONO, bg="white", relief="solid", bd=1)
-        self.txt_codigo.grid(row=10, column=0, columnspan=3, sticky="nsew", pady=(2, 6))
+        entrega = ttk.Frame(f, style="Painel.TFrame", padding=14)
+        entrega.grid(row=0, column=1, sticky="nsew")
+        entrega.columnconfigure(0, weight=1)
+        entrega.rowconfigure(1, weight=1)
+        ttk.Label(entrega, text="Código para o cliente", style="Painel.TLabel", font=tema.FONTE_G).grid(
+            row=0, column=0, sticky="w", pady=(0, 10))
+        self.txt_codigo = self._campo_codigo(entrega)
+        self.txt_codigo.grid(row=1, column=0, sticky="nsew")
         self.txt_codigo.configure(state="disabled")
-        botoes = ttk.Frame(f)
-        botoes.grid(row=11, column=0, columnspan=3, sticky="w")
-        self.btn_copiar = ttk.Button(botoes, text="Copiar código", command=lambda: self.copiar(lambda e: e.codigo, "Código copiado."))
-        self.btn_copiar.pack(side="left")
-        self.btn_msg = ttk.Button(botoes, text="Copiar mensagem pronta para o cliente",
+        self.btn_copiar = ttk.Button(entrega, text="Copiar código", command=lambda: self.copiar(lambda e: e.codigo, "Código copiado."))
+        self.btn_copiar.grid(row=2, column=0, sticky="ew", pady=(10, 4))
+        self.btn_msg = ttk.Button(entrega, text="Copiar mensagem para o cliente",
                                   command=lambda: self.copiar(nucleo.mensagem_para_o_cliente, "Mensagem copiada."))
-        self.btn_msg.pack(side="left", padx=8)
-        self.btn_salvar = ttk.Button(botoes, text="Salvar em arquivo...", command=self.salvar_arquivo)
-        self.btn_salvar.pack(side="left")
-        self.lbl_status = ttk.Label(f, text="", foreground=COR["ok"])
-        self.lbl_status.grid(row=12, column=0, columnspan=3, sticky="w", pady=(8, 0))
-        f.columnconfigure(2, weight=1)
-        f.rowconfigure(10, weight=1)
+        self.btn_msg.grid(row=3, column=0, sticky="ew", pady=(0, 4))
+        self.btn_salvar = ttk.Button(entrega, text="Salvar em arquivo...", command=self.salvar_arquivo)
+        self.btn_salvar.grid(row=4, column=0, sticky="ew")
+        self.lbl_status = ttk.Label(entrega, text="", style="Painel.TLabel", foreground=COR["ok"], wraplength=340)
+        self.lbl_status.grid(row=5, column=0, sticky="w", pady=(4, 0))
         self._botoes_codigo(False)
+
+    @staticmethod
+    def _campo_codigo(pai) -> tk.Text:
+        return tk.Text(pai, height=6, width=18, wrap="char", font=tema.FONTE_MONO, bg=COR["campo"],
+                       fg=COR["texto"], insertbackground=COR["texto"], selectbackground=COR["selecao"],
+                       selectforeground=COR["selecao_texto"], relief="flat", padx=10, pady=8,
+                       highlightthickness=1, highlightbackground=COR["borda"], highlightcolor=COR["rotulo"])
 
     def _botoes_codigo(self, ligado: bool) -> None:
         for b in (self.btn_copiar, self.btn_msg, self.btn_salvar):
@@ -139,7 +157,7 @@ class Janela(tk.Tk):
         try:
             expira = nucleo.validade(tipo, self.quantidade())
             self.lbl_validade.configure(text="Sem vencimento (100 anos)" if tipo == "permanente"
-                                        else f"Válida até {expira.strftime(BR)}", foreground=COR["marinho2"])
+                                        else f"Válida até {expira.strftime(BR)}", foreground=COR["rotulo"])
         except ErroLicenciador as e:
             self.lbl_validade.configure(text=str(e), foreground=COR["perigo"])
 
@@ -194,7 +212,7 @@ class Janela(tk.Tk):
                                ("vence", "Vence em", 100, "center"), ("situacao", "Situação", 150, "w")], altura=12)
         self.grade.pack(fill="both", expand=True, pady=8)
         self.grade.tag("vencida", foreground=COR["perigo"])
-        self.grade.tag("vence", foreground="#b07700")
+        self.grade.tag("vence", foreground=COR["aviso"])
         botoes = ttk.Frame(f)
         botoes.pack(anchor="w")
         ttk.Button(botoes, text="Renovar a selecionada", command=self.renovar).pack(side="left")
@@ -217,7 +235,8 @@ class Janela(tk.Tk):
             self.aviso_venc.pack_forget()
             return
         vencida = bool(resumo["vencidas"])
-        self.aviso_venc.configure(text=texto, bg="#fde2e2" if vencida else "#fff1d6", fg="#8a1c1c" if vencida else "#7a4b00")
+        self.aviso_venc.configure(text=texto, bg=COR["sem_linha"] if vencida else COR["ponto_linha"],
+                                  fg=COR["perigo"] if vencida else COR["aviso"])
         self.aviso_venc.pack(fill="x", before=self.abas)
 
     def _selecionada(self) -> dict | None:
@@ -257,7 +276,7 @@ class Janela(tk.Tk):
         f = ttk.Frame(self.abas, padding=16)
         self.abas.add(f, text="  Conferir um código  ")
         ttk.Label(f, text="Cole um código (PDVL1....) para ver de quem é e até quando vale", style="Rotulo.TLabel").pack(anchor="w")
-        self.txt_conferir = tk.Text(f, height=6, wrap="char", font=tema.FONTE_MONO, bg="white", relief="solid", bd=1)
+        self.txt_conferir = self._campo_codigo(f)
         self.txt_conferir.pack(fill="x", pady=(2, 8))
         ttk.Button(f, text="Conferir", command=self.conferir).pack(anchor="w")
         self.lbl_conferido = ttk.Label(f, text="", justify="left", wraplength=760, font=tema.FONTE_B)
@@ -309,7 +328,7 @@ class Janela(tk.Tk):
             self.aviso_chave.configure(text="", bg=COR["fundo"])
             self.aviso_chave.pack_forget()
         else:
-            self.aviso_chave.configure(text="⚠ " + e.mensagem, bg="#fff1d6", fg="#7a4b00")
+            self.aviso_chave.configure(text=e.mensagem, bg=COR["ponto_linha"], fg=COR["aviso"])
             self.aviso_chave.pack(fill="x", before=self.abas)
         self.btn_gerar.state(["!disabled"] if e.pronta else ["disabled"])
 

@@ -2,11 +2,13 @@
  * Guarda só o "app shell" (arquivos estáticos) com cache-first e atualização em segundo plano.
  * Chamadas à API (/v1/) vão sempre à rede e NUNCA são guardadas: contêm dados sensíveis e o token. */
 
-const VERSAO = "painel-v15";
+const VERSAO = "painel-v16";
 const ARQUIVOS_SHELL = [
   "./",
   "./index.html",
   "./app.js",
+  "./pdf.js",
+  "./balcao.webp",
   "./estilo.css",
   "./manifest.webmanifest",
   "./icones/icone-192.png",
@@ -28,7 +30,7 @@ self.addEventListener("install", (evento) => {
 self.addEventListener("activate", (evento) => {
   evento.waitUntil(
     caches.keys()
-      .then((chaves) => Promise.all(chaves.filter((c) => c !== VERSAO).map((c) => caches.delete(c))))
+      .then((chaves) => Promise.all(chaves.filter((c) => c.startsWith("painel-v") && c !== VERSAO).map((c) => caches.delete(c))))
       .then(() => self.clients.claim())
   );
 });

@@ -5,9 +5,10 @@ as únicas ações que a alteram, para aplicar a validação de ContasController
 """
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView, QCheckBox, QComboBox, QDialog, QFormLayout,
+    QAbstractItemView, QCheckBox, QComboBox, QDialog, QFormLayout, QFrame,
     QGridLayout, QHBoxLayout, QHeaderView, QInputDialog, QLineEdit,
     QMessageBox, QPushButton, QSpinBox, QTableWidget, QTableWidgetItem,
     QVBoxLayout,
@@ -28,8 +29,18 @@ class JanelaContas(QDialog):
         self.setWindowTitle("Contas a pagar / receber")
         self.resize(1180, 760)
         layout = QVBoxLayout(self)
-        layout.addWidget(texto("Contas a pagar / receber", "titulo"))
+        cabecalho = QHBoxLayout()
+        cabecalho.addWidget(texto("Contas a pagar / receber", "titulo"), 1)
+        self.resumo = texto("", "secao")
+        self.resumo.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        cabecalho.addWidget(self.resumo)
+        layout.addLayout(cabecalho)
+        cartao = QFrame()
+        cartao.setObjectName("cartao")
+        edicao = QVBoxLayout(cartao)
         barra = QHBoxLayout()
+        self.titulo_edicao = texto("Nova conta", "secao")
+        barra.addWidget(self.titulo_edicao, 1)
         for chave, rotulo, acao in (
             ("novo", "Incluir", self.novo), ("gravar", "Gravar (Ctrl+S)", self.gravar),
             ("cancelar", "Cancelar edição", self.cancelar), ("excluir", "Excluir", self.excluir),
@@ -37,10 +48,14 @@ class JanelaContas(QDialog):
             ("desquitar", "Desfazer quitação", self.desquitar),
         ):
             botao = QPushButton(rotulo)
+            if chave == "gravar":
+                botao.setObjectName("primario")
+            elif chave == "excluir":
+                botao.setObjectName("perigo")
             botao.clicked.connect(acao)
             setattr(self, f"btn_{chave}", botao)
             barra.addWidget(botao)
-        layout.addLayout(barra)
+        edicao.addLayout(barra)
         self.subplano, self.tipo, self.fornecedor = QComboBox(), QComboBox(), QComboBox()
         self.descricao, self.valor = QLineEdit(), QLineEdit()
         self.documento, self.nota = QLineEdit(), QLineEdit()
@@ -67,10 +82,11 @@ class JanelaContas(QDialog):
             formulario.addLayout(grupo, indice // 4, indice % 4)
         formulario.addWidget(self.mercadoria, 3, 0)
         formulario.addWidget(self.previsao, 3, 1, 1, 3)
-        layout.addLayout(formulario)
-        layout.addWidget(texto(
+        edicao.addLayout(formulario)
+        edicao.addWidget(texto(
             "Conta mensal repete o valor inteiro a cada mês; não divide o total. "
             "A edição e exclusão afetam apenas a conta selecionada.", "suave"))
+        layout.addWidget(cartao)
         filtros = QHBoxLayout()
         inicio = fmt.hoje()[:8] + "01"
         self.f_de = QLineEdit(fmt.fmt_data(inicio))
@@ -85,6 +101,7 @@ class JanelaContas(QDialog):
             self.f_previsao.addItem(rotulo, valor)
         self.busca = QLineEdit()
         self.busca.setPlaceholderText("Descrição, documento ou nota")
+        self.busca.setClearButtonEnabled(True)
         for rotulo, campo in (("De", self.f_de), ("Até (inclusive)", self.f_ate),
                                ("Data por", self.f_por), ("Situação", self.f_situacao),
                                ("Previsão", self.f_previsao), ("Busca", self.busca)):
@@ -111,12 +128,13 @@ class JanelaContas(QDialog):
         self.grade.horizontalHeader().setStretchLastSection(True)
         self.grade.itemSelectionChanged.connect(self.selecionar)
         layout.addWidget(self.grade, 1)
-        self.resumo, self.mensagem = texto("", "suave"), texto("", "aviso")
-        layout.addWidget(self.resumo)
-        layout.addWidget(self.mensagem)
+        self.mensagem = texto("", "aviso")
         fechar = QPushButton("Fechar")
         fechar.clicked.connect(self.reject)
-        layout.addWidget(fechar)
+        rodape = QHBoxLayout()
+        rodape.addWidget(self.mensagem, 1)
+        rodape.addWidget(fechar)
+        layout.addLayout(rodape)
         QShortcut(QKeySequence("Ctrl+S"), self, activated=self.gravar)
         QShortcut(QKeySequence("F5"), self, activated=self.listar)
         QShortcut(QKeySequence("Delete"), self.grade, activated=self.excluir)
@@ -158,6 +176,7 @@ class JanelaContas(QDialog):
 
     def _novo(self):
         self.id_atual = None
+        self.titulo_edicao.setText("Nova conta")
         bloqueado = self.grade.blockSignals(True)
         try:
             self.grade.clearSelection()
@@ -239,6 +258,7 @@ class JanelaContas(QDialog):
 
     def _carregar(self, conta):
         self.id_atual = conta["id"]
+        self.titulo_edicao.setText("Editar conta")
         self._escolher(self.subplano, conta["subplano_id"],
                        f"{conta['subplano']} - {conta['plano']}")
         self._escolher(self.tipo, conta["tipo_pagamento_id"], conta["tipo_financeiro"])

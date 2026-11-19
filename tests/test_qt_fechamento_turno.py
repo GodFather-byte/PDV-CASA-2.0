@@ -50,7 +50,7 @@ class TesteFechamentoDoTurnoQt(BaseCaixaQt):
         painel = PainelFechamento(self.ctx, res, vias_impressas=2)
         self.addCleanup(painel.deleteLater)
         self.assertIn("CAIXA CONFERIDO", painel.faixa.text())
-        self.assertIn("#17805a", painel.faixa.styleSheet())
+        self.assertEqual(painel.faixa.property("tom"), "sucesso")
         self.assertIn("2 vias", painel.lbl_impresso.text())
         self.assertEqual((rotulo_do_resultado(500), rotulo_do_resultado(-500), rotulo_do_resultado(0)),
                          ("SOBRA", "FALTA", "CAIXA CONFERIDO"))
@@ -60,7 +60,7 @@ class TesteFechamentoDoTurnoQt(BaseCaixaQt):
         painel = PainelFechamento(self.ctx, res)
         self.addCleanup(painel.deleteLater)
         self.assertIn("FALTA", painel.faixa.text())
-        self.assertIn("#b83a45", painel.faixa.styleSheet())
+        self.assertEqual(painel.faixa.property("tom"), "perigo")
         self.assertEqual(painel.lbl_impresso.text(), "")
 
     def test_botoes_imprimir_conferencia_e_arquivo_texto(self):

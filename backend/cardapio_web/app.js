@@ -79,8 +79,6 @@
     atual.qtd = Math.max(0, Math.min(99, Math.round((atual.qtd + delta) * 10000) / 10000));
     if (atual.qtd) carrinho.set(chave, atual); else carrinho.delete(chave);
     atualizarBarra();
-    const marcador = document.querySelector('[data-qtd="' + chave + '"]');
-    if (marcador) marcador.textContent = atual.qtd ? String(atual.qtd) : "";
   }
 
   function atualizarBarra() {
@@ -92,7 +90,7 @@
 
   function escolherOpcoes(p, confirmar) {
     if (!(p.grupos_opcoes || []).length) { confirmar(); return; }
-    const dialogo = el("dialog", { "aria-label": "Opções de " + p.nome });
+    const dialogo = el("dialog", { class: "opcoes", "aria-label": "Opções de " + p.nome });
     dialogo.append(el("h2", { text: p.nome }));
     const campos = [];
     for (const g of p.grupos_opcoes) {
@@ -103,11 +101,10 @@
         campo.checked = (p._escolhas || []).some(e => e.id === o.id);
         campos.push({ g, o, campo });
         quadro.append(el("label", null, campo, document.createTextNode(o.nome + " · + " + reais(o.preco_cent))));
-        quadro.append(el("br"));
       }
       dialogo.append(quadro);
     }
-    const erro = el("p", { role: "alert" });
+    const erro = el("p", { class: "erro", role: "alert" });
     const cancelar = el("button", { type: "button", text: "Cancelar" });
     const aceitar = el("button", { type: "button", text: "Adicionar ao pedido" });
     const fechar = () => { dialogo.close(); dialogo.remove(); };
@@ -122,27 +119,35 @@
       fechar();
       confirmar();
     });
-    dialogo.append(erro, cancelar, aceitar);
+    dialogo.append(erro, el("div", { class: "acoes-opcoes" }, cancelar, aceitar));
     document.body.append(dialogo);
     dialogo.showModal();
   }
 
-  function botoesPedido(p) {
-    if (p.esgotado) return el("span", { class: "selo", text: "Esgotado" });
+  function botoesPedido(p, valor) {
+    if (p.esgotado) return el("span", { class: "selo esgotado", text: "Esgotado" });
     if (!pedidoCfg || !p.codigo) return null;
-    const qtd = carrinho.get(chaveDe(p));
+    const marcador = el("span", { "aria-live": "polite" });
     const menos = el("button", { class: "mais", type: "button", "aria-label": "Tirar " + p.nome, text: "−" });
     const mais = el("button", { class: "mais", type: "button", "aria-label": "Adicionar " + p.nome, text: "+" });
-    menos.addEventListener("click", () => mudar(p, -1));
-    mais.addEventListener("click", () => escolherOpcoes(p, () => mudar(p, 1)));
-    const pedacos = [menos, el("span", { "data-qtd": chaveDe(p), text: qtd ? String(qtd.qtd) : "" }), mais];
+    function atualizar() {
+      const quantidade = carrinho.get(chaveDe(p))?.qtd || 0;
+      marcador.textContent = quantidade ? String(quantidade).replace(".", ",") : "";
+      menos.disabled = !quantidade;
+      valor.textContent = reais(precoDe(p));
+    }
+    menos.addEventListener("click", () => { mudar(p, -1); atualizar(); });
+    mais.addEventListener("click", () => escolherOpcoes(p, () => { mudar(p, 1); atualizar(); }));
+    atualizar();
+    const pedacos = [menos, marcador, mais];
     if (p.preco_gelada_cent) {
-      const gel = el("button", { class: "mais", type: "button",
+      const gel = el("button", { class: "temperatura", type: "button",
         text: tempDe(p) === "gelada" ? "Gelada" : "Natural",
         "aria-label": "Temperatura de " + p.nome });
       gel.addEventListener("click", () => {
         p._temp = tempDe(p) === "gelada" ? "natural" : "gelada";
-        if (cardapioDados) desenhar(cardapioDados, $("campo-busca").value);
+        gel.textContent = tempDe(p) === "gelada" ? "Gelada" : "Natural";
+        atualizar();
       });
       pedacos.push(gel);
     }
@@ -153,39 +158,44 @@
     const alvo = $("conteudo");
     alvo.replaceChildren();
     const busca = normalizar(filtro);
-    let achou = false;
-    for (const grupo of dados.grupos || []) {
+    const categorias = $("categorias");
+    const atalhos = [];
+    for (const [indice, grupo] of (dados.grupos || []).entries()) {
       const subs = [];
       for (const sub of grupo.subgrupos || []) {
         const itens = (sub.produtos || []).filter((p) => !busca || normalizar(p.nome).includes(busca) ||
           normalizar(p.descricao).includes(busca));
         if (!itens.length) continue;
-        achou = true;
-        const lista = el("div");
+        const lista = el("div", { class: "subgrupo" });
         if (sub.nome) lista.append(el("h3", { class: "sub", text: sub.nome }));
         for (const p of itens) {
           const marca = selo(p.promocao);
+          const valor = el("strong", { text: reais(precoDe(p)) });
           lista.append(el("article", { class: "item" },
-            p.foto ? el("img", { src: p.foto, alt: "" }) : null,
+            p.foto ? el("img", { src: p.foto, alt: "", loading: "lazy" }) : null,
             el("div", null,
               el("div", { class: "nome", text: p.nome }),
               p.descricao ? el("p", { class: "desc", text: p.descricao }) : null
             ),
             el("div", { class: "preco" },
               p.preco_de_cent ? el("span", { class: "de", text: reais(p.preco_de_cent) }) : null,
-              el("strong", { text: reais(precoDe(p)) }),
+              valor,
               marca ? el("span", { class: "selo", text: marca }) : null,
-              botoesPedido(p)
+              botoesPedido(p, valor)
             )
           ));
         }
         subs.push(lista);
       }
       if (!subs.length) continue;
-      alvo.append(el("h2", { class: "grupo", text: grupo.nome }));
-      for (const sub of subs) alvo.append(sub);
+      const id = "categoria-" + indice;
+      atalhos.push(el("a", { href: "#" + id, text: grupo.nome }));
+      alvo.append(el("section", { class: "categoria", id },
+        el("h2", { class: "grupo", text: grupo.nome }), ...subs));
     }
-    if (!achou) {
+    categorias.replaceChildren(...atalhos);
+    categorias.hidden = atalhos.length < 2;
+    if (!atalhos.length) {
       alvo.append(el("p", { class: "estado", text: busca ? "Nada com esse nome." : "Nada no cardápio agora." }));
     }
   }
@@ -219,6 +229,7 @@
     }
     const nome = (dados.loja && dados.loja.nome) || "Cardápio";
     $("loja").textContent = nome;
+    $("tipo-pagina").hidden = nome === "Cardápio";
     document.title = nome;
     if (dados.mesa) {
       $("mesa").hidden = false;
@@ -234,6 +245,7 @@
     if (dados.pedido) prepararPedido(dados.pedido);
     acompanhar();
     desenhar(dados, "");
+    $("campo-busca").disabled = false;
     $("campo-busca").addEventListener("input", (e) => desenhar(dados, e.target.value));
   }
 
@@ -277,6 +289,7 @@
     for (const campo of ["nome", "telefone", "endereco"]) if (salvo[campo]) $("f-" + campo).value = salvo[campo];
     $("barra-carrinho").addEventListener("click", abrirCarrinho);
     $("fechar-carrinho").addEventListener("click", () => $("carrinho").close());
+    $("carrinho").addEventListener("close", () => desenhar(cardapioDados, $("campo-busca").value));
     $("f-retirada").addEventListener("change", resumoCarrinho);
     $("f-bairro").addEventListener("change", resumoCarrinho);
     $("f-pagamento").addEventListener("change", resumoCarrinho);
@@ -374,7 +387,6 @@
       guardado("ultimo-pedido", { loja: lojaChave, numero: resposta.numero, telefone: corpo.telefone });
       carrinho.clear();
       atualizarBarra();
-      document.querySelectorAll("[data-qtd]").forEach((n) => { n.textContent = ""; });
       $("form-pedido").hidden = true;
       $("resultado").hidden = false;
       $("resultado-texto").textContent = "Pedido #" + resposta.numero + " enviado! Total " + reais(resposta.total_cent) +

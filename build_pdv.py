@@ -64,6 +64,7 @@ def gerar_executavel(ed) -> None:
         comando += ["--icon", str(icone), "--add-data", f"{icone}{os.pathsep}."]
     if ed.logotipo and (PASTA_INSTALADOR / ed.logotipo).exists():
         comando += ["--add-data", f"{PASTA_INSTALADOR / ed.logotipo}{os.pathsep}."]      # logotipo no alto do menu
+    comando += ["--add-data", f"{PASTA_INSTALADOR / 'balcao-pdv.jpg'}{os.pathsep}."]
     web_porteiro = RAIZ / "src" / "porteiro" / "web"
     comando += ["--add-data", f"{web_porteiro}{os.pathsep}porteiro_web"]                 # página do porteiro no celular
     web_cozinha = RAIZ / "src" / "cozinha" / "web"

@@ -7,8 +7,8 @@
   "scope": "/painel/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#14532d",
-  "theme_color": "#14532d",
+  "background_color": "#101c20",
+  "theme_color": "#101c20",
   "icons": [
     {
       "src": "icones/icone-192.png",

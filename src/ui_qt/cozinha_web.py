@@ -1,7 +1,7 @@
 """Configuração da cozinha no tablet/TV pelo caixa principal."""
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QGroupBox, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QVBoxLayout)
 from src.cozinha.servico import PORTA_PADRAO, configurar, urls
 from src.core.erros import ErroNegocio
@@ -15,10 +15,13 @@ class DialogoCozinhaWeb(QDialog):
         self.setWindowTitle("Cozinha no tablet / TV")
         self.resize(620, 450)
         layout = QVBoxLayout(self)
-        layout.addWidget(texto("Cozinha na rede local", "titulo"))
-        layout.addWidget(texto("O caixa principal precisa ficar aberto. Use o mesmo Wi-Fi/rede; não precisa de internet. "
-                               "O PIN é exclusivo da cozinha. Não há pagamento nesta página.", "suave"))
-        form = QFormLayout()
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(9)
+        layout.addWidget(texto("Cozinha no tablet ou TV", "titulo"))
+        layout.addWidget(texto("Conecte o aparelho à mesma rede e mantenha o caixa principal aberto. "
+                               "A cozinha usa um PIN próprio e funciona sem internet.", "suave"))
+        acesso = QGroupBox("Acesso pela rede local")
+        form = QFormLayout(acesso)
         self.ativo = QCheckBox("Ligado")
         self.ativo.setChecked(ctx.banco.cfg_bool("cozinha_web_ativo"))
         self.porta = QLineEdit(ctx.banco.cfg("cozinha_web_porta", str(PORTA_PADRAO)))
@@ -33,21 +36,27 @@ class DialogoCozinhaWeb(QDialog):
         form.addRow("Porta", self.porta)
         form.addRow("PIN da cozinha", self.pin)
         form.addRow("Identificar ações como", self.operador)
-        layout.addLayout(form)
+        layout.addWidget(acesso)
+        acesso_remoto = QGroupBox("Endereço da cozinha")
+        conexao = QHBoxLayout(acesso_remoto)
         self.endereco = texto("")
         self.endereco.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(self.endereco)
+        conexao.addWidget(self.endereco, 1)
         self.qr = QLabel()
         self.qr.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.qr)
+        conexao.addWidget(self.qr)
+        layout.addWidget(acesso_remoto)
+        layout.addStretch()
         self.mensagem = texto("", "aviso")
         layout.addWidget(self.mensagem)
         linha = QHBoxLayout()
         salvar, fechar = QPushButton("Salvar"), QPushButton("Fechar")
+        salvar.setObjectName("primario")
         salvar.clicked.connect(self.salvar)
         fechar.clicked.connect(self.accept)
-        linha.addWidget(salvar)
+        linha.addStretch()
         linha.addWidget(fechar)
+        linha.addWidget(salvar)
         layout.addLayout(linha)
         pode = not ctx.banco.remoto and ctx.operador is not None and ctx.pode("cfg_configuracoes")
         for campo in (self.ativo, self.porta, self.pin, self.operador, salvar):
@@ -81,5 +90,5 @@ class DialogoCozinhaWeb(QDialog):
             self.mensagem.setText(str(exc))
             return
         self.pin.clear()
-        self.mensagem.setText("Salvo. Abra o endereço abaixo no tablet/TV da mesma rede.")
+        self.mensagem.setText("Salvo. Abra o endereço no tablet ou na TV da mesma rede.")
         self.mostrar_endereco()

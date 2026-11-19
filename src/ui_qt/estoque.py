@@ -1,7 +1,8 @@
 """Painel Qt de estoque, com consulta e operações rápidas do EstoqueController."""
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
+    QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame,
     QHBoxLayout, QHeaderView, QInputDialog, QLineEdit, QMessageBox,
     QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
@@ -179,13 +180,8 @@ class JanelaEstoque(QDialog):
         self.setWindowTitle("Estoque")
         self.resize(1200, 780)
         layout = QVBoxLayout(self)
-        layout.addWidget(texto("Estoque", "titulo"))
-        layout.addWidget(texto(
-            "Consulte os saldos e movimentos. A busca por nome/código também inclui produtos sem controle.",
-            "suave"))
-        self.resumo = texto("", "suave")
-        layout.addWidget(self.resumo)
-        acoes = QHBoxLayout()
+        acoes = tema.LinhaFluida(preencher=False)
+        acoes.addWidget(texto("Estoque", "titulo", False), 1)
         self.btn_pedido = QPushButton("Gerar pedido do que falta")
         self.btn_pedido.clicked.connect(self.gerar_pedido)
         acoes.addWidget(self.btn_pedido)
@@ -201,11 +197,30 @@ class JanelaEstoque(QDialog):
         self.btn_lancamentos = QPushButton("Lançamentos de estoque")
         self.btn_lancamentos.clicked.connect(self.abrir_lancamentos)
         acoes.addWidget(self.btn_lancamentos)
-        acoes.addStretch(1)
         layout.addLayout(acoes)
+        indicadores = QHBoxLayout()
+        quadro = QFrame()
+        quadro.setObjectName("cartao")
+        coluna = QVBoxLayout(quadro)
+        self.resumo = texto("")
+        coluna.addWidget(self.resumo)
+        indicadores.addWidget(quadro, 3)
+        self.alertas_estoque = {}
+        for chave, rotulo in (("sem", "Sem estoque"), ("ponto", "Para repor")):
+            quadro = QFrame()
+            quadro.setObjectName("cartao")
+            linha = QHBoxLayout(quadro)
+            linha.addWidget(texto(rotulo, "suave"), 1)
+            valor = texto("", "kpi_alerta", False)
+            linha.addWidget(valor)
+            self.alertas_estoque[chave] = valor
+            indicadores.addWidget(quadro, 1)
+        layout.addLayout(indicadores)
         filtros = QHBoxLayout()
         self.busca = QLineEdit()
-        self.busca.setPlaceholderText("Nome ou código • pressione Enter")
+        self.busca.setPlaceholderText("Nome ou código")
+        self.busca.setClearButtonEnabled(True)
+        self.busca.setToolTip("A busca também inclui produtos sem controle de estoque.")
         self.busca.returnPressed.connect(self.atualizar)
         self.situacao, self.grupo = QComboBox(), QComboBox()
         self.visao = QComboBox()
@@ -220,12 +235,13 @@ class JanelaEstoque(QDialog):
             formulario.addRow(rotulo, campo)
             filtros.addLayout(formulario)
         self.btn_atualizar = QPushButton("Consultar / atualizar (F5)")
+        self.btn_atualizar.setObjectName("primario")
         self.btn_atualizar.clicked.connect(self.atualizar)
         filtros.addWidget(self.btn_atualizar)
         layout.addLayout(filtros)
-        layout.addWidget(texto(
-            "Adega: categorias típicas e produtos configurados. Alta = sem estoque; média = repor. "
-            "Pedido/lista Adega seguem os filtros; Geral mantém compras gerais.", "suave"))
+        self.visao.setToolTip(
+            "Na visão Adega, o pedido e a lista seguem os filtros. A prioridade é alta para produtos sem estoque "
+            "e média para produtos a repor. Na visão Geral, as compras abrangem todos os produtos.")
         self.aviso_cobertura = texto(
             "Cobertura indicativa = saldo ÷ (vendas líquidas de estornos nos últimos 30 dias ÷ 30). "
             "Sem consumo líquido: indisponível. Reposição mantém dobro do mínimo; revise antes de comprar.",
@@ -261,15 +277,17 @@ class JanelaEstoque(QDialog):
         layout.addLayout(acoes_produto)
         self._habilitar_acoes(False)
         self._janela_lancamentos = None
-        self.detalhe = texto("Selecione um produto para consultar os últimos movimentos.", "suave")
+        self.detalhe = texto("Selecione um produto para consultar os últimos movimentos.", "secao")
         layout.addWidget(self.detalhe)
         self.historico = self._tabela(["Quando", "Movimento", "Quantidade", "Saldo após"])
         layout.addWidget(self.historico, 1)
         self.mensagem = texto("", "aviso")
-        layout.addWidget(self.mensagem)
         fechar = QPushButton("Fechar")
         fechar.clicked.connect(self.reject)
-        layout.addWidget(fechar)
+        rodape = QHBoxLayout()
+        rodape.addWidget(self.mensagem, 1)
+        rodape.addWidget(fechar)
+        layout.addLayout(rodape)
         QShortcut(QKeySequence("F5"), self, activated=self.atualizar)
         QShortcut(QKeySequence("Ctrl+F"), self, activated=self.busca.setFocus)
         self.visao.currentIndexChanged.connect(lambda _: self._trocar_visao())
@@ -296,12 +314,15 @@ class JanelaEstoque(QDialog):
         self.ctx.acesso.exigir(self.ctx.acesso.operador(self.ctx.operador_id), "lanc_estoque")
 
     @staticmethod
-    def _preencher(tabela, linhas):
+    def _preencher(tabela, linhas, numericas=()):
         tabela.clearSelection()
         tabela.setRowCount(len(linhas))
         for linha, valores in enumerate(linhas):
             for coluna, valor in enumerate(valores):
-                tabela.setItem(linha, coluna, QTableWidgetItem(str(valor)))
+                item = QTableWidgetItem(str(valor))
+                if coluna in numericas:
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                tabela.setItem(linha, coluna, item)
 
     def _limpar_historico(self):
         self.movimentos = []
@@ -313,6 +334,8 @@ class JanelaEstoque(QDialog):
         self.produto = None
         self.grade.setRowCount(0)
         self.resumo.clear()
+        for valor in self.alertas_estoque.values():
+            valor.clear()
         self._limpar_historico()
         self._habilitar_acoes(False)
 
@@ -393,7 +416,7 @@ class JanelaEstoque(QDialog):
                  fmt.fmt_datahora(p["ult_atualizacao"]) or "—", p["categoria"], p["prioridade"],
                  p.get("cobertura_rotulo", ""))
                 for p in linhas
-            ])
+            ], numericas=(4, 5, 6, 7, 8))
         finally:
             self.grade.blockSignals(False)
         self._limpar_historico()
@@ -406,9 +429,10 @@ class JanelaEstoque(QDialog):
                     break
         self.resumo.setText(
             f"Resumo {'Adega' if adega else 'geral'} (ativos) • {resumo['total']} controlado(s) • "
-            f"{resumo['sem']} sem estoque • {resumo['ponto']} para repor • "
-            f"{resumo['normal']} normal(is) • {resumo['livre']} sem controle • "
+            f"{resumo['normal']} normal(is) • {resumo['livre']} sem controle\n"
             f"Valor: {fmt.fmt_brl(resumo['valor_cent'])} (saldo × último custo).")
+        for chave, valor in self.alertas_estoque.items():
+            valor.setText(str(resumo[chave]))
         self.mensagem.setText(
             f"{len(linhas)} produto(s) encontrado(s)." if linhas else
             "Nenhum produto encontrado. Consulte também o filtro Sem controle.")
@@ -439,7 +463,7 @@ class JanelaEstoque(QDialog):
              fmt.fmt_qtd(m["quantidade"], fmt.CASAS_QTD),
              fmt.fmt_qtd(m["qt_apos"], fmt.CASAS_QTD))
             for m in movimentos
-        ])
+        ], numericas=(2, 3))
         self.detalhe.setText(
             f"{produto['nome']} • até {self.LIMITE_HISTORICO} movimentos, mais recentes primeiro "
             f"• unidade: {produto['unidade']}" +

@@ -111,6 +111,8 @@
     $("loja-nome").textContent = "";
   }
 
+  $("menu-compacto").addEventListener("change", (evento) => abrir(evento.target.value));
+
   async function iniciar() {
     if (estado.modo === "fornecedor") {
       $("link-voltar").textContent = "Voltar à central";
@@ -166,6 +168,14 @@
 
   function montarMenu() {
     const menu = limpar($("menu"));
+    const compacto = limpar($("menu-compacto"));
+    let grupoCompacto;
+    const abrirGrupo = (nome) => {
+      menu.append(el("h3", nome));
+      grupoCompacto = el("optgroup");
+      grupoCompacto.label = nome;
+      compacto.append(grupoCompacto);
+    };
     const botao = (secao, rotulo, contador) => {
       const b = el("button", rotulo);
       b.type = "button";
@@ -173,30 +183,35 @@
       if (contador) b.append(el("span", contador, "contador"));
       b.addEventListener("click", () => abrir(secao));
       menu.append(b);
+      const opcao = el("option", contador ? rotulo + " (" + contador + ")" : rotulo);
+      opcao.value = secao;
+      grupoCompacto.append(opcao);
     };
     GRUPOS.forEach(([grupo, titulo]) => {
       const itens = estado.esquema.entidades.filter((e) => e.grupo === grupo);
       const extras = grupo === "financeiro" && (estado.esquema.contas || estado.esquema.caderneta);
       if (!itens.length && !extras) return;
-      menu.append(el("h3", titulo));
+      abrirGrupo(titulo);
       if (grupo === "financeiro" && estado.esquema.contas) botao("contas", "Contas a pagar");
       if (grupo === "financeiro" && estado.esquema.caderneta) botao("caderneta", "Caderneta (quem deve)");
       itens.sort((x, y) => (y.chave === "produtos") - (x.chave === "produtos"));       // Produtos primeiro no seu grupo
       itens.forEach((e) => botao("cadastro:" + e.chave, tituloCurto(e)));
     });
     if (estado.modo === "fornecedor") {
-      menu.append(el("h3", "Suporte"));
+      abrirGrupo("Suporte");
       botao("planilha", "Importar planilha de produtos");
       botao("servicos", "Serviços cobrados");
     }
-    menu.append(el("h3", "Loja"));
+    abrirGrupo("Loja");
     botao("config", "Configurações");
     botao("alteracoes", "Alterações enviadas", estado.visao.pendentes || null);
+    if (estado.secao) compacto.value = estado.secao;
   }
 
   async function abrir(secao, mesmaBusca) {
     if (estado.secao !== secao || !mesmaBusca) { estado.busca = ""; estado.pagina = 1; }
     estado.secao = secao;
+    $("menu-compacto").value = secao;
     document.querySelectorAll("#menu button").forEach((b) => {
       if (b.dataset.secao === secao) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
@@ -313,9 +328,11 @@
       raiz.append(el("p", estado.busca ? "Nada encontrado para “" + estado.busca + "”." : "Nenhum registro neste cadastro.", "vazio cartao"));
       return raiz;
     }
-    const tabela = el("table");
+    const tabela = el("table", null, "tabela-cadastro");
     const cabeca = el("tr");
-    colunas.forEach((c) => cabeca.append(el("th", c.rotulo.replace(/\s*\(.*\)$/, ""), ["dinheiro", "decimal", "int"].includes(c.tipo) ? "numero" : "")));
+    const rotuloColuna = (campo) => campo.rotulo.replace(/\s*\(.*\)$/, "");
+    const campoTitulo = colunas.find((c) => c.nome === "nome" || c.nome === "descricao") || colunas[0];
+    colunas.forEach((c) => cabeca.append(el("th", rotuloColuna(c), ["dinheiro", "decimal", "int"].includes(c.tipo) ? "numero" : "")));
     cabeca.append(el("th", ""));
     const thead = el("thead");
     thead.append(cabeca);
@@ -325,7 +342,12 @@
       dados.campos.forEach((nome, i) => { linha[nome] = valores[i]; });
       const tr = el("tr");
       if (ent.tem_ativo && !linha.ativo) tr.className = "inativo";
-      colunas.forEach((c) => tr.append(el("td", valorDaCelula(c, linha[c.nome]), ["dinheiro", "decimal", "int"].includes(c.tipo) ? "numero" : "")));
+      colunas.forEach((c) => {
+        const celula = el("td", valorDaCelula(c, linha[c.nome]), ["dinheiro", "decimal", "int"].includes(c.tipo) ? "numero" : "");
+        celula.dataset.rotulo = rotuloColuna(c);
+        if (c === campoTitulo) celula.classList.add("titulo-registro");
+        tr.append(celula);
+      });
       const fim = el("td");
       if (esperando[linha.id]) fim.append(el("span", "aguardando o caixa", "selo espera"));
       tr.append(fim);
