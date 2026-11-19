@@ -594,17 +594,29 @@ class JanelaCaixa(QMainWindow):
         dicas = QHBoxLayout(self.lbl_dica_nav)
         dicas.setContentsMargins(0, 2, 0, 2)
         dicas.setSpacing(4)
-        self._dicas_teclas: list[tuple[QLabel, QLabel]] = []      # na tela estreita as últimas saem (ver _acomodar_itens)
+        # Na tela estreita os últimos pares saem inteiros (ver _acomodar_dicas). Cada par fica na sua caixinha,
+        # com o respiro até o próximo: some tudo junto, sem deixar espaço órfão empurrando os outros.
+        self._dicas_teclas: list[tuple[QLabel, QLabel]] = []
+        self._pares_dicas: list[QWidget] = []
         for tecla, oque in TECLAS_DICA:
+            par = QWidget()
+            par.setObjectName("linha")
+            caixinha = QHBoxLayout(par)
+            caixinha.setContentsMargins(0, 0, self.RESPIRO_DICAS, 0)
+            caixinha.setSpacing(4)
             rotulo_tecla = QLabel(tecla)
             rotulo_tecla.setObjectName("tecla")
-            dicas.addWidget(rotulo_tecla)
+            caixinha.addWidget(rotulo_tecla)
             rotulo_dica = QLabel(oque)
             rotulo_dica.setObjectName("dica")
-            dicas.addWidget(rotulo_dica)
-            dicas.addSpacing(8)
+            caixinha.addWidget(rotulo_dica)
+            dicas.addWidget(par)
             self._dicas_teclas.append((rotulo_tecla, rotulo_dica))
+            self._pares_dicas.append(par)
         dicas.addStretch(1)
+        self.lbl_dica_nav.installEventFilter(self)
+        # A fileira cede a largura que for preciso: quem decide o que cabe é o _acomodar_dicas, escondendo pares.
+        self.lbl_dica_nav.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         c_cen.addWidget(self.lbl_dica_nav)
         botoes = QHBoxLayout()
         self.btn_cancelar_item = QPushButton("Cancelar item")
@@ -2669,6 +2681,8 @@ class JanelaCaixa(QMainWindow):
     def eventFilter(self, obj, ev):
         if ev.type() == QEvent.Resize and obj is getattr(self, "tabela", None):
             self._acomodar_itens(ev.size().width())           # o tamanho novo: a tabela ainda não se reorganizou
+        if ev.type() == QEvent.Resize and obj is getattr(self, "lbl_dica_nav", None):
+            self._acomodar_dicas(ev.size().width())
         if ev.type() == QEvent.KeyPress:
             tecla = ev.key()
             # Pagamento só no teclado vale com ou sem mesas (adega e restaurante no balcão também):
@@ -2713,6 +2727,7 @@ class JanelaCaixa(QMainWindow):
     # Janela mais baixa que isto (notebook com a tela ampliada pelo Windows): a linha dos quartos fica com uma fileira.
     ALTURA_BAIXA = 640
     LARGURA_PAGAMENTO = 360
+    RESPIRO_DICAS = 8
 
     def _largura_do_cartao_de_pagamento(self) -> None:
         """O cartão do pagamento tem largura fixa, medida para a letra do programa. Com letra mais larga (outra
@@ -2747,14 +2762,19 @@ class JanelaCaixa(QMainWindow):
         for coluna in (0, 2):
             if self.tabela.isColumnHidden(coluna) != apertado:
                 self.tabela.setColumnHidden(coluna, apertado)
-        # A fileira dos atalhos (Enter paga, F12 fecha...) mostra só os pares que cabem inteiros, do primeiro em diante.
-        usado = 0
-        for tecla, dica in self._dicas_teclas:
-            usado += tecla.sizeHint().width() + dica.sizeHint().width() + 16
-            cabe = usado - 8 <= largura
-            for rotulo in (tecla, dica):
-                if rotulo.isHidden() == cabe:
-                    rotulo.setVisible(cabe)
+
+    def _acomodar_dicas(self, largura: int) -> None:
+        """A fileira dos atalhos (Enter paga, F12 fecha...) mostra só os pares que cabem inteiros, do primeiro em
+        diante. `largura` é a da própria fileira (a que ela vai ter, quando chamado no meio de um redimensionamento)."""
+        linha = self.lbl_dica_nav.layout()
+        margens = linha.contentsMargins()
+        disponivel = largura - margens.left() - margens.right()
+        usado = -max(linha.spacing(), 0)
+        for par in self._pares_dicas:
+            usado += max(linha.spacing(), 0) + par.sizeHint().width()
+            cabe = usado - self.RESPIRO_DICAS <= disponivel          # o respiro do último par pode sobrar fora
+            if par.isHidden() == cabe:
+                par.setVisible(cabe)
 
     def resizeEvent(self, ev) -> None:
         super().resizeEvent(ev)
