@@ -11,7 +11,7 @@ from unittest import mock
 
 from PySide6.QtCore import QCoreApplication, QEvent, QRect
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QHeaderView, QLabel, QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout,
+    QComboBox, QDialog, QDialogButtonBox, QHeaderView, QLabel, QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout,
     QWidget,
 )
 
@@ -456,7 +456,10 @@ class TesteAjudantesDoTema(BaseTelas):
         self.assertEqual(rolagem.horizontalScrollBar().maximum(), 0)          # a barra de rolar para baixo já está na conta
 
     def test_botoes_das_mensagens_tem_largura_minima(self):
-        self.assertIn("QDialogButtonBox QPushButton { min-width: 64px; }", tema.ESTILO)
+        botoes = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        botao = botoes.button(QDialogButtonBox.StandardButton.Ok)
+        botao.ensurePolished()
+        self.assertGreaterEqual(botao.minimumWidth(), 64)
 
 
 class TesteConferencia(BaseTelas):

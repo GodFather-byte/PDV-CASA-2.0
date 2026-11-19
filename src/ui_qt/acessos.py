@@ -14,7 +14,7 @@ class JanelaAcessos(QDialog):
         super().__init__(parent)
         self.ctx = ctx
         self._exigir()
-        self.setWindowTitle("Acessos ao sistema • Qt")
+        self.setWindowTitle("Acessos ao sistema")
         self.resize(900, 650)
         layout = QVBoxLayout(self)
         layout.addWidget(texto("Acessos ao sistema", "titulo"))
@@ -30,6 +30,7 @@ class JanelaAcessos(QDialog):
         self.grade.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.grade.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.grade.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.grade.setAlternatingRowColors(True)
         self.grade.horizontalHeader().setStretchLastSection(True)
         self.grade.itemSelectionChanged.connect(self._selecionar)
         layout.addWidget(self.grade)
@@ -37,16 +38,21 @@ class JanelaAcessos(QDialog):
         layout.addWidget(self.mensagem)
         barra = QHBoxLayout()
         self.nivel = QComboBox()
+        self.nivel.setAccessibleName("Nível mínimo do módulo selecionado")
         for valor in range(1, 5):
             self.nivel.addItem(str(valor), valor)
         self.btn_salvar = QPushButton("Salvar nível do módulo")
+        self.btn_salvar.setObjectName("primario")
         self.btn_recarregar = QPushButton("Recarregar")
         self.btn_salvar.clicked.connect(self.salvar)
         self.btn_recarregar.clicked.connect(self.recarregar)
         fechar = QPushButton("Fechar")
         fechar.clicked.connect(self.reject)
-        for widget in (self.nivel, self.btn_salvar, self.btn_recarregar, fechar):
+        barra.addWidget(texto("Nível mínimo", "suave", False))
+        for widget in (self.nivel, self.btn_salvar, self.btn_recarregar):
             barra.addWidget(widget)
+        barra.addStretch(1)
+        barra.addWidget(fechar)
         layout.addLayout(barra)
         self._carregar()
 

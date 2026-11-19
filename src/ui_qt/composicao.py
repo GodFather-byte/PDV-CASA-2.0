@@ -22,7 +22,7 @@ class JanelaComposicao(QDialog):
         super().__init__(parent)
         self.ctx = ctx
         self._exigir_acesso()
-        self.setWindowTitle("Composição / ficha técnica • Qt")
+        self.setWindowTitle("Composição / ficha técnica")
         self.resize(1000, 680)
 
         layout = QVBoxLayout(self)
@@ -56,6 +56,7 @@ class JanelaComposicao(QDialog):
         self.quantidade.returnPressed.connect(self.incluir)
         linha_qtd.addWidget(self.quantidade, 1)
         self.btn_incluir = QPushButton("Incluir composição")
+        self.btn_incluir.setObjectName("primario")
         self.btn_incluir.clicked.connect(self.incluir)
         linha_qtd.addWidget(self.btn_incluir)
         formulario.addRow(linha_qtd)
@@ -63,6 +64,7 @@ class JanelaComposicao(QDialog):
 
         acoes = QHBoxLayout()
         self.btn_excluir = QPushButton("Excluir selecionada")
+        self.btn_excluir.setObjectName("perigo")
         self.btn_excluir.clicked.connect(self.excluir)
         acoes.addWidget(self.btn_excluir)
         self.custo = texto("", "suave")

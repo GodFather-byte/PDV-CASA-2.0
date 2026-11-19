@@ -3,83 +3,134 @@ import atexit
 import os
 import sys
 from pathlib import Path
+from string import Template
 
-from PySide6.QtCore import QCoreApplication, QEvent, QRect, QSize, Qt
-from PySide6.QtGui import QFontDatabase, QGuiApplication
-from PySide6.QtWidgets import QApplication, QDialog, QLabel, QLayout, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtCore import QCoreApplication, QEvent, QRect, QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QFontDatabase, QGuiApplication, QLinearGradient, QPainter, QPainterPath, QPalette, QPixmap
+from PySide6.QtWidgets import QApplication, QDialog, QFrame, QLabel, QLayout, QScrollArea, QVBoxLayout, QWidget
 
 
-ESTILO = """
-QWidget { background: #101827; color: #e6edf7; font-family: 'Segoe UI'; font-size: 13px; }
-QMainWindow, QDialog { background: #101827; }
-QFrame#cartao { background: #1b2739; border: 1px solid #324158; border-radius: 12px; }
-QLabel { background: transparent; }
-QLabel#titulo { font-size: 22px; font-weight: 700; }
-QLabel#marca { color: #5ee2bb; font-size: 24px; font-weight: 800; }
-QLabel#suave { color: #afbdd1; }
-QWidget#linha { background: transparent; }
-QCheckBox, QRadioButton { background: transparent; spacing: 7px; }
-QCheckBox::indicator { width: 17px; height: 17px; border: 1px solid #405570; border-radius: 5px; background: #182437; }
-QCheckBox::indicator:hover { border-color: #5ee2bb; }
-QCheckBox::indicator:checked { background: #5ee2bb; border: 3px solid #187e65; }
-QCheckBox::indicator:disabled { background: #1b2534; }
-QProgressBar { background: #24364d; border: 0; border-radius: 5px; }
-QProgressBar::chunk { background: #5ee2bb; border-radius: 5px; }
-QLabel#secao { color: #5ee2bb; font-size: 14px; font-weight: 700; }
-QLabel#aviso { color: #ffd28a; }
-QPushButton { background: #24364d; border: 1px solid #405570; border-radius: 8px;
+# Cores por função; o mesmo componente recebe a mesma hierarquia nos dois modos.
+_CORES = {
+    # função                 escuro      claro
+    "fundo":               ("#101c20", "#f3f3ed"),
+    "painel":              ("#192a2e", "#fffefa"),
+    "campo":               ("#132226", "#ffffff"),
+    "controle":            ("#24373b", "#f0f2ec"),
+    "sobre":               ("#30494c", "#e2e9e2"),
+    "borda":               ("#34494c", "#c5d0c8"),
+    "borda_forte":         ("#587174", "#889e96"),
+    "texto":               ("#edf5f1", "#172923"),
+    "suave":               ("#b0c4c0", "#50645d"),
+    "acao":                ("#55dfb0", "#11694f"),
+    "sobre_acao":          ("#85eac5", "#0c5842"),
+    "texto_acao":          ("#0a3026", "#ffffff"),
+    "destaque":            ("#69e3b8", "#11694f"),
+    "selecao":             ("#235a4c", "#c8e9d8"),
+    "texto_selecao":       ("#e3fff1", "#103d30"),
+    "linha_par":           ("#1a2b2e", "#f3f6f1"),
+    "inativo":             ("#93a5a3", "#617069"),
+    "fundo_inativo":       ("#202e32", "#e7ebe5"),
+    "alerta":              ("#ffcc86", "#85490b"),
+    "perigo":              ("#ffa8a5", "#9c302e"),
+    "borda_perigo":        ("#965753", "#c39189"),
+    "fundo_perigo":        ("#442b2b", "#f9e5dd"),
+}
+
+_FOLHA = Template("""
+QWidget { background: $fundo; color: $texto; font-family: 'Segoe UI', sans-serif; font-size: 13px; }
+QMainWindow, QDialog { background: $fundo; }
+QFrame#cartao, QFrame#kpi, QFrame#entrada_formulario {
+    background: $painel; border: 1px solid $borda; border-radius: 12px; }
+QFrame#kpi[financeiro="true"] { border-color: $destaque; }
+QLabel, QCheckBox, QRadioButton, QWidget#linha { background: transparent; }
+QLabel#titulo, QLabel#titulo_painel { font-weight: 700; font-size: 22px; }
+QLabel#titulo_painel { font-size: 26px; }
+QLabel#marca { color: $destaque; font-size: 22px; font-weight: 800; }
+QLabel#suave, QLabel#linha_porteiro, QLabel[tom="suave"] { color: $suave; }
+QLabel#secao, QLabel#subtitulo { color: $texto; font-size: 15px; font-weight: 700; }
+QLabel#legenda { color: $suave; font-size: 12px; font-weight: 600; }
+QLabel[tom="sucesso"] { color: $destaque; }
+QLabel[tom="perigo"] { color: $perigo; }
+QLabel#aviso, QLabel[tom="alerta"] { color: $alerta; }
+QLabel#kpi_valor, QLabel#kpi_alerta { font-size: 24px; font-weight: 700; color: $destaque; }
+QLabel#kpi_alerta { color: $alerta; }
+QLabel#foto_titulo { color: #ffffff; font-size: 29px; font-weight: 700; }
+QLabel#foto_marca { color: #ffffff; font-size: 19px; font-weight: 800; }
+QLabel#foto_detalhe { color: #ddf6e9; font-size: 13px; font-weight: 600; }
+QLabel#foto_aviso { color: #ffe3b5; font-size: 12px; }
+QCheckBox, QRadioButton { spacing: 7px; }
+QCheckBox::indicator, QRadioButton::indicator { width: 17px; height: 17px; }
+QProgressBar { background: $controle; border: 0; border-radius: 4px; }
+QProgressBar::chunk { background: $acao; border-radius: 4px; }
+QPushButton { background: $controle; color: $texto; border: 1px solid $borda; border-radius: 7px;
               padding: 5px 10px; min-height: 20px; }
-QPushButton:hover { background: #304864; border-color: #5b7393; }
-QPushButton:pressed { background: #1b2739; }
-QToolBox QPushButton { text-align: left; font-weight: 400; padding: 4px 10px; min-height: 16px; }
+QPushButton:hover { background: $sobre; border-color: $borda_forte; }
+QPushButton:pressed { background: $selecao; }
+QPushButton#primario, QPushButton#tutorial_novo, QPushButton#tutorial_salvar {
+    background: $acao; color: $texto_acao; border-color: $acao; font-weight: 700; }
+QPushButton#primario:hover, QPushButton#tutorial_novo:hover, QPushButton#tutorial_salvar:hover {
+    background: $sobre_acao; border-color: $sobre_acao; }
+QPushButton#primario:pressed, QPushButton#tutorial_novo:pressed, QPushButton#tutorial_salvar:pressed {
+    background: $selecao; color: $texto_selecao; border-color: $destaque; }
+QPushButton#perigo { background: transparent; color: $perigo; border-color: $borda_perigo; }
+QPushButton#perigo:hover { background: $fundo_perigo; }
+QPushButton#discreto { color: $suave; background: transparent; border-color: transparent; }
+QPushButton#discreto:hover { color: $texto; background: $controle; }
+QPushButton:disabled, QPushButton#primario:disabled, QPushButton#tutorial_novo:disabled,
+QPushButton#tutorial_salvar:disabled, QPushButton#perigo:disabled {
+    color: $inativo; background: $fundo_inativo; border-color: $borda; }
 QDialogButtonBox QPushButton { min-width: 64px; }
-QPushButton:focus, QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus,
-QPlainTextEdit:focus, QTextEdit:focus { border: 2px solid #5ee2bb; }
-QPushButton#primario { background: #187e65; border-color: #32b38e; font-weight: 700; }
-QPushButton#primario:hover { background: #1f9476; }
-QPushButton#perigo { background: transparent; color: #ff9b9b; border-color: #8a3b46; }
-QPushButton#perigo:hover { background: #3a1f2a; }
-QPushButton:disabled, QPushButton#primario:disabled, QPushButton#perigo:disabled {
-              color: #8190a6; background: #1b2534; border-color: #324158; }
-QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateEdit { background: #182437; border: 1px solid #405570;
-                       border-radius: 7px; padding: 5px 8px; min-height: 20px; }
-QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateEdit:hover { border-color: #5b7393; }
-QLineEdit:disabled, QComboBox:disabled { color: #8190a6; background: #1b2534; }
-QPlainTextEdit, QTextEdit, QListWidget { background: #182437; border: 1px solid #324158; border-radius: 8px; }
-QComboBox QAbstractItemView { background: #182437; border: 1px solid #405570; selection-background-color: #187e65;
-                              outline: 0; padding: 4px; }
-QTableWidget, QTableView { background: #182437; alternate-background-color: #1d2d43; border: 1px solid #324158;
-               border-radius: 8px; gridline-color: #24364d; selection-background-color: #187e65;
-               selection-color: #e6edf7; }
-QTableView::item:hover { background: #24364d; }
+QWidget#navegacao, QToolBox, QToolBox QWidget#grupo_menu { background: $painel; }
+QToolBox::tab { background: $painel; color: $suave; padding: 3px 8px; font-weight: 600; }
+QToolBox::tab:selected { background: $selecao; color: $texto_selecao; border-left: 3px solid $acao; }
+QToolBox QPushButton { text-align: left; font-weight: 400; background: $painel;
+                      border: 1px solid transparent; padding: 3px 10px; min-height: 16px; }
+QToolBox QPushButton:hover { background: $sobre; }
+QToolBox QPushButton:disabled { color: $inativo; background: $painel; border: 1px solid transparent; }
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateEdit {
+    background: $campo; color: $texto; border: 1px solid $borda_forte;
+    border-radius: 7px; padding: 5px 8px; min-height: 20px;
+    selection-color: $texto_selecao; selection-background-color: $selecao; }
+QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateEdit:hover { border-color: $destaque; }
+QLineEdit:disabled, QComboBox:disabled { color: $inativo; background: $fundo_inativo; }
+QPlainTextEdit, QTextEdit, QListWidget { background: $campo; border: 1px solid $borda; border-radius: 8px; }
+QComboBox QAbstractItemView { background: $painel; border: 1px solid $borda_forte; selection-color: $texto_selecao;
+                              selection-background-color: $selecao; outline: 0; padding: 4px; }
+QTableWidget, QTableView { background: $campo; alternate-background-color: $linha_par; border: 1px solid $borda;
+    border-radius: 8px; gridline-color: $borda; selection-background-color: $selecao; selection-color: $texto_selecao; }
+QTableView::item:hover { background: $sobre; }
 QHeaderView { background: transparent; }
-QHeaderView::section { background: #24364d; color: #e6edf7; padding: 6px 8px; border: 0;
-                       border-right: 1px solid #324158; font-weight: 600; }
-QHeaderView::section:vertical { color: #8190a6; font-weight: 400; padding: 2px 6px; border-right: 0; }
-QTableCornerButton::section { background: #24364d; border: 0; }
-QTabWidget::pane { border: 1px solid #324158; border-radius: 8px; top: -1px; }
-QTabBar::tab { background: #1b2739; color: #afbdd1; padding: 7px 14px; margin-right: 2px;
-               border-top-left-radius: 8px; border-top-right-radius: 8px; }
-QTabBar::tab:hover { background: #24364d; color: #e6edf7; }
-QTabBar::tab:selected { background: #187e65; color: #e6edf7; font-weight: 600; }
-QGroupBox { border: 1px solid #324158; border-radius: 10px; margin-top: 12px; padding: 10px 8px 8px 8px; }
-QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; color: #5ee2bb; font-weight: 700; }
+QHeaderView::section { background: $controle; color: $suave; padding: 6px 8px; border: 0;
+                       border-right: 1px solid $borda; font-weight: 600; }
+QHeaderView::section:vertical { font-weight: 400; padding: 2px 6px; border-right: 0; }
+QTableCornerButton::section { background: $controle; border: 0; }
+QTabWidget::pane { border: 1px solid $borda; border-radius: 8px; }
+QTabBar::tab { background: $fundo; color: $suave; padding: 6px 12px; border-bottom: 2px solid transparent; }
+QTabBar::tab:hover { color: $texto; background: $controle; }
+QTabBar::tab:selected { color: $destaque; border-bottom: 2px solid $acao; font-weight: 600; }
+QGroupBox { border: 1px solid $borda; border-radius: 10px; margin-top: 12px; padding: 10px 8px 8px 8px; }
+QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; color: $destaque; font-weight: 700; }
 QScrollArea { border: 0; }
 QScrollBar:vertical { background: transparent; width: 11px; margin: 2px; }
 QScrollBar:horizontal { background: transparent; height: 11px; margin: 2px; }
-QScrollBar::handle:vertical { background: #405570; border-radius: 4px; min-height: 32px; }
-QScrollBar::handle:horizontal { background: #405570; border-radius: 4px; min-width: 32px; }
-QScrollBar::handle:hover { background: #5b7393; }
+QScrollBar::handle:vertical { background: $borda_forte; border-radius: 4px; min-height: 32px; }
+QScrollBar::handle:horizontal { background: $borda_forte; border-radius: 4px; min-width: 32px; }
+QScrollBar::handle:hover { background: $suave; }
 QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
 QScrollBar::add-page, QScrollBar::sub-page { background: none; }
-QToolTip { background: #24364d; color: #e6edf7; border: 1px solid #405570; border-radius: 6px; padding: 5px; }
-QMenu { background: #1b2739; border: 1px solid #405570; border-radius: 8px; padding: 4px; }
-QMenu::item { padding: 6px 18px; border-radius: 6px; }
-QMenu::item:selected { background: #187e65; }
-QFrame#kpi { background: #1b2739; border: 1px solid #32b38e; border-radius: 12px; }
-QLabel#kpi_valor { font-size: 24px; font-weight: 800; color: #5ee2bb; }
-QLabel#kpi_alerta { font-size: 24px; font-weight: 800; color: #ffd28a; }
-"""
+QToolTip { background: $painel; color: $texto; border: 1px solid $borda_forte; padding: 5px; }
+QMenu { background: $painel; border: 1px solid $borda; border-radius: 8px; padding: 4px; }
+QMenu::item { padding: 6px 18px; border-radius: 5px; }
+QMenu::item:selected { background: $selecao; color: $texto_selecao; }
+QPushButton:focus, QToolBox QPushButton:focus, QPushButton#discreto:focus, QPushButton#perigo:focus,
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus,
+QPlainTextEdit:focus, QTextEdit:focus { border: 2px solid $destaque; }
+QPushButton#primario:focus, QPushButton#tutorial_novo:focus, QPushButton#tutorial_salvar:focus {
+    border: 2px solid $texto_acao; }
+""")
+ESTILO = _FOLHA.substitute({chave: par[0] for chave, par in _CORES.items()})
+ESTILO_CLARO = _FOLHA.substitute({chave: par[1] for chave, par in _CORES.items()})
 
 
 def aplicar(aplicacao: QApplication, aparencia: str = "escuro") -> None:
@@ -91,22 +142,22 @@ def aplicar(aplicacao: QApplication, aparencia: str = "escuro") -> None:
             if caminho.is_file():
                 QFontDatabase.addApplicationFont(str(caminho))
     aplicacao.setStyle("Fusion")
-    estilo = ESTILO
-    if aparencia == "claro":
-        # Claro confortável: fundo cinza-azulado suave e cartões em off-white (nada de branco puro em áreas grandes),
-        # texto azul-grafite em vez de preto e bordas discretas, para cansar menos a vista em turnos longos.
-        cores = {
-            "#101827": "#e8ecf1", "#e6edf7": "#1e2a3c", "#1b2739": "#f5f7fa",
-            "#324158": "#a9b6c7", "#5ee2bb": "#0b6b53", "#afbdd1": "#4d5c74",
-            "#ffd28a": "#7d4b00", "#24364d": "#dde4ed", "#405570": "#8e9db2",
-            "#304864": "#b9c6d8", "#187e65": "#bfe3d3", "#32b38e": "#2f9a7c",
-            "#8190a6": "#66748a", "#1b2534": "#dfe4eb", "#182437": "#fbfcfd",
-            "#1d2d43": "#eef1f5", "#5b7393": "#6f7f96", "#ff9b9b": "#a3222f", "#8a3b46": "#c9858d",
-            "#3a1f2a": "#f6dfe1", "#1f9476": "#a9d8c3",
-        }
-        for original, nova in cores.items():
-            estilo = estilo.replace(original, nova)
-    aplicacao.setStyleSheet(estilo)
+    # Calendários, indicadores de seleção e ícones de controles nativos também acompanham o tema.
+    indice = 1 if aparencia == "claro" else 0
+    cores = {chave: QColor(par[indice]) for chave, par in _CORES.items()}
+    paleta = aplicacao.style().standardPalette()
+    papeis = QPalette.ColorRole
+    for papel, chave in (
+        (papeis.Window, "fundo"), (papeis.WindowText, "texto"), (papeis.Base, "campo"),
+        (papeis.AlternateBase, "linha_par"), (papeis.Text, "texto"), (papeis.PlaceholderText, "suave"),
+        (papeis.Button, "controle"), (papeis.ButtonText, "texto"), (papeis.Highlight, "selecao"),
+        (papeis.HighlightedText, "texto_selecao"), (papeis.Link, "destaque"),
+    ):
+        paleta.setColor(papel, cores[chave])
+    for papel in (papeis.Text, papeis.ButtonText, papeis.WindowText):
+        paleta.setColor(QPalette.ColorGroup.Disabled, papel, cores["inativo"])
+    aplicacao.setPalette(paleta)
+    aplicacao.setStyleSheet(ESTILO_CLARO if aparencia == "claro" else ESTILO)
     instalar_ajuste_de_janelas(aplicacao)
     from src.core import edicao
     ed = edicao.atual()
@@ -118,6 +169,47 @@ def texto(conteudo: str, nome: str = "", quebra: bool = True) -> QLabel:
     rotulo.setObjectName(nome)
     rotulo.setWordWrap(quebra)
     return rotulo
+
+
+class CapaBalcao(QFrame):
+    """Foto local reenquadrada conforme o painel, com fundo legível durante todo o redimensionamento."""
+
+    def __init__(self, vertical=False):
+        super().__init__()
+        from src.core import edicao
+        self._vertical = vertical
+        self._foto = QPixmap(str(edicao.pasta_recursos() / "balcao-pdv.jpg"))
+
+    def paintEvent(self, evento):
+        area = QRectF(self.rect())
+        pintor = QPainter(self)
+        pintor.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform)
+        contorno = QPainterPath()
+        contorno.addRoundedRect(area, 14, 14)
+        pintor.setClipPath(contorno)
+        fundo = QColor("#12382f")
+        pintor.fillRect(area, fundo)
+        if self._foto.isNull() or area.isEmpty():
+            return
+        destino = QRectF(area)
+        if not self._vertical:
+            destino.setLeft(area.width() * 0.35)
+        escala = max(destino.width() / self._foto.width(), destino.height() / self._foto.height())
+        largura, altura = destino.width() / escala, destino.height() / escala
+        origem = QRectF((self._foto.width() - largura) * 0.74, (self._foto.height() - altura) * 0.60,
+                        largura, altura)
+        pintor.drawPixmap(destino, self._foto, origem)
+        if self._vertical:
+            sombra = QLinearGradient(area.topLeft(), area.bottomLeft())
+            sombra.setColorAt(0, QColor(5, 23, 18, 155))
+            sombra.setColorAt(0.45, QColor(5, 23, 18, 12))
+            sombra.setColorAt(1, QColor(5, 23, 18, 235))
+        else:
+            sombra = QLinearGradient(destino.topLeft(), destino.topRight())
+            sombra.setColorAt(0, fundo)
+            sombra.setColorAt(0.45, QColor(18, 56, 47, 160))
+            sombra.setColorAt(1, QColor(18, 56, 47, 12))
+        pintor.fillRect(destino, sombra)
 
 
 class LinhaFluida(QLayout):
@@ -529,7 +621,8 @@ def realcar_botoes(janela) -> None:
     apagam ficam em vermelho discreto, e o "Fechar" sozinho numa linha deixa de esticar de ponta a ponta."""
     from PySide6.QtWidgets import QBoxLayout, QPushButton
     botoes = [b for b in janela.findChildren(QPushButton) if not b.objectName()]
-    if not any(b.objectName() == "primario" for b in janela.findChildren(QPushButton)):
+    if not any(b.objectName() in ("primario", "tutorial_novo", "tutorial_salvar")
+               for b in janela.findChildren(QPushButton)):
         for prefixo in PRIMARIOS:
             principal = next((b for b in botoes if _texto_botao(b).startswith(prefixo)), None)
             if principal is not None:

@@ -25,13 +25,13 @@ FONTE = "Segoe UI"
 
 ESTADOS = {
     "escuro": {
-        "consumindo": {"fundo": "#121b45", "borda": "#34479a", "texto": "#9ab9ff"},
-        "parada": {"fundo": "#3a1c1a", "borda": "#b8544c", "texto": "#ff9a8f"},
-        "conta": {"fundo": "#33280f", "borda": "#a8832b", "texto": "#ffcf6e"},
-        "balcao": {"fundo": "#0f2c2a", "borda": "#2e8f6c", "texto": "#5fe0b0"},
-        "garota": {"fundo": "#4a1240", "borda": "#ff5fb4", "texto": "#ffa3d6"},      # rosa: comanda com comissão
-        "parcial": {"fundo": "#211c4a", "borda": "#7d63d6", "texto": "#c4b1ff"},
-        "acerto": {"fundo": "#33280f", "borda": "#a8832b", "texto": "#ffcf6e"},
+        "consumindo": {"fundo": "#1c313a", "borda": "#52788b", "texto": "#ace1ec"},
+        "parada": {"fundo": "#372726", "borda": "#a7665e", "texto": "#ffb1a6"},
+        "conta": {"fundo": "#352f22", "borda": "#9a8053", "texto": "#ffce82"},
+        "balcao": {"fundo": "#18372f", "borda": "#438871", "texto": "#7ce8bd"},
+        "garota": {"fundo": "#3b2734", "borda": "#a66c91", "texto": "#f2b1d4"},      # rosa: comanda com comissão
+        "parcial": {"fundo": "#302c3c", "borda": "#8875a3", "texto": "#cfb9eb"},
+        "acerto": {"fundo": "#352f22", "borda": "#9a8053", "texto": "#ffce82"},
     },
     "claro": {
         "consumindo": {"fundo": "#e3eaf7", "borda": "#7f96c8", "texto": "#2a4a8f"},
@@ -44,14 +44,20 @@ ESTADOS = {
     },
 }
 CORES = {
-    "escuro": {"texto": "#f1f5f9", "suave": "#b3c2d1", "mudo": "#94a8bd", "azul": "#78abff", "verde": "#52dfb4",
-               "ambar": "#ffd078", "vermelho": "#ff8d9b", "cartao": "#1a2735", "cartao2": "#233548",
-               "sobre_marca": "#0b1330", "campo": "#0a1030", "borda": "#2f4180",
-               "quadro": "#0a1029", "quadro_borda": "#25336e"},
-    "claro": {"texto": "#1e2a3c", "suave": "#4d5c74", "mudo": "#66748a", "azul": "#3560c4", "verde": "#0b6b53",
-              "ambar": "#7d4b00", "vermelho": "#b3303b", "cartao": "#f5f7fa", "cartao2": "#e3e9f1",
-              "sobre_marca": "#f7f9fc", "campo": "#fbfcfd", "borda": "#97a6bb",
-              "quadro": "#dfe5ec", "quadro_borda": "#a9b6c7"},
+    "escuro": {
+        "fundo": "#101c20", "quadro": "#17272b", "quadro_borda": "#33474b", "campo": "#112125",
+        "cartao": "#1d3034", "cartao2": "#293f43", "borda": "#4a6365",
+        "texto": "#eef5ef", "suave": "#b4c6c4", "mudo": "#9cafac", "azul": "#8bc6e2",
+        "verde": "#55dfb0", "ambar": "#ffce82", "vermelho": "#ff9a98", "rosa": "#efacd1",
+        "sobre_marca": "#0d2a22", "sobre_botao": "#85edc5", "selecao": "#234c42",
+    },
+    "claro": {
+        "fundo": "#eff1eb", "quadro": "#fffefa", "quadro_borda": "#cbd5ce", "campo": "#ffffff",
+        "cartao": "#f5f7f1", "cartao2": "#e8eee6", "borda": "#94aaa0",
+        "texto": "#162b28", "suave": "#425c55", "mudo": "#546b63", "azul": "#266280",
+        "verde": "#11694f", "ambar": "#875310", "vermelho": "#a33437", "rosa": "#913969",
+        "sobre_marca": "#ffffff", "sobre_botao": "#0b5943", "selecao": "#dceee3",
+    },
 }
 
 
@@ -233,7 +239,7 @@ class GradeCartoes(QWidget):
         e = ESTADOS[self.modo][t["estado"]]
         atual = t["chave"] == self.atual
         x1, y1, x2, y2 = x + 4, y + 4, x + w - 4, y + h - 4
-        self._cartao(p, x1, y1, x2, y2, 12, e["fundo"], self._cor("azul") if atual else e["borda"], 3 if atual else 1)
+        self._cartao(p, x1, y1, x2, y2, 12, e["fundo"], self._cor("verde") if atual else e["borda"], 3 if atual else 1)
         meio = (y1 + y2) / 2
         esquerda, direita = x1 + 12, x2 - 12
         largura_pilula = self._pilula(p, esquerda, meio, e, t["estado"])
@@ -255,7 +261,7 @@ class GradeCartoes(QWidget):
         rosa = cores_do_cartao(t, self.modo)
         atual = t["chave"] == self.atual
         x1, y1, x2, y2 = x + 4, y + 4, x + w - 4, y + h - 4
-        self._cartao(p, x1, y1, x2, y2, 14, rosa["fundo"], self._cor("azul") if atual else rosa["borda"], 3 if atual else 1)
+        self._cartao(p, x1, y1, x2, y2, 14, rosa["fundo"], self._cor("verde") if atual else rosa["borda"], 3 if atual else 1)
         pad = 12
         esquerda, direita = x1 + pad, x2 - pad
         rotulo_tipo = ROTULOS_TIPO[t["tipo"]] + (f" {t['rotulo']}" if t["tipo"] == "garota" and t.get("nome") else "")
@@ -381,6 +387,7 @@ class PainelMesas(QWidget):
 
     def __init__(self, parent=None, colunas: int = 2, com_comissoes: bool = True):
         super().__init__(parent)
+        self.setObjectName("area_mesas")
         self.colunas = max(1, colunas)
         self._lista_abas = tuple(a for a in ABAS if com_comissoes or a[0] != "Comissões")
         self._todos_tiles: list[dict] = []
@@ -440,12 +447,12 @@ class PainelMesas(QWidget):
     def _estilizar(self) -> None:
         c = CORES[self.modo]
         self.lbl_resumo.setStyleSheet(f"color: {c['suave']}; font-size: 12px;")
-        for valor, botao in self._abas.items():
+        for botao in self._abas.values():
             botao.setStyleSheet(
                 f"QPushButton {{ background: {c['cartao']}; color: {c['texto']}; border: 1px solid {c['borda']};"
-                f" border-radius: 12px; padding: 5px 10px; font-weight: 700; font-size: 12px; text-align: center; }}"
+                f" border-radius: 7px; padding: 5px 8px; font-weight: 600; font-size: 12px; text-align: center; }}"
                 f"QPushButton:hover {{ background: {c['cartao2']}; }}"
-                f"QPushButton:checked {{ background: {c['azul']}; color: {c['sobre_marca']}; border-color: {c['azul']}; }}")
+                f"QPushButton:checked {{ background: {c['verde']}; color: {c['sobre_marca']}; border-color: {c['verde']}; }}")
         self._marcar_abas()
         self._arrumar_abas()
 

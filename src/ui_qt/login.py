@@ -5,16 +5,16 @@ import logging
 from queue import Empty, Queue
 from threading import Event, Thread
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame,
     QHBoxLayout, QInputDialog, QLineEdit, QPushButton, QVBoxLayout,
 )
 
 from src.core import edicao, licenca
 from src.core.erros import ErroNegocio
 from src.sync import licenca_nuvem
-from src.ui_qt.tema import texto
+from src.ui_qt.tema import CapaBalcao, texto
 
 
 class TrocaSenha(QDialog):
@@ -69,42 +69,63 @@ class JanelaLogin(QDialog):
         self._thread = None
         ed = edicao.atual()
         self.setWindowTitle(f"{ed.nome} • {ed.titulo_entrada}")
-        self.setMinimumSize(680, 470)
+        self.setMinimumSize(680, 440)
+        self.resize(820, 490)
         layout = QHBoxLayout(self)
-        marca = QVBoxLayout()
-        marca.addWidget(texto(ed.marca, "marca"))
-        marca.addWidget(texto("Seu atendimento\ncomeça aqui.", "titulo"))
-        marca.addWidget(texto(ctx.config.nome_loja(), "suave"))
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
+        capa = CapaBalcao(vertical=True)
+        marca = QVBoxLayout(capa)
+        marca.setContentsMargins(24, 24, 24, 24)
+        marca.addWidget(texto(ed.marca, "foto_marca"))
         marca.addStretch()
+        marca.addWidget(texto(f"Terminal  {ctx.banco.cfg_int('terminal', 1):02d}", "foto_detalhe"))
+        loja = texto(ctx.config.nome_loja(), "foto_titulo")
+        loja.setTextFormat(Qt.TextFormat.PlainText)
+        marca.addWidget(loja)
         if ed.aviso_entrada:
-            marca.addWidget(texto(ed.aviso_entrada, "aviso"))
-        layout.addLayout(marca, 1)
-        formulario = QVBoxLayout()
-        formulario.addWidget(texto("Bem-vindo de volta", "titulo"))
-        formulario.addWidget(texto("Usuário"))
+            marca.addWidget(texto(ed.aviso_entrada, "foto_aviso"))
+        layout.addWidget(capa, 1)
+        painel = QFrame()
+        painel.setObjectName("entrada_formulario")
+        formulario = QVBoxLayout(painel)
+        formulario.setContentsMargins(24, 22, 24, 20)
+        formulario.setSpacing(7)
+        formulario.addStretch()
+        formulario.addWidget(texto("Acesso do operador", "titulo"))
+        formulario.addSpacing(7)
+        nome_usuario = texto("Usuário", "legenda")
+        formulario.addWidget(nome_usuario)
         self.usuario = QComboBox()
+        nome_usuario.setBuddy(self.usuario)
         self.usuario.setEditable(True)
         self.usuario.addItems(ctx.acesso.nomes_login())
         formulario.addWidget(self.usuario)
-        formulario.addWidget(texto("Senha"))
+        nome_senha = texto("Senha", "legenda")
+        formulario.addWidget(nome_senha)
         self.senha = QLineEdit()
+        nome_senha.setBuddy(self.senha)
         self.senha.setEchoMode(QLineEdit.EchoMode.Password)
-        self.senha.returnPressed.connect(self.entrar)
         formulario.addWidget(self.senha)
         mostrar = QCheckBox("Mostrar senha")
         mostrar.toggled.connect(lambda ativo: self.senha.setEchoMode(
             QLineEdit.EchoMode.Normal if ativo else QLineEdit.EchoMode.Password))
-        formulario.addWidget(mostrar)
+        ajuda = QHBoxLayout()
+        ajuda.addWidget(mostrar)
+        ajuda.addStretch()
+        self.btn_esqueci = QPushButton("Esqueci a senha")
+        self.btn_esqueci.setObjectName("discreto")
+        self.btn_esqueci.setToolTip("Gerente sem a senha: gera um pedido para o fornecedor liberar a troca")
+        self.btn_esqueci.clicked.connect(self.esqueci_a_senha)
+        ajuda.addWidget(self.btn_esqueci)
+        formulario.addLayout(ajuda)
         self.mensagem = texto("", "aviso")
         formulario.addWidget(self.mensagem)
         self.btn_entrar = QPushButton("Entrar no PDV")
         self.btn_entrar.setObjectName("primario")
         self.btn_entrar.clicked.connect(self.entrar)
         formulario.addWidget(self.btn_entrar)
-        self.btn_esqueci = QPushButton("Esqueci a senha")
-        self.btn_esqueci.setToolTip("Gerente sem a senha: gera um pedido para o fornecedor liberar a troca")
-        self.btn_esqueci.clicked.connect(self.esqueci_a_senha)
-        formulario.addWidget(self.btn_esqueci)
+        formulario.addSpacing(3)
         self.btn_licenca = QPushButton("Ativar licença ou instalar loja")
         self.btn_licenca.setToolTip("Cole o código de licença ou o código de instalação (WILL1-...) da central")
         self.btn_licenca.clicked.connect(self.pedir_licenca)
@@ -118,7 +139,11 @@ class JanelaLogin(QDialog):
         self.btn_rede.setVisible(ctx.banco.caminho != ":memory:")
         formulario.addWidget(self.btn_rede)
         formulario.addStretch()
-        layout.addLayout(formulario, 1)
+        layout.addWidget(painel, 1)
+        for secundario in (self.btn_esqueci, self.btn_licenca, self.btn_rede):
+            secundario.setAutoDefault(False)
+        self.btn_entrar.setDefault(True)
+        self.usuario.setFocus()
         self._timer = QTimer(self)
         self._timer.setInterval(80)
         self._timer.timeout.connect(self._receber_licenca)
@@ -211,6 +236,7 @@ class JanelaLogin(QDialog):
         self.mensagem.setText(str(erro))
         self.senha.clear()
         self._ocupar(False)
+        self.senha.setFocus()
 
     def ligar_a_outro_caixa(self):
         """Faz deste computador um caixa adicional (ou desfaz). Depois da troca o programa fecha: o banco é outro."""

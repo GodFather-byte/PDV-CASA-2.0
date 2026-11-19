@@ -41,7 +41,7 @@ class JanelaImportarProdutos(QDialog):
         self.caminho = None
         self.tabela = None
         self.previa: Previa | None = None
-        self.setWindowTitle("Importar produtos • Qt")
+        self.setWindowTitle("Importar produtos")
         self.resize(1120, 760)
 
         layout = QVBoxLayout(self)

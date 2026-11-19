@@ -18,7 +18,7 @@ class JanelaMaquinas(QDialog):
         self._exigir()
         self.campos = {}
         self._originais = {}
-        self.setWindowTitle("Máquinas • Qt")
+        self.setWindowTitle("Máquinas e equipamentos")
         self.resize(1120, 720)
         layout = QVBoxLayout(self)
         layout.addWidget(texto("Máquinas e equipamentos", "titulo"))
@@ -51,6 +51,7 @@ class JanelaMaquinas(QDialog):
         layout.addWidget(self.mensagem)
         barra = QHBoxLayout()
         self.btn_salvar = QPushButton("Salvar")
+        self.btn_salvar.setObjectName("primario")
         self.btn_recarregar = QPushButton("Descartar alterações")
         self.btn_teste = QPushButton("Imprimir página de teste")
         self.btn_gaveta = QPushButton("Testar abertura da gaveta")

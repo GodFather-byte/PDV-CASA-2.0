@@ -7,7 +7,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout,
+    QApplication, QCheckBox, QDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout,
 )
 
 from src.core.erros import ErroNegocio
@@ -22,13 +22,14 @@ class JanelaPorteiro(QDialog):
         self._url = ""
         self._pode = bool(ctx.operador is not None and ctx.pode("cfg_configuracoes"))
         self.setWindowTitle("Porteiro no celular")
-        self.resize(560, 720)
+        self.resize(660, 610)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(9)
         layout.addWidget(texto("Porteiro no celular", "titulo"))
         layout.addWidget(texto(
-            "O porteiro abre esta página no Wi-Fi do clube, digita o PIN e consulta a comanda. "
-            "Ele vê se ainda deve e a lista do que está em aberto. Não fecha conta nem lança item. "
-            "Funciona sem internet: o caixa é que responde.",
+            "Com o celular no Wi-Fi da casa, o porteiro usa o PIN para conferir os itens e o saldo "
+            "da comanda antes da saída. A consulta local funciona sem internet.",
             "suave"))
         self.ativo = QCheckBox("Ligado")
         self.porta = QLineEdit()
@@ -39,31 +40,39 @@ class JanelaPorteiro(QDialog):
         self.pin2 = QLineEdit()
         self.pin2.setEchoMode(QLineEdit.EchoMode.Password)
         self.pin2.setPlaceholderText("Repita o PIN novo")
-        formulario = QFormLayout()
+        acesso = QGroupBox("Acesso pela rede local")
+        formulario = QFormLayout(acesso)
         formulario.addRow("Página na rede do clube", self.ativo)
         formulario.addRow("Porta", self.porta)
         formulario.addRow("PIN novo (4 a 8 números)", self.pin)
         formulario.addRow("Confirmar PIN", self.pin2)
-        layout.addLayout(formulario)
+        layout.addWidget(acesso)
+        conexao = QGroupBox("Endereço da portaria")
+        endereco = QHBoxLayout(conexao)
         self.lbl_enderecos = texto("")
         self.lbl_enderecos.setObjectName("enderecos_porteiro")
         self.lbl_enderecos.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(self.lbl_enderecos)
+        endereco.addWidget(self.lbl_enderecos, 1)
         self.qr = QLabel()
         self.qr.setObjectName("qr_porteiro")
         self.qr.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.qr)
+        endereco.addWidget(self.qr)
+        layout.addWidget(conexao)
+        layout.addStretch()
         self.mensagem = texto("", "aviso")
         layout.addWidget(self.mensagem)
         barra = QHBoxLayout()
         self.btn_salvar = QPushButton("Salvar")
+        self.btn_salvar.setObjectName("primario")
         self.btn_copiar = QPushButton("Copiar endereço")
         fechar = QPushButton("Fechar")
         self.btn_salvar.clicked.connect(self.salvar)
         self.btn_copiar.clicked.connect(self.copiar)
         fechar.clicked.connect(self.accept)
-        for botao in (self.btn_salvar, self.btn_copiar, fechar):
-            barra.addWidget(botao)
+        barra.addWidget(self.btn_copiar)
+        barra.addStretch()
+        barra.addWidget(fechar)
+        barra.addWidget(self.btn_salvar)
         layout.addLayout(barra)
         self._carregar()
         if not self._pode:

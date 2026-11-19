@@ -6,7 +6,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QDate, QLocale, Qt, QTimer
 from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
@@ -202,31 +202,38 @@ class JanelaPrincipal(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QHBoxLayout(central)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         lateral = QVBoxLayout()
+        lateral.setContentsMargins(12, 12, 12, 10)
         lateral.setSpacing(3)  # Mantém as sete categorias visíveis também com as métricas do Windows.
+        cabecalho_menu = QHBoxLayout()
         self.logo_edicao = QLabel()
         if self.edicao.logotipo:
             imagem = QPixmap(str(edicao.pasta_recursos() / self.edicao.logotipo))
             if not imagem.isNull():
-                self.logo_edicao.setPixmap(imagem.scaledToWidth(160, Qt.TransformationMode.SmoothTransformation))
-                lateral.addWidget(self.logo_edicao)
-        lateral.addWidget(tema.texto(self.edicao.marca, "marca"))
-        lateral.addWidget(tema.texto(f"Versão {VERSAO}", "suave"))
+                self.logo_edicao.setPixmap(imagem.scaledToWidth(36, Qt.TransformationMode.SmoothTransformation))
+                cabecalho_menu.addWidget(self.logo_edicao)
+        cabecalho_menu.addWidget(tema.texto(self.edicao.marca, "marca"), 1)
+        cabecalho_menu.addWidget(tema.texto(VERSAO, "legenda", quebra=False))
+        lateral.addLayout(cabecalho_menu)
         self.btn_tema = QPushButton()
+        self.btn_tema.setObjectName("discreto")
         self.btn_tema.setAccessibleName("Alternar entre modo claro e modo escuro")
         self.btn_tema.clicked.connect(self.alternar_tema)
-        lateral.addWidget(self.btn_tema)
         self._rotular_tema()
         self.busca_modulos = QLineEdit()
-        self.busca_modulos.setPlaceholderText("Buscar módulo…")
+        self.busca_modulos.setPlaceholderText("Buscar módulo…  (Ctrl+K)")
         self.busca_modulos.setClearButtonEnabled(True)
         self.busca_modulos.setAccessibleName("Buscar módulo do PDV")
         lateral.addWidget(self.busca_modulos)
         self.menu_grupos = QToolBox()
-        lateral.addWidget(self.menu_grupos, 1)
+        lateral.addWidget(self.menu_grupos)
+        lateral.addStretch()
         grupos = {}
         for nome in ("Tutoriais", "Operação", "Produtos e estoque", "Gestão", "Cadastros", "Configuração", "Manutenção"):
             pagina = QWidget()
+            pagina.setObjectName("grupo_menu")
             grade = QVBoxLayout(pagina)
             grade.setContentsMargins(2, 2, 2, 2)
             grade.setSpacing(3)
@@ -307,37 +314,66 @@ class JanelaPrincipal(QMainWindow):
         self.menu_grupos.setCurrentIndex(1)  # Operação aberta por padrão; Tutoriais continua no topo.
         self.marcar_tutoriais()
         self.busca_modulos.textChanged.connect(self.filtrar_modulos)
-        self.sessao = tema.texto("", "suave")
+        lateral.addWidget(self.btn_tema)
+        self.sessao = tema.texto("", "legenda")
         lateral.addWidget(self.sessao)
         sair = QPushButton("Encerrar sessão")
         sair.clicked.connect(lambda: self.app.encerrar_sessao(confirmar=True))
         lateral.addWidget(sair)
         lateral_widget = QWidget()
+        lateral_widget.setObjectName("navegacao")
         lateral_widget.setLayout(lateral)
         self.lateral_scroll = QScrollArea()
         self.lateral_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.lateral_scroll.setWidgetResizable(True)
         self.lateral_scroll.setWidget(lateral_widget)
         self.lateral_scroll.setMinimumWidth(275)
-        self.lateral_scroll.setMaximumWidth(360)
+        self.lateral_scroll.setMaximumWidth(305)
         layout.addWidget(self.lateral_scroll, 1)
         conteudo = QVBoxLayout()
-        conteudo.setContentsMargins(24, 12, 12, 12)
-        conteudo.addWidget(tema.texto("Sua operação, em foco", "titulo"))
-        conteudo.addWidget(tema.texto(
-            "Caixa, estoque, relatórios e gestão em uma única interface.", "suave"))
+        conteudo.setContentsMargins(20, 14, 20, 12)
+        conteudo.setSpacing(8)
+        cabecalho = QHBoxLayout()
+        cabecalho.addWidget(tema.texto("Visão geral", "titulo_painel"), 1)
+        self.data_painel = tema.texto("", "suave", quebra=False)
+        cabecalho.addWidget(self.data_painel)
+        conteudo.addLayout(cabecalho)
+        capa = tema.CapaBalcao()
+        capa.setMinimumHeight(138)
+        faixa = QHBoxLayout(capa)
+        faixa.setContentsMargins(22, 12, 22, 12)
+        operacao = QVBoxLayout()
+        faixa.addLayout(operacao, 3)
+        faixa.addStretch(2)
+        operacao.setSpacing(4)
+        self.terminal = tema.texto("", "foto_detalhe", quebra=False)
+        operacao.addWidget(self.terminal)
+        self.loja = tema.texto("", "foto_titulo")
+        self.loja.setTextFormat(Qt.TextFormat.PlainText)
+        operacao.addWidget(self.loja)
+        abrir = QPushButton("Abrir caixa")
+        abrir.setObjectName("primario")
+        abrir.clicked.connect(self.abrir_caixa)
+        operacao.addWidget(abrir, 0, Qt.AlignmentFlag.AlignLeft)
+        conteudo.addWidget(capa)
         self.indicadores = {}
         self.kpis = {}
         self.faixa_noite = QWidget()          # a noite ao vivo (casas com mesas e comandas): números grandes no alto
-        noite = QHBoxLayout(self.faixa_noite)
-        noite.setContentsMargins(0, 0, 0, 0)
-        for chave, titulo in (("abertas", "POSIÇÕES ABERTAS"), ("acertos", "AGUARDANDO ACERTO"),
-                              ("aberto", "EM ABERTO NA CASA"), ("comissoes", "COMISSÕES A PAGAR")):
+        movimento = QVBoxLayout(self.faixa_noite)
+        movimento.setContentsMargins(0, 0, 0, 0)
+        movimento.setSpacing(5)
+        movimento.addWidget(tema.texto("Movimento da casa", "subtitulo"))
+        noite = QHBoxLayout()
+        movimento.addLayout(noite)
+        for chave, titulo in (("abertas", "Posições abertas"), ("acertos", "Aguardando acerto"),
+                              ("aberto", "Em aberto na casa"), ("comissoes", "Comissões a pagar")):
             cartao = QFrame()
             cartao.setObjectName("kpi")
+            cartao.setProperty("financeiro", chave == "aberto")
             caixa = QVBoxLayout(cartao)
-            caixa.setContentsMargins(16, 12, 16, 12)
-            caixa.addWidget(tema.texto(titulo, "suave"))
+            caixa.setContentsMargins(12, 8, 12, 8)
+            caixa.setSpacing(3)
+            caixa.addWidget(tema.texto(titulo, "legenda"))
             valor = tema.texto("0", "kpi_valor", quebra=False)
             caixa.addWidget(valor)
             self.kpis[chave] = (cartao, valor)
@@ -347,16 +383,27 @@ class JanelaPrincipal(QMainWindow):
         self.linha_porteiro.setObjectName("linha_porteiro")
         self.linha_porteiro.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         conteudo.addWidget(self.linha_porteiro)
+        atalhos = QHBoxLayout()
+        atalhos.addWidget(tema.texto("Acesso rápido", "subtitulo", quebra=False))
+        self.atalhos = {}
+        for chave, rotulo in (("produtos", "Produtos"), ("estoque", "Estoque"), ("relatorio_vendas", "Vendas")):
+            atalho = QPushButton(rotulo)
+            atalho.clicked.connect(self.botoes[chave].click)
+            self.atalhos[chave] = atalho
+            atalhos.addWidget(atalho)
+        atalhos.addStretch()
+        conteudo.addLayout(atalhos)
+        conteudo.addWidget(tema.texto("Situação do sistema", "subtitulo"))
         self.abas_status = QTabWidget()
         conteudo.addWidget(self.abas_status, 1)
-        for chave, titulo in (("turno", "CAIXA"), ("licenca", "LICENÇA"),
-                              ("backup", "PROTEÇÃO DOS DADOS"), ("impressao", "RECUPERAÇÃO DA IMPRESSÃO"),
-                              ("sync", "NUVEM E SERVIÇOS")):
+        for chave, titulo in (("turno", "Turno do caixa"), ("licenca", "Licença da loja"),
+                              ("backup", "Proteção dos dados"), ("impressao", "Recuperação da impressão"),
+                              ("sync", "Conexão e sincronização")):
             cartao = QFrame()
             cartao.setObjectName("cartao")
             caixa = QVBoxLayout(cartao)
             caixa.setContentsMargins(18, 14, 18, 14)
-            caixa.addWidget(tema.texto(titulo, "suave"))
+            caixa.addWidget(tema.texto(titulo, "secao"))
             rotulo = tema.texto("")
             caixa.addWidget(rotulo)
             caixa.addStretch(1)
@@ -367,7 +414,6 @@ class JanelaPrincipal(QMainWindow):
         conteudo.addWidget(self.mensagem)
         self.aviso_atualizacao = tema.texto("", "aviso")
         conteudo.addWidget(self.aviso_atualizacao)
-        conteudo.addStretch()
         painel = QWidget()
         painel.setLayout(conteudo)
         self.conteudo_scroll = QScrollArea()
@@ -484,7 +530,10 @@ class JanelaPrincipal(QMainWindow):
             return
         self.ctx.operador = self.ctx.acesso.operador(self.ctx.operador_id)
         operador = self.ctx.operador
-        self.sessao.setText(f"{operador.nome}\nNível {operador.nivel}")
+        self.sessao.setText(f"{operador.nome}   ·   Nível {operador.nivel}")
+        self.loja.setText(self.ctx.config.nome_loja())
+        self.terminal.setText(f"Terminal  {self.ctx.banco.cfg_int('terminal', 1):02d}")
+        self.data_painel.setText(QLocale("pt_BR").toString(QDate.currentDate(), "d 'de' MMMM 'de' yyyy"))
         desligados = modulos_desligados(self.ctx.banco)
         for chave in ("produtos", "operadores"):
             modulo = f"cad_{chave}"
@@ -537,6 +586,9 @@ class JanelaPrincipal(QMainWindow):
             for chave in SO_NO_PRINCIPAL:
                 self.botoes[chave].setEnabled(False)
                 self.botoes[chave].setToolTip("Disponível no caixa principal, onde o banco da loja está guardado.")
+        for chave, atalho in self.atalhos.items():
+            atalho.setEnabled(self.botoes[chave].isEnabled())
+            atalho.setVisible(chave not in self.edicao.menu_oculto)
         self._atualizar_noite()
         self._atualizar_porteiro()
         self.filtrar_modulos(self.busca_modulos.text())

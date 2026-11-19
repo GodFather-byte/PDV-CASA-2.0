@@ -5,8 +5,8 @@ nem substitui a consulta de cupons do caixa clássico.
 """
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QDialog, QFormLayout, QHBoxLayout, QHeaderView,
-    QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
+    QAbstractItemView, QDialog, QFormLayout, QFrame, QHBoxLayout, QHeaderView,
+    QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout,
 )
 
 from src.controllers.relatorio_vendas import virada_dia
@@ -25,9 +25,7 @@ class JanelaRelatorioVendas(QDialog):
         self.resize(1050, 760)
         layout = QVBoxLayout(self)
         layout.addWidget(texto("Relatório de vendas", "titulo"))
-        layout.addWidget(texto(
-            "Somente leitura • produtos de vendas fechadas • valores em R$. "
-            "O período considera a virada do dia configurada no PDV.", "suave"))
+        layout.addWidget(texto("Vendas fechadas no período, conforme a virada do dia configurada no caixa.", "suave"))
         filtros = QHBoxLayout()
         hoje = fmt.fmt_data(fmt.dia_operacional(virada=virada_dia(ctx.banco)))
         self.inicio, self.fim = QLineEdit(hoje), QLineEdit(hoje)
@@ -38,22 +36,40 @@ class JanelaRelatorioVendas(QDialog):
             formulario.addRow(rotulo, campo)
             filtros.addLayout(formulario)
         self.aplicar = QPushButton("Consultar")
+        self.aplicar.setObjectName("primario")
         self.aplicar.clicked.connect(self.atualizar)
         filtros.addWidget(self.aplicar)
         layout.addLayout(filtros)
+        indicadores = QHBoxLayout()
+        self.valores = {}
+        for chave, rotulo in (("Total apurado", "Total apurado (R$)"), ("Cupons (TC)", "Cupons"),
+                              ("Ticket médio (TM)", "Ticket médio (R$)")):
+            cartao = QFrame()
+            cartao.setObjectName("cartao")
+            coluna = QVBoxLayout(cartao)
+            coluna.addWidget(texto(rotulo, "suave"))
+            valor = texto("—", "kpi_valor")
+            valor.setAccessibleName(rotulo)
+            coluna.addWidget(valor)
+            self.valores[chave] = valor
+            indicadores.addWidget(cartao, 1)
+        layout.addLayout(indicadores)
         self.criterios = texto("", "suave")
         self.criterios.setWordWrap(True)
         layout.addWidget(self.criterios)
         self.grade = self._grade()
-        layout.addWidget(self.grade, 2)
-        layout.addWidget(texto("Totalizações do período", "titulo"))
         self.totais = self._grade()
-        layout.addWidget(self.totais, 1)
+        abas = QTabWidget()
+        abas.addTab(self.grade, "Produtos vendidos")
+        abas.addTab(self.totais, "Totalizações do período")
+        layout.addWidget(abas, 1)
         self.mensagem = texto("", "aviso")
-        layout.addWidget(self.mensagem)
         fechar = QPushButton("Fechar")
         fechar.clicked.connect(self.reject)
-        layout.addWidget(fechar)
+        rodape = QHBoxLayout()
+        rodape.addWidget(self.mensagem, 1)
+        rodape.addWidget(fechar)
+        layout.addLayout(rodape)
         self.atualizar()
 
     @staticmethod
@@ -63,7 +79,6 @@ class JanelaRelatorioVendas(QDialog):
         grade.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         grade.setAlternatingRowColors(True)
         grade.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        grade.horizontalHeader().setStretchLastSection(True)
         return grade
 
     def _exigir_acesso(self):
@@ -88,12 +103,22 @@ class JanelaRelatorioVendas(QDialog):
             self.grade.setRowCount(0)
             self.totais.setRowCount(0)
             self.criterios.clear()
+            for valor in self.valores.values():
+                valor.setText("—")
             self.mensagem.setText(str(erro))
             return False
         self.rel = rel
+        rodape = dict(rel.rodape)
+        for chave, valor in self.valores.items():
+            valor.setText(str(rodape.get(chave, "—")))
         self.criterios.setText("\n".join(rel.criterios))
         self.grade.setColumnCount(len(rel.colunas))
         self.grade.setHorizontalHeaderLabels([coluna.titulo for coluna in rel.colunas])
+        for indice, coluna in enumerate(rel.colunas):
+            if coluna.titulo == "Produto":
+                self.grade.horizontalHeader().setSectionResizeMode(indice, QHeaderView.ResizeMode.Stretch)
+            alinhamento = Qt.AlignmentFlag.AlignRight if coluna.alinha == "d" else Qt.AlignmentFlag.AlignLeft
+            self.grade.horizontalHeaderItem(indice).setTextAlignment(alinhamento | Qt.AlignmentFlag.AlignVCenter)
         self.grade.setRowCount(len(rel.linhas))
         for linha, valores in enumerate(rel.linhas):
             for coluna, valor in enumerate(valores):
@@ -103,9 +128,15 @@ class JanelaRelatorioVendas(QDialog):
                 self.grade.setItem(linha, coluna, item)
         self.totais.setColumnCount(2)
         self.totais.setHorizontalHeaderLabels(["Indicador", "Valor"])
+        self.totais.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.totais.horizontalHeaderItem(0).setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        direita = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        self.totais.horizontalHeaderItem(1).setTextAlignment(direita)
         self.totais.setRowCount(len(rel.rodape))
         for linha, (rotulo, valor) in enumerate(rel.rodape):
             self.totais.setItem(linha, 0, QTableWidgetItem(rotulo))
-            self.totais.setItem(linha, 1, QTableWidgetItem(str(valor)))
+            item = QTableWidgetItem(str(valor))
+            item.setTextAlignment(direita)
+            self.totais.setItem(linha, 1, item)
         self.mensagem.setText("Nenhuma venda encontrada no período." if rel.vazio() else "")
         return True

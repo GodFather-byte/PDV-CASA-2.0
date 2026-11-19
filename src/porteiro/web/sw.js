@@ -2,7 +2,7 @@
  * A consulta (/porteiro/api/) vai sempre ao caixa e nunca fica no celular:
  * um saldo antigo liberaria quem ainda deve. */
 
-const VERSAO = "porteiro-v3";
+const VERSAO = "porteiro-v4";
 const SHELL = [
   "./",
   "./index.html",
@@ -27,7 +27,7 @@ self.addEventListener("install", (evento) => {
 self.addEventListener("activate", (evento) => {
   evento.waitUntil(
     caches.keys()
-      .then((chaves) => Promise.all(chaves.filter((c) => c !== VERSAO).map((c) => caches.delete(c))))
+      .then((chaves) => Promise.all(chaves.filter((c) => c.startsWith("porteiro-") && c !== VERSAO).map((c) => caches.delete(c))))
       .then(() => self.clients.claim())
   );
 });

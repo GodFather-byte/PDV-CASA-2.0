@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Cardápio</title>
-  <meta name="description" content="Cardápio da casa, só para consulta.">
-  <meta name="theme-color" content="#14532d">
+  <meta name="description" content="Confira no celular os produtos e preços do cardápio da casa.">
+  <meta name="theme-color" content="#102322">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Cardápio">
   <link rel="manifest" href="manifest.webmanifest">
@@ -14,26 +14,31 @@
 </head>
 <body>
   <header class="topo">
-    <img id="logo" alt="" hidden>
-    <div>
-      <p id="mesa" class="mesa" hidden></p>
-      <h1 id="loja">Cardápio</h1>
-      <p id="aviso-topo" class="aviso">Só consulta. O pedido é feito no caixa.</p>
+    <div class="identidade">
+      <img id="logo" alt="" hidden>
+      <div>
+        <div class="origem"><span id="tipo-pagina" hidden>Cardápio</span><span id="mesa" class="mesa" hidden></span></div>
+        <h1 id="loja">Cardápio</h1>
+        <p id="aviso-topo" class="aviso">Só consulta. O pedido é feito no caixa.</p>
+      </div>
     </div>
   </header>
   <div class="busca">
-    <label class="sumido" for="campo-busca">Buscar</label>
-    <input id="campo-busca" type="search" placeholder="Buscar no cardápio" enterkeyhint="search" autocomplete="off">
+    <label class="campo-busca" for="campo-busca">
+      <span class="sumido">Buscar no cardápio</span>
+      <input id="campo-busca" type="search" placeholder="Buscar no cardápio" enterkeyhint="search" autocomplete="off" disabled>
+    </label>
+    <nav id="categorias" aria-label="Categorias do cardápio" hidden></nav>
   </div>
   <main id="conteudo">
     <p id="estado" class="estado">Carregando o cardápio…</p>
   </main>
-  <p id="situacao-pedido" class="situacao" hidden></p>
+  <p id="situacao-pedido" class="situacao" role="status" hidden></p>
   <button id="barra-carrinho" class="barra-carrinho" type="button" hidden>
     <span id="barra-texto"></span><strong>Ver pedido ›</strong>
   </button>
-  <dialog id="carrinho" class="carrinho">
-    <div class="carrinho-topo"><h2>Seu pedido</h2>
+  <dialog id="carrinho" class="carrinho" aria-labelledby="titulo-carrinho">
+    <div class="carrinho-topo"><h2 id="titulo-carrinho">Seu pedido</h2>
       <button id="fechar-carrinho" type="button" class="fechar" aria-label="Fechar">×</button></div>
     <form id="form-pedido">
       <ul id="itens-carrinho" class="itens-carrinho"></ul>

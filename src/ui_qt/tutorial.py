@@ -8,13 +8,13 @@ from src.controllers.tutoriais import PRODUTO, ROTEIROS, Tutoriais
 
 # Letra grande e contraste alto: o balão tem de ser lido sem esforço por quem enxerga pouco ou nunca usou sistema.
 ESTILO_BALAO = (
-    "QFrame {background: #ffffff; color: #101820; border: 2px solid #1f6feb; border-radius: 8px;}"
-    " QLabel {border: none; font-size: 16px;}"
-    " QLabel#tutorial_passo {font-size: 13px; font-weight: bold; color: #1f6feb;}"
-    " QLabel#tutorial_dica {font-size: 13px; color: #9a3412;}"
-    " QPushButton {color: #101820; background: #e8eaed; border: 1px solid #9aa0a6; border-radius: 6px;"
+    "QFrame#tutorial_balao {background: #f8f8f0; border: 2px solid #11694f; border-radius: 12px;}"
+    " QLabel {background: transparent; color: #192e2d; border: none; font-size: 16px;}"
+    " QLabel#tutorial_passo {font-size: 13px; font-weight: bold; color: #11694f;}"
+    " QLabel#tutorial_dica {font-size: 13px; color: #815507;}"
+    " QPushButton {color: #192e2d; background: #eef1e9; border: 1px solid #a5b8ae; border-radius: 6px;"
     " padding: 8px 12px; font-size: 15px; min-height: 22px;}"
-    " QPushButton#tutorial_proximo {background: #1f6feb; color: #ffffff; border: none; font-weight: bold;}"
+    " QPushButton#tutorial_proximo {background: #11694f; color: #ffffff; border: none; font-weight: bold;}"
     " QPushButton#tutorial_proximo:disabled {background: #c9d1d9; color: #57606a;}"
     " QPushButton:disabled {color: #8c959f;}"
 )
@@ -144,6 +144,7 @@ class MotorTutorial(QObject):
                 pai = pai.parentWidget()
             self.sombra = Sombra(janela)
             self.balao = QFrame(janela)
+            self.balao.setObjectName("tutorial_balao")
             self.balao.setStyleSheet(ESTILO_BALAO)
             layout = QVBoxLayout(self.balao)
             numero = QLabel(f"Passo {self.indice + 1} de {len(self.passos)}")

@@ -6,14 +6,14 @@ gerente. Ligar a emissão (homologação ou produção) também é por aqui, par
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView, QComboBox, QDialog, QGridLayout, QHBoxLayout, QInputDialog, QMessageBox, QPushButton,
+    QAbstractItemView, QComboBox, QDialog, QHBoxLayout, QInputDialog, QMessageBox, QPushButton,
     QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
 
 from src.controllers.fiscal_controller import FiscalController
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
-from src.ui_qt.tema import texto
+from src.ui_qt.tema import LinhaFluida, texto
 
 SITUACOES = {
     "pendente": "Aguardando envio", "processando": "Na SEFAZ", "autorizada": "Autorizada",
@@ -41,19 +41,23 @@ class JanelaNotasFiscais(QDialog):
         self.setWindowTitle("Notas fiscais (NFC-e)")
         self.resize(1150, 560)
         layout = QVBoxLayout(self)
-        layout.addWidget(texto("Notas fiscais (NFC-e)", "titulo"))
-        self.estado = texto("")
-        layout.addWidget(self.estado)
         linha = QHBoxLayout()
+        linha.addWidget(texto("Notas fiscais (NFC-e)", "titulo"), 1)
         self.filtro = QComboBox()
         self.filtro.addItem("Todas", None)
         for chave, nome in SITUACOES.items():
             self.filtro.addItem(nome, chave)
         self.filtro.currentIndexChanged.connect(self.atualizar)
-        linha.addWidget(texto("Mostrar:", quebra=False))
+        linha.addWidget(texto("Situação", "suave", False))
+        self.filtro.setAccessibleName("Filtrar notas por situação")
         linha.addWidget(self.filtro)
-        linha.addStretch(1)
+        self.btn_atualizar = QPushButton("Atualizar (F5)")
+        self.btn_atualizar.setObjectName("primario")
+        self.btn_atualizar.clicked.connect(self.atualizar)
+        linha.addWidget(self.btn_atualizar)
         layout.addLayout(linha)
+        self.estado = texto("", "secao")
+        layout.addWidget(self.estado)
         self.grade = QTableWidget(0, 8)
         self.grade.setHorizontalHeaderLabels(("Cupom", "Venda em", "Total", "Situação", "Nº NFC-e", "CPF",
                                               "Tentativas", "Mensagem"))
@@ -64,24 +68,31 @@ class JanelaNotasFiscais(QDialog):
         self.grade.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.grade)
         self.mensagem = texto("", "aviso")
-        layout.addWidget(self.mensagem)
-        barra = QGridLayout()
-        for indice, (atributo, rotulo, acao) in enumerate((
-            ("btn_atualizar", "Atualizar (F5)", self.atualizar),
+        barra = LinhaFluida(preencher=False)
+        for atributo, rotulo, acao in (
             ("btn_reenviar", "Reenviar selecionada", self.reenviar),
             ("btn_cpf", "CPF na nota", self.informar_cpf),
             ("btn_reimprimir", "Reimprimir cupom fiscal", self.reimprimir),
             ("btn_cancelar", "Cancelar nota", self.cancelar),
             ("btn_inutilizar", "Inutilizar número", self.inutilizar),
-            ("btn_testar", "Testar SEFAZ", self.testar_sefaz),
-            ("btn_ligar", "Ligar / desligar emissão", self.ligar),
-            ("btn_fechar", "Fechar (Esc)", self.close),
-        )):
+        ):
+            botao = QPushButton(rotulo)
+            if atributo in ("btn_cancelar", "btn_inutilizar"):
+                botao.setObjectName("perigo")
+            botao.clicked.connect(acao)
+            setattr(self, atributo, botao)
+            barra.addWidget(botao)
+        layout.addLayout(barra)
+        rodape = QHBoxLayout()
+        rodape.addWidget(self.mensagem, 1)
+        for atributo, rotulo, acao in (("btn_testar", "Testar SEFAZ", self.testar_sefaz),
+                                       ("btn_ligar", "Ligar / desligar emissão", self.ligar),
+                                       ("btn_fechar", "Fechar (Esc)", self.close)):
             botao = QPushButton(rotulo)
             botao.clicked.connect(acao)
             setattr(self, atributo, botao)
-            barra.addWidget(botao, indice // 4, indice % 4)
-        layout.addLayout(barra)
+            rodape.addWidget(botao)
+        layout.addLayout(rodape)
         QShortcut(QKeySequence("F5"), self, activated=self.atualizar)
         self.atualizar()
 

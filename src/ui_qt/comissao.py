@@ -18,7 +18,6 @@ from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
 from src.controllers.comissao_controller import entregar_via
 
-VERMELHO, MUDO = "#b32020", "#5b6573"
 
 
 # ===================================================================== regras de tela (as mesmas do caixa clássico)
@@ -172,7 +171,7 @@ def _campo(largura: int, tamanho: int = 16, direita: bool = False) -> QLineEdit:
 def _mudo(texto: str = "") -> QLabel:
     lbl = QLabel(texto)
     lbl.setWordWrap(True)
-    lbl.setStyleSheet(f"color: {MUDO};")
+    lbl.setProperty("tom", "suave")
     return lbl
 
 
@@ -216,7 +215,7 @@ class DialogoComissao(QDialog):
         caixa.addWidget(self.ent_valor)
         self.lbl_msg = QLabel("")
         self.lbl_msg.setWordWrap(True)
-        self.lbl_msg.setStyleSheet(f"color: {VERMELHO};")
+        self.lbl_msg.setProperty("tom", "perigo")
         caixa.addWidget(self.lbl_msg)
         _botoes(self, caixa, "Lançar", self.gravar)
         self.ent_numero.textEdited.connect(self.mostrar_nome)
@@ -228,7 +227,11 @@ class DialogoComissao(QDialog):
     def mostrar_nome(self, _texto: str = "") -> None:
         texto, alerta = descrever_garota(self.ctx, self.ent_numero.text())
         self.lbl_nome.setText(texto)
-        self.lbl_nome.setStyleSheet("color: #a15c00;" if alerta else f"color: {MUDO};")
+        tom = "alerta" if alerta else "suave"
+        if self.lbl_nome.property("tom") != tom:
+            self.lbl_nome.setProperty("tom", tom)
+            self.lbl_nome.style().unpolish(self.lbl_nome)
+            self.lbl_nome.style().polish(self.lbl_nome)
 
     def gravar(self) -> None:
         try:
@@ -296,7 +299,7 @@ class DialogoAcerto(QDialog):
         if self.consumo_cent:
             lbl_drinks = QLabel(f"Consumo dela ({len(self.consumos)} bebida(s)): - {fmt.fmt_brl(self.consumo_cent)}  (descontado)")
             lbl_drinks.setFont(QFont("Georgia", 14, QFont.Bold))
-            lbl_drinks.setStyleSheet(f"color: {VERMELHO};")
+            lbl_drinks.setProperty("tom", "perigo")
             caixa.addWidget(lbl_drinks)
 
         colunas = QHBoxLayout()
@@ -394,7 +397,7 @@ class DialogoAcerto(QDialog):
                               "O Pix nunca sai da gaveta."))
         self.lbl_msg = QLabel("")
         self.lbl_msg.setWordWrap(True)
-        self.lbl_msg.setStyleSheet(f"color: {VERMELHO};")
+        self.lbl_msg.setProperty("tom", "perigo")
         caixa.addWidget(self.lbl_msg)
         _botoes(self, externo, "Pagar", self.confirmar)
         for campo in (self.ent_nome, self.ent_qtd, self.ent_shows_manuais, self.ent_vale, self.ent_pix):

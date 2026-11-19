@@ -98,3 +98,35 @@ test("instalação e mudança para modo app ocultam também uma ajuda aberta", a
   b.media.change();
   assert.equal(b.botao.hidden, true);
 });
+
+test("atualizar painel, cardápio ou porteiro conserva as outras PWAs da mesma origem", async () => {
+  const apps = {
+    painel: "../backend/painel_web/sw.js",
+    cardapio: "../backend/cardapio_web/sw.js",
+    porteiro: "../src/porteiro/web/sw.js",
+  };
+  for (const [app, arquivo] of Object.entries(apps)) {
+    const cachesLocais = new Set(Object.keys(apps).map((nome) => nome + "-v1"));
+    const eventos = {};
+    const worker = fs.readFileSync(path.join(__dirname, arquivo), "utf8");
+    const contexto = vm.createContext({
+      self: { addEventListener(nome, acao) { eventos[nome] = acao; }, clients: { claim() {} } },
+      caches: {
+        async keys() { return [...cachesLocais]; },
+        async delete(nome) { return cachesLocais.delete(nome); },
+      },
+    });
+    vm.runInContext(worker, contexto);
+    const versaoAtual = vm.runInContext("VERSAO", contexto);
+    cachesLocais.add(versaoAtual);
+
+    let terminou;
+    eventos.activate({ waitUntil(promessa) { terminou = promessa; } });
+    await terminou;
+
+    assert.ok(cachesLocais.has(versaoAtual), app);
+    for (const nome of Object.keys(apps)) {
+      assert.equal(cachesLocais.has(nome + "-v1"), nome !== app, app + " ao verificar " + nome);
+    }
+  }
+});

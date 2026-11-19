@@ -4,8 +4,9 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QHeaderView, QPushButton, QTableWidget,  # noqa: E402
-                               QTableWidgetItem, QVBoxLayout)
+from PySide6.QtGui import QPalette  # noqa: E402
+from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QHBoxLayout, QHeaderView, QLabel, QLineEdit,  # noqa: E402
+                               QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout)
 
 from src.ui_qt import tema  # noqa: E402
 
@@ -72,15 +73,57 @@ class TestTemaModerno(unittest.TestCase):
         self.assertGreaterEqual(j.width(), min(j.sizeHint().width(), area.width() - tema.RESERVA_LARGURA))
         self.assertLessEqual(j.width(), area.width())
 
-    def test_cores_novas_tem_versao_no_modo_claro(self):
-        import re
-        claro = {}
-        from pathlib import Path
-        codigo = Path(tema.__file__).read_text(encoding="utf-8")
-        for original, nova in re.findall(r'"(#[0-9a-f]{6})": "(#[0-9a-f]{6})"', codigo):
-            claro[original] = nova
-        usadas = set(re.findall(r"#[0-9a-f]{6}", tema.ESTILO))
-        self.assertFalse(usadas - set(claro), "cor do tema escuro sem par no claro")
+    def test_contraste_de_texto_acao_e_foco_nos_dois_modos(self):
+        def luminancia(cor):
+            canais = (cor.redF(), cor.greenF(), cor.blueF())
+            r, g, b = (v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in canais)
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+        def contraste(cor, fundo):
+            menor, maior = sorted((luminancia(cor), luminancia(fundo)))
+            return (maior + 0.05) / (menor + 0.05)
+
+        def cor_da_borda(widget):
+            imagem = widget.grab().toImage()
+            return imagem.pixelColor(0, imagem.height() // 2)
+
+        janela = Janela()
+        self.addCleanup(APP.setStyleSheet, APP.styleSheet())
+        self.addCleanup(APP.setPalette, APP.palette())
+        self.addCleanup(janela.close)
+        layout = QVBoxLayout(janela)
+        legenda = QLabel("Operador")
+        legenda.setObjectName("suave")
+        acao = QPushButton("Entrar")
+        acao.setObjectName("primario")
+        campos = (QLineEdit(), QComboBox(), QSpinBox())
+        for widget in (legenda, *campos, acao):
+            layout.addWidget(widget)
+        janela.show()
+        janela.activateWindow()
+        for modo in ("claro", "escuro"):
+            with self.subTest(modo=modo):
+                tema.aplicar(APP, modo)
+                APP.processEvents()
+                fundo = janela.palette().color(QPalette.Window)
+                texto = janela.palette().color(QPalette.WindowText)
+                self.assertEqual(luminancia(fundo) > luminancia(texto), modo == "claro")
+                self.assertGreaterEqual(contraste(texto, fundo), 4.5)
+                self.assertGreaterEqual(contraste(legenda.palette().color(QPalette.WindowText), fundo), 4.5)
+                botao = acao.palette()
+                self.assertGreaterEqual(contraste(botao.color(QPalette.ButtonText), botao.color(QPalette.Button)), 4.5)
+                for campo in campos:
+                    acao.setFocus()
+                    APP.processEvents()
+                    normal = cor_da_borda(campo)
+                    campo.setFocus()
+                    APP.processEvents()
+                    foco = cor_da_borda(campo)
+                    self.assertTrue(campo.hasFocus())
+                    self.assertNotEqual(normal, foco)
+                    base = campo.palette().color(QPalette.Base)
+                    self.assertGreaterEqual(contraste(campo.palette().color(QPalette.Text), base), 4.5)
+                    self.assertGreaterEqual(contraste(foco, base), 3)
 
 
 if __name__ == "__main__":

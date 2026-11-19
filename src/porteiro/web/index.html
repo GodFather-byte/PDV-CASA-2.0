@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Porteiro</title>
   <meta name="description" content="Lista as comandas abertas e confere se ainda há valor antes da saída.">
-  <meta name="theme-color" content="#0b1220">
-  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#101c20">
+  <meta name="color-scheme" content="light dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -18,7 +18,7 @@
 </head>
 <body>
   <header class="topo">
-    <strong>Porteiro</strong>
+    <strong><span class="icone-porta" aria-hidden="true"></span>Porteiro</strong>
     <button type="button" id="botao-instalar" aria-controls="ajuda-instalar" aria-expanded="false" hidden>Instalar</button>
   </header>
   <section id="ajuda-instalar" class="ajuda-instalar" aria-labelledby="titulo-instalar" tabindex="-1" hidden>
@@ -37,12 +37,12 @@
   <p id="aviso" class="aviso" role="alert" hidden></p>
 
   <main id="tela-pin" hidden>
-    <h1>Entrada</h1>
-    <p class="sub">PIN definido no caixa. Quem está no Wi-Fi sem o PIN não consulta comanda.</p>
+    <h1>Acesso à portaria</h1>
+    <p class="sub">Digite o PIN definido no caixa para consultar as comandas.</p>
     <label id="rotulo-loja" for="campo-loja" hidden>Loja</label>
     <input id="campo-loja" hidden inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false"
            placeholder="CHAVE-DA-LOJA" aria-label="Chave da loja">
-    <p id="pin-mostra" class="mostra" aria-live="polite"> </p>
+    <div class="visor"><span>PIN da portaria</span><p id="pin-mostra" class="mostra" aria-live="polite"> </p></div>
     <div class="teclado" data-teclado="pin">
       <button type="button" data-tecla="1">1</button>
       <button type="button" data-tecla="2">2</button>
@@ -63,21 +63,20 @@
   <main id="tela-lista" hidden>
     <div class="lista-topo">
       <h1>Comandas abertas</h1>
-      <button type="button" id="botao-atualizar" class="secundario compacto">Atualizar agora</button>
+      <button type="button" id="botao-atualizar" class="secundario compacto">Atualizar</button>
     </div>
-    <p class="sub">Sem as comandas das garotas. No Wi-Fi do caixa a lista é ao vivo; na nuvem, até o próximo envio.</p>
-    <p id="lista-hora" class="origem">última atualização —</p>
-    <p id="lista-origem" class="origem"></p>
+    <p class="sub">Comandas de clientes. No Wi-Fi do caixa, a lista é ao vivo. Na nuvem, vale o último envio.</p>
+    <button type="button" id="botao-buscar" class="acao">Consultar número</button>
+    <div class="leitura"><p id="lista-hora" class="origem">última atualização —</p><p id="lista-origem" class="origem"></p></div>
     <p id="lista-vazio" class="sub" hidden>Nenhuma comanda aberta.</p>
     <div id="lista-comandas" class="lista"></div>
-    <button type="button" id="botao-buscar" class="acao">Consultar número</button>
     <button type="button" id="botao-sair-lista" class="link">Sair</button>
   </main>
 
   <main id="tela-consulta" hidden>
     <h1>Consultar número</h1>
     <p class="sub">Digite o número, ou use o leitor. A câmera só abre em endereço seguro.</p>
-    <p id="codigo-mostra" class="mostra" aria-live="polite">—</p>
+    <div class="visor"><span>Número da comanda ou mesa</span><p id="codigo-mostra" class="mostra" aria-live="polite">—</p></div>
     <div class="teclado" data-teclado="consulta">
       <button type="button" data-tecla="1">1</button>
       <button type="button" data-tecla="2">2</button>
@@ -100,9 +99,11 @@
   </main>
 
   <main id="tela-resultado" hidden>
-    <p id="res-cabecalho" class="cabecalho-resultado"></p>
-    <h1 id="res-titulo" class="titulo-resultado"></h1>
-    <p id="res-valor" class="valor-resultado"></p>
+    <div class="resumo">
+      <p id="res-cabecalho" class="cabecalho-resultado"></p>
+      <h1 id="res-titulo" class="titulo-resultado"></h1>
+      <p id="res-valor" class="valor-resultado"></p>
+    </div>
     <p id="res-detalhe" class="detalhe"></p>
     <p id="res-origem" class="origem"></p>
     <ul id="res-itens" class="itens"></ul>

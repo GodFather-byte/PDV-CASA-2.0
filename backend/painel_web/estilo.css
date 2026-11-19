@@ -1,51 +1,51 @@
-/* WillPDV Painel: mobile-first, identidade azul-noite e verde-água do PDV, sem dependências. */
+/* WillPDV Painel: mobile-first, identidade petróleo e jade do PDV, sem dependências. */
 
 :root {
-  /* Mesma identidade do PDV: azul-noite e verde-água. */
-  --topo: #101827;
-  --verde: #0f6b55;
-  --verde-escuro: #0a4a3b;
-  --verde-claro: #dff3ea;
-  --verde-medio: #14997a;
-  --marca: #5ee2bb;
-  --fundo: #eef2f6;
+  /* Mesma identidade do PDV: petróleo e jade. */
+  --topo: #101c20;
+  --verde: #11694f;
+  --verde-escuro: #104638;
+  --verde-claro: #ddefe4;
+  --verde-medio: #127451;
+  --marca: #55dfb0;
+  --fundo: #f2f3ed;
   --superficie: #ffffff;
-  --texto: #1e2a3c;
-  --texto-suave: #5a6a82;
-  --borda: #d5dde8;
+  --texto: #192b29;
+  --texto-suave: #50635d;
+  --borda: #cdd6cd;
   --vermelho: #a32f26;
   --vermelho-fundo: #fbe6e2;
-  --ambar: #7d4b00;
+  --ambar: #784700;
   --ambar-fundo: #fff1d3;
   --azul: #1d4ed8;
   --azul-fundo: #dbeafe;
-  --barra: #14997a;
+  --barra: #127451;
   --barra-fraca: #cfe9df;
   --raio: 14px;
-  --sombra: 0 4px 16px rgba(16, 24, 39, .07);
+  --sombra: 0 2px 6px rgba(24, 44, 37, .045);
   --altura-nav: 62px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --verde: #187e65;
+    --verde: #126a51;
     --verde-escuro: #0f5a48;
-    --verde-claro: #12332c;
-    --verde-medio: #5ee2bb;
-    --fundo: #0c1320;
-    --superficie: #151f30;
-    --texto: #e6edf7;
-    --texto-suave: #9eaec4;
-    --borda: #2a3850;
+    --verde-claro: #193d35;
+    --verde-medio: #55dfb0;
+    --fundo: #101c20;
+    --superficie: #192a2d;
+    --texto: #eff5ed;
+    --texto-suave: #b0c1be;
+    --borda: #384b4d;
     --vermelho: #ff9d94;
     --vermelho-fundo: #40191a;
-    --ambar: #ffd28a;
+    --ambar: #ffce83;
     --ambar-fundo: #3a2c10;
     --azul: #93c5fd;
     --azul-fundo: #13284a;
-    --barra: #5ee2bb;
-    --barra-fraca: #22304a;
-    --sombra: 0 8px 24px rgba(0, 0, 0, .3);
+    --barra: #55dfb0;
+    --barra-fraca: #2c413e;
+    --sombra: 0 2px 8px rgba(0, 0, 0, .13);
   }
 }
 
@@ -98,7 +98,7 @@ h3 { font-size: .95rem; color: var(--texto-suave); margin-top: .75rem; }
 
 .cartao-login {
   width: 100%;
-  max-width: 380px;
+  min-width: 0;
   background: var(--superficie);
   border-radius: 16px;
   padding: 1.5rem;
@@ -600,7 +600,7 @@ li.zerado .nome strong { color: var(--vermelho); }
 @media (prefers-color-scheme: dark) {
   .aba-botao.ativa { color: #86efac; }
   .etiqueta-garota { background: #4a1d36; color: #f9a8d4; }
-  .filtro.ativa { background: #166534; color: #fff; }
+  .filtro.ativa { background: var(--verde); color: #fff; }
 }
 
 :focus-visible { outline: 2px solid var(--verde-medio); outline-offset: 2px; }
@@ -631,11 +631,51 @@ li.zerado .nome strong { color: var(--vermelho); }
 
 body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.45; }
 
-/* ---------- Login ---------- */
-.tela-login { background: radial-gradient(120% 90% at 50% 0%, #1b2a44 0%, var(--topo) 60%); }
-.cartao-login { border-radius: 20px; padding: 1.75rem 1.5rem; }
-.cartao-login input { border-radius: 10px; }
-.botao-principal { border-radius: 10px; }
+/* ---------- Acesso ---------- */
+.tela-login {
+  padding: clamp(1rem, 5vw, 4rem);
+  background: var(--fundo);
+  min-height: 100svh;
+}
+.acesso-painel {
+  width: min(100%, 56rem);
+  display: grid;
+  grid-template-columns: 1.16fr 1fr;
+  overflow: hidden;
+  border: 1px solid var(--borda);
+  border-radius: 1.4rem;
+  box-shadow: 0 18px 54px rgba(16, 28, 32, .13);
+}
+.identidade-acesso {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 28rem;
+  padding: clamp(1.5rem, 3vw, 2.5rem);
+  color: #fff;
+  background: linear-gradient(165deg, rgba(11, 26, 26, .62), transparent 43%, rgba(8, 20, 20, .88)),
+              #142823 url("balcao.webp") center / cover;
+}
+.assinatura { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.12rem; font-weight: 730; }
+.assinatura img { border-radius: .5rem; }
+.identidade-acesso h1 { font-size: clamp(2.7rem, 5vw, 4.3rem); line-height: .98; letter-spacing: -.055em; margin: 0; }
+.cartao-login {
+  border-radius: 0;
+  box-shadow: none;
+  justify-content: center;
+  padding: clamp(1.5rem, 3.2vw, 3rem);
+  background: var(--superficie);
+}
+.cartao-login h2 { font-size: 1.65rem; letter-spacing: -.04em; margin: 0 0 1rem; }
+.cartao-login .sub { text-align: left; }
+.cartao-login input { border-radius: .55rem; background: var(--superficie); }
+.botao-principal { border-radius: .55rem; }
+@media (max-width: 650px) {
+  .acesso-painel { max-width: 28rem; grid-template-columns: minmax(0, 1fr); }
+  .identidade-acesso { min-height: 10rem; gap: 1.25rem; background-position: center 55%; }
+  .identidade-acesso h1 { font-size: 2.3rem; }
+  .identidade-acesso h1 br { display: none; }
+}
 
 /* ---------- Cabeçalho ---------- */
 .cabecalho {
@@ -644,7 +684,7 @@ body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-se
   border-bottom: 1px solid rgba(255, 255, 255, .08);
 }
 .cabecalho-titulo strong { font-size: 1.02rem; letter-spacing: -.01em; }
-.status-atualizacao { font-size: .74rem; color: #9eaec4; opacity: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status-atualizacao { font-size: .74rem; color: #b0c1be; opacity: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cabecalho-acoes { gap: .3rem; }
 .botao-icone {
   display: inline-flex;
@@ -662,7 +702,7 @@ body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-se
   text-decoration: none;
 }
 .botao-icone svg { width: 18px; height: 18px; flex-shrink: 0; }
-.botao-icone[aria-pressed="true"] { background: var(--marca); color: #04231b; border-color: var(--marca); }
+.botao-icone[aria-pressed="true"] { background: var(--marca); color: #10291e; border-color: var(--marca); }
 .botao-icone.girando svg { animation: girar 1s linear infinite; }
 @media (max-width: 599px) { .botao-icone .rot { display: none; } }
 
@@ -673,16 +713,26 @@ body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-se
   background: linear-gradient(135deg, var(--verde) 0%, var(--verde-escuro) 100%);
 }
 .cartao-mes {
-  background: linear-gradient(135deg, #16263f 0%, var(--topo) 100%) !important;
-  padding: 1.1rem;
-  gap: .25rem;
+  background: linear-gradient(110deg, #172d2c, #133d32) !important;
+  padding: clamp(1.2rem, 2.5vw, 2rem);
+  justify-content: space-between;
+  gap: 1rem;
 }
-.cartao-mes .valor-grande { font-size: 2.3rem !important; letter-spacing: -.02em; color: var(--marca); }
+.cartao-mes .valor-grande { font-size: clamp(1.95rem, 4vw, 3.25rem) !important; letter-spacing: -.045em; color: var(--marca); }
 .cartao-mes .legenda { color: rgba(255, 255, 255, .7); margin: 0; }
 .rotulo { font-size: .72rem; font-weight: 700; letter-spacing: .06em; }
 .valor-grande { letter-spacing: -.01em; }
-.bloco h2 { font-size: 1rem; letter-spacing: -.01em; }
-.linha-dia input { max-width: none; width: 44px; }
+.bloco h2 { font-size: 1.08rem; letter-spacing: -.025em; }
+.saldo-mes { display: grid; gap: .2rem; }
+.titulo-aba { font-size: clamp(1.55rem, 3vw, 2.2rem); letter-spacing: -.045em; line-height: 1.12; margin: .3rem 0 .9rem; }
+.linha-dia { flex-wrap: wrap; }
+.linha-dia input { max-width: 100%; min-width: 0; width: 9rem; font-variant-numeric: tabular-nums; }
+.linha-dia #data-dia { width: 9rem; }
+@media (max-width: 480px) {
+  .linha-dia:has(input + label) { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
+  .linha-dia:has(input + label) label { grid-column: 1; }
+  .linha-dia:has(input + label) input { width: 100%; }
+}
 
 /* Ocultar valores: o dono mostra o celular sem expor o faturamento. */
 body.valores-ocultos .valor-grande,
@@ -690,6 +740,7 @@ body.valores-ocultos .valor,
 body.valores-ocultos .total,
 body.valores-ocultos .detalhe,
 body.valores-ocultos .linha-detalhes strong,
+body.valores-ocultos .grafico-svg,
 body.valores-ocultos .barra .topo,
 body.valores-ocultos .detalhe-grafico,
 body.valores-ocultos .tabela-meses td,
@@ -697,6 +748,8 @@ body.valores-ocultos #meta-texto,
 body.valores-ocultos #meta-projecao,
 body.valores-ocultos .legenda,
 body.valores-ocultos .sec { filter: blur(7px); user-select: none; }
+
+body.valores-ocultos .grafico-svg { pointer-events: none; }
 
 /* ---------- Meta do mês ---------- */
 .meta { margin-top: .7rem; padding-top: .7rem; border-top: 1px solid rgba(255, 255, 255, .14); }
@@ -713,7 +766,7 @@ body.valores-ocultos .sec { filter: blur(7px); user-select: none; }
 }
 .medidor-meta { height: 10px; border-radius: 5px; background: rgba(255, 255, 255, .14); margin: .45rem 0; }
 .medidor-meta > span { background: var(--marca); border-radius: 5px; transition: width .4s ease; }
-.medidor-meta.batida > span { background: #ffd28a; }
+.medidor-meta.batida > span { background: #ffce83; }
 .meta-form { display: flex; gap: .4rem; margin-top: .5rem; }
 .meta-form input {
   flex: 1;
@@ -730,7 +783,7 @@ body.valores-ocultos .sec { filter: blur(7px); user-select: none; }
   border-radius: 10px;
   border: 0;
   background: var(--marca);
-  color: #04231b;
+  color: #10291e;
   font-weight: 700;
   cursor: pointer;
 }
@@ -781,7 +834,8 @@ body.valores-ocultos .sec { filter: blur(7px); user-select: none; }
 /* ---------- Navegação inferior ---------- */
 .navegacao {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   overflow: visible;
   box-shadow: 0 -4px 16px rgba(16, 24, 39, .08);
 }
@@ -842,23 +896,35 @@ body.valores-ocultos .sec { filter: blur(7px); user-select: none; }
     border-radius: 10px;
     font-size: .92rem;
   }
-  .aba-botao.ativa { background: var(--verde-claro); }
+  .navegacao { background: var(--topo); border-right-color: #304442; }
+  .aba-botao { color: #c0cec7; }
+  .aba-botao:hover { background: #233936; }
+  .aba-botao.ativa { background: #23463c; color: var(--marca); }
   .aba-botao.ativa::before { display: none; }
   .aba-botao .selo { position: static; margin-left: .4rem; }
   .cabecalho { padding-left: 1.25rem; padding-right: 1.25rem; }
   .faixa { margin-left: 208px; }
-  .conteudo { max-width: none; margin: 0 0 0 208px; padding: 1.25rem 1.5rem 2rem; }
-  .aba { max-width: 1280px; column-count: 2; column-gap: 1rem; }
-  .aba > * { break-inside: avoid; }
-  .aba > .cartao-mes, .aba > .linha-dia, .aba > .grade-cartoes, .aba > #cartao-alertas { column-span: all; }
-  .aba > .bloco:first-of-type { margin-top: .85rem; }
-  .grade-cartoes { grid-template-columns: repeat(6, 1fr); }
-  #aba-vendas, #aba-lucro { column-count: 1; }
+  #tela-app .conteudo { max-width: none; margin: 0 0 0 208px; padding: 1.5rem clamp(1rem, 2.4vw, 2.5rem) 3rem; }
+  #tela-rede .conteudo { max-width: 1140px; }
+  .aba { max-width: 1280px; margin: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+  .aba > * { min-width: 0; grid-column: 1 / -1; margin: 0; }
+  .aba > .bloco, #cartao-mes { grid-column: auto; }
+  #bloco-historico, #cartao-mes { align-self: stretch; }
+  #cartao-alertas { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  #cartao-alertas .rotulo, #cartao-alertas .legenda { grid-column: 1; }
+  #lista-alertas { grid-column: 1; }
+  #cartao-alertas .acoes-resumo { grid-column: 2; grid-row: 1 / 4; justify-content: flex-end; max-width: 26rem; }
+  #aba-vendas > .bloco, #bloco-lojas, #adicionar-loja, #bloco-notas { grid-column: 1 / -1; }
+  .aba > .grade-cartoes, .aba > .linha-dia { margin: 0; }
+  .grade-cartoes { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); }
+  .cartao.destaque { grid-column: auto; }
+  .bloco, .cartao:not(.cartao-mes) { padding: 1.1rem; }
 }
 .botao-icone.girando span { animation: none; }
 .linha-dia { margin-top: .85rem; }
 #lista-alertas > li button { font-size: .78rem; padding: .4rem .7rem; }
-.grade-cartoes { grid-auto-flow: dense; }
+.grade-cartoes > * { min-width: 0; overflow-wrap: anywhere; }
+.bloco > .grade-cartoes { grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr)); }
 
 /* ---------- Notas de compra ---------- */
 .arquivo-oculto { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
@@ -902,8 +968,8 @@ body.valores-ocultos .sec { filter: blur(7px); user-select: none; }
 .etiqueta-nota.baixada { background: var(--azul-fundo); color: var(--azul); }
 .etiqueta-nota.lancada { background: var(--verde-claro); color: var(--verde-medio); }
 .etiqueta-nota.recusada { background: var(--vermelho-fundo); color: var(--vermelho); }
+.lista-lojas .botao-link { color: var(--verde-medio); }
 .botao-link.perigo { color: var(--vermelho); }
-@media (min-width: 1000px) { .aba > #bloco-notas { column-span: all; } }
 #aviso-notas { margin-bottom: .6rem; }
 
 /* ---------- Minhas lojas ---------- */
@@ -944,7 +1010,6 @@ body.valores-ocultos .sec { filter: blur(7px); user-select: none; }
 }
 .form-loja button { margin-top: .5rem; }
 #aviso-lojas { margin-top: .6rem; }
-@media (min-width: 1000px) { .aba > #bloco-lojas, .aba > #adicionar-loja { column-span: all; } }
 a.botao-arquivo { text-decoration: none; }
 
 /* ---- Rede de lojas ---- */

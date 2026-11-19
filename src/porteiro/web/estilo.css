@@ -1,264 +1,132 @@
 :root {
-  color-scheme: dark;
-  --fundo: #0b1220;
-  --cartao: #152033;
-  --texto: #f8fafc;
-  --suave: #cbd5e1;
-  --linha: #334155;
-  --acao: #5ee2bb;
-  --acao-texto: #042f2e;
+  color-scheme: light dark;
+  --fundo: #eeefe8;
+  --cartao: #fffef9;
+  --campo: #f3f4ed;
+  --tecla: #f8f9f3;
+  --texto: #192b29;
+  --suave: #4d615b;
+  --linha: #c8d3c9;
+  --acao: #11694f;
+  --acao-texto: #fffef9;
+  --atencao: #714400;
+  --aviso: #ffedc4;
+  --negativo: #9d3b38;
+  --positivo: #11694f;
+  font-family: "Segoe UI", Roboto, system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #101c20;
+    --cartao: #1a2a2c;
+    --campo: #152224;
+    --tecla: #233537;
+    --texto: #f3f5ec;
+    --suave: #b1c2ba;
+    --linha: #3a504c;
+    --acao: #55dfb0;
+    --acao-texto: #10382d;
+    --atencao: #ffdc97;
+    --aviso: #3d3224;
+    --negativo: #ffa29b;
+    --positivo: #7ae4b9;
+  }
 }
 
 * { box-sizing: border-box; }
-
-html, body {
-  margin: 0;
-  min-height: 100%;
-  background: var(--fundo);
-  color: var(--texto);
-  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-}
-
+[hidden] { display: none !important; }
 body {
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  margin: 0; min-height: 100vh; background: var(--fundo); color: var(--texto);
+  padding-bottom: env(safe-area-inset-bottom);
 }
-
-button, video { font: inherit; }
-
+button, input { font: inherit; }
+button {
+  min-height: 46px; border: 1px solid var(--linha); border-radius: 9px; padding: .5rem .9rem;
+  cursor: pointer; font-weight: 650; touch-action: manipulation;
+}
+button:focus-visible, input:focus-visible { outline: 3px solid var(--acao); outline-offset: 2px; }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: .6; }
 .topo {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px 0;
-  font-size: 1.05rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: calc(64px + env(safe-area-inset-top)); padding: calc(.5rem + env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) .5rem max(1rem, env(safe-area-inset-left));
+  background: #101c20; color: #f0f5ec;
 }
-
-#botao-instalar, .secundario, .link, .acao, .teclado button {
-  border: 0;
-  border-radius: 14px;
-  min-height: 56px;
-  touch-action: manipulation;
+.topo strong { display: flex; align-items: center; gap: .65rem; font-size: 1.12rem; letter-spacing: -.02em; }
+.icone-porta {
+  position: relative; width: 32px; height: 32px; background: #55dfb0; border-radius: 9px;
 }
+.icone-porta::before, .icone-porta::after { content: ""; position: absolute; }
+.icone-porta::before { inset: 6px 8px; border-radius: 4px 4px 0 0; border: 2px solid #143c32; }
+.icone-porta::after { width: 3px; height: 3px; top: 16px; right: 12px; border-radius: 50%; background: #143c32; }
+#botao-instalar { min-height: 44px; border-color: #48655c; background: transparent; color: #92e9c8; }
+#botao-instalar:focus-visible { outline-color: #55dfb0; }
 
-#botao-instalar {
-  background: transparent;
-  color: var(--acao);
-  border: 1px solid var(--acao);
-  padding: 8px 14px;
-  min-height: 44px;
+main, .ajuda-instalar, .aviso {
+  width: min(calc(100% - 1.5rem), 31rem); margin: 1.15rem auto;
+  padding: clamp(1rem, 4vw, 1.75rem); border-radius: 16px; background: var(--cartao); border: 1px solid var(--linha);
 }
-
-main {
-  max-width: 480px;
-  margin: 0 auto;
-  padding: 12px 16px 28px;
-}
-
-.ajuda-instalar {
-  max-width: 480px;
-  margin: 16px auto;
-  padding: 16px;
-  background: var(--cartao);
-  border: 1px solid var(--linha);
-  border-radius: 14px;
-  line-height: 1.5;
-}
-
-.ajuda-instalar h2 { margin: 0; font-size: 1.2rem; }
-.ajuda-instalar ol { padding-left: 24px; }
-.ajuda-instalar li + li { margin-top: 10px; }
-.ajuda-instalar button { width: 100%; }
-
-h1 { font-size: 1.6rem; margin: 8px 0; }
-
-.sub { color: var(--suave); margin-top: 0; line-height: 1.4; }
-
+.ajuda-instalar { line-height: 1.5; }
+.ajuda-instalar h2 { font-size: 1.25rem; margin: 0; }
+.ajuda-instalar ol { padding-left: 1.25rem; }
+.ajuda-instalar li + li { margin-top: .55rem; }
+.aviso { color: var(--atencao); background: var(--aviso); line-height: 1.4; padding: 1rem; }
+h1 { font-size: clamp(1.6rem, 5vw, 2.15rem); line-height: 1.12; letter-spacing: -.045em; margin: 0 0 .5rem; }
+.sub, .origem, .link, #rotulo-loja, .visor > span { color: var(--suave); }
+.sub { margin: .5rem 0 1.1rem; line-height: 1.45; }
+.origem { margin: 0; font-size: .9rem; line-height: 1.45; }
+#rotulo-loja, .visor > span { font-weight: 650; font-size: .86rem; }
 #campo-loja {
-  display: block;
-  width: 100%;
-  margin: 8px 0 12px;
-  min-height: 56px;
-  border-radius: 14px;
-  border: 1px solid var(--linha);
-  background: var(--cartao);
-  color: var(--texto);
-  font-size: 1.3rem;
-  letter-spacing: 0.06em;
-  text-align: center;
-  padding: 8px 12px;
+  width: 100%; min-height: 46px; margin: .4rem 0 .85rem; padding: .65rem .8rem;
+  font-size: 1rem; background: var(--campo); color: var(--texto); border: 1px solid var(--linha); border-radius: 8px;
 }
-
-label[for="campo-loja"] { color: var(--suave); }
-
-.origem { font-size: 1rem; opacity: 0.95; }
-
-.aviso {
-  margin: 12px 16px 0;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: #451a03;
-  color: #ffedd5;
+.visor {
+  display: grid; align-content: center; justify-items: center; gap: .15rem; min-height: 82px;
+  margin: .75rem 0; padding: .5rem .75rem; border-radius: 10px; background: var(--campo); border: 1px solid var(--linha);
 }
+.mostra { margin: 0; font-size: 1.95rem; font-weight: 650; letter-spacing: .08em; min-height: 1.18em; line-height: 1.18; overflow-wrap: anywhere; }
+.teclado { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+.teclado button { min-height: 54px; background: var(--tecla); color: var(--texto); font-size: 1.5rem; font-weight: 550; }
+.teclado button[data-tecla="limpar"], .teclado button[data-tecla="mesa"] { font-size: .92rem; color: var(--suave); }
+.teclado button[aria-pressed="true"] { background: var(--acao); color: var(--acao-texto); }
+.acao, .secundario, .link { display: block; width: 100%; margin-top: .7rem; }
+.acao { background: var(--acao); color: var(--acao-texto); border-color: transparent; font-size: 1.13rem; min-height: 54px; }
+.secundario { color: var(--texto); background: var(--tecla); }
+.link { border-color: transparent; background: transparent; }
+#camera { width: 100%; max-height: 240px; margin-top: .75rem; border-radius: 9px; background: #000; object-fit: cover; }
 
-.mostra {
-  min-height: 76px;
-  margin: 8px 0 14px;
-  padding: 12px;
-  border-radius: 16px;
-  background: var(--cartao);
-  border: 1px solid var(--linha);
-  font-size: 2.4rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-align: center;
-  overflow: hidden;
-}
-
-.teclado {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-
-.teclado button {
-  background: #1e293b;
-  color: var(--texto);
-  font-size: 1.7rem;
-  font-weight: 700;
-}
-
-.teclado button:active { background: #334155; }
-
-#botao-mesa[aria-pressed="true"] {
-  background: var(--acao);
-  color: var(--acao-texto);
-}
-
-.acao, .secundario, .link {
-  display: block;
-  width: 100%;
-  margin-top: 12px;
-}
-
-.acao {
-  background: var(--acao);
-  color: var(--acao-texto);
-  font-size: 1.35rem;
-  font-weight: 800;
-  min-height: 68px;
-}
-
-.secundario {
-  background: #1e293b;
-  color: var(--texto);
-  font-size: 1.1rem;
-}
-
-.link {
-  background: transparent;
-  color: var(--suave);
-  min-height: 48px;
-}
-
-#camera {
-  width: 100%;
-  margin-top: 12px;
-  border-radius: 16px;
-  background: #000;
-  max-height: 240px;
-  object-fit: cover;
-}
-
-body[data-situacao="liberada"] { background: #047857; }
-body[data-situacao="devendo"] { background: #b91c1c; }
-
-body[data-situacao] .topo,
-body[data-situacao] .aviso { color: #fff; }
-
-.titulo-resultado {
-  font-size: clamp(3rem, 14vw, 5.2rem);
-  line-height: 0.95;
-  letter-spacing: 0.02em;
-  margin: 8px 0;
-}
-
-.cabecalho-resultado {
-  font-size: 1.35rem;
-  margin-bottom: 0;
-}
-
-.valor-resultado {
-  font-size: clamp(2.4rem, 12vw, 4.2rem);
-  font-weight: 800;
-  margin: 0;
-}
-
-.detalhe { font-size: 1.2rem; line-height: 1.35; }
-
-.itens {
-  list-style: none;
-  padding: 0;
-  margin: 12px 0 18px;
-}
-
-.itens li {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px;
-  margin-top: 8px;
-  border-radius: 14px;
-  background: rgba(0, 0, 0, 0.28);
-  font-size: 1.15rem;
-}
-
-.itens .valor { font-weight: 700; white-space: nowrap; }
-
-.lista-topo {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.lista-topo h1 { margin: 8px 0; }
-
-.compacto {
-  width: auto;
-  margin-top: 0;
-  min-height: 44px;
-  padding: 8px 14px;
-  flex: 0 0 auto;
-}
-
-.lista { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
-
+.lista-topo { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+.lista-topo h1 { margin: 0; }
+.compacto { width: auto; margin: 0; white-space: nowrap; }
+.leitura { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .3rem .7rem; margin: 1.15rem 0 .75rem; }
+.lista { display: grid; gap: .5rem; }
 .cartao-comanda {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-rows: auto auto;
-  gap: 2px 12px;
-  width: 100%;
-  margin: 0;
-  padding: 14px 16px;
-  text-align: left;
-  background: var(--cartao);
-  color: var(--texto);
-  border: 1px solid var(--linha);
-  border-left-width: 6px;
+  display: grid; grid-template-columns: 1fr auto; gap: .3rem .5rem; width: 100%; padding: .85rem;
+  text-align: left; color: var(--texto); background: var(--campo); overflow-wrap: anywhere;
 }
-
-.cartao-comanda.devendo { border-left-color: #f87171; }
-.cartao-comanda.liberada { border-left-color: #34d399; }
-
-.cartao-comanda .numero { font-size: 1.55rem; font-weight: 800; }
-.cartao-comanda .valor { font-size: 1.35rem; font-weight: 800; text-align: right; }
-.cartao-comanda .hora, .cartao-comanda .situacao-txt { color: var(--suave); font-size: 0.95rem; }
-.cartao-comanda .situacao-txt { text-align: right; }
-
-body[data-situacao] .acao {
-  background: #fff;
-  color: #111827;
+.cartao-comanda .numero, .cartao-comanda .valor { font-size: clamp(1rem, 4vw, 1.23rem); }
+.cartao-comanda .valor, .valor-resultado, .mostra { font-variant-numeric: tabular-nums; }
+.cartao-comanda .valor, .cartao-comanda .situacao-txt { text-align: right; }
+.cartao-comanda .hora { color: var(--suave); font-size: .86rem; font-weight: 400; }
+.cartao-comanda .situacao-txt { font-size: .8rem; }
+.cartao-comanda.devendo .situacao-txt { color: var(--negativo); }
+.cartao-comanda.liberada .situacao-txt { color: var(--positivo); }
+#lista-vazio { text-align: center; border: 1px dashed var(--linha); border-radius: 9px; padding: 1.65rem .65rem; }
+.resumo { padding: 1.25rem; border-radius: 10px; background: #1b5948; color: #fff; overflow-wrap: anywhere; }
+body[data-situacao="devendo"] .resumo { background: #873833; }
+.cabecalho-resultado { margin: 0 0 .6rem; font-size: 1.1rem; font-weight: 600; }
+.titulo-resultado { font-size: clamp(2.1rem, 10vw, 3.8rem); }
+.valor-resultado { border-top: 1px solid #ffffff66; padding-top: .8rem; margin: .8rem 0 0; font-size: clamp(1.8rem, 8vw, 2.5rem); font-weight: 650; }
+.detalhe { font-size: 1.1rem; line-height: 1.45; margin: 1rem 0 .4rem; }
+.itens { list-style: none; margin: .9rem 0 1.2rem; padding: 0; }
+.itens li { display: flex; justify-content: space-between; gap: .8rem; padding: .8rem 0; border-bottom: 1px solid var(--linha); overflow-wrap: anywhere; }
+.itens .valor { white-space: nowrap; font-weight: 650; }
+@media (min-width: 46rem) {
+  .topo { padding-inline: max(2rem, calc((100% - 64rem) / 2)); }
+  main { margin-block: 2.5rem; box-shadow: 0 10px 30px #0e241411; }
+}
+@media (hover: hover) {
+  button:hover { border-color: var(--acao); }
+  .acao:hover { filter: brightness(1.08); }
 }

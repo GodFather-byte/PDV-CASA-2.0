@@ -114,6 +114,10 @@ def instalar(app: FastAPI) -> None:
     def site_css():
         return FileResponse(PASTA / "estilo.css", media_type="text/css", headers=cabecalho_css)
 
+    @app.get("/site/balcao.webp", include_in_schema=False)
+    def site_foto():
+        return FileResponse(PASTA / "balcao.webp", media_type="image/webp", headers=cabecalho_css)
+
     @app.get("/site/teste.js", include_in_schema=False)
     def site_js():
         return FileResponse(PASTA / "teste.js", media_type="text/javascript", headers=cabecalho_html)

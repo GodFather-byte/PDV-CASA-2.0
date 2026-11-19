@@ -213,11 +213,10 @@ class PainelFechamento(QDialog):
             g_maq.setColumnStretch(0, 1)
             direita.addWidget(conferir)
         resultado = res["resultado"]
-        cor = "#17805a" if resultado >= 0 else "#b83a45"
         self.faixa = QLabel(f"Resultado: {fmt.fmt_brl(resultado)}  -  {rotulo_do_resultado(resultado)}")
         self.faixa.setAlignment(Qt.AlignCenter)
-        self.faixa.setStyleSheet(f"background: {cor}; color: #ffffff; font-size: 20pt; font-weight: bold; "
-                                 "padding: 10px; border-radius: 8px;")
+        self.faixa.setProperty("tom", "sucesso" if resultado >= 0 else "perigo")
+        self.faixa.setStyleSheet("font-size: 20pt; font-weight: bold; padding: 10px;")
         raiz.addWidget(self.faixa)
         barra = QHBoxLayout()
         self.btn_imprimir = QPushButton("Imprimir Fechamento")
@@ -241,7 +240,8 @@ class PainelFechamento(QDialog):
             self.lbl_impresso.setText(
                 f"Fechamento enviado à impressora ({vias_impressas} via{'s' if vias_impressas > 1 else ''}): "
                 "o caixa responsável e o gerente assinam.")
-            self.lbl_impresso.setStyleSheet("color: #52a98a; font-weight: bold;")
+            self.lbl_impresso.setProperty("tom", "sucesso")
+            self.lbl_impresso.setStyleSheet("font-weight: bold;")
         raiz.addWidget(self.lbl_impresso)
         self.btn_concluir.setFocus()
 
