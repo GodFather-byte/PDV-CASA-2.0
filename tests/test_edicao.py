@@ -26,7 +26,7 @@ class TesteEscolhaDaEdicao(unittest.TestCase):
         with sem_variavel():
             ed = edicao.atual()
         self.assertEqual((ed.chave, ed.nome, ed.pasta_dados), ("willpdv", "WillPDV", "WILL-PDV"))
-        self.assertEqual((ed.fixas, ed.perfil, ed.menu_oculto), ({}, None, frozenset()))
+        self.assertEqual((ed.fixas, ed.perfil, ed.menu_oculto), ({}, None, frozenset({"hotel"})))   # o hotel é só do Will Hotel
 
     def test_variavel_escolhe_a_adega(self):
         with patch.dict(os.environ, ADEGA):

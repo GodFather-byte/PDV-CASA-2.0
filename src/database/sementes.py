@@ -59,6 +59,8 @@ ACESSOS = [
     ("fiscal_nfce", "Notas fiscais (NFC-e)", "Utilitários", 3),
     ("util_cozinha", "Painel da Cozinha/Bar", "Utilitários", 2),
     ("util_quartos", "Controle de quartos (tempo)", "Utilitários", 1),
+    ("util_hotel", "Hotel: recepção, reservas, check-in e check-out", "Utilitários", 1),
+    ("cfg_hotel", "Hotel: quartos, tarifas e períodos", "Configurações", 3),
     ("cfg_acessos", "Configurar níveis de acesso", "Configurações", 4),
     ("cfg_loja", "Dados da Loja", "Configurações", 3),
     ("cfg_configuracoes", "Configurações operacionais", "Configurações", 4),
@@ -108,6 +110,9 @@ CONFIG_PADRAO = {
     "usar_quartos": "N", "quartos_qtd": "7", "quartos_minutos_bloco": "30", "quartos_valor_bloco": "90",
     "quartos_alerta_min": "5", "quartos_campainhas": "", "quartos_garota_minimo": "100",
     "quartos_codigo_show": "33", "quartos_pela_comanda": "N", "quartos_tolerancia_min": "5",
+    # Hotel (edição Will Hotel): diárias e períodos curtos, conta da estadia numa comanda a partir de `hotel_conta_inicio`.
+    "usar_hotel": "N", "hotel_checkin_hora": "14:00", "hotel_checkout_hora": "12:00", "hotel_conta_inicio": "500",
+    "hotel_tolerancia_min": "15", "hotel_alerta_min": "15", "hotel_produto_cafe": "", "hotel_produto_hora_extra": "",
     # Recursos da casa noturna: nascem ligados porque o sistema nasceu boate; o perfil do estabelecimento os desliga nos
     # outros tipos de negócio (perfil_controller.py).
     "usar_garotas": "S", "usar_portaria": "S", "perfil_operacao": "boate",
