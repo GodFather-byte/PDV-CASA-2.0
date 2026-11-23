@@ -3,10 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>WillPDV — caixa para boate, adega, restaurante e loja · software sob medida</title>
-  <meta name="description" content="WillPDV, Will Adega, Will Restaurante e Will Variedades: caixa no Windows que vende sem internet, painel do dono no celular e atualização automática. E sob medida: software, sites, apps de gestão, bots de atendimento com IA e Google Meu Negócio.">
+  <title>{{titulo}}</title>
+  <meta name="description" content="{{meta_descricao}}">
+  <link rel="canonical" href="{{url_publica}}/">
+  <meta property="og:title" content="{{titulo}}">
+  <meta property="og:description" content="{{meta_descricao}}">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:url" content="{{url_publica}}/">
+  <meta property="og:site_name" content="WillPDV">
+  <meta property="og:image" content="{{url_publica}}/site/balcao.webp">
+  <meta property="og:image:alt" content="Terminal de caixa no balcão de um bistrô.">
   <meta name="theme-color" content="#102322">
   <link rel="stylesheet" href="/site/estilo.css">
+  <script type="application/ld+json">{{json_ld}}</script>
 </head>
 <body>
   <header class="topo">
@@ -14,7 +24,7 @@
     <nav aria-label="Seções">
       <a href="#edicoes">Programas</a>
       <a href="#planos">Planos</a>
-      <a href="#sob-medida">Sob medida</a>
+      <a href="#servicos">Serviços</a>
       <a href="#faq">Dúvidas</a>
     </nav>
     <a class="botao pequeno" href="#teste">Testar grátis</a>
@@ -36,13 +46,22 @@
 
     <section id="edicoes">
       <h2>Um caixa para cada tipo de negócio</h2>
+      <div class="troca-periodo" role="group" aria-label="Período do plano">
+        <button type="button" class="ativo" aria-pressed="true" data-periodo="mensal">Mensal</button>
+        <button type="button" aria-pressed="false" data-periodo="anual">Anual <span class="selo-gratis">2 meses grátis</span></button>
+      </div>
       <div class="edicoes quatro">
         <article class="cartao boate">
           <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
           <p class="olho">Boate e bar</p>
           <h3>WillPDV</h3>
           <p>Casa com mesas, comandas e portaria. O cardápio no celular é só consulta: o pedido é feito no caixa. Não há pedido online.</p>
-          <p class="preco">{{boate_mensal}}<small>/mês</small></p>
+          <div class="precos-plano">
+            <p class="preco preco-mes">{{boate_mensal}}<small>/mês</small></p>
+            <p class="preco preco-ano">{{boate_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
+            <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{boate_anual}} no ano</span></p>
+            <p class="linha-mes">ou {{boate_mensal}} por mês</p>
+          </div>
           <a class="botao" href="{{download_willpdv}}">Baixar instalador</a>
         </article>
         <article class="cartao adega">
@@ -50,7 +69,12 @@
           <p class="olho">Adega</p>
           <h3>Will Adega</h3>
           <p>Pedido online pelo cardápio QR, entrega ou retirada na loja, e o pedido cai no caixa. Gelada, casco e quantidade fracionada quando o produto tem.</p>
-          <p class="preco">{{adega_mensal}}<small>/mês</small></p>
+          <div class="precos-plano">
+            <p class="preco preco-mes">{{adega_mensal}}<small>/mês</small></p>
+            <p class="preco preco-ano">{{adega_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
+            <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{adega_anual}} no ano</span></p>
+            <p class="linha-mes">ou {{adega_mensal}} por mês</p>
+          </div>
           <a class="botao" href="{{download_willadega}}">Baixar instalador</a>
         </article>
         <article class="cartao restaurante">
@@ -58,16 +82,26 @@
           <p class="olho">Restaurante, pizzaria e lanchonete</p>
           <h3>Will Restaurante</h3>
           <p>Mesas, cozinha e cardápio digital. Pedido online com entrega e retirada caindo direto no caixa, delivery com taxa por bairro.</p>
-          <p class="preco">{{restaurante_mensal}}<small>/mês</small></p>
+          <div class="precos-plano">
+            <p class="preco preco-mes">{{restaurante_mensal}}<small>/mês</small></p>
+            <p class="preco preco-ano">{{restaurante_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
+            <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{restaurante_anual}} no ano</span></p>
+            <p class="linha-mes">ou {{restaurante_mensal}} por mês</p>
+          </div>
           <a class="botao" href="{{download_willrestaurante}}">Baixar instalador</a>
         </article>
         <article class="cartao variedades">
           <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0"/></svg></span>
           <p class="olho">Loja de variedades</p>
-          <h3>Will Variedades <span class="breve">Em breve</span></h3>
+          <h3>Will Variedades</h3>
           <p>Para loja de variedades, utilidades e presentes: muitos produtos, código de barras, estoque e venda rápida no balcão.</p>
-          <p class="preco">{{variedades_mensal}}<small>/mês</small></p>
-          <a class="zap" href="{{zap_variedades}}">Quero ser avisado</a>
+          <div class="precos-plano">
+            <p class="preco preco-mes">{{variedades_mensal}}<small>/mês</small></p>
+            <p class="preco preco-ano">{{variedades_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
+            <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{variedades_anual}} no ano</span></p>
+            <p class="linha-mes">ou {{variedades_mensal}} por mês</p>
+          </div>
+          <a class="botao" href="{{zap_variedades}}">Assinar</a>
         </article>
       </div>
     </section>
@@ -108,33 +142,53 @@
     <section id="planos">
       <h2>Preço simples, sem fidelidade</h2>
       <p class="lead">Teste grátis de {{dias_teste}} dias. No plano anual, {{meses_gratis}} meses saem grátis: você paga {{meses_cobrados}}.</p>
+      <div class="troca-periodo" role="group" aria-label="Período do plano">
+        <button type="button" class="ativo" aria-pressed="true" data-periodo="mensal">Mensal</button>
+        <button type="button" aria-pressed="false" data-periodo="anual">Anual <span class="selo-gratis">2 meses grátis</span></button>
+      </div>
       <div class="edicoes quatro">
         <article class="cartao boate">
           <h3>WillPDV · boate e bar</h3>
-          <p class="preco">{{boate_mensal}}<small>/mês</small></p>
-          <p>Ano: {{boate_anual}} <span class="nota">({{meses_gratis}} meses grátis)</span></p>
+          <div class="precos-plano">
+            <p class="preco preco-mes">{{boate_mensal}}<small>/mês</small></p>
+            <p class="preco preco-ano">{{boate_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
+            <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{boate_anual}} no ano</span></p>
+            <p class="linha-mes">ou {{boate_mensal}} por mês</p>
+          </div>
           <a class="zap" href="{{zap_boate}}">Assinar</a>
         </article>
         <article class="cartao adega">
           <h3>Will Adega</h3>
-          <p class="preco">{{adega_mensal}}<small>/mês</small></p>
-          <p>Ano: {{adega_anual}} <span class="nota">({{meses_gratis}} meses grátis)</span></p>
+          <div class="precos-plano">
+            <p class="preco preco-mes">{{adega_mensal}}<small>/mês</small></p>
+            <p class="preco preco-ano">{{adega_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
+            <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{adega_anual}} no ano</span></p>
+            <p class="linha-mes">ou {{adega_mensal}} por mês</p>
+          </div>
           <a class="zap" href="{{zap_adega}}">Assinar</a>
         </article>
         <article class="cartao restaurante">
           <h3>Will Restaurante</h3>
-          <p class="preco">{{restaurante_mensal}}<small>/mês</small></p>
-          <p>Ano: {{restaurante_anual}} <span class="nota">({{meses_gratis}} meses grátis)</span></p>
+          <div class="precos-plano">
+            <p class="preco preco-mes">{{restaurante_mensal}}<small>/mês</small></p>
+            <p class="preco preco-ano">{{restaurante_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
+            <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{restaurante_anual}} no ano</span></p>
+            <p class="linha-mes">ou {{restaurante_mensal}} por mês</p>
+          </div>
           <a class="zap" href="{{zap_restaurante}}">Assinar</a>
         </article>
-        <article class="cartao">
-          <h3>Instalação</h3>
-          <p class="preco">{{instalacao}}<small> uma vez</small></p>
-          <p>Alguém vai à loja, instala o caixa e deixa a primeira venda saindo.</p>
-          <a class="fantasma" href="{{zap_instalacao}}">Pedir instalação</a>
+        <article class="cartao variedades">
+          <h3>Will Variedades</h3>
+          <div class="precos-plano">
+            <p class="preco preco-mes">{{variedades_mensal}}<small>/mês</small></p>
+            <p class="preco preco-ano">{{variedades_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
+            <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{variedades_anual}} no ano</span></p>
+            <p class="linha-mes">ou {{variedades_mensal}} por mês</p>
+          </div>
+          <a class="zap" href="{{zap_variedades}}">Assinar</a>
         </article>
       </div>
-      <p class="miudo">Assinar abre o WhatsApp. O Will Variedades chega em breve pelo mesmo preço do Will Adega.</p>
+      <p class="miudo">Assinar abre o WhatsApp. A instalação na loja é grátis: alguém vai até a casa, instala o caixa e deixa a primeira venda saindo. <a href="{{zap_instalacao}}">Pedir instalação</a></p>
     </section>
 
     <section id="teste" class="duas">
@@ -177,22 +231,14 @@
       </div>
     </section>
 
-    <section id="sob-medida">
+    <section id="servicos">
+      <span id="sob-medida"></span>
       <p class="olho">WB SISTEMAS</p>
-      <h2>Também fazemos sob medida</h2>
-      <p class="lead">Além do caixa, criamos a tecnologia que o seu negócio precisa: do cliente achar você no Google até o atendimento automático e o sistema de gestão.</p>
+      <h2>Serviços</h2>
+      <p class="lead">Além do caixa, estes serviços começam pelos valores abaixo. Cada botão abre o WhatsApp.</p>
       <ul class="grade servicos">
-        <li><strong>Software sob medida</strong><span>Sistema feito para o jeito que o seu negócio funciona: cadastros, controles, relatórios e ligação com o que você já usa.</span></li>
-        <li><strong>Presença online</strong><span>Do cadastro no Google Meu Negócio, com fotos, horário e avaliações, ao Instagram e ao WhatsApp Business organizados para o cliente achar e chamar você.</span></li>
-        <li><strong>Bots de atendimento com IA</strong><span>No WhatsApp, Instagram ou Telegram: responde dúvidas, agenda e confirma horários, manda lembretes e passa para você quando precisa.</span></li>
-        <li><strong>Apps de gestão (PWA)</strong><span>Aplicativo que instala pelo navegador, no celular e no computador, sem loja de aplicativos: agenda, vendas, estoque, clientes e relatórios.</span></li>
-        <li><strong>Criação de sites</strong><span>Site rápido, que aparece no Google e funciona bem no celular, com botão de WhatsApp e, se quiser, agendamento ou pedido online.</span></li>
-        <li><strong>Para quem</strong><span>Clínicas e consultórios, cabeleireiros e salões, pet shops, restaurantes, lojas, oficinas e prestadores de serviço.</span></li>
+        {{grade_servicos}}
       </ul>
-      <div class="acoes">
-        <a class="zap" href="{{zap_sob_medida}}">Pedir orçamento no WhatsApp</a>
-        <a class="fantasma" href="{{zap_bot}}">Quero um bot de atendimento</a>
-      </div>
     </section>
 
     <section id="faq">
@@ -203,7 +249,7 @@
       </details>
       <details>
         <summary>Qual programa é o meu?</summary>
-        <p>Boate e bar: WillPDV. Adega, depósito e conveniência: Will Adega. Restaurante, pizzaria e lanchonete: Will Restaurante. Loja de variedades: Will Variedades, em breve.</p>
+        <p>Boate e bar: WillPDV. Adega, depósito e conveniência: Will Adega. Restaurante, pizzaria e lanchonete: Will Restaurante. Loja de variedades, utilidades e presentes: Will Variedades.</p>
       </details>
       <details>
         <summary>A boate recebe pedido pelo celular?</summary>
@@ -215,7 +261,7 @@
       </details>
       <details>
         <summary>Vocês fazem só o caixa?</summary>
-        <p>Não. Também fazemos software sob medida, sites, apps de gestão, bots de atendimento com IA e a presença no Google Meu Negócio. Chame no WhatsApp e conte o que você precisa.</p>
+        <p>Não. Também fazemos software sob medida, site, bot e atendimento com IA, automações, delivery, WhatsApp Business, logo e currículo. Os valores estão em Serviços. Chame no WhatsApp e diga o que você precisa.</p>
       </details>
       <details>
         <summary>Como pago?</summary>
@@ -226,10 +272,13 @@
 
   <footer>
     <a class="marca" href="#inicio"><span class="logo" aria-hidden="true">W</span>WillPDV</a>
-    <p>WillPDV {{versao}} · WB SISTEMAS · {{telefone}}</p>
+    <p>WillPDV {{versao}} · WB SISTEMAS · <span class="telefone">{{telefone}}</span></p>
     <a class="zap" href="{{zap_contato}}">Chamar no WhatsApp</a>
   </footer>
-  <a class="zap fixo" href="{{zap_contato}}">WhatsApp</a>
+  <a class="zap fixo" href="{{zap_contato}}" aria-label="Chamar no WhatsApp">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.04 2C6.58 2 2.15 6.4 2.15 11.83c0 1.74.46 3.44 1.34 4.94L2 22l5.39-1.41a10 10 0 0 0 4.65 1.18h.01c5.46 0 9.89-4.4 9.89-9.83C21.94 6.4 17.5 2 12.04 2zm5.76 14.15c-.24.68-1.4 1.25-1.94 1.33-.5.07-1.12.1-1.81-.11-.42-.13-.95-.3-1.64-.6-2.88-1.25-4.76-4.15-4.9-4.34-.14-.2-1.16-1.54-1.16-2.94s.73-2.08 1-2.37c.24-.28.64-.41 1.02-.41h.73c.23 0 .55-.09.86.65.32.77 1.08 2.64 1.18 2.83.1.2.16.42.03.68-.13.26-.2.42-.39.65-.2.22-.41.5-.59.67-.2.2-.4.4-.17.77.23.38 1.03 1.7 2.21 2.75 1.52 1.35 2.8 1.77 3.2 1.97.39.2.62.17.85-.1.23-.26.98-1.14 1.24-1.53.26-.39.52-.32.86-.19.35.13 2.2 1.04 2.58 1.23.38.19.63.28.72.44.1.16.1.94-.14 1.62z"/></svg>
+    <span>WhatsApp</span>
+  </a>
   <script src="/site/teste.js" defer></script>
 </body>
 </html>
