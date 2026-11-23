@@ -163,6 +163,19 @@ da categoria). A nuvem precisa estar atualizada para aceitar as miniaturas.
 - Pendências conhecidas (não impedem a operação): sem NFC-e (cupom não fiscal).
 
 
+## Bandeira 2 (preço da noite)
+
+O dono liga e desliga a **bandeira 2** quando quiser, pelo painel (Retaguarda > Configurações > Caixa > "Bandeira 2
+ligada") ou no caixa (Configurações > Caixa, com o nível de acesso de Configurações). O caixa recebe na rodada seguinte
+da sincronização (até 1 minuto) e mostra o aviso **BANDEIRA 2** no alto.
+
+- **Acréscimo padrão (%)**: vale para todo produto que entra na bandeira 2 e não tem preço próprio.
+- No cadastro do produto, aba **Bandeira 2**: "Entra na bandeira 2" (marcado por padrão; desmarque cigarro, gelo...),
+  "Preço na bandeira 2" e "Preço gelada na bandeira 2" (0 = usa o acréscimo padrão).
+- Com ela ligada, o produto que muda de preço não tem promoção nem atacado. Itens já lançados não mudam.
+- O cardápio digital e o pedido online passam a cobrar o mesmo preço da noite.
+- A retaguarda precisa estar ligada no caixa da loja (Configurações > Nuvem).
+
 ## Logotipo no caixa
 
 Com o logotipo cadastrado (Configurações > Identificação e contatos), o caixa mostra o logo num selo

@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 58
+VERSAO_ESQUEMA = 59
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -503,6 +503,9 @@ TABELAS = [
         hora_ini TEXT, hora_fim TEXT, hora_preco_cent INTEGER NOT NULL DEFAULT 0,
         promo_gelada_cent INTEGER NOT NULL DEFAULT 0, sem_gelada_cent INTEGER NOT NULL DEFAULT 0,
         hora_gelada_cent INTEGER NOT NULL DEFAULT 0,
+        bandeira2 INTEGER NOT NULL DEFAULT 1 CHECK (bandeira2 IN (0, 1)),
+        preco_bandeira2_cent INTEGER NOT NULL DEFAULT 0 CHECK (preco_bandeira2_cent >= 0),
+        preco_gelada_bandeira2_cent INTEGER NOT NULL DEFAULT 0 CHECK (preco_gelada_bandeira2_cent >= 0),
         validade_dias INTEGER NOT NULL DEFAULT 0,
         balanca INTEGER NOT NULL DEFAULT 0,
         automatico INTEGER NOT NULL DEFAULT 0,
@@ -1169,7 +1172,7 @@ _AUDITORIA_CAMPOS = {
                  "cobrar_servico venda aceita_decimal partes maior montagem composto comissao_pct "
                  "preco_gelada_cent atacado_qtd preco_atacado_cent atacado_gelada_qtd "
                  "preco_atacado_gelada_cent casco_produto_id promo_gelada_cent sem_gelada_cent "
-                 "hora_gelada_cent").split(),
+                 "hora_gelada_cent bandeira2 preco_bandeira2_cent preco_gelada_bandeira2_cent").split(),
     "produtos_historico": "id qt_atual custo_cent ativo excluido_em".split(),
     "unidades": "id nome abreviatura".split(),
     "grupos": "id nome".split(),
@@ -1315,6 +1318,10 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v59: bandeira 2 (preço da noite que o dono liga pelo painel): o produto entra ou não e pode ter preço próprio.
+    59: [("coluna", "produtos", "bandeira2", "INTEGER NOT NULL DEFAULT 1"),
+         ("coluna", "produtos", "preco_bandeira2_cent", "INTEGER NOT NULL DEFAULT 0"),
+         ("coluna", "produtos", "preco_gelada_bandeira2_cent", "INTEGER NOT NULL DEFAULT 0")],
     58: [],  # tabelas aditivas do hotel (hotel_tipos, hotel_uhs, hotel_periodos, hotel_hospedes, hotel_estadias e acompanhantes)
     57: [],  # tabelas aditivas seguranca_dono, vendas_apagadas e vendas_apagar_recusadas (apagar vendas de teste com a senha de segurança)
     56: [],  # tabela aditiva nfce_xmls_enviados (cópia dos XMLs da NFC-e na nuvem)

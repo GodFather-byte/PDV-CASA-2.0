@@ -345,12 +345,13 @@ class CaixaController(DivisaoContaMixin):
                     "criterio": "composto" if p["composto"] else "maior" if p["maior"] else "média"}
         else:
             componentes = []
+            bandeira = self.produtos.bandeira2()           # preço da noite ligado pelo dono
             if temperatura == "gelada":                # promoção da gelada nas mesmas janelas da natural
-                base = self.produtos.regra_preco_gelada(p, quando)
+                base = self.produtos.regra_preco_gelada(p, quando, bandeira=bandeira)
                 preco = base["preco_cent"]
             else:
                 preco = self.produtos.preco_vigente(p, quando)
-                base = self.produtos.regra_preco_vigente(p, quando)
+                base = self.produtos.regra_preco_vigente(p, quando, bandeira=bandeira)
         if preco <= 0:
             raise ErroNegocio(f"'{p['nome']}' está sem preço de venda. Defina o preço no cadastro antes de vender.")
 
@@ -475,8 +476,12 @@ class CaixaController(DivisaoContaMixin):
             chave = (i["produto_id"], i["temperatura"])
             quantidades[chave] = fmt.arred_qtd(quantidades.get(chave, 0) + i["quantidade"])
         for i in itens:
-            preco = self.produtos.preco_por_quantidade_adega(
-                i, i["preco_base_cent"], quantidades[(i["produto_id"], i["temperatura"])], i["temperatura"]) + i["adicionais_cent"]
+            if (self.produtos.ler_regra_preco(dict(i)) or {}).get("base", {}).get("tipo") == "bandeira2":
+                preco = i["preco_base_cent"] + i["adicionais_cent"]      # na bandeira 2 o atacado fica suspenso
+            else:
+                preco = self.produtos.preco_por_quantidade_adega(
+                    i, i["preco_base_cent"], quantidades[(i["produto_id"], i["temperatura"])],
+                    i["temperatura"]) + i["adicionais_cent"]
             total = fmt.mult_cent(preco, i["quantidade"])
             if i["qtd_paga_item"] > 0:
                 # Linha já paga por item não muda: nem preço (recusa) nem o total exato que foi pago.

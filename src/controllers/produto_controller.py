@@ -81,7 +81,7 @@ class ProdutoController:
             return None
         if (not isinstance(regra, dict) or type(regra.get("versao")) is not int or regra["versao"] != 1
                 or not isinstance(regra.get("base"), dict)
-                or regra.get("tipo") not in ("normal", "gelada", "promocao", "atacado", "partes", "legado")):
+                or regra.get("tipo") not in ("normal", "gelada", "promocao", "atacado", "partes", "legado", "bandeira2")):
             return None
         obrigatorios = {"preco_base_cent", "preco_unit_cent", "temperatura", "tem_preco_gelada",
                         "minimo_qtd", "preco_faixa_cent", "faixa_atingida", "quantidade_grupo",
@@ -125,7 +125,7 @@ class ProdutoController:
                     or not quantidade(leitura.get("quantidade"))):
                 return None
             bases.append(leitura["base"])
-        if any(b.get("tipo") not in ("normal", "gelada", "promocao", "partes", "legado")
+        if any(b.get("tipo") not in ("normal", "gelada", "promocao", "partes", "legado", "bandeira2")
                or not centavos(b.get("preco_cent"))
                or (b["tipo"] != "legado" and not instante(b.get("avaliado_em")))
                or (b["tipo"] == "promocao" and (
@@ -165,6 +165,9 @@ class ProdutoController:
         if adicionais:
             detalhe += f"; adicionais por unidade: {fmt.fmt_brl(adicionais)}"
         bases = [l["base"] for l in retrato["leituras"]] or [retrato["base"]]
+        if any(b["tipo"] == "bandeira2" for b in bases):
+            detalhe += "; preço da bandeira 2 (promoções e atacado suspensos)"
+            etiquetas.append("Bandeira 2")
         promocoes = sorted({b["criterio"] for b in bases if b["tipo"] == "promocao"})
         if promocoes:
             detalhe += "; base de promoção por " + ", ".join(promocoes)
@@ -176,20 +179,48 @@ class ProdutoController:
             detalhe += "; origem histórica do preço-base indisponível (legado)"
         if len(retrato.get("leituras", [])) > 1:
             nomes = {"normal": "normal", "gelada": "gelada", "promocao": "promoção",
-                     "partes": "partes", "legado": "legado"}
+                     "partes": "partes", "legado": "legado", "bandeira2": "bandeira 2"}
             detalhe += "; bases das leituras agrupadas: " + ", ".join(sorted({nomes[b["tipo"]] for b in bases}))
         return {"rotulo": " · ".join(etiquetas), "detalhe": detalhe, "economia_cent": economia}
 
-    def preco_vigente(self, produto: dict, quando: datetime | None = None) -> int:
-        """Preço de venda em centavos considerando promoções ativas.
-
-        Se mais de uma promoção estiver ativa vale a de menor preço."""
-        return self.regra_preco_vigente(produto, quando)["preco_cent"]
+    def bandeira2(self) -> dict | None:
+        """A bandeira 2 (preço da noite) quando ligada: o acréscimo padrão em %. Desligada: None."""
+        if not self.banco.cfg_bool("bandeira2_ativa", False):
+            return None
+        try:
+            pct = fmt._dec(self.banco.cfg("bandeira2_pct", "0") or "0")
+        except Exception:  # noqa: BLE001 - configuração estragada não pode travar a venda
+            pct = fmt._dec(0)
+        return {"pct": pct}
 
     @staticmethod
-    def regra_preco_vigente(produto: dict, quando: datetime | None = None) -> dict:
-        """Mesma seleção do preço vigente, incluindo a origem da promoção vencedora."""
+    def preco_bandeira2(produto: dict, bandeira: dict | None, gelada: bool = False) -> int | None:
+        """Preço do produto na bandeira 2, ou None quando ela não muda nada nele (desligada, produto fora dela, sem
+        preço próprio e sem acréscimo). O preço próprio vale mais que o acréscimo padrão."""
+        if not bandeira or not produto.get("bandeira2", 1):
+            return None
+        base = (produto.get("preco_gelada_cent") if gelada else produto.get("preco_cent")) or 0
+        if base <= 0:
+            return None
+        proprio = produto.get("preco_gelada_bandeira2_cent" if gelada else "preco_bandeira2_cent") or 0
+        valor = proprio if proprio > 0 else fmt.arredondar(fmt._dec(base) * (1 + bandeira["pct"] / 100))
+        return valor if valor != base else None
+
+    def preco_vigente(self, produto: dict, quando: datetime | None = None) -> int:
+        """Preço de venda em centavos considerando promoções ativas e a bandeira 2.
+
+        Se mais de uma promoção estiver ativa vale a de menor preço. Com a bandeira 2 ligada, o preço dela substitui
+        promoções no produto que entra nela."""
+        return self.regra_preco_vigente(produto, quando, bandeira=self.bandeira2())["preco_cent"]
+
+    @staticmethod
+    def regra_preco_vigente(produto: dict, quando: datetime | None = None, bandeira: dict | None = None) -> dict:
+        """Mesma seleção do preço vigente, incluindo a origem da promoção vencedora (ou da bandeira 2)."""
         q = quando or fmt.agora_dt()
+        noite = ProdutoController.preco_bandeira2(produto, bandeira)
+        if noite is not None:
+            return {"tipo": "bandeira2", "criterio": "bandeira 2", "preco_cent": noite,
+                    "preco_cadastro_cent": produto["preco_cent"], "avaliado_em": q.strftime("%Y-%m-%d %H:%M:%S")}
         dia_iso, hora = q.strftime("%Y-%m-%d"), q.strftime("%H:%M")
         promos = []
         if (produto.get("promo_preco_cent") or 0) > 0 and produto.get("promo_de") and produto.get("promo_ate"):
@@ -215,7 +246,7 @@ class ProdutoController:
                 "avaliado_em": q.strftime("%Y-%m-%d %H:%M:%S")}
 
     @staticmethod
-    def regra_preco_gelada(produto: dict, quando: datetime | None = None) -> dict:
+    def regra_preco_gelada(produto: dict, quando: datetime | None = None, bandeira: dict | None = None) -> dict:
         """Preço da gelada com promoção: as mesmas janelas da natural (período, dias da semana, horário), cada uma com o
         seu preço de gelada. Vale a menor das ativas, e só se for menor que o preço gelado normal."""
         gelada = produto.get("preco_gelada_cent") or 0
@@ -223,6 +254,10 @@ class ProdutoController:
         base = {"tipo": "gelada", "preco_cent": gelada, "avaliado_em": q.strftime("%Y-%m-%d %H:%M:%S")}
         if gelada <= 0:
             return base
+        noite = ProdutoController.preco_bandeira2(produto, bandeira, gelada=True)
+        if noite is not None:
+            return {**base, "tipo": "bandeira2", "criterio": "bandeira 2", "preco_cent": noite, "temperatura": "gelada",
+                    "preco_gelada_cent": gelada}
         espelho = {**produto,
                    "preco_cent": gelada,
                    "promo_preco_cent": produto.get("promo_gelada_cent") or 0,
@@ -234,7 +269,7 @@ class ProdutoController:
         return {**regra, "temperatura": "gelada", "preco_gelada_cent": gelada}
 
     def preco_gelada_vigente(self, produto: dict, quando: datetime | None = None) -> int:
-        return self.regra_preco_gelada(produto, quando)["preco_cent"]
+        return self.regra_preco_gelada(produto, quando, bandeira=self.bandeira2())["preco_cent"]
 
     def preco_partes(self, base: dict, partes: list[dict], quando: datetime | None = None) -> int:
         """Preço de um item dividido/combo. Composto: preço único do produto-base.

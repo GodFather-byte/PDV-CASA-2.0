@@ -88,9 +88,11 @@ def _logo(caminho: str | None) -> str:
 
 def coletar(banco) -> dict:
     """O catálogo visível, já sem custo e sem estoque."""
+    from src.controllers.produto_controller import ProdutoController
     config = ConfigController(banco)
     produtos = []
     orcamento = [FOTOS_EMBUTIDAS_TOTAL]
+    bandeira = ProdutoController(banco).bandeira2()
     for r in banco.todos(
             """SELECT p.id AS produto_id, p.codigo, p.nome, p.preco_cent, p.texto_sugestao,
                       p.promo_de, p.promo_ate, p.promo_preco_cent,
@@ -98,6 +100,7 @@ def coletar(banco) -> dict:
                       p.hora_ini, p.hora_fim, p.hora_preco_cent,
                       p.preco_gelada_cent, p.promo_gelada_cent, p.sem_gelada_cent, p.hora_gelada_cent,
                       p.aceita_decimal, p.casco_produto_id, p.controla_estoque, p.qt_atual,
+                      p.bandeira2, p.preco_bandeira2_cent, p.preco_gelada_bandeira2_cent,
                       g.nome AS grupo, s.nome AS subgrupo, s.figura AS foto,
                       f.origem AS foto_origem, f.miniatura AS foto_miniatura
                FROM produtos p
@@ -125,6 +128,7 @@ def coletar(banco) -> dict:
             "fracionado": bool(r["aceita_decimal"]),
             "retornavel": bool(r["casco_produto_id"]),
         }
+        _aplicar_bandeira2(item, dict(r), bandeira)
         if r["controla_estoque"] and float(r["qt_atual"] or 0) <= 0:
             item["esgotado"] = True                     # só o sim/não: a quantidade não sai do caixa
         from src.controllers.opcoes_produto_controller import OpcoesProdutoController
@@ -145,6 +149,19 @@ def coletar(banco) -> dict:
     from src.core import edicao
     return {"loja_nome": config.nome_loja(), "logo": _logo(config.loja().get("logotipo")), "produtos": produtos,
             "edicao": edicao.atual().chave, "pedido": config_pedido(banco)}
+
+
+def _aplicar_bandeira2(item: dict, produto: dict, bandeira: dict | None) -> None:
+    """Bandeira 2 ligada: o cardápio e o pedido online cobram o preço da noite, sem as promoções (como no caixa). O
+    preço sobe já resolvido; ao desligar, o catálogo muda e é reenviado na rodada seguinte."""
+    from src.controllers.produto_controller import ProdutoController
+    noite = ProdutoController.preco_bandeira2(produto, bandeira)
+    if noite is not None:
+        item.update({"preco_cent": noite, "promo_preco_cent": 0, "sem_preco_cent": 0, "hora_preco_cent": 0})
+    noite_gelada = ProdutoController.preco_bandeira2(produto, bandeira, gelada=True)
+    if noite_gelada is not None:
+        item.update({"preco_gelada_cent": noite_gelada, "promo_gelada_cent": 0, "sem_gelada_cent": 0,
+                     "hora_gelada_cent": 0})
 
 
 def config_pedido(banco) -> dict:

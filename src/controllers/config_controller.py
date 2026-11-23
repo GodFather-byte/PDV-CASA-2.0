@@ -66,6 +66,9 @@ CAMPOS_CONFIG = [
     ("cobra_servico_mesa", "Cobrar serviço nas mesas", "sn", "Mesas e serviço"),
     ("cobra_servico_comanda", "Cobrar serviço nas comandas", "sn", "Mesas e serviço"),
     ("servico_pct", "Percentual de serviço (%)", "decimal", "Mesas e serviço"),
+    ("bandeira2_ativa", "Bandeira 2 ligada: vale o preço da noite nos produtos que entram nela (e as promoções deles "
+     "ficam suspensas). Liga e desliga também pelo painel do dono", "sn", "Caixa"),
+    ("bandeira2_pct", "Bandeira 2: acréscimo padrão em % (produto sem preço próprio na bandeira 2)", "decimal", "Caixa"),
     ("controle_garcom", "Exigir o garçom ao fechar a mesa", "sn", "Mesas e serviço"),
     ("comissao_garcom_pct", "Comissão dos garçons sobre produtos (%)", "decimal", "Mesas e serviço"),
     ("tempo_inatividade_min", "Alertar mesa parada após (minutos, 0 = desligado)", "int", "Mesas e serviço"),
