@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-VERSAO = "1.14.20"
+VERSAO = "1.14.21"
 
 _FORMATO = re.compile(r"\d{1,4}(\.\d{1,4}){0,3}")
 
