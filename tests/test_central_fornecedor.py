@@ -189,6 +189,23 @@ class TesteCentralFornecedor(unittest.TestCase):
                           resumo["chamados_abertos"]), (1, 1, 1, 1, 1))
         self.assertNotIn("99999", json.dumps(r))                          # nada do retrato de vendas chega à central
 
+    def test_suporte_mostra_o_id_do_rustdesk_que_o_caixa_mandou(self):
+        from backend.painel import PainelCaixa
+        retratos = {"a": {"versao_programa": "1.14.18", "rustdesk_id": "123456789"},
+                    "b": {"versao_programa": "1.14.18", "rustdesk_id": "<script>alert(1)</script>"},
+                    "c": {"versao_programa": "1.14.18", "rustdesk_id": 123456789},
+                    "d": {"versao_programa": "1.14.17"}}
+        with nuvem.SessionLocal() as db:
+            db.query(PainelCaixa).delete()
+            for numero, (terminal_id, dados) in enumerate(retratos.items(), 1):
+                db.add(PainelCaixa(chave_loja="LOJA-1", terminal_id=terminal_id, terminal=numero,
+                                   recebido_em="2026-11-19 10:00:00", dados=json.dumps(dados)))
+            db.commit()
+        self.addCleanup(self._limpar_saude)
+        caixas = {c["terminal_id"]: c for c in self.http.get("/v1/fornecedor/lojas/LOJA-1").json()["caixas"]}
+        self.assertEqual([caixas[k]["rustdesk_id"] for k in "abcd"], ["123456789", "", "", ""])
+        self.assertEqual(caixas["a"]["versao"], "1.14.18")
+
     def _limpar_saude(self):
         from backend import erros_caixa
         from backend.painel import PainelCaixa

@@ -2,7 +2,7 @@
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView, QComboBox, QDialog, QHBoxLayout, QPushButton,
+    QAbstractItemView, QComboBox, QDialog, QHBoxLayout, QHeaderView, QPushButton,
     QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
 
@@ -21,30 +21,46 @@ class JanelaCozinha(QDialog):
         self.ctx = ctx
         self._operador_id = ctx.operador_id
         self.exigir_acesso()
-        self.setWindowTitle("Painel da Cozinha/Bar • Qt")
+        self.setWindowTitle("Painel da Cozinha/Bar")
         self.resize(1050, 620)
         layout = QVBoxLayout(self)
-        layout.addWidget(texto("Painel da Cozinha/Bar", "titulo"))
-        layout.addWidget(texto(
-            "Itens dos subgrupos com impressora remota. Atualização a cada 2 segundos. "
-            "Marcar pronto altera o preparo, não imprime nem confirma saída física.", "suave"))
-        barra = QHBoxLayout()
-        barra.addWidget(texto("Setor:"))
-        self.setor = QComboBox()
-        barra.addWidget(self.setor, 1)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+        topo = QHBoxLayout()
+        topo.addWidget(texto("Fila de preparo", "titulo"), 1)
         self.btn_web = QPushButton("Tablet / TV")
         self.btn_web.clicked.connect(self.abrir_web)
-        barra.addWidget(self.btn_web)
+        topo.addWidget(self.btn_web)
+        layout.addLayout(topo)
+        layout.addWidget(texto(
+            "Itens dos subgrupos com impressora remota. A fila é atualizada a cada 2 segundos.", "suave"))
+        barra = QHBoxLayout()
+        barra.addWidget(texto("Setor"))
+        self.setor = QComboBox()
+        barra.addWidget(self.setor)
+        barra.addStretch()
+        self.contagem = texto("", "secao")
+        barra.addWidget(self.contagem)
         layout.addLayout(barra)
         self.grade = QTableWidget(0, 6)
         self.grade.setHorizontalHeaderLabels(
-            ("Posição", "Produto", "Quantidade", "Observação", "Minutos", "Situação"))
+            ("Posição", "Produto", "Qtd.", "Observação", "Espera", "Situação"))
         self.grade.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.grade.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.grade.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.grade.horizontalHeader().setStretchLastSection(True)
+        self.grade.setAlternatingRowColors(True)
+        self.grade.setShowGrid(False)
+        self.grade.verticalHeader().hide()
+        self.grade.verticalHeader().setDefaultSectionSize(38)
+        cabecalho = self.grade.horizontalHeader()
+        cabecalho.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        for coluna in (1, 3):
+            cabecalho.setSectionResizeMode(coluna, QHeaderView.ResizeMode.Stretch)
         self.grade.cellDoubleClicked.connect(lambda *_: self.avancar())
         layout.addWidget(self.grade)
+        self.vazio = texto("Nenhum item aguardando neste setor.", "suave")
+        self.vazio.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.vazio, 1)
         self.mensagem = texto("", "aviso")
         layout.addWidget(self.mensagem)
         barra = QHBoxLayout()
@@ -56,11 +72,15 @@ class JanelaCozinha(QDialog):
             ("Fechar (Esc)", self.close),
         ):
             botao = QPushButton(rotulo)
+            if acao == self.avancar:
+                botao.setObjectName("primario")
             botao.setAutoDefault(False)
             botao.clicked.connect(acao)
             barra.addWidget(botao)
             self.acoes.append(botao)
         layout.addLayout(barra)
+        layout.addWidget(texto(
+            "Marcar pronto altera o preparo, sem imprimir ou confirmar a saída física.", "suave"))
         self.timer = QTimer(self)
         self.timer.setInterval(2000)
         self.timer.timeout.connect(self.atualizar)
@@ -100,6 +120,8 @@ class JanelaCozinha(QDialog):
         self.mensagem.setText(str(erro))
         if isinstance(erro, ErroPermissao):
             self.grade.setRowCount(0)
+            self.contagem.clear()
+            self.vazio.hide()
             self.timer.stop()
             for botao in self.acoes[:3]:
                 botao.setEnabled(False)
@@ -122,19 +144,28 @@ class JanelaCozinha(QDialog):
             finally:
                 self.setor.blockSignals(False)
             itens = self.ctx.preparo.fila(self.setor.currentData())
+            self.vazio.setVisible(not itens)
+            self.grade.setVisible(bool(itens))
             self.grade.setRowCount(len(itens))
             for linha, item in enumerate(itens):
                 valores = (
                     item["posicao_rotulo"], item["produto"], fmt_qtd(item["quantidade"]),
-                    item["observacao"] or "", item["minutos"], SITUACOES[item["status_preparo"]],
+                    item["observacao"] or "", f'{item["minutos"]} min', SITUACOES[item["status_preparo"]],
                 )
                 for coluna, valor in enumerate(valores):
                     celula = QTableWidgetItem(str(valor))
                     celula.setData(Qt.ItemDataRole.UserRole, item["id"])
+                    if coluna in (1, 3):
+                        celula.setToolTip(str(valor))
+                    if coluna in (0, 1, 5):
+                        fonte = celula.font()
+                        fonte.setBold(True)
+                        celula.setFont(fonte)
                     self.grade.setItem(linha, coluna, celula)
                 if item["id"] == selecionado:
                     self.grade.selectRow(linha)
-            self.mensagem.setText(f"{len(itens)} item(ns) aguardando preparo ou entrega.")
+            self.mensagem.clear()
+            self.contagem.setText("1 item na fila" if len(itens) == 1 else f"{len(itens)} itens na fila")
             for botao in self.acoes[:3]:
                 botao.setEnabled(True)
             if self.isVisible():

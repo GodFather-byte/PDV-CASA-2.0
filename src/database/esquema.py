@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 56
+VERSAO_ESQUEMA = 58
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -18,6 +18,107 @@ PAGAMENTOS_ITENS_DDL = [
     )""",
     "CREATE INDEX IF NOT EXISTS ix_pagamentos_itens_item ON pagamentos_itens(item_id)",
     "CREATE INDEX IF NOT EXISTS ix_pagamentos_itens_pagamento ON pagamentos_itens(pagamento_id)",
+]
+
+# Hotel (edição Will Hotel, src/controllers/hotel_controller.py). Tipo de quarto com a diária (um produto, que é o que o
+# caixa cobra), quartos (unidades habitacionais, UH) com a situação da arrumação, períodos curtos (2 h, 4 h, pernoite),
+# hóspedes (os dados da Ficha Nacional de Registro de Hóspedes ficam aqui, só no computador da loja) e as estadias: da
+# reserva ao check-out. A conta da estadia é uma comanda do caixa (`venda_id`, `conta`): sem chave estrangeira para
+# `vendas`, porque apagar uma venda de teste não pode travar no hotel.
+HOTEL_DDL = [
+    """CREATE TABLE IF NOT EXISTS hotel_tipos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL UNIQUE,
+        capacidade INTEGER NOT NULL DEFAULT 2 CHECK (capacidade BETWEEN 1 AND 20),
+        produto_diaria_id INTEGER,
+        cafe_incluso INTEGER NOT NULL DEFAULT 1 CHECK (cafe_incluso IN (0, 1)),
+        descricao TEXT,
+        ativo INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0, 1))
+    )""",
+    """CREATE TABLE IF NOT EXISTS hotel_uhs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        numero TEXT NOT NULL UNIQUE,
+        tipo_id INTEGER NOT NULL REFERENCES hotel_tipos(id),
+        andar TEXT,
+        limpeza TEXT NOT NULL DEFAULT 'limpo' CHECK (limpeza IN ('limpo','sujo','arrumando','manutencao')),
+        motivo_manutencao TEXT,
+        observacao TEXT,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        ativo INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0, 1))
+    )""",
+    """CREATE TABLE IF NOT EXISTS hotel_periodos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL UNIQUE,
+        minutos INTEGER NOT NULL CHECK (minutos BETWEEN 30 AND 1440),
+        produto_id INTEGER,
+        ativo INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0, 1))
+    )""",
+    """CREATE TABLE IF NOT EXISTS hotel_hospedes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        cpf TEXT,
+        documento_tipo TEXT NOT NULL DEFAULT 'RG',
+        documento TEXT,
+        documento_emissor TEXT,
+        nascimento TEXT,
+        genero TEXT,
+        nacionalidade TEXT NOT NULL DEFAULT 'Brasileira',
+        telefone TEXT,
+        email TEXT,
+        profissao TEXT,
+        cidade TEXT,
+        uf TEXT,
+        pais TEXT NOT NULL DEFAULT 'Brasil',
+        observacao TEXT,
+        criado_em TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_hotel_hospedes_cpf ON hotel_hospedes(cpf)",
+    "CREATE INDEX IF NOT EXISTS ix_hotel_hospedes_nome ON hotel_hospedes(nome)",
+    """CREATE TABLE IF NOT EXISTS hotel_estadias (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT NOT NULL UNIQUE,
+        uh_id INTEGER NOT NULL REFERENCES hotel_uhs(id),
+        modalidade TEXT NOT NULL DEFAULT 'diaria' CHECK (modalidade IN ('diaria','periodo')),
+        situacao TEXT NOT NULL DEFAULT 'reservada'
+            CHECK (situacao IN ('reservada','hospedada','encerrada','cancelada','nao_compareceu')),
+        titular_nome TEXT NOT NULL,
+        hospede_id INTEGER REFERENCES hotel_hospedes(id),
+        telefone TEXT,
+        adultos INTEGER NOT NULL DEFAULT 1 CHECK (adultos BETWEEN 1 AND 20),
+        criancas INTEGER NOT NULL DEFAULT 0 CHECK (criancas BETWEEN 0 AND 20),
+        entrada_prevista TEXT NOT NULL,
+        saida_prevista TEXT NOT NULL,
+        entrada_em TEXT,
+        saida_em TEXT,
+        produto_id INTEGER,
+        periodo_id INTEGER REFERENCES hotel_periodos(id),
+        minutos INTEGER NOT NULL DEFAULT 0,
+        cafe_incluso INTEGER NOT NULL DEFAULT 0 CHECK (cafe_incluso IN (0, 1)),
+        diarias_lancadas INTEGER NOT NULL DEFAULT 0,
+        horas_extras_lancadas INTEGER NOT NULL DEFAULT 0,
+        venda_id INTEGER,
+        conta INTEGER,
+        origem TEXT NOT NULL DEFAULT 'balcao',
+        motivo_viagem TEXT,
+        meio_transporte TEXT,
+        procedencia TEXT,
+        proximo_destino TEXT,
+        observacao TEXT,
+        motivo_cancelamento TEXT,
+        operador_id INTEGER REFERENCES operadores(id),
+        criado_em TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_hotel_estadias_situacao ON hotel_estadias(situacao, uh_id)",
+    "CREATE INDEX IF NOT EXISTS ix_hotel_estadias_datas ON hotel_estadias(entrada_prevista, saida_prevista)",
+    """CREATE TABLE IF NOT EXISTS hotel_estadia_hospedes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        estadia_id INTEGER NOT NULL REFERENCES hotel_estadias(id) ON DELETE CASCADE,
+        hospede_id INTEGER NOT NULL REFERENCES hotel_hospedes(id),
+        responsavel TEXT,
+        UNIQUE (estadia_id, hospede_id)
+    )""",
 ]
 
 RETORNAVEIS_DDL = [
@@ -188,6 +289,37 @@ TABELAS = [
         inutilizada_em TEXT
     )""",
     "CREATE INDEX IF NOT EXISTS ix_nfce_situacao ON nfce_notas(situacao)",
+    # Senha de segurança do dono (só o hash), separada das senhas de entrada: autoriza apagar vendas de teste aqui e
+    # no painel. Fica fora de `config` de propósito: a retaguarda espelha e altera a config pela nuvem.
+    """CREATE TABLE IF NOT EXISTS seguranca_dono (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        senha_hash TEXT NOT NULL,
+        atualizada_em TEXT NOT NULL,
+        tentativas INTEGER NOT NULL DEFAULT 0,
+        bloqueada_ate TEXT,
+        enviada_em TEXT
+    )""",
+    # Vendas de teste apagadas (registro permanente: quem, quando, quanto). enviada_em: a nuvem confirmou e apagou lá.
+    """CREATE TABLE IF NOT EXISTS vendas_apagadas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT NOT NULL UNIQUE,
+        cupom INTEGER,
+        status TEXT,
+        total_cent INTEGER NOT NULL DEFAULT 0,
+        fechada_em TEXT,
+        turno_id INTEGER,
+        origem TEXT NOT NULL CHECK (origem IN ('caixa', 'painel')),
+        operador_id INTEGER,
+        apagada_em TEXT NOT NULL,
+        enviada_em TEXT
+    )""",
+    # Pedido do painel recusado pelo caixa (NFC-e, devolução, fiado, Pix): a nuvem mostra o motivo ao dono.
+    """CREATE TABLE IF NOT EXISTS vendas_apagar_recusadas (
+        uuid TEXT PRIMARY KEY,
+        motivo TEXT NOT NULL,
+        recusada_em TEXT NOT NULL,
+        enviada_em TEXT
+    )""",
     # XMLs da NFC-e (produção) já copiados para a nuvem, pelo nome do arquivo em nfce/producao/.
     """CREATE TABLE IF NOT EXISTS nfce_xmls_enviados (
         arquivo TEXT PRIMARY KEY,
@@ -278,6 +410,7 @@ TABELAS = [
     )""",
     *PAGAMENTOS_ITENS_DDL,
     *RETORNAVEIS_DDL,
+    *HOTEL_DDL,
     *DEVOLUCOES_DDL,
     PRODUTOS_HISTORICO_DDL,
     # ------------------------------------------------------------ infraestrutura
@@ -1182,6 +1315,8 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    58: [],  # tabelas aditivas do hotel (hotel_tipos, hotel_uhs, hotel_periodos, hotel_hospedes, hotel_estadias e acompanhantes)
+    57: [],  # tabelas aditivas seguranca_dono, vendas_apagadas e vendas_apagar_recusadas (apagar vendas de teste com a senha de segurança)
     56: [],  # tabela aditiva nfce_xmls_enviados (cópia dos XMLs da NFC-e na nuvem)
     # v55: NFC-e em contingência off-line (impressa antes de autorizar) e números inutilizados na SEFAZ.
     55: [("coluna", "nfce_notas", "contingencia_em", "TEXT"),

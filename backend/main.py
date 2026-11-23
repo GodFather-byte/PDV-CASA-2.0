@@ -527,6 +527,24 @@ _retaguarda.instalar(app, Loja, autenticar)
 from backend import nfce_xmls as _nfce_xmls  # noqa: E402
 
 _nfce_xmls.instalar(app, Loja, autenticar)
+
+# Vendas de teste apagadas no caixa ou pelo painel, com a senha de segurança do dono (backend/vendas_teste.py).
+from backend import vendas_teste as _vendas_teste  # noqa: E402
+
+_vendas_teste.instalar(app, Loja)
+
+# IA nos caixas (recurso pago, ligado por loja na central): backend/ia.py. A chave da API fica só na nuvem.
+from backend import ia as _ia  # noqa: E402
+_ia.instalar(app, autenticar)
+
+# Insta-BDelivery ligado pela central (implantação e liberação da IA da vitrine): backend/insta.py.
+from backend import insta as _insta  # noqa: E402
+_insta.instalar(app)
+
+# Backup do caixa na nuvem para recuperar a loja num computador novo: backend/backup_nuvem.py.
+from backend import backup_nuvem as _backup_nuvem  # noqa: E402
+_backup_nuvem.instalar(app, autenticar)
+
 _ponte.instalar(app, Loja, hash_token)
 
 # Porteiro no celular pelo 4G: retrato das comandas abertas e a mesma página em /porteiro/.

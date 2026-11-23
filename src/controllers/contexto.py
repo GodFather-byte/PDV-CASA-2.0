@@ -98,6 +98,11 @@ class Contexto:
         return PreparoController(self.banco, self.operador_id)
 
     @property
+    def hotel(self):
+        from src.controllers.hotel_controller import HotelController
+        return HotelController(self.banco, self.operador_id)
+
+    @property
     def quartos(self) -> QuartosController:
         return QuartosController(self.banco, self.operador_id)
 

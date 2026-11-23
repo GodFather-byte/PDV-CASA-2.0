@@ -1,10 +1,12 @@
 """Coleta Qt da conferência por forma, sem gravar nem fechar turno."""
 from __future__ import annotations
 
-from PySide6.QtWidgets import QDialog, QGridLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
 
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio
+from src.ui_qt.tema import texto
 
 
 class DialogoFechamento(QDialog):
@@ -16,42 +18,56 @@ class DialogoFechamento(QDialog):
         self.previa = None
         super().__init__(parent)
         self.setWindowTitle("Conferência por forma")
+        self.resize(640, 480)
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Informe todas as formas, inclusive zero. Não copie o esperado."))
-        layout.addWidget(QLabel(f"Gaveta declarada: {fmt.fmt_brl(valor_final_cent)}"))
-        grade = QGridLayout()
-        layout.addLayout(grade)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(8)
+        layout.addWidget(texto("Conferência por forma", "titulo"))
+        layout.addWidget(texto("Informe o valor apurado em cada forma de pagamento, inclusive zero.", "suave"))
+        quadro = QFrame()
+        quadro.setObjectName("cartao")
+        grade = QGridLayout(quadro)
+        grade.setContentsMargins(12, 10, 12, 10)
+        layout.addWidget(quadro)
+        layout.addWidget(texto(f"Gaveta declarada: {fmt.fmt_brl(valor_final_cent)}", "secao"))
         for coluna, titulo in enumerate(("Forma", "Informado (R$)", "Esperado", "Diferença")):
-            grade.addWidget(QLabel(titulo), 0, coluna)
+            grade.addWidget(texto(titulo, "suave", quebra=False), 0, coluna)
         self.campos, self.esperados, self.diferencas = {}, {}, {}
         for linha, forma in enumerate(self.formas, 1):
             chave = forma["tipo_id"]
             grade.addWidget(QLabel(forma["tipo"]), linha, 0)
             self.campos[chave] = QLineEdit()
+            self.campos[chave].setAlignment(Qt.AlignRight)
+            self.campos[chave].setAccessibleName(f"Valor informado em {forma['tipo']}")
             self.esperados[chave] = QLabel("Não revelado")
             self.diferencas[chave] = QLabel("—")
             grade.addWidget(self.campos[chave], linha, 1)
             grade.addWidget(self.esperados[chave], linha, 2)
             grade.addWidget(self.diferencas[chave], linha, 3)
-        self.gaveta = QLabel("Dinheiro inclui fundo, suprimentos e sangrias; recebido já líquido de troco.")
-        self.gaveta.setWordWrap(True)
+        self.gaveta = texto("A gaveta inclui fundo de caixa, suprimentos, sangrias e recebimentos em dinheiro "
+                            "já descontados os trocos.", "suave")
         layout.addWidget(self.gaveta)
         layout.addWidget(QLabel("Justificativa (obrigatória se houver diferença)"))
         self.motivo = QLineEdit()
+        self.motivo.setAccessibleName("Justificativa da diferença")
         layout.addWidget(self.motivo)
-        self.mensagem = QLabel("")
-        self.mensagem.setWordWrap(True)
+        self.mensagem = texto("", "aviso")
         layout.addWidget(self.mensagem)
-        conferir = QPushButton("Conferir")
-        conferir.clicked.connect(self.conferir)
-        layout.addWidget(conferir)
-        self.btn_aceitar = QPushButton("Usar declaração")
-        self.btn_aceitar.setEnabled(False)
-        self.btn_aceitar.clicked.connect(self.aceitar)
-        layout.addWidget(self.btn_aceitar)
+        layout.addStretch(1)
+        acoes = QHBoxLayout()
         cancelar = QPushButton("Cancelar")
         cancelar.clicked.connect(self.reject)
-        layout.addWidget(cancelar)
+        acoes.addWidget(cancelar)
+        acoes.addStretch(1)
+        conferir = QPushButton("Conferir")
+        conferir.clicked.connect(self.conferir)
+        acoes.addWidget(conferir)
+        self.btn_aceitar = QPushButton("Usar declaração")
+        self.btn_aceitar.setObjectName("primario")
+        self.btn_aceitar.setEnabled(False)
+        self.btn_aceitar.clicked.connect(self.aceitar)
+        acoes.addWidget(self.btn_aceitar)
+        layout.addLayout(acoes)
 
     def _comparar(self):
         if self.ctx.operador_id != self.operador_id:

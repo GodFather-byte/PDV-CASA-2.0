@@ -147,6 +147,7 @@ class Sincronizador:
         self._buscar_notas()
         self._retaguarda()
         self._xmls_nfce()
+        self._backup_nuvem()
         return painel and sucesso
 
     def _ponte(self) -> None:
@@ -209,6 +210,16 @@ class Sincronizador:
                 nfce_xmls.sincronizar(self.banco, self._http)
         except Exception:
             log.exception("Falha ao copiar os XMLs da NFC-e para a nuvem.")
+
+    def _backup_nuvem(self) -> None:
+        """Backup do caixa na nuvem (recupera a loja num computador novo). No máximo a cada poucas horas, só quando há
+        backup local novo. Falha aqui não segura o resto."""
+        try:
+            from src.sync import backup_nuvem
+            if backup_nuvem.ha_pendente(self.banco):
+                backup_nuvem.enviar(self.banco, self._http)
+        except Exception:
+            log.exception("Falha ao mandar o backup para a nuvem.")
 
     def _buscar_notas(self) -> None:
         """Notas de compra que o dono subiu pelo painel. Só usa a rede quando o envio do painel avisou que há nota

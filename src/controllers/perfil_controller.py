@@ -55,6 +55,9 @@ PERFIS = {
     "a_la_carte": ("À la carte", "mesas com serviço, cozinha e delivery", {**_RESTAURANTE}),
     "rodizio": ("Rodízio", "mesas com cobrança por pessoa, cozinha e delivery",
                 {**_RESTAURANTE, "usar_rodizio": "S"}),
+    "hotel": ("Hotel / pousada", "recepção com reservas, diárias e períodos; a conta de cada estadia é uma comanda do "
+              "caixa, sem serviço nem desconto automático",
+              {**_SEM_BOATE, "usar_delivery": "N", "cobra_servico_mesa": "N", "cobra_servico_comanda": "N"}),
 }
 PADRAO = "boate"
 
@@ -65,6 +68,7 @@ CATEGORIAS = {
     "pizzaria": {"PIZZAS": ["PIZZAS SALGADAS", "PIZZAS DOCES"], "BEBIDAS": ["REFRIGERANTES", "ÁGUAS E SUCOS"]},
     "a_la_carte": {"COZINHA": ["PRATOS", "PORÇÕES", "SOBREMESAS"]},
     "rodizio": {"COZINHA": ["RODÍZIO", "EXTRAS", "SOBREMESAS"]},
+    "hotel": {"HOSPEDAGEM": ["DIÁRIAS E PERÍODOS", "SERVIÇOS DO HOTEL"], "FRIGOBAR E CONVENIÊNCIA": ["BEBIDAS", "PETISCOS"]},
     "adega": {"BEBIDAS": ["CERVEJAS", "DESTILADOS", "VINHOS E ESPUMANTES", "REFRIGERANTES", "ÁGUAS E SUCOS", "ENERGÉTICOS"],
               "CONVENIÊNCIA": ["GELO E CARVÃO", "TABACARIA", "PETISCOS", "DESCARTÁVEIS"]},
     "variedades": {"ELETRÔNICOS": ["FONES E ÁUDIO", "CABOS E CARREGADORES", "ACESSÓRIOS DE CELULAR", "INFORMÁTICA",

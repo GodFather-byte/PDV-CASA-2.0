@@ -75,6 +75,12 @@ def numero_versao(versao) -> tuple:
     return tuple(partes)
 
 
+def id_rustdesk(valor) -> str:
+    """O ID do RustDesk que o caixa mandou no retrato, só se tiver cara de ID (o dado vem do computador da loja)."""
+    from src.core.suporte_remoto import id_valido
+    return id_valido(valor) if isinstance(valor, str) else ""
+
+
 def saude_das_lojas(db, momento: datetime | None = None) -> dict:
     """Por loja: último contato dos caixas, versão mais antiga em uso, erros dos últimos 7 dias e chamados em aberto.
 
@@ -139,6 +145,10 @@ INSTALADORES = {
     "willpdv": "https://github.com/GodFather-byte/willpdv-downloads/releases/download/ultima-versao/WillPDV-Instalador.exe",
     "willadega": "https://github.com/GodFather-byte/willpdv-downloads/releases/download/ultima-versao-adega/"
                  "WillAdega-Instalador.exe",
+    "willhotel": "https://github.com/GodFather-byte/willpdv-downloads/releases/download/ultima-versao-hotel/"
+                 "WillHotel-Instalador.exe",
+    "willvariedades": "https://github.com/GodFather-byte/willpdv-downloads/releases/download/ultima-versao-variedades/"
+                      "WillVariedades-Instalador.exe",
 }
 
 
@@ -465,7 +475,8 @@ def instalar(app, Loja):
                 foto = {}
             caixas.append({"terminal_id": c.terminal_id, "terminal": c.terminal,
                            "recebido_em": c.recebido_em, "versao": foto.get("versao_programa"),
-                           "edicao": foto.get("edicao_programa")})
+                           "edicao": foto.get("edicao_programa"),
+                           "rustdesk_id": id_rustdesk(foto.get("rustdesk_id"))})
         return {"caixas": caixas,
                 "caixas_ponte": [{"id": c.caixa_id, "revogado": c.revogado,
                                   "versao": c.versao, "ultimo_contato": c.ultimo_contato,
@@ -858,3 +869,9 @@ def instalar(app, Loja):
     retaguarda.instalar_fornecedor(app, sessao, obter, auditar)
     from backend import nfce_xmls
     nfce_xmls.instalar_fornecedor(app, sessao, obter, auditar)
+    from backend import ia
+    ia.instalar_fornecedor(app, sessao, obter, auditar)
+    from backend import insta
+    insta.instalar_fornecedor(app, sessao, obter, auditar)
+    from backend import backup_nuvem
+    backup_nuvem.instalar_fornecedor(app, sessao, obter, auditar)

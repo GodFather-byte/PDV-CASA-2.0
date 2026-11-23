@@ -33,15 +33,10 @@ REPETIR_TOQUE_SEG = 60      # tempo esgotado: toca de novo a cada minuto até li
 VERIFICAR_CAMPAINHAS_SEG = 30
 COLUNAS = 4
 
-# estado -> (fundo, texto)
-CORES = {
-    "livre": ("#1e7d32", "#ffffff"),        # verde: disponível
-    "uso": ("#1e4fa3", "#ffffff"),          # azul: ocupado (como a comanda aberta)
-    "alerta": ("#f9a825", "#000000"),
-    "estourou": ("#c62828", "#ffffff"),
-    "piscar": ("#ff8a80", "#000000"),
-    "arrumacao": ("#5e35b1", "#ffffff"),    # roxo: em arrumação, não inicia
-}
+# As duas grades de quartos usam as cores do painel de mesas para indicar a situação.
+_ESTADO_CARTAO = {"livre": "balcao", "uso": "consumindo", "alerta": "conta", "estourou": "parada",
+                  "arrumacao": "parcial"}
+FAIXA_LIVRE, FAIXA_LOTADO = "#11694f", "#c62828"
 
 
 # ------------------------------------------------------------------ avisos
@@ -520,10 +515,15 @@ class CartaoQuarto(QFrame):
             self.sino.setToolTip("Campainha ligada" if ok else "Campainha fora do ar: confira o aparelho e o Wi-Fi")
 
     def _cor(self, chave: str):
-        fundo, letra = CORES[chave]
-        self.setStyleSheet(
-            f"QFrame#cartao_quarto {{ background: {fundo}; border-radius: 10px; }}"
-            f"QFrame#cartao_quarto QLabel {{ color: {letra}; background: transparent; }}")
+        if chave == "piscar":
+            fundo, borda, letra = FAIXA_LOTADO, "#ef968d", "#ffffff"
+        else:
+            cores = ESTADOS_MESAS[self.painel.modo_visual][_ESTADO_CARTAO[chave]]
+            fundo, borda, letra = cores["fundo"], cores["borda"], cores["texto"]
+        estilo = (f"QFrame#cartao_quarto {{ background: {fundo}; border: 1px solid {borda}; border-radius: 10px; }}"
+                  f"QFrame#cartao_quarto QLabel {{ color: {letra}; background: transparent; }}")
+        if self.styleSheet() != estilo:
+            self.setStyleSheet(estilo)
 
     def mostrar(self, item: dict):
         self.item = item
@@ -618,8 +618,6 @@ class JanelaQuartos(QDialog):
         self.faixa = QLabel("")
         self.faixa.setObjectName("faixa_quartos")
         self.faixa.setWordWrap(True)
-        self.faixa.setStyleSheet("font-size: 20px; font-weight: bold; padding: 8px 12px; border-radius: 8px;"
-                                 "background: #1e7d32; color: #ffffff;")
         layout.addWidget(self.faixa)
         self.grade_widget = QWidget()
         self.grade = QGridLayout(self.grade_widget)
@@ -765,6 +763,7 @@ class JanelaQuartos(QDialog):
                 for cartao in self.cartoes.values():
                     cartao.setEnabled(False)
             return
+        self.modo_visual = "claro" if self.ctx.banco.cfg("tema_visual") == "claro" else "escuro"
         self._montar([item["quarto"] for item in situacao])
         for item in situacao:
             cartao = self.cartoes[item["quarto"]]
@@ -775,7 +774,7 @@ class JanelaQuartos(QDialog):
         livres = sum(i["estado"] == "livre" for i in situacao)
         c = contagem_quartos(situacao)
         self.faixa.setText(texto_contagem(c))
-        fundo = CORES["livre"][0] if c["livres"] else CORES["estourou"][0]   # vermelho: nenhum quarto livre
+        fundo = FAIXA_LIVRE if c["livres"] else FAIXA_LOTADO
         self.faixa.setStyleSheet("font-size: 20px; font-weight: bold; padding: 8px 12px; border-radius: 8px;"
                                  f"background: {fundo}; color: #ffffff;")
         self.resumo.setText(
@@ -786,8 +785,6 @@ class JanelaQuartos(QDialog):
 
 # ------------------------------------------------- quartos no caixa
 # Cartões no mesmo desenho dos das comandas (painel_mesas.py): mesmas cores por situação, cantos, pílula e fontes.
-_ESTADO_CARTAO = {"livre": "balcao", "uso": "consumindo", "alerta": "conta", "estourou": "parada",
-                  "arrumacao": "parcial"}   # livre verde, ocupado azul
 _PILULA = {"livre": "Livre", "uso": "Em uso", "alerta": "Acabando", "estourou": "Esgotado", "arrumacao": "Arrumando"}
 
 
@@ -808,6 +805,15 @@ class GradeQuartos(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)       # o teclado continua no caixa
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def definir_linhas(self, linhas: int) -> bool:
+        """Quantas linhas de cartões a grade ocupa: duas no caixa de sempre, uma quando a janela é baixa (os outros
+        quartos ficam nas páginas ◀ ▶). Devolve se mudou."""
+        por_pagina = self.MAX_COLUNAS * max(1, min(2, linhas))
+        if por_pagina == self.POR_PAGINA:
+            return False
+        self.POR_PAGINA = por_pagina
+        return True
 
     def definir(self, itens: list[dict], modo: str) -> None:
         self.itens = itens
@@ -850,11 +856,9 @@ class GradeQuartos(QWidget):
             largura = 1
             if estado == "estourou" and self.piscar:          # pisca a borda: chama o olho sem poluir
                 borda, largura = cores["vermelho"], 3
-            elif estado == "livre":                            # livre salta aos olhos: borda verde grossa
-                largura = 3
             p.setPen(QPen(QColor(borda), largura))
             p.setBrush(QColor(fundo))
-            p.drawRoundedRect(QRectF(x1, y1, x2 - x1, y2 - y1), 12, 12)
+            p.drawRoundedRect(QRectF(x1, y1, x2 - x1, y2 - y1), 8, 8)
             pad = 9
             if estado in ("uso", "alerta", "estourou"):       # barra do tempo já usado, na base do cartão
                 usado = fracao_usada(item)
@@ -922,6 +926,7 @@ class PainelQuartosCaixa(QFrame):
         lay.setContentsMargins(10, 5, 8, 5)
         lay.setSpacing(8)
         lateral = QVBoxLayout()
+        lateral.setContentsMargins(0, 0, 0, 0)        # com a margem padrão o "Painel completo" não cabia na lateral
         lateral.setSpacing(0)
         self.titulo = QLabel("Quartos")
         self.titulo.setStyleSheet("font-size: 15px; font-weight: 700;")
@@ -988,6 +993,11 @@ class PainelQuartosCaixa(QFrame):
     def mudar_pagina(self, passo):
         self.grade.pagina = max(0, min(self.grade.pagina + passo, (len(self.grade.itens) - 1) // self.grade.POR_PAGINA))
         self.atualizar()
+
+    def definir_linhas(self, linhas: int) -> None:
+        """A janela do caixa avisa quando ficou baixa: a linha dos quartos passa a ter uma fileira só."""
+        if self.grade.definir_linhas(linhas):
+            self.atualizar()
 
     def atualizar(self):
         try:

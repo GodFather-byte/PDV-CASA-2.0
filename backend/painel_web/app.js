@@ -942,6 +942,90 @@
     carregarNotas();
   }
 
+  // ------------------------------------------------------------------
+  // Vendas de teste: o dono marca, confirma com a senha de segurança e o caixa apaga
+  // ------------------------------------------------------------------
+
+  const SITUACAO_TESTE = { aguardando: "aguardando o caixa", apagada: "apagada", recusada: "o caixa não deixou" };
+  let vendasTeste = [];
+
+  function avisarTeste(texto, erro) {
+    const aviso = $("aviso-teste");
+    aviso.hidden = !texto;
+    aviso.textContent = texto || "";
+    aviso.classList.toggle("erro", !!erro);
+  }
+
+  function totalTeste() {
+    const marcadas = vendasTeste.filter((v) => v.marcada);
+    const total = marcadas.filter((v) => v.status === "fechada").reduce((s, v) => s + v.total_cent, 0);
+    $("teste-total").textContent = marcadas.length
+      ? marcadas.length + " venda(s) marcada(s), total " + formatarCentavos(total) : "";
+    return { marcadas, total };
+  }
+
+  async function carregarVendasTeste() {
+    if (!estado.token) return;
+    const d = new Date();                                 // dia local (toISOString seria o dia em UTC)
+    const hoje = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    if (!$("teste-de").value) $("teste-de").value = hoje;
+    if (!$("teste-ate").value) $("teste-ate").value = hoje;
+    let dados;
+    try {
+      dados = await chamarApi("/vendas-teste?inicio=" + encodeURIComponent($("teste-de").value) +
+        "&fim=" + encodeURIComponent($("teste-ate").value));
+    } catch (e) {
+      if (e instanceof ErroApi && e.status === 404) { $("bloco-vendas-teste").hidden = true; return; }
+      avisarTeste(e.message || "Não consegui carregar as vendas.", true);
+      return;
+    }
+    $("bloco-vendas-teste").hidden = false;
+    vendasTeste = (dados.vendas || []).map((v) => Object.assign({ marcada: false }, v));
+    const lista = $("teste-lista");
+    limpar(lista);
+    if (!vendasTeste.length) lista.append(el("p", { class: "legenda", text: "Nenhuma venda nesse período." }));
+    for (const v of vendasTeste) {
+      const caixa = el("input", { type: "checkbox", disabled: !!v.pedido });
+      caixa.addEventListener("change", () => { v.marcada = caixa.checked; totalTeste(); });
+      const quando = v.fechada_em ? String(v.fechada_em).slice(8, 10) + "/" + String(v.fechada_em).slice(5, 7) +
+        " " + String(v.fechada_em).slice(11, 16) : v.dia;
+      const situacao = v.pedido ? " · " + (SITUACAO_TESTE[v.pedido] || v.pedido) + (v.motivo ? ": " + v.motivo : "")
+        : (v.status === "cancelada" ? " · cancelada" : "");
+      lista.append(el("label", { class: "linha-teste", style: "display:block;margin:4px 0" }, caixa,
+        " Cupom " + (v.cupom || "-") + " · " + quando + " · " + formatarCentavos(v.total_cent) + situacao));
+    }
+    const hist = dados.historico || [];
+    $("teste-historico-bloco").hidden = hist.length === 0;
+    const caixaHist = $("teste-historico");
+    limpar(caixaHist);
+    for (const h of hist) {
+      caixaHist.append(el("p", { class: "legenda" }, "Cupom " + (h.cupom || "-") + " · " + formatarCentavos(h.total_cent) +
+        " · " + (SITUACAO_TESTE[h.situacao] || h.situacao) + (h.motivo ? ": " + h.motivo : "") +
+        " · pelo " + (h.origem === "painel" ? "painel" : "caixa") + " em " + String(h.pedida_em || "").slice(0, 16)));
+    }
+    $("teste-apagar").disabled = !dados.senha_configurada;
+    if (!dados.senha_configurada) avisarTeste("Crie a senha de segurança no caixa (Utilitários) para apagar por aqui.", false);
+    totalTeste();
+  }
+
+  async function apagarVendasTeste() {
+    const { marcadas, total } = totalTeste();
+    if (!marcadas.length) { avisarTeste("Marque as vendas de teste.", true); return; }
+    const senha = $("teste-senha").value;
+    if (!senha) { avisarTeste("Digite a senha de segurança.", true); return; }
+    if (!confirm("Apagar " + marcadas.length + " venda(s), total " + formatarCentavos(total) + "? Não dá para desfazer.")) return;
+    try {
+      const r = await chamarApi("/vendas-teste/apagar", { metodo: "POST",
+        corpo: { uuids: marcadas.map((v) => v.uuid), senha } });
+      avisarTeste(r.pedidas + " venda(s) enviada(s) ao caixa para apagar. " + (r.aviso || ""), false);
+    } catch (e) {
+      avisarTeste(e.message || "Não consegui apagar.", true);
+    } finally {
+      $("teste-senha").value = "";
+    }
+    carregarVendasTeste();
+  }
+
   function configurarNotas() {
     const campo = $("arquivo-nota");
     campo.addEventListener("change", () => {
@@ -949,6 +1033,8 @@
       enviarNotas(arquivos).finally(() => { campo.value = ""; });
     });
     $("baixar-xmls").addEventListener("click", baixarXmls);
+    $("teste-buscar").addEventListener("click", carregarVendasTeste);
+    $("teste-apagar").addEventListener("click", apagarVendasTeste);
   }
 
   // ------------------------------------------------------------------
@@ -1645,7 +1731,8 @@
     const diaAtual = estado.resumo && (estado.resumo.dia_operacional || estado.resumo.dia);
     const pontos = dias.map((d, i) => {
       const valor = Number(d.faturamento_cent) || 0;
-      const mostrar = i === 0 || i === dias.length - 1 || (d.dia && Number(d.dia.slice(8, 10)) % 5 === 0);
+      const longeDasPontas = i > 1 && i < dias.length - 2;
+      const mostrar = i === 0 || i === dias.length - 1 || (longeDasPontas && d.dia && Number(d.dia.slice(8, 10)) % 5 === 0);
       return {
         valor,
         rotulo: mostrar && d.dia ? d.dia.slice(8, 10) : "",
@@ -2287,7 +2374,7 @@
     if (nome === "vendas" && estado.token) carregarVendas();
     if (nome === "periodo" && estado.token) carregarPeriodo();
     if (nome === "lucro" && estado.token) carregarLucro();
-    if (nome === "produtos" && estado.token) { carregarNotas(); carregarXmls(); }
+    if (nome === "produtos" && estado.token) { carregarNotas(); carregarXmls(); carregarVendasTeste(); }
   }
 
   function mudarDia(novoDia) {

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>WillPDV Retaguarda</title>
   <meta name="description" content="Retaguarda da loja: produtos, estoque, pessoas, financeiro e configurações alterados de longe.">
-  <meta name="theme-color" content="#101827">
+  <meta name="theme-color" content="#101c20">
   <meta name="color-scheme" content="light dark">
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" sizes="192x192" href="/painel/icones/icone-192.png">
@@ -14,8 +14,11 @@
 <body>
   <header class="topo">
     <div class="marca">
+      <img src="/painel/icones/icone-192.png" alt="" width="36" height="36">
+      <div>
       <strong>Retaguarda</strong>
       <span id="loja-nome">carregando…</span>
+      </div>
     </div>
     <div class="topo-acoes">
       <span id="espelho-quando" class="suave"></span>
@@ -41,6 +44,9 @@
   </section>
 
   <div id="tela-app" class="app" hidden>
+    <label class="seletor-secao" for="menu-compacto">Seção
+      <select id="menu-compacto"></select>
+    </label>
     <nav id="menu" class="menu" aria-label="Seções da retaguarda"></nav>
     <main id="conteudo" class="conteudo" tabindex="-1"></main>
   </div>

@@ -15,8 +15,7 @@ from src.core.erros import ErroNegocio
 from src.ui_qt.tema import texto
 
 LARGURA_MINIMA, ALTURA_MINIMA = 560, 420
-COR_ESTADO = {"erro": "#d9534f", "nao_confirmado": "#d9534f", "indisponivel": "#e0a800",
-              "confirmado": "#28a745", "enviado": "#17a2b8", "lido": "#17a2b8", "configurado": ""}
+TOM_ESTADO = {"erro": "perigo", "nao_confirmado": "perigo", "indisponivel": "alerta", "confirmado": "sucesso"}
 
 
 class JanelaDiagnostico(QDialog):
@@ -25,7 +24,7 @@ class JanelaDiagnostico(QDialog):
         self.ctx = ctx
         self.diag = DiagnosticoController(ctx)
         self.diag.exigir()
-        self.setWindowTitle("Diagnóstico de equipamentos • Qt")
+        self.setWindowTitle("Diagnóstico de equipamentos")
         self.status = {}
         self.resultados = {}
         layout = QVBoxLayout(self)
@@ -113,8 +112,9 @@ class JanelaDiagnostico(QDialog):
         self.resultados[resultado.dispositivo] = resultado
         rotulo = self.status[resultado.dispositivo]
         rotulo.setText(f"<b>{resultado.rotulo}</b><br>{_escapar(resultado.mensagem)}")
-        cor = COR_ESTADO.get(resultado.estado, "")
-        rotulo.setStyleSheet(f"color: {cor};" if cor else "")
+        rotulo.setProperty("tom", TOM_ESTADO.get(resultado.estado, "suave"))
+        rotulo.style().unpolish(rotulo)
+        rotulo.style().polish(rotulo)
 
     def _liberar(self, ligado):
         for widget in self._acoes:

@@ -1,5 +1,6 @@
-"""Edição do programa: o mesmo código gera o WillPDV (completo, nasceu boate), o Will Adega (só adega), o Will Restaurante
-e o Will Variedades (loja de eletrônicos, utilidades e presentes: balcão, etiqueta com código de barras, sem bebida gelada).
+"""Edição do programa: o mesmo código gera o WillPDV (completo, nasceu boate), o Will Adega (só adega), o Will Restaurante,
+o Will Variedades (loja de eletrônicos, utilidades e presentes: balcão, etiqueta com código de barras, sem bebida gelada)
+e o Will Hotel.
 
 A edição define a marca (nome, ícone, logotipo), a pasta dos dados no Windows e, na adega, o perfil de operação aplicado na
 primeira entrada, as configurações que ficam sempre com o mesmo valor (sem mesas, garotas, portaria, rodízio nem pré-pago) e
@@ -32,6 +33,10 @@ CHAVES_CASA_NOTURNA = frozenset({
     "quartos_garota_minimo", "quartos_codigo_show", "quartos_pela_comanda", "quartos_tolerancia_min",
 })
 
+
+# Hotel: só no Will Hotel. Nas outras edições o módulo e as configurações dele não aparecem.
+CHAVES_HOTEL = frozenset({"usar_hotel", "hotel_checkin_hora", "hotel_checkout_hora", "hotel_tolerancia_min",
+                          "hotel_alerta_min", "hotel_conta_inicio"})
 
 # Pedido online pelo cardápio: só no Will Adega. Na boate o cardápio é só consulta e estas opções não aparecem.
 CHAVES_PEDIDO_ONLINE = frozenset({"pedido_online", "pedido_online_whatsapp", "pedido_online_minimo",
@@ -71,22 +76,24 @@ class Edicao:
 
 EDICOES = {
     "willpdv": Edicao("willpdv", "WillPDV", "WILLPDV", "willpdv.ico", None, "WILL-PDV",
-                      ocultas=CHAVES_PEDIDO_ONLINE, sufixo_titulo=" • Qt piloto", titulo_entrada="Entrada Qt",
+                      ocultas=CHAVES_PEDIDO_ONLINE | CHAVES_HOTEL, menu_oculto=frozenset({"hotel"}),
+                      sufixo_titulo=" • Qt piloto", titulo_entrada="Entrada Qt",
                       aviso_entrada="Piloto Qt • Interface em validação"),
     "willadega": Edicao(
         "willadega", "Will Adega", "WILL ADEGA", "willadega.ico", "willadega-logo.png",
         "WILL-ADEGA", perfil="adega",
         fixas={"usar_mesas": "N", "usar_garotas": "N", "usar_portaria": "N", "usar_rodizio": "N", "usar_prepago": "N",
                "usar_quartos": "N"},
-        ocultas=CHAVES_CASA_NOTURNA, menu_oculto=frozenset({"cozinha", "quartos"}), recebimento_direto=True,
+        ocultas=CHAVES_CASA_NOTURNA | CHAVES_HOTEL, menu_oculto=frozenset({"cozinha", "quartos", "hotel"}),
+        recebimento_direto=True,
         executavel="WillAdega", script_instalador="WillAdega.iss"),
     "willvariedades": Edicao(
         "willvariedades", "Will Variedades", "WILL VARIEDADES", "willvariedades.ico", "willvariedades-logo.png",
         "WILL-VARIEDADES", perfil="variedades",
         fixas={"usar_mesas": "N", "usar_garotas": "N", "usar_portaria": "N", "usar_rodizio": "N", "usar_prepago": "N",
                "usar_quartos": "N", "usar_cozinha_bar": "N", "porteiro_ativo": "N"},
-        ocultas=CHAVES_CASA_NOTURNA | CHAVES_PEDIDO_ONLINE,
-        menu_oculto=frozenset({"cozinha", "quartos", "porteiro", "retornaveis"}),
+        ocultas=CHAVES_CASA_NOTURNA | CHAVES_PEDIDO_ONLINE | CHAVES_HOTEL,
+        menu_oculto=frozenset({"cozinha", "quartos", "porteiro", "retornaveis", "hotel"}),
         sem_gelada=True, recebimento_direto=True,
         executavel="WillVariedades", script_instalador="WillVariedades.iss"),
     "willrestaurante": Edicao(
@@ -99,9 +106,26 @@ EDICOES = {
         ocultas=frozenset(c for c in CHAVES_CASA_NOTURNA if c.startswith(("quartos_", "comissao_", "porteiro_"))
                          or c in {"exigir_senha_comissao", "codigo_comissao", "imprimir_via_comissao",
                                   "show_valores", "codigo_saida", "imprimir_saida_ao_pagar",
-                                  "consumacao_minima", "consumacao_minima_de", "consumacao_minima_ate"}),
-        menu_oculto=frozenset({"quartos", "porteiro"}),
+                                  "consumacao_minima", "consumacao_minima_de", "consumacao_minima_ate"})
+        | CHAVES_HOTEL,
+        menu_oculto=frozenset({"quartos", "porteiro", "hotel"}),
         executavel="WillRestaurante", script_instalador="WillRestaurante.iss"),
+    # Hotel e pousada: diárias e uso por horas. A conta de cada estadia é uma comanda (a partir da 500): sem limite de
+    # valor, sem serviço nem a inatividade da boate. Mesas continuam para quem tem restaurante.
+    "willhotel": Edicao(
+        "willhotel", "Will Hotel", "WILL HOTEL", "willpdv.ico", None,
+        "WILL-HOTEL", perfil="hotel",
+        padroes={"num_comandas": "999", "limite_comanda": "0", "tempo_inatividade_min": "0", "posicao_padrao": "comanda",
+                 "consumacao_minima": "0"},
+        fixas={"usar_hotel": "S", "usar_garotas": "N", "usar_portaria": "N", "usar_quartos": "N", "usar_rodizio": "N",
+               "usar_prepago": "N", "porteiro_ativo": "N", "painel_mostra_garotas": "N"},
+        ocultas=frozenset(c for c in CHAVES_CASA_NOTURNA if c.startswith(("quartos_", "comissao_", "porteiro_",
+                                                                             "consumacao_minima"))
+                          or c in {"exigir_senha_comissao", "codigo_comissao", "imprimir_via_comissao", "show_valores",
+                                   "codigo_saida", "imprimir_saida_ao_pagar", "limite_comanda", "tempo_inatividade_min",
+                                   "posicao_padrao"}),
+        menu_oculto=frozenset({"quartos", "porteiro"}),
+        executavel="WillHotel", script_instalador="WillHotel.iss"),
 }
 
 

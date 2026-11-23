@@ -1,11 +1,15 @@
 """Utilitários locais Qt; integração: ``JanelaUtilitarios(ctx, parent).exec()``."""
 import sqlite3
 
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QDialog, QInputDialog, QLineEdit, QPushButton, QVBoxLayout,
+    QApplication, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QInputDialog, QLineEdit,
+    QMessageBox, QPushButton, QVBoxLayout,
 )
 
 from src.core import formatacao as fmt
+from src.core import suporte_remoto
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.ui_qt.tema import texto
 
@@ -22,18 +26,22 @@ class JanelaUtilitarios(QDialog):
     ACOES = (
         ("backup", "Backup local manual", "util_backup"),
         ("suporte", "Pacote de suporte (log de erros)", "util_backup"),
+        ("rustdesk", "Suporte remoto (RustDesk)", "util_comunicacao"),
         ("limpeza", "Limpeza do movimento…", "util_limpeza"),
         ("excluir_produtos", "Excluir todos os produtos…", "util_excluir_produtos"),
         ("comunicacao", "Programa de comunicação", "util_comunicacao"),
         ("verificar_backup", "Verificar backup (teste de restauração)…", "util_backup"),
+        ("recuperar_nuvem", "Recuperar a loja pelo backup da nuvem…", "util_backup"),
+        ("senha_seguranca", "Senha de segurança do dono…", "util_vendas_teste"),
+        ("vendas_teste", "Apagar vendas de teste…", "util_vendas_teste"),
     )
 
     def __init__(self, ctx, parent=None):
         super().__init__(parent)
         self.ctx = ctx
         self._operador()
-        self.setWindowTitle("Utilitários • Qt")
-        self.resize(650, 500)
+        self.setWindowTitle("Utilitários")
+        self.resize(850, 490)
         layout = QVBoxLayout(self)
         layout.addWidget(texto("Utilitários locais", "titulo"))
         self.botoes = {}
@@ -42,7 +50,23 @@ class JanelaUtilitarios(QDialog):
             botao.setEnabled(ctx.acesso.pode(ctx.operador, permissao))
             botao.clicked.connect(getattr(self, chave))
             self.botoes[chave] = botao
-            layout.addWidget(botao)
+        grade = QGridLayout()
+        for indice, (titulo, chaves) in enumerate((
+            ("Backup e recuperação", ("backup", "verificar_backup", "recuperar_nuvem")),
+            ("Suporte e comunicação", ("suporte", "rustdesk", "comunicacao")),
+            ("Manutenção de dados", ("limpeza", "excluir_produtos", "vendas_teste")),
+            ("Acesso do dono", ("senha_seguranca",)),
+        )):
+            grupo = QGroupBox(titulo)
+            coluna = QVBoxLayout(grupo)
+            for chave in chaves:
+                botao = self.botoes[chave]
+                if chave in ("limpeza", "excluir_produtos", "vendas_teste"):
+                    botao.setObjectName("perigo")
+                coluna.addWidget(botao)
+            coluna.addStretch()
+            grade.addWidget(grupo, indice // 2, indice % 2)
+        layout.addLayout(grade)
         self.status = texto("Nenhuma operação executada nesta janela.", "suave")
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
@@ -51,7 +75,10 @@ class JanelaUtilitarios(QDialog):
         layout.addWidget(self.mensagem)
         fechar = QPushButton("Fechar")
         fechar.clicked.connect(self.reject)
-        layout.addWidget(fechar)
+        rodape = QHBoxLayout()
+        rodape.addStretch()
+        rodape.addWidget(fechar)
+        layout.addLayout(rodape)
 
     def _operador(self):
         if self.ctx.operador is None:
@@ -111,12 +138,56 @@ class JanelaUtilitarios(QDialog):
             return True
         return self._executar(acao)
 
+    def recuperar_nuvem(self):
+        def acao():
+            self._controlador("util_backup")
+            from src.ui_qt.backup_nuvem import JanelaBackupNuvem
+            self.janela_backup_nuvem = JanelaBackupNuvem(self.ctx, self)
+            self.janela_backup_nuvem.open()
+            return True
+        return self._executar(acao)
+
     def suporte(self):
         def acao():
             caminho = self._controlador("util_backup").pacote_suporte()
             self.status.setText(
                 f"Pacote de suporte gerado:\n{caminho}\n\nEnvie este arquivo ao fornecedor. "
                 "Ele leva só os registros de erro (log), nunca as vendas.")
+            return True
+        return self._executar(acao)
+
+    def rustdesk(self):
+        """Abre o RustDesk e mostra o ID deste computador (já copiado). Sem o programa, oferece a página de download."""
+        def acao():
+            ctrl = self._controlador("util_comunicacao")
+            if not ctrl.rustdesk_instalado():
+                resposta = QMessageBox.question(
+                    self, "Suporte remoto",
+                    "O RustDesk não está instalado neste computador.\n\n"
+                    "É o programa que deixa o suporte ver esta tela, sempre com a sua liberação.\n"
+                    "Abrir a página rustdesk.com para baixar?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
+                if resposta == QMessageBox.StandardButton.Yes:
+                    QDesktopServices.openUrl(QUrl(suporte_remoto.SITE))
+                    self.status.setText("Página do RustDesk aberta no navegador. Baixe, instale e clique aqui de novo.")
+                    return False
+            ctrl.abrir_rustdesk()
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                id_atual = ctrl.obter_id_rustdesk()
+            finally:
+                QApplication.restoreOverrideCursor()
+            if id_atual:
+                QApplication.clipboard().setText(id_atual)
+                self.status.setText(
+                    f"RustDesk aberto.\n\nID deste computador: {suporte_remoto.formatar_id(id_atual)}\n"
+                    "(já copiado: é só colar na conversa com o suporte)\n\n"
+                    "Passe também a senha de uso único que aparece na janela do RustDesk, ou aceite a conexão "
+                    "quando ela chegar. Sem a sua liberação ninguém entra.")
+            else:
+                self.status.setText(
+                    "RustDesk aberto.\n\nPasse ao suporte o ID e a senha de uso único que aparecem na janela dele. "
+                    "Sem a sua liberação ninguém entra.")
             return True
         return self._executar(acao)
 
@@ -160,6 +231,26 @@ class JanelaUtilitarios(QDialog):
             return True
         return self._executar(acao)
 
+
+    def senha_seguranca(self):
+        def acao():
+            self._controlador("util_vendas_teste")
+            from src.ui_qt.vendas_teste import JanelaSenhaSeguranca
+            if JanelaSenhaSeguranca(self.ctx, self).exec():
+                self.status.setText("Senha de segurança do dono gravada. Ela sobe para o painel na próxima "
+                                    "sincronização.")
+                return True
+            return False
+        return self._executar(acao)
+
+    def vendas_teste(self):
+        def acao():
+            self._controlador("util_vendas_teste")
+            from src.ui_qt.vendas_teste import JanelaApagarVendasTeste
+            self.janela_vendas_teste = JanelaApagarVendasTeste(self.ctx, self)
+            self.janela_vendas_teste.open()
+            return True
+        return self._executar(acao)
 
     def excluir_produtos(self):
         def acao():

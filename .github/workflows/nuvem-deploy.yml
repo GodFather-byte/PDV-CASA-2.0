@@ -71,9 +71,16 @@ jobs:
             echo "Sem Deploy Hook: aguardando a publicação automática pelo Git no Render."
             exit 0
           fi
-          codigo=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$HOOK")
+          # ref = o commit testado: o Render publica exatamente ele, e não "o último que ele conhece".
+          # Se o serviço estiver ligado a outro repositório (ou a uma cópia parada), o commit não existe lá
+          # e o Render responde 404 na hora, em vez de republicar o commit antigo em silêncio.
+          codigo=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "${HOOK}&ref=${GITHUB_SHA}")
           echo "Render respondeu HTTP $codigo"
-          case "$codigo" in 2*) ;; *) echo "Deploy Hook falhou"; exit 1;; esac
+          case "$codigo" in
+            2*) ;;
+            404) echo "::error::O Render não achou o commit ${GITHUB_SHA:0:7} no repositório ligado ao serviço. Em Render > serviço > Settings > Build & Deploy, ligue o serviço ao repositório do GitHub (ramo main); se o Deploy Hook foi regenerado, atualize o segredo RENDER_DEPLOY_HOOK_URL."; exit 1;;
+            *) echo "::error::Deploy Hook falhou (HTTP $codigo)"; exit 1;;
+          esac
       - name: Confirmar o commit publicado na nuvem
         env:
           NUVEM_URL: ${{ vars.PDV_NUVEM_URL || 'https://willpdv-nuvem-6sp0.onrender.com' }}

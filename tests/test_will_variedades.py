@@ -119,7 +119,8 @@ class TesteEdicao(unittest.TestCase):
     def test_central_do_fornecedor_oferece_o_programa(self):
         from backend.central_fornecedor import EDICOES, link_instalador
         self.assertEqual(EDICOES["willvariedades"].nome, "Will Variedades")
-        self.assertEqual(link_instalador("willvariedades"), "")          # sem link até a primeira publicação
+        self.assertTrue(link_instalador("willvariedades").endswith(           # o link fixo das Releases de downloads
+            "/ultima-versao-variedades/WillVariedades-Instalador.exe"))
         with patch.dict(os.environ, {"PDV_INSTALADOR_WILLVARIEDADES": "https://exemplo/WillVariedades.exe"}):
             self.assertEqual(link_instalador("willvariedades"), "https://exemplo/WillVariedades.exe")
 

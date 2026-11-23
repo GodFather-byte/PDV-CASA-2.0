@@ -68,9 +68,13 @@ class TurnoController:
         return ultimo % total + 1 if ultimo else 1
 
     # ------------------------------------------------------------- abertura
-    def abrir(self, operador_id: int, numero: int, valor_inicial_cent: int) -> int:
+    def abrir(self, operador_id: int, numero: int, valor_inicial_cent: int, *, treino: bool = False) -> int:
+        """`treino`: turno do caixa de treino, que não confere a licença. Só vale em banco na memória (nada do treino
+        chega à loja); no banco da loja a licença continua valendo sempre."""
+        if treino and self.banco.caminho != ":memory:":
+            raise ErroNegocio("Turno de treino só existe no caixa de treino.")
         est = licenca.estado(self.banco)
-        if est.bloqueia:
+        if est.bloqueia and not treino:
             raise ErroNegocio(f"{est.mensagem} Renove a licença na tela de entrada antes de abrir um turno.")
         if self.atual():
             raise ErroNegocio("Já existe um turno aberto neste caixa.")
@@ -85,7 +89,7 @@ class TurnoController:
                 "aberto_em": fmt.agora(), "valor_inicial_cent": valor_inicial_cent,
                 "cupom_inicial": cupom_inicial, "status": "aberto"})
             self.banco.log("turno_aberto", f"turno {numero}, fundo {fmt.fmt_brl(valor_inicial_cent)}", operador_id)
-            if licenca.exigida(self.banco):
+            if licenca.exigida(self.banco) and not treino:
                 licenca.registrar_uso(self.banco)
         notificacoes.avisar(self.banco, "turno", "turno_aberto", tid)
         return tid

@@ -6,7 +6,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QDate, QLocale, Qt, QTimer
 from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
@@ -29,7 +29,7 @@ from src.fiscal.servico import ServicoFiscal
 from src.sync.ponte import ServicoPonte
 from src.sync.sincronizador import ServicoSincronizacao
 from src.controllers.contexto import Contexto
-from src.ui_qt import tema
+from src.ui_qt import sinais, tema
 from src.ui_qt.login import JanelaLogin
 from src.versao import VERSAO
 
@@ -202,31 +202,38 @@ class JanelaPrincipal(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QHBoxLayout(central)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         lateral = QVBoxLayout()
+        lateral.setContentsMargins(12, 12, 12, 10)
         lateral.setSpacing(3)  # Mantém as sete categorias visíveis também com as métricas do Windows.
+        cabecalho_menu = QHBoxLayout()
         self.logo_edicao = QLabel()
         if self.edicao.logotipo:
             imagem = QPixmap(str(edicao.pasta_recursos() / self.edicao.logotipo))
             if not imagem.isNull():
-                self.logo_edicao.setPixmap(imagem.scaledToWidth(160, Qt.TransformationMode.SmoothTransformation))
-                lateral.addWidget(self.logo_edicao)
-        lateral.addWidget(tema.texto(self.edicao.marca, "marca"))
-        lateral.addWidget(tema.texto(f"Versão {VERSAO}", "suave"))
+                self.logo_edicao.setPixmap(imagem.scaledToWidth(36, Qt.TransformationMode.SmoothTransformation))
+                cabecalho_menu.addWidget(self.logo_edicao)
+        cabecalho_menu.addWidget(tema.texto(self.edicao.marca, "marca"), 1)
+        cabecalho_menu.addWidget(tema.texto(VERSAO, "legenda", quebra=False))
+        lateral.addLayout(cabecalho_menu)
         self.btn_tema = QPushButton()
+        self.btn_tema.setObjectName("discreto")
         self.btn_tema.setAccessibleName("Alternar entre modo claro e modo escuro")
         self.btn_tema.clicked.connect(self.alternar_tema)
-        lateral.addWidget(self.btn_tema)
         self._rotular_tema()
         self.busca_modulos = QLineEdit()
-        self.busca_modulos.setPlaceholderText("Buscar módulo…")
+        self.busca_modulos.setPlaceholderText("Buscar módulo…  (Ctrl+K)")
         self.busca_modulos.setClearButtonEnabled(True)
         self.busca_modulos.setAccessibleName("Buscar módulo do PDV")
         lateral.addWidget(self.busca_modulos)
         self.menu_grupos = QToolBox()
-        lateral.addWidget(self.menu_grupos, 1)
+        lateral.addWidget(self.menu_grupos)
+        lateral.addStretch()
         grupos = {}
         for nome in ("Tutoriais", "Operação", "Produtos e estoque", "Gestão", "Cadastros", "Configuração", "Manutenção"):
             pagina = QWidget()
+            pagina.setObjectName("grupo_menu")
             grade = QVBoxLayout(pagina)
             grade.setContentsMargins(2, 2, 2, 2)
             grade.setSpacing(3)
@@ -234,7 +241,7 @@ class JanelaPrincipal(QMainWindow):
             self.menu_grupos.addItem(pagina, nome)
         categorias = {
             "Tutoriais": {"tutoriais"} | {f"tutorial_{c}" for c in ROTEIROS},
-            "Operação": {"inicio", "caixa", "porteiro", "quartos", "cozinha", "alertas"},
+            "Operação": {"inicio", "caixa", "hotel", "porteiro", "quartos", "cozinha", "alertas"},
             "Produtos e estoque": {"produtos", "estoque", "contagem", "retornaveis", "promocoes", "importar_produtos", "composicao"},
             "Gestão": {"relatorio_vendas", "relatorios", "contas", "devolucoes", "notas_fiscais", "whatsapp", "auditoria"},
             "Cadastros": {"operadores", "mais_cadastros"},
@@ -251,6 +258,7 @@ class JanelaPrincipal(QMainWindow):
             *tutoriais,
             ("inicio", "Visão geral", self.atualizar),
             ("caixa", "Abrir caixa", self.abrir_caixa),
+            ("hotel", "Hotel • recepção", self.abrir_hotel),
             ("porteiro", "Porteiro no celular", self.abrir_porteiro),
             ("produtos", "Produtos", lambda: self.abrir_cadastro("produtos")),
             ("estoque", "Estoque", self.abrir_estoque),
@@ -307,37 +315,66 @@ class JanelaPrincipal(QMainWindow):
         self.menu_grupos.setCurrentIndex(1)  # Operação aberta por padrão; Tutoriais continua no topo.
         self.marcar_tutoriais()
         self.busca_modulos.textChanged.connect(self.filtrar_modulos)
-        self.sessao = tema.texto("", "suave")
+        lateral.addWidget(self.btn_tema)
+        self.sessao = tema.texto("", "legenda")
         lateral.addWidget(self.sessao)
         sair = QPushButton("Encerrar sessão")
         sair.clicked.connect(lambda: self.app.encerrar_sessao(confirmar=True))
         lateral.addWidget(sair)
         lateral_widget = QWidget()
+        lateral_widget.setObjectName("navegacao")
         lateral_widget.setLayout(lateral)
         self.lateral_scroll = QScrollArea()
         self.lateral_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.lateral_scroll.setWidgetResizable(True)
         self.lateral_scroll.setWidget(lateral_widget)
         self.lateral_scroll.setMinimumWidth(275)
-        self.lateral_scroll.setMaximumWidth(360)
+        self.lateral_scroll.setMaximumWidth(305)
         layout.addWidget(self.lateral_scroll, 1)
         conteudo = QVBoxLayout()
-        conteudo.setContentsMargins(24, 12, 12, 12)
-        conteudo.addWidget(tema.texto("Sua operação, em foco", "titulo"))
-        conteudo.addWidget(tema.texto(
-            "Caixa, estoque, relatórios e gestão em uma única interface.", "suave"))
+        conteudo.setContentsMargins(20, 14, 20, 12)
+        conteudo.setSpacing(8)
+        cabecalho = QHBoxLayout()
+        cabecalho.addWidget(tema.texto("Visão geral", "titulo_painel"), 1)
+        self.data_painel = tema.texto("", "suave", quebra=False)
+        cabecalho.addWidget(self.data_painel)
+        conteudo.addLayout(cabecalho)
+        capa = tema.CapaBalcao()
+        capa.setMinimumHeight(138)
+        faixa = QHBoxLayout(capa)
+        faixa.setContentsMargins(22, 12, 22, 12)
+        operacao = QVBoxLayout()
+        faixa.addLayout(operacao, 3)
+        faixa.addStretch(2)
+        operacao.setSpacing(4)
+        self.terminal = tema.texto("", "foto_detalhe", quebra=False)
+        operacao.addWidget(self.terminal)
+        self.loja = tema.texto("", "foto_titulo")
+        self.loja.setTextFormat(Qt.TextFormat.PlainText)
+        operacao.addWidget(self.loja)
+        abrir = QPushButton("Abrir caixa")
+        abrir.setObjectName("primario")
+        abrir.clicked.connect(self.abrir_caixa)
+        operacao.addWidget(abrir, 0, Qt.AlignmentFlag.AlignLeft)
+        conteudo.addWidget(capa)
         self.indicadores = {}
         self.kpis = {}
         self.faixa_noite = QWidget()          # a noite ao vivo (casas com mesas e comandas): números grandes no alto
-        noite = QHBoxLayout(self.faixa_noite)
-        noite.setContentsMargins(0, 0, 0, 0)
-        for chave, titulo in (("abertas", "POSIÇÕES ABERTAS"), ("acertos", "AGUARDANDO ACERTO"),
-                              ("aberto", "EM ABERTO NA CASA"), ("comissoes", "COMISSÕES A PAGAR")):
+        movimento = QVBoxLayout(self.faixa_noite)
+        movimento.setContentsMargins(0, 0, 0, 0)
+        movimento.setSpacing(5)
+        movimento.addWidget(tema.texto("Movimento da casa", "subtitulo"))
+        noite = QHBoxLayout()
+        movimento.addLayout(noite)
+        for chave, titulo in (("abertas", "Posições abertas"), ("acertos", "Aguardando acerto"),
+                              ("aberto", "Em aberto na casa"), ("comissoes", "Comissões a pagar")):
             cartao = QFrame()
             cartao.setObjectName("kpi")
+            cartao.setProperty("financeiro", chave == "aberto")
             caixa = QVBoxLayout(cartao)
-            caixa.setContentsMargins(16, 12, 16, 12)
-            caixa.addWidget(tema.texto(titulo, "suave"))
+            caixa.setContentsMargins(12, 8, 12, 8)
+            caixa.setSpacing(3)
+            caixa.addWidget(tema.texto(titulo, "legenda"))
             valor = tema.texto("0", "kpi_valor", quebra=False)
             caixa.addWidget(valor)
             self.kpis[chave] = (cartao, valor)
@@ -347,16 +384,27 @@ class JanelaPrincipal(QMainWindow):
         self.linha_porteiro.setObjectName("linha_porteiro")
         self.linha_porteiro.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         conteudo.addWidget(self.linha_porteiro)
+        atalhos = QHBoxLayout()
+        atalhos.addWidget(tema.texto("Acesso rápido", "subtitulo", quebra=False))
+        self.atalhos = {}
+        for chave, rotulo in (("produtos", "Produtos"), ("estoque", "Estoque"), ("relatorio_vendas", "Vendas")):
+            atalho = QPushButton(rotulo)
+            atalho.clicked.connect(self.botoes[chave].click)
+            self.atalhos[chave] = atalho
+            atalhos.addWidget(atalho)
+        atalhos.addStretch()
+        conteudo.addLayout(atalhos)
+        conteudo.addWidget(tema.texto("Situação do sistema", "subtitulo"))
         self.abas_status = QTabWidget()
         conteudo.addWidget(self.abas_status, 1)
-        for chave, titulo in (("turno", "CAIXA"), ("licenca", "LICENÇA"),
-                              ("backup", "PROTEÇÃO DOS DADOS"), ("impressao", "RECUPERAÇÃO DA IMPRESSÃO"),
-                              ("sync", "NUVEM E SERVIÇOS")):
+        for chave, titulo in (("turno", "Turno do caixa"), ("licenca", "Licença da loja"),
+                              ("backup", "Proteção dos dados"), ("impressao", "Recuperação da impressão"),
+                              ("sync", "Conexão e sincronização")):
             cartao = QFrame()
             cartao.setObjectName("cartao")
             caixa = QVBoxLayout(cartao)
             caixa.setContentsMargins(18, 14, 18, 14)
-            caixa.addWidget(tema.texto(titulo, "suave"))
+            caixa.addWidget(tema.texto(titulo, "secao"))
             rotulo = tema.texto("")
             caixa.addWidget(rotulo)
             caixa.addStretch(1)
@@ -367,7 +415,6 @@ class JanelaPrincipal(QMainWindow):
         conteudo.addWidget(self.mensagem)
         self.aviso_atualizacao = tema.texto("", "aviso")
         conteudo.addWidget(self.aviso_atualizacao)
-        conteudo.addStretch()
         painel = QWidget()
         painel.setLayout(conteudo)
         self.conteudo_scroll = QScrollArea()
@@ -484,7 +531,10 @@ class JanelaPrincipal(QMainWindow):
             return
         self.ctx.operador = self.ctx.acesso.operador(self.ctx.operador_id)
         operador = self.ctx.operador
-        self.sessao.setText(f"{operador.nome}\nNível {operador.nivel}")
+        self.sessao.setText(f"{operador.nome}   ·   Nível {operador.nivel}")
+        self.loja.setText(self.ctx.config.nome_loja())
+        self.terminal.setText(f"Terminal  {self.ctx.banco.cfg_int('terminal', 1):02d}")
+        self.data_painel.setText(QLocale("pt_BR").toString(QDate.currentDate(), "d 'de' MMMM 'de' yyyy"))
         desligados = modulos_desligados(self.ctx.banco)
         for chave in ("produtos", "operadores"):
             modulo = f"cad_{chave}"
@@ -506,6 +556,7 @@ class JanelaPrincipal(QMainWindow):
             "util_cozinha" not in desligados and self.ctx.pode("util_cozinha"))
         self.botoes["quartos"].setEnabled(
             "util_quartos" not in desligados and self.ctx.pode("util_quartos"))
+        self.botoes["hotel"].setEnabled("util_hotel" not in desligados and self.ctx.pode("util_hotel"))
         self.botoes["relatorio_vendas"].setEnabled(self.ctx.pode("rel_vendas"))
         self.botoes["contas"].setEnabled(self.ctx.pode("lanc_contas"))
         self.botoes["relatorios"].setEnabled(any(
@@ -537,6 +588,9 @@ class JanelaPrincipal(QMainWindow):
             for chave in SO_NO_PRINCIPAL:
                 self.botoes[chave].setEnabled(False)
                 self.botoes[chave].setToolTip("Disponível no caixa principal, onde o banco da loja está guardado.")
+        for chave, atalho in self.atalhos.items():
+            atalho.setEnabled(self.botoes[chave].isEnabled())
+            atalho.setVisible(chave not in self.edicao.menu_oculto)
         self._atualizar_noite()
         self._atualizar_porteiro()
         self.filtrar_modulos(self.busca_modulos.text())
@@ -707,6 +761,10 @@ class JanelaPrincipal(QMainWindow):
         from src.ui_qt.quartos import JanelaQuartos
         return self._abrir_painel_operacional(
             "quartos", lambda: JanelaQuartos(self.ctx, self))
+
+    def abrir_hotel(self):
+        from src.ui_qt.hotel import JanelaHotel
+        return self._abrir_painel_operacional("hotel", lambda: JanelaHotel(self.ctx, self))
 
     def abrir_diagnostico(self):
         from src.ui_qt.diagnostico import JanelaDiagnostico
@@ -1076,7 +1134,8 @@ class App:
         self._servicos_habilitados = False
         self._gancho_anterior = None
         self._gancho = None
-        self.aplicacao.aboutToQuit.connect(self.finalizar)
+        # A App não é QObject: sinal para método dela só por `ligar_metodo` (o porquê está em sinais.py).
+        self._ao_sair = sinais.ligar_metodo(self.aplicacao.aboutToQuit, self, "finalizar")
 
     def iniciar(self, servicos=True):
         if self._iniciada:
@@ -1140,8 +1199,8 @@ class App:
         if self._finalizada:
             return
         self.login = JanelaLogin(self.ctx)
-        self.login.accepted.connect(self._autenticado)
-        self.login.rejected.connect(self.encerrar)
+        sinais.ligar_metodo(self.login.accepted, self, "_autenticado")
+        sinais.ligar_metodo(self.login.rejected, self, "encerrar")
         self.login.show()
 
     def _autenticado(self):
@@ -1308,7 +1367,7 @@ def main():
         if existente is not None:
             # O hospedeiro já controla exec(); conserva o ciclo e a trava até aboutToQuit.
             aplicacao._willpdv_qt = app
-            aplicacao.aboutToQuit.connect(trava.liberar)
+            aplicacao.aboutToQuit.connect(lambda: trava.liberar())     # lambda: a trava não é QObject (sinais.py)
             ciclo_transferido = True
             return 0
         return aplicacao.exec()
@@ -1337,11 +1396,22 @@ def autoteste(pasta: Path) -> list[str]:
     if existente is None:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     aplicacao = existente or QApplication([])
+    foto = _fotografar_funcoes_do_executavel()
     banco = BancoDados(":memory:")
     app = None
     try:
         app = App(banco, aplicacao)
         tema.aplicar(aplicacao)
+        # A tela de entrada nasce e morre como em toda troca de operador: é quando as ligações com a App se desfazem.
+        for _ in range(2):
+            app.entrar()
+            aplicacao.processEvents()
+            entrada, app.login = app.login, None
+            if entrada is None or not entrada.isVisible():
+                raise RuntimeError("A tela de entrada Qt não abriu.")
+            entrada.cancelar_consulta()
+            entrada.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         app.ctx.operador = app.ctx.acesso.autenticar("ADM", "ADM")
         app.principal = JanelaPrincipal(app)
         app.principal.show()
@@ -1418,17 +1488,37 @@ def autoteste(pasta: Path) -> list[str]:
             raise RuntimeError("A saída Qt não liberou a comanda.")
         if app.ctx.comissoes.pendente(180) != 1500:
             raise RuntimeError("A saída alterou indevidamente a comissão pendente.")
-        return ["Qt Widgets: menu principal e cadastros de produtos/operadores abrem; "
-                "banco em memória, sem rede nem serviços",
-                "caixa Qt: comissão na linha, painel, diálogos de comissão/acerto e saída sem consumo conferidos",
-                "configurações, máquinas, acessos, utilitários, atualizações e estoque abrem sem rede nem hardware"]
+        resultado = ["Qt Widgets: entrada, menu principal e cadastros de produtos/operadores abrem; "
+                     "banco em memória, sem rede nem serviços",
+                     "caixa Qt: comissão na linha, painel, diálogos de comissão/acerto e saída sem consumo conferidos",
+                     "configurações, máquinas, acessos, utilitários, atualizações e estoque abrem sem rede nem hardware"]
     finally:
         if app is not None:
             app.finalizar()
-            aplicacao.aboutToQuit.disconnect(app.finalizar)
+            aplicacao.aboutToQuit.disconnect(app._ao_sair)
         aplicacao.processEvents()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         banco.fechar()
+    # Só depois de tudo fechado: é ao morrer a janela que emite o sinal que a referência a mais é solta.
+    soltas = sinais.funcoes_soltas(foto)
+    if soltas:
+        raise RuntimeError("Sinal do Qt ligado direto a método de objeto que não é QObject (use "
+                           "src.ui_qt.sinais.ligar_metodo): " + "; ".join(soltas[:10]))
+    if foto:
+        resultado.append(f"sinais do Qt: {len(foto)} funções de classe com a contagem de referências intacta")
+    return resultado
+
+
+def _fotografar_funcoes_do_executavel():
+    """No executável (código compilado), carrega todos os módulos e fotografa as funções antes de abrir telas; no
+    código-fonte devolve lista vazia, porque lá o defeito das ligações não existe (ver sinais.py)."""
+    if not sinais.compilado(App.encerrar):
+        return []
+    import importlib
+    from src.autoteste import MODULOS
+    for nome in MODULOS:
+        importlib.import_module(nome)
+    return sinais.fotografar_funcoes()
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ from src.controllers.config_controller import modulos_desligados
 from src.core import edicao, formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.core.relatorio import Coluna, Relatorio, para_csv, para_texto
-from src.ui_qt.tema import texto
+from src.ui_qt.tema import LinhaFluida, texto
 
 
 def exigir_acesso(ctx, chave):
@@ -462,42 +462,43 @@ class JanelaCadastro(QDialog):
         self.filtros = {}
         self.apenas_ativos = False
         self.ordem = self.entidade.ordem
-        self.setWindowTitle(self.entidade.titulo + " • Qt")
+        self.setWindowTitle(self.entidade.titulo)
         self.resize(1000, 680)
         layout = QVBoxLayout(self)
-        layout.addWidget(texto(self.entidade.titulo, "titulo"))
+        cabecalho = QHBoxLayout()
+        cabecalho.addWidget(texto(self.entidade.titulo, "titulo"), 1)
+        for titulo, acao, nome in (("Novo", self.novo, "tutorial_novo"), ("Editar", self.editar, ""),
+                                   ("Excluir", self.excluir, "perigo")):
+            botao = QPushButton(titulo)
+            botao.setObjectName(nome)
+            botao.setAutoDefault(False)
+            botao.clicked.connect(acao)
+            cabecalho.addWidget(botao)
+        layout.addLayout(cabecalho)
         barra = QHBoxLayout()
         self.busca = QLineEdit()
         self.busca.setObjectName("tutorial_busca")
-        self.busca.setPlaceholderText("Pesquisar e pressionar Enter")
+        self.busca.setPlaceholderText("Buscar neste cadastro")
+        self.busca.setAccessibleName("Buscar neste cadastro")
+        self.busca.setClearButtonEnabled(True)
         self.busca.returnPressed.connect(self.atualizar)
         barra.addWidget(self.busca, 1)
-        for titulo, acao in (("Pesquisar", self.atualizar), ("Novo", self.novo),
-                             ("Editar", self.editar), ("Excluir", self.excluir)):
+        for titulo, acao in (("Pesquisar", self.atualizar), ("Filtrar", self.filtrar), ("Ordenar", self.ordenar)):
             botao = QPushButton(titulo)
-            if titulo == "Novo":
-                botao.setObjectName("tutorial_novo")
             botao.clicked.connect(acao)
             barra.addWidget(botao)
+        layout.addLayout(barra)
+        extras = LinhaFluida(preencher=False)
         if chave == "produtos":
             botao = QPushButton("Criar fardo")
             botao.clicked.connect(self.criar_embalagem)
-            barra.addWidget(botao)
+            extras.addWidget(botao)
             adicionais = QPushButton("Adicionais e opções")
             adicionais.clicked.connect(self.adicionais)
-            barra.addWidget(adicionais)
+            extras.addWidget(adicionais)
             botao = QPushButton("Criar combo")
             botao.clicked.connect(self.criar_combo)
-            barra.addWidget(botao)
-        layout.addLayout(barra)
-        extras = QHBoxLayout()
-        for rotulo, acao in (("Filtrar", self.filtrar), ("Ordenar", self.ordenar),
-                              ("Visualizar / imprimir", self.visualizar),
-                              ("Exportar CSV", lambda: self.exportar_csv())):
-            botao = QPushButton(rotulo)
-            botao.clicked.connect(acao)
             extras.addWidget(botao)
-        if chave == "produtos":
             for rotulo, acao in (
                 ("Tabela de preços", self.tabela_precos),
                 ("Observações", lambda: self.abrir_cadastro_relacionado("observacoes")),
@@ -514,7 +515,8 @@ class JanelaCadastro(QDialog):
             botao = QPushButton("Sub Planos")
             botao.clicked.connect(lambda: self.abrir_cadastro_relacionado("subplanos"))
             extras.addWidget(botao)
-        layout.addLayout(extras)
+        if extras.count():
+            layout.addLayout(extras)
         self.colunas = [c for c in self.entidade.campos if c.na_grade and c.tipo != "senha"]
         self._mostra_lucro = chave == "produtos" and ctx.pode("rel_custo")
         if not self._mostra_lucro:
@@ -530,8 +532,15 @@ class JanelaCadastro(QDialog):
         self.grade.horizontalHeader().setStretchLastSection(True)
         self.grade.cellDoubleClicked.connect(lambda *_: self.editar())
         layout.addWidget(self.grade)
+        rodape = QHBoxLayout()
         self.mensagem = texto("", "aviso")
-        layout.addWidget(self.mensagem)
+        rodape.addWidget(self.mensagem, 1)
+        for rotulo, acao in (("Visualizar / imprimir", self.visualizar), ("Exportar CSV", lambda: self.exportar_csv())):
+            botao = QPushButton(rotulo)
+            botao.clicked.connect(acao)
+            rodape.addWidget(botao)
+        layout.addLayout(rodape)
+        self.busca.setFocus()
         self.atualizar()
 
     def exigir_acesso(self):

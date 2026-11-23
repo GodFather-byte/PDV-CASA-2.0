@@ -179,6 +179,14 @@ CAMPOS_CONFIG = [
     ("usar_quartos", "Quartos: contagem do tempo de cada quarto (o cliente paga antes no caixa), aviso no caixa e "
      "campainha no quarto", "sn", "Módulos"),
     ("quartos_qtd", "Quartos: quantidade de quartos", "int", "Módulos"),
+    ("usar_hotel", "Hotel: recepção com reservas, diárias e períodos, check-in e check-out, governança e fichas dos "
+     "hóspedes", "sn", "Módulos"),
+    ("hotel_checkin_hora", "Hotel: horário do check-in, entrada das diárias (hh:mm)", "texto", "Hotel"),
+    ("hotel_checkout_hora", "Hotel: horário do check-out, saída das diárias (hh:mm)", "texto", "Hotel"),
+    ("hotel_tolerancia_min", "Hotel: tolerância depois da saída antes de avisar o atraso ou cobrar a hora adicional (min)",
+     "int", "Hotel"),
+    ("hotel_alerta_min", "Hotel: avisar quantos minutos antes de acabar o período", "int", "Hotel"),
+    ("hotel_conta_inicio", "Hotel: número da primeira conta (comanda) das estadias", "int", "Hotel"),
     ("quartos_minutos_bloco", "Quartos: minutos de cada bloco de tempo", "int", "Módulos"),
     ("quartos_valor_bloco", "Quartos: valor de cada bloco (R$, só informativo na tela)", "texto", "Módulos"),
     ("quartos_alerta_min", "Quartos: avisar quantos minutos antes de acabar", "int", "Módulos"),
@@ -198,6 +206,8 @@ CAMPOS_CONFIG = [
     ("smtp_servidor", "Servidor de e-mail (provedor)", "texto", "E-mail"),
     ("chave_loja", "Chave da loja (licença)", "texto", "Nuvem"), ("api_url", "Endereço da nuvem (licença e atualizações)", "texto", "Nuvem"),
     ("api_token", "Token da API", "texto", "Nuvem"),
+    ("instab_url", "Insta-BDelivery: endereço da integração (vazio = sem a vitrine de delivery)", "texto", "Nuvem"),
+    ("instab_token", "Insta-BDelivery: chave da loja (gerada no painel do Insta-BDelivery)", "segredo", "Nuvem"),
     ("sync_quase_tempo_real", "Sincronização automática com o PDV aberto (o lote sobe no intervalo abaixo; nasce desligada)", "sn", "Nuvem"),
     ("sync_intervalo_seg", "Espera depois de uma falha de rede, no modo normal (segundos, de 5 a 3600)", "int", "Nuvem"),
     ("sync_lote_seg", "Intervalo do lote enviado à nuvem (segundos, de 60 a 3600; 900 = 15 minutos). Abaixo de 300 o banco não dorme", "int", "Nuvem"),
@@ -244,6 +254,7 @@ MODULOS_OPCIONAIS = {
     "usar_cozinha_bar": {"cad_setores_impressao", "util_cozinha"},
     "usar_garotas": {"cad_garotas", "caixa_comissao", "caixa_pagar_comissao", "rel_comissao_garotas"},
     "usar_quartos": {"util_quartos"},
+    "usar_hotel": {"util_hotel", "cfg_hotel"},
 }
 
 # Códigos especiais do caixa: (módulo que o usa, valor de fábrica, para que serve). Com o módulo desligado o código deixa de
@@ -469,6 +480,19 @@ class ConfigController:
                         except ValueError:
                             raise ErroValidacao("Horário inválido (use hh:mm, por exemplo 18:00).", {chave: "inválido"}) from None
                     v = texto
+                if chave in ("hotel_checkin_hora", "hotel_checkout_hora"):
+                    try:
+                        v = fmt.para_hora(str(v)) or ""
+                    except ValueError:
+                        v = ""
+                    if not v:
+                        raise ErroValidacao("Horário do hotel inválido (use hh:mm, por exemplo 14:00).", {chave: "inválido"})
+                if chave == "hotel_tolerancia_min" and not 0 <= int(v) <= 180:
+                    raise ErroValidacao("A tolerância do hotel vai de 0 a 180 minutos.", {chave: "inválido"})
+                if chave == "hotel_alerta_min" and not 0 <= int(v) <= 120:
+                    raise ErroValidacao("O aviso do período vai de 0 a 120 minutos antes.", {chave: "inválido"})
+                if chave == "hotel_conta_inicio" and not 1 <= int(v) <= 9000:
+                    raise ErroValidacao("A primeira conta do hotel vai de 1 a 9000.", {chave: "inválido"})
                 if chave == "virada_dia_hora" and not 0 <= int(v) <= 23:
                     raise ErroValidacao("A hora da virada do dia vai de 0 a 23.", {chave: "inválido"})
                 if chave == "num_turnos" and not 1 <= int(v) <= 9:

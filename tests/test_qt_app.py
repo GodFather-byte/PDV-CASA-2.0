@@ -11,7 +11,8 @@ import unittest
 from threading import Event
 from unittest.mock import MagicMock, patch
 
-from PySide6.QtCore import QCoreApplication, QEvent, QTimer
+from PySide6.QtCore import QCoreApplication, QEvent, Qt, QTimer
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QDialog, QMainWindow, QMessageBox
 
 from src.core import licenca
@@ -50,7 +51,7 @@ class BaseQt(unittest.TestCase):
     def tearDown(self):
         for app in self.apps:
             app.finalizar()
-            self.aplicacao.aboutToQuit.disconnect(app.finalizar)
+            self.aplicacao.aboutToQuit.disconnect(app._ao_sair)
         for janela in reversed(self.janelas):
             janela.close()
             janela.deleteLater()
@@ -93,6 +94,34 @@ class TestLoginQt(BaseQt):
         self.assertIn("Senha Incorreta", janela.mensagem.text())
         self.assertTrue(janela.btn_entrar.isEnabled())
         self.assertEqual(janela.senha.text(), "")
+
+    def test_enter_na_senha_faz_uma_tentativa_e_permite_corrigir_pelo_teclado(self):
+        self.ctx.acesso.trocar_senha(self.admin(), "Segura123")
+        self.ctx.operador = None
+        janela = self.login()
+        janela.show()
+        janela.activateWindow()
+        self.aplicacao.processEvents()
+        self.assertTrue(janela.usuario.hasFocus())
+        QTest.keyClick(janela.usuario, Qt.Key.Key_Tab)
+        self.assertTrue(janela.senha.hasFocus())
+        self.assertTrue(janela.btn_entrar.isDefault())
+        for botao in (janela.btn_esqueci, janela.btn_licenca, janela.btn_rede):
+            self.assertFalse(botao.autoDefault())
+
+        with patch.object(self.ctx.acesso, "autenticar", wraps=self.ctx.acesso.autenticar) as autenticar, \
+                patch("src.ui_qt.esqueci_senha.DialogoEsqueciSenha.exec",
+                      return_value=QDialog.DialogCode.Rejected) as recuperar:
+            QTest.keyClicks(janela.senha, "errada")
+            QTest.keyClick(janela.senha, Qt.Key.Key_Return)
+            autenticar.assert_called_once_with("ADM", "errada")
+            self.assertIn("Senha Incorreta", janela.mensagem.text())
+            self.assertTrue(janela.senha.hasFocus())
+            QTest.keyClicks(janela.senha, "Segura123")
+            QTest.keyClick(janela.senha, Qt.Key.Key_Enter)
+            self.assertEqual(autenticar.call_count, 2)
+            self.assertEqual(janela.result(), QDialog.DialogCode.Accepted)
+            recuperar.assert_not_called()
 
     def test_senha_fabrica_nao_pode_ser_cancelada_para_entrar(self):
         janela = self.login()
@@ -447,8 +476,8 @@ class TestAppQt(BaseQt):
         self.banco.cfg_set("tema_visual", "claro")
         app = self.app()
         app.iniciar(servicos=False)
-        self.assertIn("#e8ecf1", self.aplicacao.styleSheet())
         from src.ui_qt import tema
+        self.assertEqual(self.aplicacao.styleSheet(), tema.ESTILO_CLARO)
         tema.aplicar(self.aplicacao)
 
     def test_convite_cadastro_loja_adia_sem_gravar_e_nao_reabre_ja_cadastrada(self):

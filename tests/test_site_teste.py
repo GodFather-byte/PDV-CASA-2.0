@@ -57,11 +57,19 @@ class TesteGratisPeloSite(unittest.TestCase):
         self.assertEqual(login.status_code, 200, login.text)
         self.assertIn("wa.me/", d["zap_ajuda"])
 
+    def test_restaurante_tambem_pelo_site(self):
+        r = self.criar(edicao="willrestaurante", nome_loja="Cantina da Nona")
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["programa"], "Will Restaurante")
+        self.assertIn("WillRestaurante", r.json()["instalador"])
+        with nuvem.SessionLocal() as db:
+            self.assertEqual(db.query(nuvem.Loja).filter_by(chave_loja=r.json()["loja"]).one().edicao, "willrestaurante")
+
     def test_abuso_e_dados_ruins_sao_barrados(self):
         self.assertEqual(self.criar(site="http://spam").status_code, 422)          # robô preencheu a isca
         self.assertEqual(self.criar(aceite=False).status_code, 422)
         self.assertEqual(self.criar(whatsapp="123").status_code, 422)
-        self.assertEqual(self.criar(edicao="willrestaurante").status_code, 422)
+        self.assertEqual(self.criar(edicao="willvariedades").status_code, 422)      # ainda não existe
         self.assertEqual(self.criar(nome_loja="x").status_code, 422)
         self.assertEqual(self.criar().status_code, 200)
         self.assertEqual(self.criar(nome_loja="Outra Adega").status_code, 409)     # mesmo WhatsApp

@@ -21,20 +21,20 @@ class TestCiProtecao(unittest.TestCase):
             self.assertIn("'windows-latest'", alvo)           # sem a variável, continua no GitHub
 
     def test_instalador_que_cria_usuario_no_windows_nunca_roda_no_pc_do_dono(self):
-        for arquivo in ("build-windows.yml", "will-restaurante.yml", "will-variedades.yml"):
+        for arquivo in ("build-windows.yml", "will-restaurante.yml", "will-variedades.yml", "will-hotel.yml"):
             for alvo in runs_on(arquivo):
                 self.assertNotIn("self-hosted", alvo, arquivo)
                 self.assertNotIn("RUNNER_PC", alvo, arquivo)
 
     def test_downloads_vao_para_o_repositorio_publico_quando_configurado(self):
-        for arquivo in ("build-windows.yml", "publicar-pacote.yml", "will-restaurante.yml", "will-variedades.yml"):
+        for arquivo in ("build-windows.yml", "publicar-pacote.yml", "will-restaurante.yml", "will-variedades.yml", "will-hotel.yml"):
             texto = (RAIZ / arquivo).read_text(encoding="utf-8")
             self.assertIn("vars.DOWNLOADS_REPO || github.repository", texto, arquivo)
             self.assertIn("secrets.DOWNLOADS_TOKEN || github.token", texto, arquivo)
             self.assertNotIn('--repo "$GITHUB_REPOSITORY" --target', texto, arquivo)
 
     def test_versao_para_as_lojas_so_sai_quando_o_dono_manda(self):
-        for arquivo in ("build-windows.yml", "will-restaurante.yml", "will-variedades.yml"):
+        for arquivo in ("build-windows.yml", "will-restaurante.yml", "will-variedades.yml", "will-hotel.yml"):
             texto = (RAIZ / arquivo).read_text(encoding="utf-8")
             gatilhos = texto.split("\non:", 1)[1].split("\npermissions:", 1)[0]
             self.assertIn("workflow_dispatch", gatilhos, arquivo)
@@ -72,14 +72,14 @@ class TestCiProtecao(unittest.TestCase):
     def test_publicacao_nao_depende_da_cota_de_artifacts(self):
         """Repositório privado tem cota pequena de artifacts: o build entrega o instalador num rascunho do repositório de
         downloads, a publicação busca de lá e apaga no fim. Artifact virou cópia opcional (cota cheia não derruba)."""
-        for arquivo in ("build-windows.yml", "will-restaurante.yml", "will-variedades.yml", "publicar-pacote.yml"):
+        for arquivo in ("build-windows.yml", "will-restaurante.yml", "will-variedades.yml", "will-hotel.yml", "publicar-pacote.yml"):
             texto = (RAIZ / arquivo).read_text(encoding="utf-8")
             self.assertNotIn("download-artifact", texto, arquivo)
             self.assertIn("select(.tag_name == env.TAG)", texto, arquivo)
             for bloco in texto.split("uses: actions/upload-artifact@v4")[1:]:
                 self.assertTrue(bloco.lstrip().startswith("continue-on-error: true"), arquivo)
         for arquivo, edicoes in (("build-windows.yml", ("willpdv", "willadega")), ("will-restaurante.yml", ("willrestaurante",)),
-                                 ("will-variedades.yml", ("willvariedades",))):
+                                 ("will-variedades.yml", ("willvariedades",)), ("will-hotel.yml", ("willhotel",))):
             texto = (RAIZ / arquivo).read_text(encoding="utf-8")
             for edicao in edicoes:
                 self.assertIn(f"TAG: rascunho-{edicao}-${{{{ github.sha }}}}", texto)

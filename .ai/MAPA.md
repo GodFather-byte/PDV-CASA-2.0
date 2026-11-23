@@ -11,6 +11,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `python -m src.app` | PDV (`--sync`: segundo plano com a nuvem; `--autoteste`: autoteste). Configurações > Nuvem > `sync_quase_tempo_real` olha a fila na própria aplicação; o lote sobe a cada `sync_lote_seg` (padrão 900 s) (`ServicoSincronizacao`, `src/sync/sincronizador.py`, `src/sync/ociosidade.py`). Fechamento de turno e o botão do celular enviam na hora. Com o porteiro ligado, a página do celular sobe na rede do caixa e o retrato das comandas abertas vai no mesmo lote |
 | `/cozinha/` no caixa principal (porta padrão 8766) | Cozinha web local com PIN; configure em Cozinha/Bar > Tablet / TV; `src/cozinha/` |
 | `python -m src.app --edicao willrestaurante` | Will Restaurante: hamburgueria, pizzaria, à la carte e rodízio; guia `docs/WILL_RESTAURANTE.md` |
+| `python -m src.app --edicao willhotel` | Will Hotel: hotel e pousada (diárias e uso por horas); guia `docs/WILL_HOTEL.md` |
 | `python -m src.app --edicao willadega` | Edição Will Adega (adega); `iniciar_will_adega.bat` no Windows |
 | `python -m src.app --edicao willvariedades` | Will Variedades: loja de eletrônicos, utilidades e presentes (balcão, catálogo próprio, etiqueta com código de barras); `iniciar_will_variedades.bat`; guia `docs/WILL_VARIEDADES.md` |
 | `python -m src.app --autoteste-qt [arquivo]` | Mesmo autoteste Qt (alias de `--autoteste`) |
@@ -47,9 +48,9 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `src/porteiro/` | Página do porteiro no celular: lista das comandas abertas (sem a da garota) e consulta por número no caixa (`/porteiro`, Wi-Fi); o retrato vai para a nuvem (`nuvem_envio.py`, 4G). A mesma página em `backend/porteiro.py` |
 | `src/cardapio/` | Preço público do cardápio e a folha A4 dos QR (`preco.py`, `folha.py`). A tela Qt é `ui_qt/cardapio_qr.py` |
 | `licenciador/` | `nucleo.py` (regras), `tela.py` (janela), `app.py`, `autoteste.py`; central própria em `central.py` (SQLite/emissão/ponte), `central_bot.py`, `central_cli.py`, `central_tela.py` |
-| `backend/` | FastAPI: `main.py` (rotas), `ponte.py` (central técnica, caixas aprovados e entrega de licenças assinadas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobranca_mercadopago.py` (Pix, Checkout Pro, webhook e varredura no próprio processo), `painel.py` e `painel_web/` (painel do dono em `/painel/`; aba Relatórios em `GET /v1/painel/lucro`; rede em `grupos.py`, link `/painel/?grupo=CHAVE`), `cardapio.py` e `cardapio_web/` (cardápio em `/cardapio/`; pedido online do Will Adega em `pedido_online.py`), `site.py` e `site_web/` (site de vendas em `/` e `/site`; preços em `site_precos.py`) |
-| `tools/` | `gerar_licenca.py`, `gerar_logos.py`, `videos_tutoriais.py` (vídeos de tutorial com as telas reais), `capturar_telas.py` (foto de todas as telas para revisão visual), `verificar.py` (verificação antes do commit; skill `.claude/skills/verify`, lista `REVIEW.md`), `esp32_campainha/main.py` (MicroPython da campainha dos quartos; nada disso vai no instalador do PDV) |
-| `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`, `WillAdega.iss`) e imagens (`willadega-*`: marca da edição adega) |
+| `backend/` | FastAPI: `main.py` (rotas), `ponte.py` (central técnica, caixas aprovados e entrega de licenças assinadas), `lojas.py`, `atualizacoes.py`, `database.py`, `cobranca_mercadopago.py` (Pix, Checkout Pro, webhook e varredura no próprio processo), `painel.py` e `painel_web/` (painel do dono em `/painel/`; aba Relatórios em `GET /v1/painel/lucro`; rede em `grupos.py`, link `/painel/?grupo=CHAVE`), `cardapio.py` e `cardapio_web/` (cardápio em `/cardapio/`; pedido online do Will Adega em `pedido_online.py`), `site.py` e `site_web/` (site de vendas em `/` e `/site`; preços em `site_precos.py`; termos em `/site/termos`; privacidade em `/site/privacidade`; checkout em `site_checkout.py`: `POST /v1/pagamentos/checkout`, webhook `/v1/pagamentos/webhook`, retornos `/site/obrigado`, `/site/pagamento-pendente` e `/site/pagamento-falhou`) |
+| `tools/` | `gerar_licenca.py`, `gerar_logos.py`, `videos_tutoriais.py` (vídeos de tutorial com as telas reais), `capturar_telas.py` (foto de todas as telas para revisão visual; `--largura/--altura` simulam o monitor e `--conferir` lista o que ficou cortado), `conferir_telas.py` (o medidor: texto cortado, campo fora da janela, rolagem de lado), `verificar.py` (verificação antes do commit; skill `.claude/skills/verify`, lista `REVIEW.md`), `esp32_campainha/main.py` (MicroPython da campainha dos quartos; nada disso vai no instalador do PDV) |
+| `instalador/` | Scripts Inno Setup (`WillPDV.iss`, `WillLicencas.iss`, `WillAdega.iss`, `WillRestaurante.iss`, `WillHotel.iss`) e imagens (`willadega-*`: marca da edição adega) |
 | `tests/` | Um `test_*.py` por assunto; `base.py` (banco em memória, relógio controlável); `ui_robo.py` (robô das janelas modais) |
 | `docs/` | Guias por assunto (lista abaixo) |
 | `.github/workflows/` | `testes.yml` (suíte), `build-windows.yml` (instaladores) e `nuvem-deploy.yml` (testa a nuvem e aciona o deploy no Render) |
@@ -60,6 +61,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 |---|---|
 | Cozinha web local e configuração Qt | `src/cozinha/{servidor,servico}.py`, `src/cozinha/web/`, `ui_qt/cozinha_web.py` |
 | Pedido online de mesa (v49), deduplicação e ACK | `controllers/pedido_mesa_controller.py`; tabela `pedidos_mesa_importados` |
+| Insta-BDelivery (vitrine de delivery com IA): catálogo sobe e pedido de entrega/retirada desce, ao lado do canal da nuvem | `sync/insta_bdelivery.py` (endereço, chave, `id` negativo), `sync/pedidos_online.py` (`fontes`, `consultar_fontes`, `_destino`), `sync/cardapio_envio.py` (`enviar_insta`); `docs/INSTA_BDELIVERY.md` |
 | Adicionais por produto e retrato por item (v48) | `core/opcoes_produto.py`, `controllers/opcoes_produto_controller.py`, `ui_qt/opcoes_produto.py` |
 | Venda, itens, pagamento, mesas e comandas | `caixa_controller.py` |
 | Produtos prontos (adega e variedades) | `catalogo.py` (`CATALOGOS`), dados em `catalogo_variedades.py`; tela `ui_qt/catalogo.py` |
@@ -75,6 +77,9 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Cartões de mesas, comandas, garotas e balcão no caixa (visual da boate) | modelo `mesas_modelo.py` (`montar_tiles`); desenho e teclado em `ui_qt/painel_mesas.py`; ligação em `ui_qt/caixa.py` (`carregar_mesas`) |
 | Turno, numeração de cupom, fechamento | `turno_controller.py`, `conferencia_turno.py` |
 | Edição do programa (WillPDV ou Will Adega/adega): marca, pasta de dados, perfil fixo, opções escondidas | `src/core/edicao.py`; usada em `ui_qt/app.py`, `ui_qt/configuracoes.py`, `config_controller.salvar_config`, `database/conexao.py` |
+| Sinal do Qt ligado a método de classe comum (falha do PySide com o Nuitka que solta a função) | `ui_qt/sinais.py` (`ligar_metodo`, conferência usada pelo `--autoteste-qt`); regra e varredura em `tests/test_qt_sinais.py` |
+| Suporte remoto (RustDesk): abrir, ler o ID e mandar para a central | `src/core/suporte_remoto.py`, `utilitario_controller.py`, `ui_qt/utilitarios.py`; o ID sobe em `sync/painel_envio.py` e aparece no suporte da central; testes `tests/test_suporte_remoto.py` |
+| Telas que cabem em monitor pequeno (ajuste de janela, colunas, títulos em linhas, linha de botões que quebra) | `ui_qt/tema.py` (`ajustar_janela`, `tirar_rolagem_de_lado`, `LinhaFluida`); caixa em `ui_qt/caixa.py` (`_acomodar_itens`, `RotuloAdaptavel`); testes `tests/test_qt_telas_cabem.py` |
 | Tela cheia do caixa (Ctrl+F, config `caixa_tela_cheia`) | `ui_qt/caixa.py` (`aplicar_tela_cheia`), `ui_qt/app.py` (`abrir_caixa`) |
 | Relógio no topo do caixa (hora, segundos, dia e data) | `ui_qt/relogio.py` (`RelogioCaixa`); estilos `relogio_*` em `ui_qt/caixa.py` |
 | Troca de turno no modelo clássico (maquininha, gaveta, confirmação, resumo sobra/falta) | `ui_qt/caixa.py` (`ir_para_fechamento`), `ui_qt/fechamento_turno.py` (`DialogoMaquininha`, `PainelFechamento`) |
@@ -118,6 +123,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Adega: balcão Qt, cadastro pelo leitor, "6*", fardo/caixa, natural/gelada, atacado por temperatura, cascos e agrupamento | `caixa_controller.py` (`adicionar_item`, `_reprecificar_balcao`), `entidades.py` (seção Adega e `_validar_adega`), `produto_controller.py` (`cadastrar_rapido`, `criar_embalagem`, `embalagem`), `estoque_controller.py` (fardo vira unidades); UI `ui_qt/caixa.py`, `ui_qt/cadastros.py`; guia em `docs/ESTOQUE.md` |
 | Pré-pago (recarga, crédito, devolução da sobra) | `caixa_controller.py` (`recarregar`, `saldo_prepago`, `_conferir_credito`, `liquidar`/`fechar`) · UI `ui_qt/caixa.py` |
 | Cozinha/Bar (setores de impressão, status de preparo por item) | `preparo_controller.py`, `impressao_controller.py` (`setor_do_subgrupo`) · UI |
+| Hotel (Will Hotel): tipos de quarto e diárias como produtos, quartos (UH), períodos, hóspedes com a ficha da FNRH, reservas sem conflito, check-in que abre a conta (comanda a partir da 500), diárias, café, check-out com atraso e hora adicional, governança, mapa, ocupação/diária média/RevPAR e exportação das fichas | `hotel_controller.py` (tabelas `hotel_*`, migração 58); tela `ui_qt/hotel.py` (menu "Hotel • recepção"); edição `willhotel` em `core/edicao.py`; perfil `hotel`; instalador `instalador/WillHotel.iss`, workflow `will-hotel.yml`; testes `tests/test_hotel.py`, `tests/test_qt_hotel.py` |
 | Controle de quartos (tempo em blocos, aviso no caixa, campainha ESP32 por quarto) | `quartos_controller.py`; envio em `src/hardware/campainha.py`; tela `ui_qt/quartos.py` (painel e linha de cartões embaixo dos produtos e do pagamento, ligados em `ui_qt/caixa.py` `_pagina_venda` e no atalho Q3 de `chamar_posicao`); programa do ESP32 em `tools/esp32_campainha/main.py`; guia `docs/QUARTOS.md` |
 | Cozinha/Bar em PySide6 | `ui_qt/cozinha.py`; setores em Mais cadastros; navegação por busca em `ui_qt/app.py` |
 | Impressão e fila | `impressao_controller.py`, `fila_impressao_controller.py`, `impressao_assistente.py` |
@@ -135,7 +141,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 
 `ESPECIFICACAO.md` (o que o sistema deve fazer), `INSTALAR_E_TESTAR.md`, `LICENCIADOR.md`,
 `NUVEM.md`, `IMPRESSORA.md`, `ESTOQUE.md` (inclui as regras da adega), `ADEGA.md` (checklist de
-implantação da adega), `IMPORTAR_PRODUTOS.md`, `PILOTO.md`,
+implantação da adega), `WILL_HOTEL.md` (edição hotel), `IMPORTAR_PRODUTOS.md`, `PILOTO.md`,
 `COBRANCA_LICENCAS_MERCADOPAGO.md` (cobrança e renovação mensal), `PAINEL_DONO.md` (painel do dono no celular), `CARDAPIO.md` (QR do cardápio, só consulta), `PORTEIRO.md` (porteiro no celular, Wi-Fi e 4G),
 `COORDENACAO.md` (histórico de pedidos entre agentes).
 `BACKUP_EXTERNO.md` (pasta sincronizada, senha e recuperação), `AUDITORIA.md`,
@@ -150,5 +156,10 @@ Logotipos importados ficam em `identidade/` junto ao banco; validação e previe
 em `src/core/identidade_visual.py`. Configuração e limites em `docs/ADEGA.md`.
 
 | XMLs da NFC-e na nuvem (ZIP do mês para o contador) | caixa `src/sync/nfce_xmls.py` (chamado pelo sincronizador); nuvem `backend/nfce_xmls.py`; painel aba Produtos; central loja > XMLs |
+| Apagar vendas de teste (senha de segurança do dono) | regra `src/controllers/vendas_teste_controller.py`; telas `src/ui_qt/vendas_teste.py` (Utilitários); envio em `src/sync/painel_envio.py`; nuvem `backend/vendas_teste.py`; painel aba Produtos |
+| IA nos caixas (pago, por loja) | nuvem `backend/ia.py` (chave `ANTHROPIC_API_KEY`); cliente `src/sync/ia.py`; botões em `src/ui_qt/importar_produtos.py`; central: detalhe da loja > IA no caixa |
+| Insta-BDelivery pela central (implantação, IA da vitrine) | nuvem `backend/insta.py`; caixa `src/sync/insta_bdelivery.py` (`anotar_resposta`); esgotado em `src/sync/cardapio_envio.py` |
+| Backup do caixa na nuvem (recuperar a loja) | nuvem `backend/backup_nuvem.py`; caixa `src/sync/backup_nuvem.py`; tela `src/ui_qt/backup_nuvem.py` (Utilitários) |
 | Teste grátis pelo site | `backend/site_teste.py` (POST `/v1/site/teste`), `backend/site_web/teste.js`; contato na central (`contato` em `/v1/fornecedor/lojas`) |
+| Checkout do site (Mercado Pago) | `backend/site_checkout.py` (`POST /v1/pagamentos/checkout`, webhook `/v1/pagamentos/webhook`); páginas `/site/obrigado`, `/site/pagamento-pendente`, `/site/pagamento-falhou`; preços em `site_precos.py` |
 | IBS/CBS na NFC-e própria | `src/fiscal/sefaz/xml_nfce.py` (`_ibscbs`, `_ibscbs_total`), alíquotas em `provedor.aliquotas_ibscbs` |

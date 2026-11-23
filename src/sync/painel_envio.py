@@ -25,7 +25,7 @@ import json
 import socket
 from uuid import uuid4
 
-from src.core import edicao, formatacao as fmt
+from src.core import edicao, formatacao as fmt, suporte_remoto
 from src.versao import VERSAO
 from src.core.erros import ErroNegocio
 from src.core.posicao import nome as nome_posicao
@@ -434,6 +434,7 @@ def retrato(banco) -> dict:
         "terminal_id": id_do_caixa(banco), "terminal": turnos.terminal,
         "terminal_rotulo": (maquina.get("descricao") or "").strip() or f"Caixa {turnos.terminal}",
         "terminal_computador": (maquina.get("nome_computador") or "").strip() or socket.gethostname(),
+        "rustdesk_id": suporte_remoto.id_guardado(banco),       # só o ID (nunca senha): o suporte vê na central
         "dia_operacional": hoje, "momento": fmt.agora(),
         "atualizacao_seg": 60,
         "devolucoes_suportadas": True, "devolucoes_pendentes_envio": devolucoes_envio.pendentes(banco),
@@ -487,6 +488,9 @@ def _postar(banco, corpo: dict, http=None) -> dict:
         notas_dono.anotar_resposta(banco, dados)          # o dono subiu nota de compra: a próxima rodada busca
         from src.sync import retaguarda
         retaguarda.anotar_resposta(banco, dados)          # há alteração da retaguarda esperando este caixa
+        _anotar_exclusoes(banco, dados, corpo.get("seguranca_hash"))
+        from src.sync import insta_bdelivery
+        insta_bdelivery.anotar_resposta(banco, dados)
         return dados
     except Exception:
         # Mensagem persistida sem URL, token ou conteúdo da exceção de rede.
@@ -494,6 +498,21 @@ def _postar(banco, corpo: dict, http=None) -> dict:
         http_erro = f" HTTP {codigo}" if type(codigo) is int else ""
         banco.cfg_set(CHAVE_ULTIMO_ERRO, f"{fmt.agora()}{http_erro} envio não confirmado; confira a conexão e o log.")
         raise
+
+
+def _anotar_exclusoes(banco, dados: dict, enviado_hash) -> None:
+    """Vendas de teste: confirmações da nuvem e exclusões pedidas pelo painel do dono. Falha aqui não derruba o envio."""
+    try:
+        from src.controllers import vendas_teste_controller as vendas_teste
+        vendas_teste.anotar_resposta(banco, dados, enviado_hash)
+    except Exception:
+        log.exception("Painel do dono: falha ao aplicar a exclusão de vendas de teste.")
+
+
+def exclusoes_pendentes(banco) -> bool:
+    from src.controllers import vendas_teste_controller as vendas_teste
+    return bool(vendas_teste.pendentes_envio(banco, 1) or vendas_teste.recusadas_envio(banco, 1)
+                or vendas_teste.hash_para_enviar(banco))
 
 
 def confirmar_sucesso(banco) -> None:
@@ -514,6 +533,19 @@ def enviar(banco, http=None, *, foto=_FOTO_PADRAO) -> dict | None:
         from src.core import erros_caixa
         erros = erros_caixa.pendentes(banco) if lotes == 0 else []
         corpo = {"vendas": vendas, "devolucoes": retornos, "enviado_em": fmt.agora()}
+        if lotes == 0:
+            from src.controllers import vendas_teste_controller as vendas_teste
+            apagadas = vendas_teste.pendentes_envio(banco)
+            if apagadas:
+                corpo["vendas_apagadas"] = apagadas       # a nuvem apaga do painel, relatórios e central
+            recusadas = vendas_teste.recusadas_envio(banco)
+            if recusadas:
+                corpo["vendas_recusadas"] = recusadas     # pedido do painel que as travas do caixa não deixaram
+            from src.sync import insta_bdelivery
+            corpo["insta_hash"] = insta_bdelivery.hash_config(banco)     # a central entrega o Insta se mudou
+            senha_hash = vendas_teste.hash_para_enviar(banco)
+            if senha_hash:
+                corpo["seguranca_hash"] = senha_hash      # só o hash da senha de segurança do dono
         if foto is not None:
             corpo["retrato"] = foto
         if erros:

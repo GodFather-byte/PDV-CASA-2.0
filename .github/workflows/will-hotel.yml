@@ -1,0 +1,185 @@
+# Instalador do Will Hotel. Só roda quando o dono manda (Actions > Run workflow na main): vários PRs viram uma
+# versão só e nada chega às lojas sem decisão dele. Ver docs/PROTEGER_CODIGO.md.
+name: Will Hotel
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: will-hotel-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validar:
+    if: github.ref != 'refs/heads/main'
+    name: Hotel / Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: sudo apt-get update -q && sudo apt-get install -y -q libegl1 libopengl0
+      - run: pip install --require-hashes -r requirements.txt -r backend/requirements.txt -r requirements-test.txt
+      - run: node --check backend/cardapio_web/app.js
+      - run: python -m unittest tests.test_hotel tests.test_qt_hotel tests.test_autoteste tests.test_caixa tests.test_edicao tests.test_perfil tests.test_fechamento_turno tests.test_qt_app
+  instalador:
+    name: Instalador Will Hotel / Windows
+    runs-on: windows-latest
+    timeout-minutes: 40
+    outputs:
+      versao: ${{ steps.info.outputs.versao }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r requirements.txt -r requirements-build.txt
+      - name: Inno Setup
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+      - name: Versão
+        id: info
+        run: |
+          $versao = python -c "from src.versao import VERSAO; print(VERSAO)"
+          "versao=$versao" >> $env:GITHUB_OUTPUT
+      - run: python build_pdv.py --edicao willhotel
+      - name: Autoteste do executável
+        run: |
+          $relatorio = Join-Path $env:RUNNER_TEMP "willhotel-autoteste.txt"
+          $exe = (Resolve-Path "dist\WillHotel\WillHotel.exe").Path
+          $p = Start-Process -FilePath $exe -ArgumentList "--autoteste", "`"$relatorio`"" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw "Autoteste não terminou" }
+          if (Test-Path $relatorio) { Get-Content $relatorio }
+          if ($p.ExitCode -ne 0) { throw "Autoteste falhou" }
+      - name: Instalação real no Windows de teste
+        run: |
+          $destino = Join-Path $env:RUNNER_TEMP "WillHotel-instalado"
+          $setup = (Get-ChildItem "instalador\saida\WillHotel-Setup-*.exe" | Select-Object -First 1).FullName
+          $p = Start-Process -FilePath $setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$destino`"" -PassThru
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "Instalação não terminou" }
+          if ($p.ExitCode -ne 0) { throw "Instalador falhou" }
+          $relatorio = Join-Path $env:RUNNER_TEMP "willhotel-instalado.txt"
+          $p = Start-Process -FilePath (Join-Path $destino "WillHotel.exe") -ArgumentList "--autoteste", "`"$relatorio`"" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw "Autoteste instalado não terminou" }
+          if (Test-Path $relatorio) { Get-Content $relatorio }
+          if ($p.ExitCode -ne 0) { throw "Autoteste do instalado falhou" }
+      - name: Consulta automática real do programa instalado
+        run: python -m tools.homologar_consulta_atualizacao --programa "$env:RUNNER_TEMP\WillHotel-instalado\WillHotel.exe"
+      - name: Pacote portátil
+        run: Compress-Archive -Path "dist\WillHotel\*" -DestinationPath "instalador\saida\WillHotel-Portatil.zip"
+      # A publicação busca o instalador aqui (rascunho = só quem tem acesso ao repositório vê), não nos artifacts do GitHub,
+      # que no repositório privado têm cota pequena e travavam a versão inteira. O rascunho é apagado no fim da publicação.
+      - name: Entregar o instalador à publicação (rascunho no repositório de downloads)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+          TAG: rascunho-willhotel-${{ github.sha }}
+        run: |
+          $antigo = gh api "repos/$env:DESTINO/releases?per_page=100" --jq '.[] | select(.tag_name == env.TAG) | .id'
+          foreach ($id in @($antigo | Where-Object { $_ })) { gh api -X DELETE "repos/$env:DESTINO/releases/$id" | Out-Null }
+          $arquivos = @((Get-ChildItem instalador\saida\WillHotel-Setup-*.exe).FullName) + @((Resolve-Path instalador\saida\WillHotel-Portatil.zip).Path)
+          gh release create $env:TAG --repo $env:DESTINO --draft --title "Rascunho Will Hotel $env:GITHUB_SHA" `
+            --notes "Cópia de passagem do build para a publicação. Apagada quando a publicação termina." @arquivos
+          if ($LASTEXITCODE -ne 0) { throw "Não consegui entregar o instalador à publicação." }
+
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true          # cota cheia não derruba a versão: a publicação usa o rascunho
+        with:
+          name: WillHotel-instalador
+          path: |
+            instalador/saida/WillHotel-Setup-*.exe
+            instalador/saida/WillHotel-Portatil.zip
+          if-no-files-found: error
+          retention-days: 2          # cópia de passagem: a versão fica nas Releases do willpdv-downloads
+
+  publicar:
+    name: Publicar última versão do Will Hotel
+    if: github.ref == 'refs/heads/main'
+    needs: instalador
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Buscar o instalador entregue pelo build (rascunho)
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+          TAG: rascunho-willhotel-${{ github.sha }}
+          PASTA: release
+        run: |
+          id=$(gh api "repos/$DESTINO/releases?per_page=100" --jq '.[] | select(.tag_name == env.TAG) | .id' | head -1)
+          [ -n "$id" ] || { echo "Rascunho $TAG não encontrado: o build não entregou o instalador."; exit 1; }
+          mkdir -p "$PASTA"
+          gh api "repos/$DESTINO/releases/$id/assets" --jq '.[] | "\(.id) \(.name)"' | while read -r aid nome; do
+            gh api -H "Accept: application/octet-stream" "repos/$DESTINO/releases/assets/$aid" > "$PASTA/$nome"
+          done
+          ls -l "$PASTA"
+      - name: Publicar instalador e portátil
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          GH_REPO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+          VERSAO: ${{ needs.instalador.outputs.versao }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          origem = next(Path("release").rglob("WillHotel-Setup-*.exe"))
+          shutil.copyfile(origem, Path("release") / "WillHotel-Instalador.exe")
+          PY
+          # A etiqueta só acompanha o commit quando a Release fica no próprio repositório do código; no repositório de
+          # downloads esse commit não existe e a Release é criada na ponta dele.
+          if [ "$GH_REPO" = "$GITHUB_REPOSITORY" ]; then
+            gh api --method PATCH "repos/$GH_REPO/git/refs/tags/ultima-versao-hotel" -f sha="$GITHUB_SHA" -F force=true > /dev/null ||
+              gh api --method POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/ultima-versao-hotel -f sha="$GITHUB_SHA" > /dev/null
+          fi
+          if gh release view ultima-versao-hotel --repo "$GH_REPO" > /dev/null 2>&1; then
+            gh release edit ultima-versao-hotel --title "Will Hotel $VERSAO" --notes "Instalador e portátil do commit $GITHUB_SHA, com autoteste do executável e da instalação no Windows." --latest=false
+          else
+            gh release create ultima-versao-hotel --title "Will Hotel $VERSAO" --notes "Instalador e portátil do commit $GITHUB_SHA, com autoteste do executável e da instalação no Windows." --latest=false
+          fi
+          gh release upload ultima-versao-hotel release/WillHotel-Instalador.exe release/WillHotel-Portatil.zip --clobber
+
+  atualizar_caixas:
+    name: Publicar atualização assinada do hotel
+    needs: instalador
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publicar-pacote.yml
+    with:
+      edicao: willhotel
+      rascunho: rascunho-willhotel-${{ github.sha }}
+      mascara: WillHotel-Setup-*.exe
+      versao: ${{ needs.instalador.outputs.versao }}
+    secrets: inherit
+
+  # Publicou tudo: apaga os rascunhos de passagem. Se algo falhou eles ficam (privados) para repetir só a publicação.
+  limpar_rascunho:
+    name: Apagar os rascunhos de passagem
+    needs: [publicar, atualizar_caixas]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          DESTINO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+        run: |
+          for TAG in "rascunho-willhotel-$GITHUB_SHA"; do
+            export TAG
+            for id in $(gh api "repos/$DESTINO/releases?per_page=100" --jq '.[] | select(.tag_name == env.TAG) | .id'); do
+              gh api -X DELETE "repos/$DESTINO/releases/$id"
+            done
+          done

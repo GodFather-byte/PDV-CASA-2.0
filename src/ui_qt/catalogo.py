@@ -44,14 +44,15 @@ class JanelaCatalogo(QDialog):
         self.escolhidos: dict[int, int] = {}          # índice do catálogo -> preço em centavos
         self._carregando = False
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(8)
         self.catalogo = catalogo()
         titulo = texto(f"Produtos prontos de {self.catalogo.titulo}", "titulo")
         layout.addWidget(titulo)
-        ajuda = texto("Digite o preço dos produtos que a loja vende: eles ficam marcados. Depois clique em "
-                      "\"Adicionar\". Nome, subgrupo e NCM já vêm prontos. O código de barras você grava depois, "
-                      "passando o produto no leitor" + (" (ou imprime a etiqueta com código próprio em Estoque > "
-                                                        "Etiquetas)." if self.catalogo.tipo == "variedades" else "."),
-                      "aviso")
+        ajuda = texto("Preencha o preço para selecionar os produtos. Nome, subgrupo e NCM já vêm preenchidos. Grave os "
+                      "códigos de barras depois de adicionar" + (" (ou imprima a etiqueta com código próprio em Estoque > "
+                                                                 "Etiquetas)." if self.catalogo.tipo == "variedades" else "."),
+                      "suave")
         ajuda.setWordWrap(True)
         layout.addWidget(ajuda)
         filtros = QHBoxLayout()
@@ -60,13 +61,19 @@ class JanelaCatalogo(QDialog):
         self.cmb_subgrupo.currentIndexChanged.connect(self.atualizar)
         self.ent_busca = QLineEdit()
         self.ent_busca.setPlaceholderText("Procurar: " + self.catalogo.exemplo)
+        self.ent_busca.setAccessibleName("Buscar no catálogo")
+        self.ent_busca.setClearButtonEnabled(True)
         self.ent_busca.textChanged.connect(self.atualizar)
-        filtros.addWidget(QLabel("Subgrupo:"))
-        filtros.addWidget(self.cmb_subgrupo)
         filtros.addWidget(self.ent_busca, 1)
+        rotulo_subgrupo = QLabel("Subgrupo")
+        rotulo_subgrupo.setBuddy(self.cmb_subgrupo)
+        filtros.addWidget(rotulo_subgrupo)
+        filtros.addWidget(self.cmb_subgrupo)
         layout.addLayout(filtros)
         self.tabela = QTableWidget(0, 3)
         self.tabela.setHorizontalHeaderLabels(("Produto", "Subgrupo", "Preço (R$)"))
+        self.tabela.setShowGrid(False)
+        self.tabela.setAlternatingRowColors(True)
         self.tabela.verticalHeader().setVisible(False)
         self.tabela.setSelectionBehavior(QAbstractItemView.SelectRows)
         cab = self.tabela.horizontalHeader()
@@ -88,7 +95,7 @@ class JanelaCatalogo(QDialog):
         self.btn_adicionar.clicked.connect(self.adicionar)
         fechar = QPushButton("Fechar")
         fechar.clicked.connect(self.reject)
-        for botao in (self.btn_codigos, self.btn_adicionar, fechar):
+        for botao in (self.btn_codigos, fechar, self.btn_adicionar):
             barra.addWidget(botao)
         layout.addLayout(barra)
         self.atualizar()
@@ -187,15 +194,19 @@ class JanelaCodigosBarras(QDialog):
         self.setWindowTitle("Gravar códigos de barras")
         self.resize(640, 560)
         layout = QVBoxLayout(self)
-        ajuda = texto("1. Procure e clique no produto.  2. Passe a embalagem no leitor (ou digite o código e tecle "
-                      "Enter). A lista mostra só os produtos ainda sem código.", "aviso")
-        ajuda.setWordWrap(True)
-        layout.addWidget(ajuda)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.addWidget(texto("Gravar códigos de barras", "titulo"))
+        layout.addWidget(texto("Selecione um produto sem código e passe a embalagem no leitor. "
+                                "Para digitar o código manualmente, confirme com Enter.", "suave"))
         self.ent_busca = QLineEdit()
-        self.ent_busca.setPlaceholderText("Procurar produto pelo nome")
+        self.ent_busca.setPlaceholderText("Buscar produto pelo nome")
+        self.ent_busca.setAccessibleName("Buscar produto sem código")
+        self.ent_busca.setClearButtonEnabled(True)
         self.ent_busca.textChanged.connect(self.atualizar)
         layout.addWidget(self.ent_busca)
         self.lista = QListWidget()
+        self.lista.setAccessibleName("Produtos sem código de barras")
+        self.lista.setAlternatingRowColors(True)
         self.lista.currentItemChanged.connect(lambda *_: self.ent_codigo.setFocus())
         layout.addWidget(self.lista, 1)
         linha = QHBoxLayout()

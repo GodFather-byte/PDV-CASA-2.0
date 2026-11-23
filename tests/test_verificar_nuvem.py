@@ -1,7 +1,7 @@
 """Uma resposta de saúde ou uma versão antiga não comprovam publicação do commit novo."""
 import io
 import unittest
-from tools.verificar_nuvem import aguardar
+from tools.verificar_nuvem import aguardar, relato
 
 
 class TesteVerificarNuvem(unittest.TestCase):
@@ -30,3 +30,21 @@ class TesteVerificarNuvem(unittest.TestCase):
                          ("https://nuvem.exemplo", "main")):
             with self.assertRaises(ValueError):
                 aguardar(url, sha)
+
+    def test_guarda_o_commit_que_a_nuvem_serviu_para_explicar_a_falha(self):
+        hora = [0]
+        respostas = [b'{"status":"ok"}', b'{"commit":"' + b'b' * 40 + b'"}', b'{"commit":"<script>"}']
+        def abrir(*args, **kwargs):
+            return io.BytesIO(respostas.pop(0) if len(respostas) > 1 else respostas[0])
+        vistos = []
+        self.assertFalse(aguardar("https://nuvem.exemplo", "a" * 40, timeout=20, intervalo=2, abrir=abrir, vistos=vistos,
+                         dormir=lambda t: hora.__setitem__(0, hora[0] + t), relogio=lambda: hora[0]))
+        self.assertEqual(vistos, ["b" * 40])                # nem resposta sem commit nem texto estranho entram
+
+    def test_relato_diz_o_commit_servido_e_onde_conferir(self):
+        self.assertIn("confirmada: a nuvem serve o commit esperado", relato(True, "a" * 40, []))
+        parado = relato(False, "a" * 40, ["b" * 40])
+        self.assertIn("continua servindo o commit bbbbbbb", parado)
+        self.assertIn("esperado é aaaaaaa", parado)
+        self.assertIn("repositório", parado)
+        self.assertIn("não respondeu", relato(False, "a" * 40, []))

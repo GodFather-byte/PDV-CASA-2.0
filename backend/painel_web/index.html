@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>WillPDV Painel</title>
   <meta name="description" content="Painel do dono: vendas, caixa, comandas, comissões, produtos e estoque da sua loja.">
-  <meta name="theme-color" content="#14532d">
+  <meta name="theme-color" content="#101c20">
   <meta name="color-scheme" content="light dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,32 +20,36 @@
 
   <!-- Tela de login -->
   <section id="tela-login" class="tela-login" hidden>
-    <form id="form-login" class="cartao-login" novalidate>
-      <img src="icones/icone-192.png" alt="" width="72" height="72" class="logo-login">
-      <h1>WillPDV Painel</h1>
-      <p class="sub">Acompanhe sua loja de onde estiver.</p>
+    <div class="acesso-painel">
+      <div class="identidade-acesso">
+        <span class="assinatura"><img src="icones/icone-192.png" alt="" width="32" height="32"> WillPDV</span>
+        <h1>Painel <br>do dono</h1>
+      </div>
+      <form id="form-login" class="cartao-login" novalidate>
+        <h2>Acessar painel</h2>
 
-      <label for="campo-loja">Loja</label>
-      <input id="campo-loja" name="loja" type="text" autocomplete="username"
-             autocapitalize="characters" spellcheck="false" required placeholder="ADEGA-1">
+        <label for="campo-loja">Loja</label>
+        <input id="campo-loja" name="loja" type="text" autocomplete="username"
+               autocapitalize="characters" spellcheck="false" required placeholder="ADEGA-1">
 
-      <label for="campo-senha">Senha</label>
-      <input id="campo-senha" name="senha" type="password" autocomplete="current-password" required>
+        <label for="campo-senha">Senha</label>
+        <input id="campo-senha" name="senha" type="password" autocomplete="current-password" required>
 
-      <p id="erro-login" class="erro" role="alert" hidden></p>
+        <p id="erro-login" class="erro" role="alert" hidden></p>
 
-      <button type="submit" id="botao-entrar" class="botao-principal">Entrar</button>
-    </form>
-    <form id="form-senha-rede" class="cartao-login" hidden>
-      <h2>Troque a senha temporária</h2>
-      <p class="sub">A senha que você recebeu vale só para o primeiro acesso.</p>
-      <label for="senha-atual">Senha temporária</label>
-      <input id="senha-atual" type="password" autocomplete="current-password" required>
-      <label for="senha-nova">Nova senha</label>
-      <input id="senha-nova" type="password" autocomplete="new-password" required minlength="8">
-      <p id="erro-senha-rede" class="erro" role="alert" hidden></p>
-      <button type="submit" class="botao-principal">Salvar senha</button>
-    </form>
+        <button type="submit" id="botao-entrar" class="botao-principal">Entrar</button>
+      </form>
+      <form id="form-senha-rede" class="cartao-login" hidden>
+        <h2>Troque a senha temporária</h2>
+        <p class="sub">A senha que você recebeu vale só para o primeiro acesso.</p>
+        <label for="senha-atual">Senha temporária</label>
+        <input id="senha-atual" type="password" autocomplete="current-password" required>
+        <label for="senha-nova">Nova senha</label>
+        <input id="senha-nova" type="password" autocomplete="new-password" required minlength="8">
+        <p id="erro-senha-rede" class="erro" role="alert" hidden></p>
+        <button type="submit" class="botao-principal">Salvar senha</button>
+      </form>
+    </div>
   </section>
 
   <section id="tela-rede" hidden>
@@ -142,6 +146,7 @@
 
       <!-- Aba Hoje -->
       <section id="aba-hoje" class="aba" role="tabpanel" aria-labelledby="tab-hoje">
+        <h1 class="titulo-aba">Resumo da loja</h1>
         <section class="bloco" id="bloco-lojas" hidden>
           <h2>Minhas lojas</h2>
           <p id="lojas-total" class="legenda"></p>
@@ -150,10 +155,12 @@
         </section>
 
         <article class="cartao destaque cartao-mes" id="cartao-mes">
-          <span class="rotulo">Faturamento do mês até agora</span>
-          <strong id="mes-faturamento" class="valor-grande">R$ 0,00</strong>
-          <p id="mes-periodo" class="legenda"></p>
-          <p id="mes-comparacao" class="detalhe"></p>
+          <div class="saldo-mes">
+            <span class="rotulo">Faturamento do mês até agora</span>
+            <strong id="mes-faturamento" class="valor-grande">R$ 0,00</strong>
+            <p id="mes-periodo" class="legenda"></p>
+            <p id="mes-comparacao" class="detalhe"></p>
+          </div>
           <div id="meta-mes" class="meta">
             <div class="meta-topo">
               <span id="meta-texto">Defina uma meta para acompanhar o mês.</span>
@@ -168,10 +175,17 @@
           </div>
         </article>
 
+        <section class="bloco" id="bloco-historico">
+          <h2>Últimos 30 dias</h2>
+          <div id="grafico-dias" class="grafico-svg-caixa" role="img" aria-label="Faturamento dos últimos 30 dias"></div>
+          <p id="detalhe-dias" class="detalhe-grafico"></p>
+          <p id="vazio-historico" class="vazio" hidden>Sem histórico ainda.</p>
+        </section>
+
         <article class="cartao" id="cartao-alertas">
           <span class="rotulo">Alertas <span id="badge-alertas">0</span></span>
           <ul id="lista-alertas"></ul>
-          <p class="legenda">Chegam com o envio do caixa (lote ou Atualizar agora). Não há consulta extra.</p>
+          <p class="legenda">Alertas atualizados a cada envio do caixa.</p>
           <div class="acoes-resumo">
             <button type="button" id="botao-resumo-whatsapp">Enviar resumo no WhatsApp</button>
             <button type="button" id="botao-copiar-resumo">Copiar texto</button>
@@ -297,13 +311,6 @@
         </section>
 
         <section class="bloco">
-          <h2>Últimos 30 dias</h2>
-          <div id="grafico-dias" class="grafico-svg-caixa" role="img" aria-label="Faturamento dos últimos 30 dias"></div>
-          <p id="detalhe-dias" class="detalhe-grafico"></p>
-          <p id="vazio-historico" class="vazio" hidden>Sem histórico ainda.</p>
-        </section>
-
-        <section class="bloco">
           <h2>Últimos 12 meses</h2>
           <p id="nota-meses" class="legenda" hidden></p>
           <div id="grafico-meses" class="grafico-svg-caixa" role="img" aria-label="Faturamento dos últimos 12 meses"></div>
@@ -328,6 +335,7 @@
 
       <!-- Aba Período -->
       <section id="aba-periodo" class="aba" role="tabpanel" aria-labelledby="tab-periodo" hidden>
+        <h1 class="titulo-aba">Análise por período</h1>
         <div class="filtros filtros-quebra" role="group" aria-label="Atalhos de período">
           <button type="button" class="filtro" data-atalho="hoje" id="atalho-hoje">Hoje</button>
           <button type="button" class="filtro" data-atalho="ontem" id="atalho-ontem">Ontem</button>
@@ -386,8 +394,9 @@
 
       <!-- Aba Caixa -->
       <section id="aba-caixa" class="aba" role="tabpanel" aria-labelledby="tab-caixa" hidden>
+        <h1 class="titulo-aba">Caixa</h1>
         <section class="bloco">
-          <h2>Caixa</h2>
+          <h2>Turnos</h2>
           <!-- Um cartão por caixa da loja (app.js: renderizarCaixa). Com um caixa só, sem cabeçalho. -->
           <div id="lista-caixas"></div>
           <p id="vazio-caixas" class="vazio" hidden>O PDV ainda não enviou dados do caixa.</p>
@@ -435,6 +444,7 @@
 
       <!-- Aba Comandas abertas e comissões -->
       <section id="aba-abertas" class="aba" role="tabpanel" aria-labelledby="tab-abertas" hidden>
+        <h1 class="titulo-aba">Salão</h1>
         <section class="bloco">
           <h2>Mesas e comandas</h2>
           <p id="nota-comandas" class="legenda" hidden></p>
@@ -484,6 +494,7 @@
 
       <!-- Aba Produtos & Estoque -->
       <section id="aba-produtos" class="aba" role="tabpanel" aria-labelledby="tab-produtos" hidden>
+        <h1 class="titulo-aba">Produtos e estoque</h1>
         <section class="bloco" id="bloco-retaguarda">
           <h2>Retaguarda</h2>
           <p class="legenda">Altere de longe produtos e preços, estoque, operadores, contas a pagar e as configurações da loja.
@@ -497,6 +508,22 @@
           <select id="mes-xmls" aria-label="Mês das notas"></select>
           <button id="baixar-xmls" type="button" class="botao-arquivo">Baixar ZIP do mês</button>
           <p id="aviso-xmls" class="aviso" role="status" hidden></p>
+        </section>
+        <section class="bloco" id="bloco-vendas-teste">
+          <h2>Apagar vendas de teste</h2>
+          <p class="legenda">Para vendas feitas só para testar o caixa. Marque e confirme com a senha de segurança
+            (a que o dono criou no caixa, em Utilitários). O caixa confere e apaga na próxima sincronização; venda com
+            NFC-e, devolução, fiado ou Pix recebido ele não apaga.</p>
+          <label>De <input id="teste-de" type="date"></label>
+          <label>até <input id="teste-ate" type="date"></label>
+          <button id="teste-buscar" type="button" class="botao-arquivo">Buscar vendas</button>
+          <div id="teste-lista"></div>
+          <p id="teste-total" class="legenda"></p>
+          <label>Senha de segurança <input id="teste-senha" type="password" autocomplete="off"></label>
+          <button id="teste-apagar" type="button" class="botao-arquivo">Apagar marcadas</button>
+          <p id="aviso-teste" class="aviso" role="status" hidden></p>
+          <details id="teste-historico-bloco" hidden><summary>Apagadas recentemente</summary>
+            <div id="teste-historico"></div></details>
         </section>
         <section class="bloco" id="bloco-notas">
           <h2>Notas de compra</h2>
@@ -582,8 +609,8 @@
 
       <!-- Aba Vendas -->
       <section id="aba-vendas" class="aba" role="tabpanel" aria-labelledby="tab-vendas" hidden>
+        <h1 class="titulo-aba">Vendas de <span id="vendas-dia">hoje</span></h1>
         <section class="bloco">
-          <h2>Vendas de <span id="vendas-dia">hoje</span></h2>
           <p id="vendas-total" class="detalhe"></p>
           <ul id="lista-vendas" class="lista lista-vendas"></ul>
           <p id="vazio-vendas" class="vazio" hidden>Nenhuma venda neste dia.</p>
@@ -597,7 +624,7 @@
 
       <!-- Aba Relatórios (adega): só agregados, sem item cru -->
       <section id="aba-lucro" class="aba" role="tabpanel" aria-labelledby="tab-lucro" hidden>
-        <h2>Relatórios</h2>
+        <h1 class="titulo-aba">Relatórios</h1>
         <div class="filtros filtros-quebra" role="group" aria-label="Período do lucro">
           <button type="button" class="filtro ativa" data-lucro="hoje" id="lucro-hoje">Hoje</button>
           <button type="button" class="filtro" data-lucro="semana" id="lucro-semana">Semana</button>

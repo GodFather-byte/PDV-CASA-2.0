@@ -20,15 +20,29 @@ class TesteMenusMelhoriasQt(BaseQt):
     def test_busca_modulos_ignora_acentos_sem_alterar_permissoes(self):
         janela = self.principal()
         estados = {chave: botao.isEnabled() for chave, botao in janela.botoes.items()}
-        # Sem busca só fica escondido o que a casa não usa (ex.: tutorial de clientes sem caderneta nem delivery).
+        # Sem busca só fica escondido o que a casa não usa (ex.: tutorial de clientes sem caderneta nem delivery) e o que
+        # é de outra edição (o hotel é só do Will Hotel).
         escondidos = {chave for chave, botao in janela.botoes.items() if botao.isHidden()}
-        self.assertLessEqual(escondidos, {"tutorial_cliente"})
+        self.assertLessEqual(escondidos, {"tutorial_cliente", "hotel"})
         janela.busca_modulos.setText("promocoes")
         self.assertFalse(janela.botoes["promocoes"].isHidden())
         self.assertTrue(janela.botoes["estoque"].isHidden())
         janela.busca_modulos.clear()
         self.assertEqual(escondidos, {chave for chave, botao in janela.botoes.items() if botao.isHidden()})
         self.assertEqual(estados, {chave: botao.isEnabled() for chave, botao in janela.botoes.items()})
+
+    def test_atalho_de_vendas_abre_o_relatorio_e_acompanha_a_permissao(self):
+        janela = self.principal()
+        atalho = janela.atalhos["relatorio_vendas"]
+        atalho.click()
+        self.assertTrue(janela.janelas["relatorio_vendas"].isVisible())
+        janela.fechar_filhos()
+        self.banco.executar("UPDATE operadores SET nivel = 1 WHERE id = ?", (self.ctx.operador_id,))
+        self.ctx.acesso.alterar_nivel_modulo("rel_vendas", 3)
+        janela.atualizar()
+        self.assertFalse(atalho.isEnabled())
+        atalho.click()
+        self.assertNotIn("relatorio_vendas", janela.janelas)
 
     def test_notebook_tem_rolagem_e_busca_por_teclado(self):
         janela = self.principal()

@@ -1,7 +1,8 @@
 """Cardápio digital: o caixa publica o catálogo na nuvem (Configurações > Nuvem > `cardapio_digital`).
 
 Sobe só o que o celular pode mostrar: nome, grupo, preço e as regras de promoção/happy hour.
-Não sobe custo, estoque, produto inativo, fora de venda ou com "mostrar no cardápio" desmarcado.
+Não sobe custo, estoque, produto inativo, fora de venda ou com "mostrar no cardápio" desmarcado. Produto que controla
+estoque e está zerado sobe como `esgotado` (aparece, mas não dá para pedir) e volta sozinho quando entra mercadoria.
 Reenviar substitui o catálogo da loja. Se nada mudou, não chama a nuvem.
 """
 from __future__ import annotations
@@ -96,7 +97,7 @@ def coletar(banco) -> dict:
                       p.sem_inicial, p.sem_final, p.sem_preco_cent,
                       p.hora_ini, p.hora_fim, p.hora_preco_cent,
                       p.preco_gelada_cent, p.promo_gelada_cent, p.sem_gelada_cent, p.hora_gelada_cent,
-                      p.aceita_decimal, p.casco_produto_id,
+                      p.aceita_decimal, p.casco_produto_id, p.controla_estoque, p.qt_atual,
                       g.nome AS grupo, s.nome AS subgrupo, s.figura AS foto,
                       f.origem AS foto_origem, f.miniatura AS foto_miniatura
                FROM produtos p
@@ -124,6 +125,8 @@ def coletar(banco) -> dict:
             "fracionado": bool(r["aceita_decimal"]),
             "retornavel": bool(r["casco_produto_id"]),
         }
+        if r["controla_estoque"] and float(r["qt_atual"] or 0) <= 0:
+            item["esgotado"] = True                     # só o sim/não: a quantidade não sai do caixa
         from src.controllers.opcoes_produto_controller import OpcoesProdutoController
         grupos = OpcoesProdutoController(banco).grupos(r["produto_id"])
         if grupos:
@@ -172,8 +175,47 @@ def _hash(corpo: dict) -> str:
     return hashlib.sha256(texto.encode("utf-8")).hexdigest()
 
 
+def _hash_insta(banco, corpo: dict) -> str:
+    """O catálogo e para onde ele vai: trocar o endereço ou a chave do Insta-BDelivery reenvia tudo."""
+    from src.sync import insta_bdelivery as insta
+    base, token = insta.acesso(banco)
+    return hashlib.sha256(f"{base}|{token}|{_hash(corpo)}".encode("utf-8")).hexdigest()
+
+
+def insta_precisa_enviar(banco) -> bool:
+    from src.sync import insta_bdelivery as insta
+    return insta.configurado(banco) and _hash_insta(banco, coletar(banco)) != banco.cfg(insta.CHAVE_HASH)
+
+
+def enviar_insta(banco, http=None) -> dict | None:
+    """Publica o catálogo na vitrine do Insta-BDelivery. Devolve None sem endereço ou chave.
+    Não marca nada se a vitrine não responder 200: a próxima rodada tenta de novo."""
+    from src.sync import insta_bdelivery as insta
+    if not insta.configurado(banco):
+        return None
+    if http is None:
+        import requests as http
+    corpo = coletar(banco)
+    digesto = _hash_insta(banco, corpo)
+    if digesto == banco.cfg(insta.CHAVE_HASH):
+        return {"produtos": len(corpo["produtos"]), "enviado": False}
+    base, token = insta.acesso(banco)
+    try:
+        resposta = http.post(f"{base}/v1/cardapio/envio", json={**corpo, "enviado_em": fmt.agora()},
+                             headers={"Authorization": f"Bearer {token}"}, timeout=(5, 30))
+    except OSError as e:
+        raise RuntimeError(f"Insta-BDelivery: sem conexão ({e}).") from e
+    if resposta.status_code != 200:
+        raise RuntimeError(f"Insta-BDelivery: a vitrine respondeu HTTP {resposta.status_code}.")
+    banco.cfg_set(insta.CHAVE_HASH, digesto)
+    log.info("Insta-BDelivery: %d produto(s) publicado(s).", len(corpo["produtos"]))
+    return {"produtos": len(corpo["produtos"]), "enviado": True}
+
+
 def precisa_enviar(banco) -> bool:
     """Há catálogo novo (ou uma retirada) que ainda não subiu. Só olha o caixa."""
+    if insta_precisa_enviar(banco):
+        return True
     if not banco.cfg("api_url").strip() or not banco.cfg("api_token").strip():
         return False
     if not banco.cfg_bool("cardapio_digital", False):
@@ -184,6 +226,18 @@ def precisa_enviar(banco) -> bool:
 
 
 def enviar(banco, http=None) -> dict | None:
+    """Publica o catálogo na nuvem e, quando ligado, na vitrine do Insta-BDelivery. Devolve o resultado da nuvem.
+    Um destino fora do ar não segura o outro: a falha do Insta-BDelivery só fica no registro e a próxima rodada tenta."""
+    try:
+        return _enviar_nuvem(banco, http)
+    finally:
+        try:
+            enviar_insta(banco, http)
+        except RuntimeError as e:
+            log.warning("%s", e)
+
+
+def _enviar_nuvem(banco, http=None) -> dict | None:
     """Publica o catálogo, ou tira do ar se o cardápio foi desligado depois de publicado.
     Devolve None sem nuvem configurada. Não marca nada se a nuvem não responder 200."""
     url_api = banco.cfg("api_url").strip()

@@ -60,7 +60,7 @@ def enviar_se_preciso(banco, http=None, relogio=None, forcar_batimento: bool = F
     devolucoes = devolucoes_envio.pendentes(banco)
     anterior = estado["quando"] if estado else 0
     try:
-        if foto is not None or vendas or devolucoes:
+        if foto is not None or vendas or devolucoes or painel_envio.exclusoes_pendentes(banco):
             resultado = painel_envio.enviar(banco, http, foto=foto)
             confirmado = agora
         elif forcar_batimento or pode_batimento(banco, agora - anterior):

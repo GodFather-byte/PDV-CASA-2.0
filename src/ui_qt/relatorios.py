@@ -19,7 +19,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
     QHBoxLayout, QGridLayout, QHeaderView, QLineEdit, QPushButton, QScrollArea, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget,
+    QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from src.core import formatacao as fmt
@@ -205,20 +205,24 @@ class JanelaRelatorios(QDialog):
         self._exigir_acesso()
         self.rel = None
         self._consulta = None
-        self.setWindowTitle("Relatórios • somente leitura • Qt opt-in")
+        self.setWindowTitle("Relatórios")
         self.resize(1100, 800)
         layout = QVBoxLayout(self)
-        layout.addWidget(texto("Relatórios", "titulo"))
+        cabecalho = QHBoxLayout()
+        cabecalho.addWidget(texto("Relatórios", "titulo"), 1)
         self.selecao = QComboBox()
+        self.selecao.setAccessibleName("Escolher relatório")
         for codigo, spec in SPECS.items():
             self.selecao.addItem(spec.titulo, codigo)
         self.selecao.setCurrentIndex(self.selecao.findData(chave))
-        layout.addWidget(self.selecao)
+        cabecalho.addWidget(self.selecao)
+        layout.addLayout(cabecalho)
         self.area_filtros = QScrollArea()
         self.area_filtros.setWidgetResizable(True)
-        layout.addWidget(self.area_filtros, 2)
+        layout.addWidget(self.area_filtros)
         barra = QHBoxLayout()
         self.aplicar = QPushButton("Consultar")
+        self.aplicar.setObjectName("primario")
         self.aplicar.clicked.connect(self.atualizar)
         self.limpar_botao = QPushButton("Limpar filtros")
         self.limpar_botao.clicked.connect(self.limpar)
@@ -228,21 +232,27 @@ class JanelaRelatorios(QDialog):
         self.pdf_botao.clicked.connect(lambda: self.exportar_pdf())
         self.visualizar_botao = QPushButton("Pré-visualizar texto")
         self.visualizar_botao.clicked.connect(self.visualizar)
-        for botao in (self.aplicar, self.limpar_botao, self.visualizar_botao, self.csv_botao, self.pdf_botao):
-            barra.addWidget(botao)
+        barra.addWidget(self.aplicar)
+        barra.addWidget(self.limpar_botao)
+        barra.addStretch(1)
         layout.addLayout(barra)
         self.criterios = texto("", "suave")
         self.criterios.setWordWrap(True)
         layout.addWidget(self.criterios)
         self.grade, self.totais = self._grade(), self._grade()
-        layout.addWidget(self.grade, 3)
-        layout.addWidget(self.totais, 1)
+        resultados = QTabWidget()
+        resultados.addTab(self.grade, "Detalhamento")
+        resultados.addTab(self.totais, "Totais")
+        layout.addWidget(resultados, 1)
         self.mensagem = texto("", "aviso")
         self.mensagem.setWordWrap(True)
-        layout.addWidget(self.mensagem)
         fechar = QPushButton("Fechar")
         fechar.clicked.connect(self.reject)
-        layout.addWidget(fechar)
+        rodape = QHBoxLayout()
+        rodape.addWidget(self.mensagem, 1)
+        for botao in (self.visualizar_botao, self.csv_botao, self.pdf_botao, fechar):
+            rodape.addWidget(botao)
+        layout.addLayout(rodape)
         self.selecao.currentIndexChanged.connect(self._selecionar)
         self._selecionar()
 
@@ -304,7 +314,8 @@ class JanelaRelatorios(QDialog):
             self._falhar(erro)
             return
         self.area_filtros.setWidget(self.painel)
-        self.area_filtros.setMinimumHeight(self.painel.sizeHint().height() + 6)
+        self.area_filtros.setVisible(bool(self.painel.campos))
+        self.area_filtros.setFixedHeight(self.painel.sizeHint().height() + 6)
         for campo in self.painel.campos.values():
             if isinstance(campo, QCheckBox):
                 campo.toggled.connect(self._alterado)

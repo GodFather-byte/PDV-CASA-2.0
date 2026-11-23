@@ -1067,6 +1067,7 @@ def limpar_antigos(db: Session) -> dict[str, int]:
             PainelCaixa.recebido_em < (agora - timedelta(days=DIAS_CAIXA_PARADO)).strftime("%Y-%m-%d %H:%M:%S")
         ).delete(synchronize_session=False),
         "erros_caixa": __import__("backend.erros_caixa", fromlist=["podar"]).podar(db),
+        "exclusoes_teste": __import__("backend.vendas_teste", fromlist=["podar"]).podar(db, _corte_das_vendas()),
     }
     db.commit()
     return removidas
@@ -1162,7 +1163,14 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             raise HTTPException(status_code=422, detail=f"Envie até {LOTE_MAXIMO} devoluções por lote.")
         agora = _agora()
         recebidos = []
+        from backend import vendas_teste
+        resposta_teste = vendas_teste.receber(db, acesso.loja, dados)      # vendas de teste apagadas no caixa
+        ja_apagadas = vendas_teste.uuids_apagados(
+            db, acesso.loja, [str(v.get("uuid") or "") for v in vendas if isinstance(v, dict)])
         for v in vendas:
+            if isinstance(v, dict) and str(v.get("uuid") or "") in ja_apagadas:
+                recebidos.append(str(v["uuid"]))             # confirma sem guardar: foi apagada como teste
+                continue
             if isinstance(v, dict):
                 uuid = _guardar_venda(db, acesso.loja, v, agora)
                 if uuid and uuid not in recebidos:
@@ -1195,6 +1203,12 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             resposta["heartbeat_confirmado"] = heartbeat_confirmado
         if erros_aceitos:
             resposta["erros"] = erros_aceitos
+        resposta.update(resposta_teste)
+        from backend import insta
+        resposta.update(insta.para_resposta(db, acesso.loja, dados))   # Insta-BDelivery cadastrado na central
+        pedidos_teste = vendas_teste.pedidos_para_o_caixa(db, acesso.loja)
+        if pedidos_teste:
+            resposta["apagar_no_caixa"] = pedidos_teste  # o dono apagou pelo painel: o caixa confere e apaga
         from backend import notas_dono
         notas = notas_dono.pendentes(db, acesso.loja)    # o dono subiu nota de compra: o caixa busca em /v1/notas-dono
         if notas:
