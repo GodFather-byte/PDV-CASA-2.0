@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.controllers.promocoes_controller import AVISO, CAMPOS, PromocoesController
-from src.core import formatacao as fmt
+from src.core import edicao, formatacao as fmt
 from src.core.erros import ErroNegocio
 
 
@@ -37,6 +37,7 @@ class JanelaPromocoes(QDialog):
         layout.addWidget(self.produto)
         abas = QTabWidget()
         secoes = {}
+        sem_gelada = edicao.atual().sem_gelada
         for campo in CAMPOS:
             secao = "Promoções" if campo.secao == "Promoções" else "Preços e faixas"
             if secao not in secoes:
@@ -54,6 +55,8 @@ class JanelaPromocoes(QDialog):
                     editor.setPlaceholderText("R$ 0,00")
             self.campos[campo.nome] = editor
             secoes[secao].addRow(campo.rotulo + (" (R$)" if campo.tipo == "dinheiro" else ""), editor)
+            if sem_gelada and ("gelada" in campo.nome or campo.nome == "casco_produto_id"):
+                secoes[secao].setRowVisible(editor, False)       # loja sem bebida: o valor fica como está, só não aparece
         layout.addWidget(abas)
         salvar = QPushButton("Salvar regras do produto")
         salvar.clicked.connect(self.salvar)
@@ -65,6 +68,8 @@ class JanelaPromocoes(QDialog):
         self.quando = QLineEdit(fmt.agora())
         simulacao.addRow("Quantidade (até 4 casas)", self.quantidade)
         simulacao.addRow("Temperatura", self.temperatura)
+        if sem_gelada:
+            simulacao.setRowVisible(self.temperatura, False)
         simulacao.addRow("Data/hora local (YYYY-MM-DD HH:MM:SS)", self.quando)
         layout.addLayout(simulacao)
         simular = QPushButton("Simular campos acima (não salva)")

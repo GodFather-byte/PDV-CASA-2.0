@@ -1,4 +1,4 @@
-# Handoff de 23/11/2026: Will Hotel (branch `will-hotel`)
+# Handoff de 23/11/2026: Will Hotel (na main) e Will Variedades (PR #118)
 
 Edição nova para hotel e pousada: diárias e uso por horas. Guia em `docs/WILL_HOTEL.md`.
 
@@ -14,6 +14,14 @@ Edição nova para hotel e pousada: diárias e uso por horas. Guia em `docs/WILL
 - Edição `willhotel` (perfil `hotel`, fixas e padrões em `core/edicao.py`; o botão do hotel some nas outras edições),
   `instalador/WillHotel.iss` (AppId próprio), workflow `will-hotel.yml`, canal de atualização `willhotel` e link do
   instalador na central.
+
+## Will Variedades (PR #118, branch `claude/inspiring-bohr-cp5miu`)
+- Etapa 1 pronta: edição `willvariedades` (balcão, caderneta, atacado, sem gelada/casco), catálogo de 282 produtos,
+  etiqueta com código de barras (todas as edições), instalador e workflow `will-variedades.yml`. Guia
+  `docs/WILL_VARIEDADES.md`.
+- 23/11: trazida a main (Will Hotel, marca da loja), as duas edições juntas em `edicao.py` e no manifesto, link do
+  instalador na central e as proteções do CI valendo também para o `will-hotel.yml`.
+- Etapa 2 (não começada): garantia e número de série/IMEI na venda; encomenda de personalizado.
 
 ## Limites
 - Sem channel manager, sem sinal antes do check-in, sem envio automático da FNRH nem NFS-e (o cliente faz à parte).

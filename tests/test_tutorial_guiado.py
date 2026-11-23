@@ -42,7 +42,7 @@ class TestTutorial(BaseQt):
         import os
         from unittest.mock import patch
         from src.core import edicao
-        for chave in ("willpdv", "willadega", "willrestaurante"):
+        for chave in ("willpdv", "willadega", "willvariedades", "willrestaurante"):
             with self.subTest(edicao=chave), patch.dict(os.environ, {"PDV_EDICAO": chave}):
                 edicao.preparar(self.banco)
                 self.test_todos_os_alvos_existem_nas_telas_reais()
@@ -167,7 +167,7 @@ class TestOutrosTutoriais(BaseQt):
         import os
         from unittest.mock import patch
         from src.core import edicao
-        for chave in ("willpdv", "willadega", "willrestaurante"):
+        for chave in ("willpdv", "willadega", "willvariedades", "willrestaurante"):
             with patch.dict(os.environ, {"PDV_EDICAO": chave}):
                 edicao.preparar(self.banco)
                 for roteiro in (r for r in ROTEIROS.values() if r.tipo == "cadastro"):
@@ -337,7 +337,7 @@ class TestVendaDeTreino(BaseQt):
         import os
         from unittest.mock import patch
         from src.core import edicao
-        for chave in ("willpdv", "willadega", "willrestaurante"):
+        for chave in ("willpdv", "willadega", "willvariedades", "willrestaurante"):
             with self.subTest(edicao=chave), patch.dict(os.environ, {"PDV_EDICAO": chave}):
                 edicao.preparar(self.banco)
                 vendas_loja = self.banco.valor("SELECT COUNT(*) FROM vendas")

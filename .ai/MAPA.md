@@ -13,6 +13,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | `python -m src.app --edicao willrestaurante` | Will Restaurante: hamburgueria, pizzaria, à la carte e rodízio; guia `docs/WILL_RESTAURANTE.md` |
 | `python -m src.app --edicao willhotel` | Will Hotel: hotel e pousada (diárias e uso por horas); guia `docs/WILL_HOTEL.md` |
 | `python -m src.app --edicao willadega` | Edição Will Adega (adega); `iniciar_will_adega.bat` no Windows |
+| `python -m src.app --edicao willvariedades` | Will Variedades: loja de eletrônicos, utilidades e presentes (balcão, catálogo próprio, etiqueta com código de barras); `iniciar_will_variedades.bat`; guia `docs/WILL_VARIEDADES.md` |
 | `python -m src.app --autoteste-qt [arquivo]` | Mesmo autoteste Qt (alias de `--autoteste`) |
 | `python -m src.app --homologacao [arquivo.json]` | Cinco cenários de recuperação em banco fictício descartável; sem rede ou hardware |
 | `python -m licenciador.app` | Gerador de licenças |
@@ -63,6 +64,8 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Insta-BDelivery (vitrine de delivery com IA): catálogo sobe e pedido de entrega/retirada desce, ao lado do canal da nuvem | `sync/insta_bdelivery.py` (endereço, chave, `id` negativo), `sync/pedidos_online.py` (`fontes`, `consultar_fontes`, `_destino`), `sync/cardapio_envio.py` (`enviar_insta`); `docs/INSTA_BDELIVERY.md` |
 | Adicionais por produto e retrato por item (v48) | `core/opcoes_produto.py`, `controllers/opcoes_produto_controller.py`, `ui_qt/opcoes_produto.py` |
 | Venda, itens, pagamento, mesas e comandas | `caixa_controller.py` |
+| Produtos prontos (adega e variedades) | `catalogo.py` (`CATALOGOS`), dados em `catalogo_variedades.py`; tela `ui_qt/catalogo.py` |
+| Etiqueta com código de barras próprio (EAN-13 `200...`), folha A4 ou rolo em HTML | `etiqueta_controller.py`, `ui_qt/etiquetas.py` |
 | Divisão por itens e cálculo de totais (auxiliares do CaixaController) | `caixa_divisao.py`, `caixa_totais.py` |
 | Custo congelado e rateio analítico de devoluções | `custos_venda.py`; fila imutável em `src/sync/devolucoes_envio.py` |
 | Envio por mudança, batimento leve e estado da fila | `src/sync/painel_ritmo.py`, `painel_status.py`; indicador em `ui_qt/estado_nuvem.py` |

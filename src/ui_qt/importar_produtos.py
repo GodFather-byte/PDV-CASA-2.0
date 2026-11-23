@@ -55,7 +55,9 @@ class JanelaImportarProdutos(QDialog):
         arquivos = tema.LinhaFluida()         # no monitor estreito a fileira continua na linha de baixo
         self.btn_catalogo = QPushButton("Produtos prontos…")
         self.btn_catalogo.setObjectName("primario")
-        self.btn_catalogo.setToolTip("Mais de 270 produtos de adega e tabacaria com nome, subgrupo e NCM: é só digitar o preço.")
+        from src.controllers.catalogo import catalogo
+        self.btn_catalogo.setToolTip(f"Mais de {len(catalogo().itens) // 10 * 10} produtos de {catalogo().titulo} com nome, "
+                                     "subgrupo e NCM: é só digitar o preço.")
         self.btn_catalogo.clicked.connect(self.abrir_catalogo)
         arquivos.addWidget(self.btn_catalogo)
         self.btn_escolher = QPushButton("Escolher planilha…")
@@ -154,7 +156,7 @@ class JanelaImportarProdutos(QDialog):
         self.ctx.acesso.exigir(self.ctx.operador, entidade.modulo)
 
     def abrir_catalogo(self):
-        """Catálogo de produtos prontos (adega): o dono marca o que vende e digita o preço."""
+        """Catálogo de produtos prontos (da adega ou da loja de variedades): o dono marca o que vende e digita o preço."""
         from src.ui_qt.catalogo import JanelaCatalogo
         try:
             janela = JanelaCatalogo(self.ctx, self, ao_adicionar=self.ao_importar)

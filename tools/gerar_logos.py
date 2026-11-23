@@ -4,6 +4,7 @@ Ferramenta do fornecedor (não vai no instalador). Precisa do Pillow só para ro
 
     python -m tools.gerar_logos
     python -c "from tools.gerar_logos import gravar_adega; gravar_adega()"   # só a Will Adega
+    python -c "from tools.gerar_logos import gravar_variedades; gravar_variedades()"   # só a Will Variedades
 
 Grava em `instalador/`. Os arquivos gerados ficam no repositório, então o build não depende do Pillow. Para usar uma
 marca própria, basta trocar `willpdv.ico` (e os .bmp) por arquivos seus com os mesmos nomes.
@@ -22,6 +23,7 @@ TAM = 1024          # desenha grande e reduz: bordas lisas em qualquer tamanho
 MARINHO, AZUL, AZUL_CLARO, BRANCO = (20, 35, 77), (79, 140, 255), (159, 179, 232), (255, 255, 255)
 ESCURO, AMBAR = (10, 16, 34), (255, 197, 71)
 VINHO, VINHO_ESCURO, ROSE = (128, 22, 52), (34, 8, 20), (240, 180, 196)
+PETROLEO, PETROLEO_ESCURO, LARANJA, AGUA = (13, 116, 122), (6, 34, 44), (255, 138, 44), (170, 226, 226)
 
 
 def fonte(tamanho: int) -> ImageFont.FreeTypeFont:
@@ -72,6 +74,18 @@ def logo_adega() -> Image.Image:
     d.rounded_rectangle(caixa, radius=int(TAM * 0.08), fill=AMBAR)
     d.text(((caixa[0] + caixa[2]) / 2, (caixa[1] + caixa[3]) / 2 + 4), "ADEGA", font=fonte(int(TAM * 0.115)),
            fill=VINHO_ESCURO, anchor="mm")
+    return img
+
+
+def logo_variedades() -> Image.Image:
+    """Will Variedades: o mesmo 'W' da família, sobre azul-petróleo, com a etiqueta VARIEDADES em laranja."""
+    img = _quadrado(PETROLEO, PETROLEO_ESCURO)
+    d = ImageDraw.Draw(img)
+    d.text((TAM / 2, TAM * 0.43), "W", font=fonte(int(TAM * 0.62)), fill=BRANCO, anchor="mm")
+    caixa = (int(TAM * 0.10), int(TAM * 0.70), int(TAM * 0.90), int(TAM * 0.86))
+    d.rounded_rectangle(caixa, radius=int(TAM * 0.08), fill=LARANJA)
+    d.text(((caixa[0] + caixa[2]) / 2, (caixa[1] + caixa[3]) / 2 + 4), "VARIEDADES", font=fonte(int(TAM * 0.098)),
+           fill=PETROLEO_ESCURO, anchor="mm")
     return img
 
 
@@ -139,9 +153,15 @@ def gravar_adega() -> list[Path]:
                   destaque=AMBAR, cor_subtitulo=ROSE)
 
 
+def gravar_variedades() -> list[Path]:
+    return gravar(logo_variedades(), "willvariedades", "Variedades", "Eletrônicos e utilidades", PETROLEO, PETROLEO_ESCURO,
+                  destaque=LARANJA, cor_subtitulo=AGUA)
+
+
 def main() -> None:
     arquivos = gravar(logo_pdv(), "willpdv", "WillPDV", "Ponto de venda", (31, 58, 138), ESCURO)
     arquivos += gravar_adega()
+    arquivos += gravar_variedades()
     arquivos += gravar(logo_licencas(), "willlicencas", "Licenças", "WillPDV", (60, 48, 110), ESCURO)
     for a in arquivos:
         print(f"{a.relative_to(SAIDA.parent)}  ({a.stat().st_size // 1024 or 1} KB)")

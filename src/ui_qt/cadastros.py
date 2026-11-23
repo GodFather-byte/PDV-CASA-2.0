@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.controllers.config_controller import modulos_desligados
-from src.core import formatacao as fmt
+from src.core import edicao, formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.core.relatorio import Coluna, Relatorio, para_csv, para_texto
 from src.ui_qt.tema import LinhaFluida, texto
@@ -45,7 +45,13 @@ class FormularioCadastro(QDialog):
         secoes = {}
         # Com a NFC-e ligada o NCM é obrigatório no produto vendido: sai da aba Fiscal e vem para a primeira.
         self.ncm_obrigatorio = chave == "produtos" and ctx.banco.cfg("nfce_emissao") in ("homologacao", "producao")
+        sem_gelada = chave == "produtos" and edicao.atual().sem_gelada
         for campo in self.entidade.campos:
+            if sem_gelada:                  # loja sem bebida: gelada e casco não aparecem e a aba Adega é só o atacado
+                if "gelada" in campo.nome or campo.nome == "casco_produto_id":
+                    continue
+                if campo.secao == "Adega":
+                    campo = replace(campo, secao="Atacado", rotulo=campo.rotulo.replace(" natural", ""))
             if campo.nome == "ncm" and self.ncm_obrigatorio:
                 campo = replace(campo, secao="Geral", rotulo="Código NCM (nota fiscal)", obrigatorio=True)
             if campo.secao not in secoes:

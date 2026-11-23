@@ -269,7 +269,7 @@ class TesteInstalador(unittest.TestCase):
     def test_instaladores_criam_e_removem_a_tarefa(self):
         raiz = Path(__file__).resolve().parent.parent / "instalador"
         self.assertTrue((raiz / "tarefa_atualizacao.ps1").is_file())
-        for nome in ("WillPDV.iss", "WillAdega.iss", "WillRestaurante.iss"):
+        for nome in ("WillPDV.iss", "WillAdega.iss", "WillRestaurante.iss", "WillVariedades.iss"):
             texto = (raiz / nome).read_text(encoding="utf-8-sig")
             self.assertIn("tarefa_atualizacao.ps1", texto, nome)
             self.assertIn("{commonappdata}", texto, nome)

@@ -2062,8 +2062,10 @@ class JanelaCaixa(QMainWindow):
                                       lambda t: ler_dinheiro(t, permitir_zero=True))
         if preco is None:
             return None
-        gelada = self._pedir_convertido("Produto novo", "Preço gelada (R$, opcional; vazio = só natural):",
-                                       lambda t: ler_dinheiro(t, permitir_zero=True) if t.strip() else 0)
+        from src.core import edicao
+        gelada = 0 if edicao.atual().sem_gelada else self._pedir_convertido(
+            "Produto novo", "Preço gelada (R$, opcional; vazio = só natural):",
+            lambda t: ler_dinheiro(t, permitir_zero=True) if t.strip() else 0)
         if gelada is None:
             return None
         opcoes = [(r["id"], f"{r['nome']} - {r['grupo']}") for r in self.ctx.banco.todos(

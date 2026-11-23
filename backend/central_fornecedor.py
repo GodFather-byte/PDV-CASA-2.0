@@ -147,6 +147,8 @@ INSTALADORES = {
                  "WillAdega-Instalador.exe",
     "willhotel": "https://github.com/GodFather-byte/willpdv-downloads/releases/download/ultima-versao-hotel/"
                  "WillHotel-Instalador.exe",
+    "willvariedades": "https://github.com/GodFather-byte/willpdv-downloads/releases/download/ultima-versao-variedades/"
+                      "WillVariedades-Instalador.exe",
 }
 
 

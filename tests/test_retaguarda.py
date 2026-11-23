@@ -470,6 +470,13 @@ class TesteFornecedor(BaseNuvem):
             db.query(nuvem_retaguarda.PrecoServico).delete()
             db.commit()
 
+    def test_catalogo_de_variedades_pela_central_e_tipo_desconhecido(self):
+        r = self.fornecedor.get("/v1/fornecedor/servicos/catalogo", params={"tipo": "variedades"})
+        self.assertEqual(r.status_code, 200, r.text)
+        fone = next(l for l in r.json()["linhas"] if l["nome"] == "FONE DE OUVIDO BLUETOOTH TWS")
+        self.assertEqual((fone["grupo"], fone["ncm"], fone["preco"]), ("FONES E ÁUDIO", "85183000", ""))
+        self.assertEqual(self.fornecedor.get("/v1/fornecedor/servicos/catalogo", params={"tipo": "x"}).status_code, 422)
+
     def test_catalogo_da_adega_vai_com_ncm_e_so_os_que_tem_preco(self):
         retaguarda.sincronizar(self.banco, self.ponte)
         r = self.fornecedor.get("/v1/fornecedor/servicos/catalogo")

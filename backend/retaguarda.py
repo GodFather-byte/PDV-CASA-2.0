@@ -555,10 +555,12 @@ def instalar_fornecedor(app: FastAPI, sessao, obter, auditar) -> APIRouter:
         return {"lojas": sorted(lojas, key=lambda x: -x["valor_cent"]), "total_cent": sum(l["valor_cent"] for l in lojas)}
 
     @router.get("/v1/fornecedor/servicos/catalogo")
-    def catalogo(_=Depends(sessao)):
-        from src.controllers.catalogo import CATALOGO_ADEGA
+    def catalogo(tipo: str = "adega", _=Depends(sessao)):
+        from src.controllers.catalogo import CATALOGOS
+        if tipo not in CATALOGOS:
+            raise HTTPException(422, "Catálogo desconhecido: " + ", ".join(CATALOGOS) + ".")
         linhas = [{**{c: "" for c in CAMPOS_LOTE}, "nome": i.nome, "grupo": i.subgrupo, "ncm": i.ncm, "unidade": "UN"}
-                  for i in CATALOGO_ADEGA]
+                  for i in CATALOGOS[tipo].itens]
         return {"linhas": linhas}
 
     @router.get("/v1/fornecedor/servicos/precos")
