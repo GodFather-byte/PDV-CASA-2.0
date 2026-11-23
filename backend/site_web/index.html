@@ -63,6 +63,7 @@
             <p class="linha-mes">ou {{boate_mensal}} por mês</p>
           </div>
           <a class="botao" href="{{download_willpdv}}">Baixar instalador</a>
+          {{compra_boate}}
         </article>
         <article class="cartao adega">
           <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 22h8M12 15v7M7 2h10l-1 7a4 4 0 0 1-8 0z"/></svg></span>
@@ -76,6 +77,7 @@
             <p class="linha-mes">ou {{adega_mensal}} por mês</p>
           </div>
           <a class="botao" href="{{download_willadega}}">Baixar instalador</a>
+          {{compra_adega}}
         </article>
         <article class="cartao restaurante">
           <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 2v8a3 3 0 0 0 6 0V2M7 2v20M17 2c-2 2-3 5-3 8h3v12"/></svg></span>
@@ -89,6 +91,7 @@
             <p class="linha-mes">ou {{restaurante_mensal}} por mês</p>
           </div>
           <a class="botao" href="{{download_willrestaurante}}">Baixar instalador</a>
+          {{compra_restaurante}}
         </article>
         <article class="cartao variedades">
           <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0"/></svg></span>
@@ -101,7 +104,8 @@
             <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{variedades_anual}} no ano</span></p>
             <p class="linha-mes">ou {{variedades_mensal}} por mês</p>
           </div>
-          <a class="botao" href="{{zap_variedades}}">Assinar</a>
+          {{compra_variedades}}
+          <a class="zap" href="{{zap_variedades}}">Assinar</a>
         </article>
       </div>
     </section>
@@ -155,6 +159,7 @@
             <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{boate_anual}} no ano</span></p>
             <p class="linha-mes">ou {{boate_mensal}} por mês</p>
           </div>
+          {{compra_boate}}
           <a class="zap" href="{{zap_boate}}">Assinar</a>
         </article>
         <article class="cartao adega">
@@ -165,6 +170,7 @@
             <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{adega_anual}} no ano</span></p>
             <p class="linha-mes">ou {{adega_mensal}} por mês</p>
           </div>
+          {{compra_adega}}
           <a class="zap" href="{{zap_adega}}">Assinar</a>
         </article>
         <article class="cartao restaurante">
@@ -175,6 +181,7 @@
             <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{restaurante_anual}} no ano</span></p>
             <p class="linha-mes">ou {{restaurante_mensal}} por mês</p>
           </div>
+          {{compra_restaurante}}
           <a class="zap" href="{{zap_restaurante}}">Assinar</a>
         </article>
         <article class="cartao variedades">
@@ -185,10 +192,11 @@
             <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{variedades_anual}} no ano</span></p>
             <p class="linha-mes">ou {{variedades_mensal}} por mês</p>
           </div>
+          {{compra_variedades}}
           <a class="zap" href="{{zap_variedades}}">Assinar</a>
         </article>
       </div>
-      <p class="miudo">Assinar abre o WhatsApp. A instalação na loja é grátis: alguém vai até a casa, instala o caixa e deixa a primeira venda saindo. <a href="{{zap_instalacao}}">Pedir instalação</a></p>
+      <p class="miudo">Assinar agora paga com Pix ou cartão. No anual, o cartão pode ser em até 10 vezes. Se o pagamento online não estiver disponível, esse botão abre o WhatsApp. Assinar continua abrindo o WhatsApp. A instalação na loja é grátis: alguém vai até a casa, instala o caixa e deixa a primeira venda saindo. <a href="{{zap_instalacao}}">Pedir instalação</a></p>
     </section>
 
     <section id="teste" class="duas">
@@ -266,7 +274,7 @@
       </details>
       <details>
         <summary>Como pago?</summary>
-        <p>Hoje a assinatura começa pelo WhatsApp {{telefone}}. O checkout entra depois.</p>
+        <p>No botão Assinar agora: Pix ou cartão. No plano anual, o cartão pode ser em até 10 vezes. A instalação é grátis. O número do cartão é digitado no Mercado Pago, não aqui. Se preferir, chame no WhatsApp {{telefone}}.</p>
       </details>
     </section>
   </main>
@@ -284,6 +292,24 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.04 2C6.58 2 2.15 6.4 2.15 11.83c0 1.74.46 3.44 1.34 4.94L2 22l5.39-1.41a10 10 0 0 0 4.65 1.18h.01c5.46 0 9.89-4.4 9.89-9.83C21.94 6.4 17.5 2 12.04 2zm5.76 14.15c-.24.68-1.4 1.25-1.94 1.33-.5.07-1.12.1-1.81-.11-.42-.13-.95-.3-1.64-.6-2.88-1.25-4.76-4.15-4.9-4.34-.14-.2-1.16-1.54-1.16-2.94s.73-2.08 1-2.37c.24-.28.64-.41 1.02-.41h.73c.23 0 .55-.09.86.65.32.77 1.08 2.64 1.18 2.83.1.2.16.42.03.68-.13.26-.2.42-.39.65-.2.22-.41.5-.59.67-.2.2-.4.4-.17.77.23.38 1.03 1.7 2.21 2.75 1.52 1.35 2.8 1.77 3.2 1.97.39.2.62.17.85-.1.23-.26.98-1.14 1.24-1.53.26-.39.52-.32.86-.19.35.13 2.2 1.04 2.58 1.23.38.19.63.28.72.44.1.16.1.94-.14 1.62z"/></svg>
     <span>WhatsApp</span>
   </a>
+  <dialog id="checkout" class="checkout" aria-labelledby="checkout-titulo">
+    <form id="form-checkout" class="form-teste" method="post" action="#checkout">
+      <h2 id="checkout-titulo">Assinar</h2>
+      <p class="preco" id="checkout-preco"></p>
+      <p class="miudo" id="checkout-nota">Pix ou cartão. A instalação é grátis.</p>
+      <label>Seu nome <input name="nome" required minlength="3" maxlength="80" autocomplete="name"></label>
+      <label>E-mail <input name="email" type="email" required maxlength="120" autocomplete="email"></label>
+      <label>WhatsApp com DDD <input name="whatsapp" required inputmode="tel" autocomplete="tel" placeholder="11 91234-5678"></label>
+      <label>Nome da loja <input name="loja" required minlength="3" maxlength="80" autocomplete="organization"></label>
+      <p id="checkout-aviso" class="miudo" role="status"></p>
+      <div class="acoes">
+        <button class="botao" type="submit">Ir para o pagamento</button>
+        <button class="fantasma" type="button" id="checkout-fechar">Voltar</button>
+      </div>
+      <p class="miudo">Se o pagamento não abrir, <a id="checkout-zap" href="{{zap_contato}}">chame no WhatsApp</a>.</p>
+    </form>
+  </dialog>
   <script src="/site/teste.js" defer></script>
+  <script src="/site/checkout.js" defer></script>
 </body>
 </html>
