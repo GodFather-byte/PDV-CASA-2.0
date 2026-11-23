@@ -65,6 +65,28 @@ Quer ver o caixa na sua casa? Chame no WhatsApp.
 
 A licença é mensal. Sem ela, o caixa avisa e, depois da carência, pede a renovação.
 
+## Checkout do site (Mercado Pago)
+
+O site público (`/site/`) pode cobrar os planos pelo Checkout Pro (Pix e cartão). O preço é o do servidor, a partir do id do plano. A instalação continua grátis. Sem `MP_ACCESS_TOKEN`, os botões Assinar agora e Comprar abrem o WhatsApp (`wa.me/5511915168336`, ou o número de `PDV_SITE_WHATSAPP`) e `POST /v1/pagamentos/checkout` responde 503. Dá para publicar antes de colar o token.
+
+O pedido fica nas tabelas `site_pedidos` e `site_pagamentos` do mesmo banco da nuvem (`PDV_NUVEM_DB_URL`). Isso não emite licença sozinho: o pagamento é registrado para o acompanhamento.
+
+| Variável | Onde | Para quê |
+| --- | --- | --- |
+| `MP_ACCESS_TOKEN` | Servidor (Render) | Access Token da aplicação. O de teste começa com `TEST-`. Nunca commitar e nunca logar. |
+| `MP_WEBHOOK_SECRET` | Servidor | Se estiver preenchido, `POST /v1/pagamentos/webhook` exige o cabeçalho `x-signature`. Vazio: o webhook ainda busca o pagamento na API e não acredita no corpo. |
+| `PUBLIC_BASE_URL` | Servidor | Opcional. Origem `https` (sem caminho) dos retornos e do `notification_url`. Sem ela, vale `RENDER_EXTERNAL_URL` e, se não houver, o endereço em `backend/site_precos.py`. |
+
+Como testar com um token de teste:
+
+1. Em [Suas integrações](https://www.mercadopago.com.br/developers/panel/app), abra a aplicação de teste e copie o Access Token (`TEST-...`).
+2. Defina `MP_ACCESS_TOKEN` no ambiente (e, se quiser validar a assinatura, `MP_WEBHOOK_SECRET` com o mesmo segredo do painel). Não coloque o token no git.
+3. Suba a API (`python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000`) e abra `/site/`.
+4. No cartão do plano, alterne Mensal/Anual e clique em Assinar agora (mensal) ou Comprar (anual). Preencha nome, e-mail, WhatsApp e nome da loja.
+5. Com token `TEST-`, o navegador vai para o checkout de teste (`sandbox_init_point`). Pague com um [comprador e cartão de teste](https://www.mercadopago.com.br/developers/pt/docs/checkout-pro/additional-content/your-integrations/test/accounts) do Mercado Pago. No anual, o cartão pode parcelar em até 10 vezes; o Pix segue à vista.
+6. O retorno cai em `/site/obrigado`, `/site/pagamento-pendente` ou `/site/pagamento-falhou`.
+7. O Mercado Pago chama `/v1/pagamentos/webhook`. A nuvem busca `GET /v1/payments/{id}` e grava o pedido. Reenviar a mesma notificação não duplica a linha.
+
 ## Para quem mexe no programa
 
 O guia de instalação, testes, licença e nuvem ficou em [docs/DESENVOLVIMENTO.md](docs/DESENVOLVIMENTO.md).

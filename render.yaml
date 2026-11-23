@@ -28,6 +28,8 @@ services:
         sync: false
       - key: MP_WEBHOOK_SECRET       # Assinatura secreta de Suas integrações > Webhooks. Não commitar.
         sync: false
+      - key: PUBLIC_BASE_URL        # Opcional. Origem https do site (sem caminho) para o retorno do checkout. Vazio = RENDER_EXTERNAL_URL.
+        sync: false
       - key: MP_BOLETO_METODO        # opcional; padrão bolbradesco. Outro código de boleto da conta, se o painel exigir.
         value: bolbradesco
       - key: BREVO_API_KEY           # E-mail por HTTPS. O Render grátis bloqueia SMTP. Não commitar.

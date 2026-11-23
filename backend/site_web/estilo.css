@@ -125,7 +125,11 @@ body.periodo-anual .linha-mes { display: flex; }
 .grade .icone { display: grid; }
 .cartao .olho { color: var(--acento, var(--suave)); margin: 0; }
 #edicoes .cartao h3 { margin-top: .1rem; }
-#edicoes .cartao > a, #planos .cartao > a { width: 100%; margin-top: .7rem; }
+#edicoes .cartao > a, #planos .cartao > a,
+#edicoes .cartao > button, #planos .cartao > button { width: 100%; margin-top: .7rem; }
+.so-ano { display: none; }
+body.periodo-anual .so-mes { display: none; }
+body.periodo-anual .so-ano { display: inline; }
 .cartao.boate { --acento: var(--boate); }
 .cartao.adega { --acento: var(--vinho); }
 .cartao.restaurante { --acento: var(--restaurante); }
@@ -222,7 +226,17 @@ footer .telefone { white-space: nowrap; }
 .documento ul { margin: .35rem 0 0; padding-left: 1.15rem; }
 .documento li { margin: .4rem 0; }
 .documento a { color: var(--jade); }
+.documento a.botao { color: #fff; }
 .documento .atualizacao { margin-top: 0; }
+dialog.checkout {
+  border: 1px solid var(--linha); border-radius: var(--raio); padding: 1.15rem 1.15rem 1.25rem;
+  background: var(--cartao); color: var(--texto); max-width: 34rem; width: calc(100% - 1.5rem);
+  max-height: min(92vh, 40rem); overflow: auto;
+}
+dialog.checkout::backdrop { background: #10232299; }
+dialog.checkout h2 { font-family: var(--serifa); font-size: 1.8rem; margin: 0; }
+dialog.checkout .form-teste { max-width: none; }
+dialog.checkout .preco { margin: .2rem 0 .4rem; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
