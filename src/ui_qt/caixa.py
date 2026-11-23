@@ -22,7 +22,7 @@ import math
 import sys
 from string import Template
 
-from PySide6.QtCore import QEvent, QPoint, Qt
+from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
@@ -64,6 +64,8 @@ QFrame#cabecalho_caixa { background: $quadro; border: 1px solid $quadro_borda; b
 QLabel#nome_caixa { color: $texto; font-size: 21px; font-weight: 700; }
 QLabel#turno_caixa { color: $suave; font-size: 12px; }
 QLabel#logo_loja { background: #ffffff; border-radius: 7px; padding: 2px 6px; }
+QLabel#bandeira2 { color: $ambar; border: 2px solid $ambar; border-radius: 6px; padding: 2px 8px; font-size: 11pt;
+                   font-weight: 800; }
 QFrame#relogio { background: transparent; border: none; }
 QLabel#relogio_hora { font-size: 18pt; font-weight: 700; }
 QLabel#relogio_seg { font-size: 10pt; font-weight: 600; color: $verde; padding-bottom: 4px; }
@@ -354,6 +356,17 @@ class JanelaCaixa(QMainWindow):
         self.lbl_cabecalho = _rotulo("", "turno_caixa")
         identificacao.addWidget(self.lbl_cabecalho)
         cabecalho.addLayout(identificacao, 1)
+        self.lbl_bandeira2 = _rotulo("BANDEIRA 2", "bandeira2")
+        self.lbl_bandeira2.setToolTip("Preço da noite ligado pelo dono: os produtos que entram na bandeira 2 saem pelo "
+                                      "preço dela, sem promoção. Os itens já lançados não mudam.")
+        self.lbl_bandeira2.setVisible(False)
+        cabecalho.addWidget(self.lbl_bandeira2)
+        cabecalho.addSpacing(6)
+        self._timer_bandeira2 = QTimer(self)             # o dono liga pelo painel: o aviso aparece sem reabrir o caixa
+        self._timer_bandeira2.setInterval(5000)
+        self._timer_bandeira2.timeout.connect(self.atualizar_bandeira2)
+        self._timer_bandeira2.start()
+        self.atualizar_bandeira2()
         self.relogio = RelogioCaixa()                   # em tela cheia a barra do Windows some: a hora fica aqui
         cabecalho.addWidget(self.relogio)
         cabecalho.addSpacing(8)
@@ -2788,6 +2801,15 @@ class JanelaCaixa(QMainWindow):
         if getattr(self, "painel_quartos", None) is not None:
             self.painel_quartos.definir_linhas(1 if self.height() < self.ALTURA_BAIXA else 2)
         self._largura_do_cartao_de_pagamento()
+
+    def atualizar_bandeira2(self) -> None:
+        """Mostra o aviso BANDEIRA 2 no cabeçalho enquanto ela estiver ligada (pelo dono, no painel, ou no caixa)."""
+        try:
+            ligada = self.ctx.banco.cfg_bool("bandeira2_ativa", False)
+        except Exception:  # noqa: BLE001 - banco fechado no fim do expediente não derruba a janela
+            return
+        if self.lbl_bandeira2.isHidden() == ligada:
+            self.lbl_bandeira2.setVisible(ligada)
 
     def ir_para_balcao(self) -> None:
         self.ent_pos.setText("0")

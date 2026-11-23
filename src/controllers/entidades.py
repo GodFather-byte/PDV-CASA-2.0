@@ -188,6 +188,13 @@ def _validar_promocoes(banco, dados, id_):
         if not produto.get(inicio) or not produto.get(fim):
             raise ErroValidacao("Promoção da gelada: informe início e fim da promoção, ou preço zero para desligar.",
                                 {inicio: "obrigatório", fim: "obrigatório"})
+    for preco in ("preco_bandeira2_cent", "preco_gelada_bandeira2_cent"):
+        valor = produto.get(preco, 0) or 0
+        if type(valor) is not int or valor < 0:
+            raise ErroValidacao("Bandeira 2: o preço não pode ser negativo.", {preco: "inválido"})
+    if (produto.get("preco_gelada_bandeira2_cent") or 0) and not produto.get("preco_gelada_cent"):
+        raise ErroValidacao("Bandeira 2: cadastre antes o preço gelada (aba Adega).",
+                            {"preco_gelada_bandeira2_cent": "inválido"})
 
 
 def _validar_adega(banco, dados, id_):
@@ -427,6 +434,11 @@ _ENTIDADES = [
         Campo("hora_fim", "Hora final", "hora", secao="Promoções", na_grade=False),
         Campo("hora_preco_cent", "Preço (horário)", "dinheiro", padrao=0, secao="Promoções", na_grade=False),
         Campo("hora_gelada_cent", "Preço gelada (horário; 0 = sem)", "dinheiro", padrao=0, secao="Promoções", na_grade=False),
+        Campo("bandeira2", "Entra na bandeira 2 (preço da noite)", "sn", padrao=1, secao="Bandeira 2", na_grade=False),
+        Campo("preco_bandeira2_cent", "Preço na bandeira 2 (0 = acréscimo padrão)", "dinheiro", padrao=0,
+              secao="Bandeira 2", na_grade=False),
+        Campo("preco_gelada_bandeira2_cent", "Preço gelada na bandeira 2 (0 = acréscimo padrão)", "dinheiro", padrao=0,
+              secao="Bandeira 2", na_grade=False),
         Campo("ncm", "Código NCM", tamanho=10, secao="Fiscal", na_grade=False),
         Campo("desc_aliq_icms", "Desc. Aliq. ICMS", tamanho=10, secao="Fiscal", na_grade=False),
         Campo("situacao_tributaria", "Situação tributária", tamanho=4, secao="Fiscal", na_grade=False),
