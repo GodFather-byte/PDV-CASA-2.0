@@ -20,9 +20,10 @@ class TesteMenusMelhoriasQt(BaseQt):
     def test_busca_modulos_ignora_acentos_sem_alterar_permissoes(self):
         janela = self.principal()
         estados = {chave: botao.isEnabled() for chave, botao in janela.botoes.items()}
-        # Sem busca só fica escondido o que a casa não usa (ex.: tutorial de clientes sem caderneta nem delivery).
+        # Sem busca só fica escondido o que a casa não usa (ex.: tutorial de clientes sem caderneta nem delivery) e o que
+        # é de outra edição (o hotel é só do Will Hotel).
         escondidos = {chave for chave, botao in janela.botoes.items() if botao.isHidden()}
-        self.assertLessEqual(escondidos, {"tutorial_cliente"})
+        self.assertLessEqual(escondidos, {"tutorial_cliente", "hotel"})
         janela.busca_modulos.setText("promocoes")
         self.assertFalse(janela.botoes["promocoes"].isHidden())
         self.assertTrue(janela.botoes["estoque"].isHidden())

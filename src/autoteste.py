@@ -82,7 +82,7 @@ MODULOS = [
     "src.ui_qt.contagem", "src.ui_qt.maquinas", "src.ui_qt.acessos", "src.ui_qt.utilitarios",
     "src.ui_qt.atualizacoes", "src.ui_qt.visualizador", "src.ui_qt.estoque_lancamentos",
     "src.ui_qt.alertas", "src.ui_qt.etiquetas", "src.ui_qt.promocoes", "src.ui_qt.retornaveis",
-    "src.ui_qt.cozinha", "src.ui_qt.quartos", "src.ui_qt.pedidos_online", "src.ui_qt.diagnostico",
+    "src.ui_qt.cozinha", "src.ui_qt.quartos", "src.ui_qt.hotel", "src.ui_qt.pedidos_online", "src.ui_qt.diagnostico",
     "src.ui_qt.devolucoes", "src.ui_qt.fechamento", "src.ui_qt.painel_mesas", "src.ui_qt.relogio", "src.core.edicao", "src.controllers.mesas_modelo", "src.ui_qt.fechamento_turno",
     "src.controllers.primeiros_passos", "src.ui_qt.primeiros_passos", "src.core.fita", "src.ui_qt.marca_dagua",
     "src.controllers.notas_dono_controller", "src.sync.notas_dono", "src.ui_qt.notas_dono",
