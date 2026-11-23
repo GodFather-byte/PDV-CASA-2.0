@@ -57,3 +57,30 @@
     catch (_) { campo.select(); }
   });
 })();
+
+// Mensal ou anual: troca o preço em destaque. Sem este script, o mensal e a linha do ano continuam visíveis.
+(function () {
+  "use strict";
+  const grupos = document.querySelectorAll(".troca-periodo");
+  if (!grupos.length) return;
+
+  function aplicar(periodo) {
+    const anual = periodo === "anual";
+    document.body.classList.toggle("periodo-anual", anual);
+    grupos.forEach((grupo) => {
+      grupo.querySelectorAll("button[data-periodo]").forEach((botao) => {
+        const ativo = botao.dataset.periodo === periodo;
+        botao.classList.toggle("ativo", ativo);
+        botao.setAttribute("aria-pressed", ativo ? "true" : "false");
+      });
+    });
+  }
+
+  grupos.forEach((grupo) => {
+    grupo.addEventListener("click", (evento) => {
+      const botao = evento.target.closest("button[data-periodo]");
+      if (!botao) return;
+      aplicar(botao.dataset.periodo);
+    });
+  });
+})();
