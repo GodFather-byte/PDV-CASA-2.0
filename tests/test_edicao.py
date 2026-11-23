@@ -214,7 +214,7 @@ if BaseQt is not None:
             with patch.dict(os.environ, ADEGA):
                 edicao.preparar(self.banco)
                 janela = self.principal()
-            self.assertTrue(janela.windowTitle().startswith("Will Adega • "))
+            self.assertTrue(janela.windowTitle().startswith("Will Adega"))       # sem loja cadastrada, só o programa
             self.assertNotIn("Qt piloto", janela.windowTitle())
             self.assertFalse(janela.logo_edicao.pixmap().isNull())
             janela.show()

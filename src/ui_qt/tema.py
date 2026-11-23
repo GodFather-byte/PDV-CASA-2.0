@@ -47,6 +47,9 @@ QLabel, QCheckBox, QRadioButton, QWidget#linha { background: transparent; }
 QLabel#titulo, QLabel#titulo_painel { font-weight: 700; font-size: 22px; }
 QLabel#titulo_painel { font-size: 26px; }
 QLabel#marca { color: $destaque; font-size: 22px; font-weight: 800; }
+QLabel#marca_loja { color: $texto; font-size: 19px; font-weight: 800; }
+QLabel#logo_loja_menu { background: #ffffff; border-radius: 7px; padding: 2px 6px; }
+QLabel#credito_marca { color: $suave; font-size: 11px; font-weight: 600; }
 QLabel#suave, QLabel#linha_porteiro, QLabel[tom="suave"] { color: $suave; }
 QLabel#secao, QLabel#subtitulo { color: $texto; font-size: 15px; font-weight: 700; }
 QLabel#legenda { color: $suave; font-size: 12px; font-weight: 600; }
