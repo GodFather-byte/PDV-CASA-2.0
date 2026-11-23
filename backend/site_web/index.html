@@ -214,6 +214,7 @@
           <label class="aceite"><input type="checkbox" name="aceite" required> Entendi: o teste dura {{dias_teste}} dias, o cupom é não fiscal e meus dados ficam no computador da loja.</label>
           <button class="botao" type="submit">Criar meu teste</button>
           <p id="teste-aviso" class="miudo" role="status"></p>
+          <p class="consentimento">Ao enviar, você concorda com os <a href="/site/termos">Termos de Uso</a> e a <a href="/site/privacidade">Política de Privacidade</a>.</p>
         </form>
         <div id="teste-pronto" class="cartao" hidden>
           <h3>Pronto! Seu teste vai até <span data-campo="validade"></span>.</h3>
@@ -273,6 +274,10 @@
   <footer>
     <a class="marca" href="#inicio"><span class="logo" aria-hidden="true">W</span>WillPDV</a>
     <p>WillPDV {{versao}} · WB SISTEMAS · <span class="telefone">{{telefone}}</span></p>
+    <nav class="rodape-docs" aria-label="Documentos">
+      <a href="/site/termos">Termos de Uso</a>
+      <a href="/site/privacidade">Política de Privacidade</a>
+    </nav>
     <a class="zap" href="{{zap_contato}}">Chamar no WhatsApp</a>
   </footer>
   <a class="zap fixo" href="{{zap_contato}}" aria-label="Chamar no WhatsApp">

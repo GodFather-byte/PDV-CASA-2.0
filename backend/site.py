@@ -1,7 +1,8 @@
 """Site público de vendas do WillPDV, na mesma API (sem serviço extra).
 
-Páginas: `/`, `/site` e `/site/`. O CSS fica em `/site/estilo.css`. Não monta arquivo
-estático na raiz, para não encobrir `/v1`, `/porteiro`, `/cardapio`, `/painel` e `/central`.
+Páginas: `/`, `/site`, `/site/`, `/site/termos` e `/site/privacidade`. O CSS fica em
+`/site/estilo.css`. Não monta arquivo estático na raiz, para não encobrir `/v1`,
+`/porteiro`, `/cardapio`, `/painel` e `/central`.
 """
 from __future__ import annotations
 
@@ -204,11 +205,16 @@ def _trocas() -> dict[str, str]:
     }
 
 
-def pagina() -> str:
-    html = (PASTA / "index.html").read_text(encoding="utf-8")
+_PAGINAS = ("index.html", "termos.html", "privacidade.html")
+
+
+def pagina(nome: str = "index.html") -> str:
+    if nome not in _PAGINAS:
+        raise ValueError("Página do site desconhecida.")
+    texto = (PASTA / nome).read_text(encoding="utf-8")
     for chave, valor in _trocas().items():
-        html = html.replace(chave, valor)
-    return html
+        texto = texto.replace(chave, valor)
+    return texto
 
 
 def instalar(app: FastAPI) -> None:
@@ -220,6 +226,16 @@ def instalar(app: FastAPI) -> None:
     @app.get("/site/", include_in_schema=False)
     def site_index():
         return HTMLResponse(pagina(), headers=cabecalho_html)
+
+    @app.get("/site/termos", include_in_schema=False)
+    @app.get("/site/termos/", include_in_schema=False)
+    def site_termos():
+        return HTMLResponse(pagina("termos.html"), headers=cabecalho_html)
+
+    @app.get("/site/privacidade", include_in_schema=False)
+    @app.get("/site/privacidade/", include_in_schema=False)
+    def site_privacidade():
+        return HTMLResponse(pagina("privacidade.html"), headers=cabecalho_html)
 
     @app.get("/site/estilo.css", include_in_schema=False)
     def site_css():
