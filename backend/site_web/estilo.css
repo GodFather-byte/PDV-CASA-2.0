@@ -13,6 +13,7 @@
   --vinho: #873c55;
   --restaurante: #974822;
   --variedades: #216d5d;
+  --hotel: #7a4b2a;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
@@ -134,10 +135,12 @@ body.periodo-anual .so-ano { display: inline; }
 .cartao.adega { --acento: var(--vinho); }
 .cartao.restaurante { --acento: var(--restaurante); }
 .cartao.variedades { --acento: var(--variedades); }
+.cartao.hotel { --acento: var(--hotel); }
 .cartao.boate .icone { color: var(--boate); }
 .cartao.adega .icone { color: var(--vinho); }
 .cartao.restaurante .icone { color: var(--restaurante); }
 .cartao.variedades .icone { color: var(--variedades); }
+.cartao.hotel .icone { color: var(--hotel); }
 .servicos li { display: flex; flex-direction: column; align-items: flex-start; border-left: 3px solid #8fb7a6; }
 .grade.servicos .preco { margin-top: auto; padding-top: .7rem; font-size: 1.45rem; }
 .grade.servicos .zap { width: 100%; margin-top: .45rem; }
@@ -208,15 +211,26 @@ footer .telefone { white-space: nowrap; }
 
 @media (min-width: 640px) {
   .edicoes, .grade { grid-template-columns: 1fr 1fr; }
+  .edicoes.cinco > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 @media (min-width: 900px) {
   .hero { grid-template-columns: 1.05fr 1fr; }
   .foto-balcao { height: 100%; max-height: 35rem; min-height: 27.5rem; }
-  .edicoes.quatro { grid-template-columns: repeat(4, 1fr); }
+  .edicoes.cinco { grid-template-columns: repeat(6, 1fr); }
+  .edicoes.cinco > .cartao { grid-column: span 2; }
+  .edicoes.cinco > .cartao:nth-child(4) { grid-column: 2 / span 2; }
+  .edicoes.cinco > .cartao:nth-child(5) { grid-column: 4 / span 2; }
   .grade.recursos { grid-template-columns: repeat(4, 1fr); }
   .grade.servicos { grid-template-columns: repeat(3, 1fr); }
   .duas { display: grid; grid-template-columns: .8fr 1.2fr; gap: 2.5rem; align-items: start; }
   #celular .edicoes { grid-template-columns: 1fr; }
+}
+@media (min-width: 1200px) {
+  .edicoes.cinco { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .edicoes.cinco > .cartao:nth-child(n) { grid-column: auto; }
+  .edicoes.cinco .cartao { padding: 1rem .8rem; }
+  .edicoes.cinco .preco { font-size: clamp(1.12rem, 1.15vw, 1.55rem); }
+  .edicoes.cinco h3 { font-size: 1.05rem; }
 }
 .documento { max-width: 42rem; padding: clamp(1.4rem, 4vw, 2.8rem) 0 1rem; overflow-wrap: anywhere; }
 .documento h1 { font-size: clamp(2.15rem, 4.4vw, 3.35rem); margin: .35rem 0 .5rem; }

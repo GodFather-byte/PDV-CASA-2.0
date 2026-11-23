@@ -65,11 +65,25 @@ class TesteGratisPeloSite(unittest.TestCase):
         with nuvem.SessionLocal() as db:
             self.assertEqual(db.query(nuvem.Loja).filter_by(chave_loja=r.json()["loja"]).one().edicao, "willrestaurante")
 
+    def test_variedades_e_hotel_pelo_site(self):
+        variedades = self.criar(edicao="willvariedades", nome_loja="Casa do Fone", whatsapp="11 91111-0001")
+        self.assertEqual(variedades.status_code, 200, variedades.text)
+        self.assertEqual(variedades.json()["programa"], "Will Variedades")
+        self.assertIn("WillVariedades", variedades.json()["instalador"])
+        hotel = self.criar(edicao="willhotel", nome_loja="Pousada do Lago", whatsapp="11 91111-0002")
+        self.assertEqual(hotel.status_code, 200, hotel.text)
+        self.assertEqual(hotel.json()["programa"], "Will Hotel")
+        self.assertIn("WillHotel", hotel.json()["instalador"])
+        with nuvem.SessionLocal() as db:
+            self.assertEqual(db.query(nuvem.Loja).filter_by(chave_loja=variedades.json()["loja"]).one().edicao,
+                             "willvariedades")
+            self.assertEqual(db.query(nuvem.Loja).filter_by(chave_loja=hotel.json()["loja"]).one().edicao, "willhotel")
+
     def test_abuso_e_dados_ruins_sao_barrados(self):
         self.assertEqual(self.criar(site="http://spam").status_code, 422)          # robô preencheu a isca
         self.assertEqual(self.criar(aceite=False).status_code, 422)
         self.assertEqual(self.criar(whatsapp="123").status_code, 422)
-        self.assertEqual(self.criar(edicao="willvariedades").status_code, 422)      # ainda não existe
+        self.assertEqual(self.criar(edicao="willnaoexiste").status_code, 422)
         self.assertEqual(self.criar(nome_loja="x").status_code, 422)
         self.assertEqual(self.criar().status_code, 200)
         self.assertEqual(self.criar(nome_loja="Outra Adega").status_code, 409)     # mesmo WhatsApp

@@ -24,7 +24,7 @@ from backend.database import Base, SessionLocal, engine
 from src.core.edicao import EDICOES
 
 POR_IP_DIA = 3
-EDICOES_SITE = ("willpdv", "willadega", "willrestaurante")
+EDICOES_SITE = ("willpdv", "willadega", "willrestaurante", "willvariedades", "willhotel")
 
 
 class SiteTeste(Base):
@@ -109,7 +109,9 @@ def criar_teste(db: Session, request: Request, dados: dict) -> dict:
     whatsapp = whatsapp_normalizado(str(dados.get("whatsapp") or ""))
     edicao = str(dados.get("edicao") or "willadega")
     if edicao not in EDICOES_SITE:
-        raise HTTPException(status_code=422, detail="Escolha o programa: boate/bar ou adega.")
+        raise HTTPException(
+            status_code=422,
+            detail="Escolha o programa: boate/bar, adega, restaurante, variedades ou hotel.")
 
     hoje = date.today().isoformat()
     ip_hash = _hash(request.client.host if request.client else "?")

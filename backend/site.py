@@ -78,7 +78,7 @@ TITULO = "WillPDV — sistema de caixa (PDV) em Osasco e região"
 def meta_descricao() -> str:
     return (
         "WillPDV, sistema de caixa (PDV) em Osasco e região para adega, restaurante, "
-        f"variedades, boate e bar. Planos a partir de {fmt_brl(precos.ADEGA_MENSAL_CENT)} por mês, "
+        f"variedades, hotel, pousada, boate e bar. Planos a partir de {fmt_brl(precos.ADEGA_MENSAL_CENT)} por mês, "
         "anual com 2 meses grátis e instalação grátis."
     )
 
@@ -118,6 +118,7 @@ def json_ld() -> str:
         ("Will Adega", precos.ADEGA_MENSAL_CENT),
         ("Will Restaurante", precos.RESTAURANTE_MENSAL_CENT),
         ("Will Variedades", precos.VARIEDADES_MENSAL_CENT),
+        ("Will Hotel", precos.HOTEL_MENSAL_CENT),
         ("WillPDV Boate e Bar", precos.BOATE_MENSAL_CENT),
     )
     grafo = [{
@@ -181,10 +182,12 @@ def _trocas() -> dict[str, str]:
     boate = fmt_brl(precos.BOATE_MENSAL_CENT)
     restaurante = fmt_brl(precos.RESTAURANTE_MENSAL_CENT)
     variedades = fmt_brl(precos.VARIEDADES_MENSAL_CENT)
+    hotel = fmt_brl(precos.HOTEL_MENSAL_CENT)
     adega_ano = fmt_brl(precos.anual_cent(precos.ADEGA_MENSAL_CENT))
     boate_ano = fmt_brl(precos.anual_cent(precos.BOATE_MENSAL_CENT))
     restaurante_ano = fmt_brl(precos.anual_cent(precos.RESTAURANTE_MENSAL_CENT))
     variedades_ano = fmt_brl(precos.anual_cent(precos.VARIEDADES_MENSAL_CENT))
+    hotel_ano = fmt_brl(precos.anual_cent(precos.HOTEL_MENSAL_CENT))
     from backend.central_fornecedor import link_instalador
     zap_adega = link_whatsapp(
         f"{MENSAGEM_CONTATO}. Quero assinar o Will Adega por {adega} por mês.")
@@ -194,6 +197,8 @@ def _trocas() -> dict[str, str]:
         f"{MENSAGEM_CONTATO}. Quero assinar o Will Restaurante por {restaurante} por mês.")
     zap_variedades = link_whatsapp(
         f"{MENSAGEM_CONTATO}. Quero assinar o Will Variedades por {variedades} por mês.")
+    zap_hotel = link_whatsapp(
+        f"{MENSAGEM_CONTATO}. Quero assinar o Will Hotel por {hotel} por mês.")
     return {
         "{{titulo}}": html.escape(TITULO, quote=True),
         "{{meta_descricao}}": html.escape(meta_descricao(), quote=True),
@@ -208,12 +213,18 @@ def _trocas() -> dict[str, str]:
         "{{restaurante_anual}}": restaurante_ano,
         "{{variedades_mensal}}": variedades,
         "{{variedades_anual}}": variedades_ano,
+        "{{hotel_mensal}}": hotel,
+        "{{hotel_anual}}": hotel_ano,
         "{{download_willrestaurante}}": link_instalador("willrestaurante"),
+        "{{download_willvariedades}}": link_instalador("willvariedades"),
+        "{{download_willhotel}}": link_instalador("willhotel"),
         "{{zap_restaurante}}": zap_restaurante,
         "{{zap_variedades}}": zap_variedades,
+        "{{zap_hotel}}": zap_hotel,
         "{{compra_adega}}": botao_compra("adega", "Will Adega", zap_adega),
         "{{compra_restaurante}}": botao_compra("restaurante", "Will Restaurante", zap_restaurante),
         "{{compra_variedades}}": botao_compra("variedades", "Will Variedades", zap_variedades),
+        "{{compra_hotel}}": botao_compra("hotel", "Will Hotel", zap_hotel),
         "{{compra_boate}}": botao_compra("boate", "WillPDV Boate e Bar", zap_boate),
         "{{dias_teste}}": str(precos.DIAS_TESTE),
         "{{meses_gratis}}": str(precos.MESES_GRATIS_NO_ANUAL),

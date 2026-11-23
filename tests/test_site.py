@@ -32,10 +32,12 @@ class TesteSite(unittest.TestCase):
         self.assertEqual(site_precos.ADEGA_MENSAL_CENT, 9_000)
         self.assertEqual(site_precos.RESTAURANTE_MENSAL_CENT, 14_999)
         self.assertEqual(site_precos.VARIEDADES_MENSAL_CENT, 15_999)
+        self.assertEqual(site_precos.HOTEL_MENSAL_CENT, 19_999)
         self.assertEqual(site_precos.BOATE_MENSAL_CENT, 24_999)
         self.assertEqual(site_precos.anual_cent(site_precos.ADEGA_MENSAL_CENT), 90_000)
         self.assertEqual(site_precos.anual_cent(site_precos.RESTAURANTE_MENSAL_CENT), 149_990)
         self.assertEqual(site_precos.anual_cent(site_precos.VARIEDADES_MENSAL_CENT), 159_990)
+        self.assertEqual(site_precos.anual_cent(site_precos.HOTEL_MENSAL_CENT), 199_990)
         self.assertEqual(site_precos.anual_cent(site_precos.BOATE_MENSAL_CENT), 249_990)
         self.assertFalse(hasattr(site_precos, "INSTALACAO_CENT"))
         self.assertEqual(site_precos.WHATSAPP_PADRAO, "5511915168336")
@@ -55,7 +57,8 @@ class TesteSite(unittest.TestCase):
                 for cidade in site_precos.CIDADES:
                     self.assertIn(cidade, texto)
                 for centavos in (site_precos.ADEGA_MENSAL_CENT, site_precos.RESTAURANTE_MENSAL_CENT,
-                                 site_precos.VARIEDADES_MENSAL_CENT, site_precos.BOATE_MENSAL_CENT):
+                                 site_precos.VARIEDADES_MENSAL_CENT, site_precos.HOTEL_MENSAL_CENT,
+                                 site_precos.BOATE_MENSAL_CENT):
                     self.assertIn(fmt_brl(centavos), texto)
                     self.assertIn(fmt_brl(site_precos.anual_cent(centavos)), texto)
                     self.assertIn(site.preco_schema(centavos), texto)
@@ -80,8 +83,14 @@ class TesteSite(unittest.TestCase):
                 self.assertIn("Assinar", texto)
                 self.assertIn("Will Restaurante", texto)
                 self.assertIn("Will Variedades", texto)
+                self.assertIn("Will Hotel", texto)
+                self.assertIn("Feito para hotéis e pousadas", texto)
                 self.assertIn("WillRestaurante-Instalador.exe", texto)
+                self.assertIn("WillVariedades-Instalador.exe", texto)
+                self.assertIn("WillHotel-Instalador.exe", texto)
                 self.assertIn('value="willrestaurante"', texto)
+                self.assertIn('value="willvariedades"', texto)
+                self.assertIn('value="willhotel"', texto)
                 self.assertIn('id="form-teste"', texto)
                 self.assertIn('id="servicos"', texto)
                 self.assertIn('data-periodo="anual"', texto)
@@ -139,10 +148,11 @@ class TesteSite(unittest.TestCase):
             self.assertIn("Código de Defesa do Consumidor", termos)
             self.assertIn("proporcional", termos)
             self.assertIn("fidelidade", termos)
-            for nome in ("Will Adega", "Will Restaurante", "Will Variedades", "boate e bar"):
+            for nome in ("Will Adega", "Will Restaurante", "Will Variedades", "Will Hotel", "boate e bar"):
                 self.assertIn(nome, termos)
             for centavos in (site_precos.ADEGA_MENSAL_CENT, site_precos.RESTAURANTE_MENSAL_CENT,
-                             site_precos.VARIEDADES_MENSAL_CENT, site_precos.BOATE_MENSAL_CENT):
+                             site_precos.VARIEDADES_MENSAL_CENT, site_precos.HOTEL_MENSAL_CENT,
+                             site_precos.BOATE_MENSAL_CENT):
                 self.assertIn(fmt_brl(centavos), termos)
             self.assertIn(str(site_precos.DIAS_TESTE), termos)
             privacidade = self.http.get("/site/privacidade").text
