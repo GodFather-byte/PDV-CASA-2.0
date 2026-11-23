@@ -10,6 +10,7 @@ Serviços: (chave, nome, centavos, prefixo, período). Prefixo vazio é preço f
 ADEGA_MENSAL_CENT = 9_000          # R$ 90,00
 RESTAURANTE_MENSAL_CENT = 14_999   # R$ 149,99
 VARIEDADES_MENSAL_CENT = 15_999    # R$ 159,99
+HOTEL_MENSAL_CENT = 19_999         # R$ 199,99
 BOATE_MENSAL_CENT = 24_999         # R$ 249,99
 MESES_GRATIS_NO_ANUAL = 2
 DIAS_TESTE = 7

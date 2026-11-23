@@ -50,7 +50,7 @@
         <button type="button" class="ativo" aria-pressed="true" data-periodo="mensal">Mensal</button>
         <button type="button" aria-pressed="false" data-periodo="anual">Anual <span class="selo-gratis">2 meses grátis</span></button>
       </div>
-      <div class="edicoes quatro">
+      <div class="edicoes cinco">
         <article class="cartao boate">
           <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
           <p class="olho">Boate e bar</p>
@@ -95,17 +95,31 @@
         </article>
         <article class="cartao variedades">
           <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0"/></svg></span>
-          <p class="olho">Loja de variedades</p>
+          <p class="olho">Eletrônicos, utilidades e presentes</p>
           <h3>Will Variedades</h3>
-          <p>Para loja de variedades, utilidades e presentes: muitos produtos, código de barras, estoque e venda rápida no balcão.</p>
+          <p>Para loja de eletrônicos, utilidades e presentes: muitos produtos, código de barras, estoque e venda rápida no balcão.</p>
           <div class="precos-plano">
             <p class="preco preco-mes">{{variedades_mensal}}<small>/mês</small></p>
             <p class="preco preco-ano">{{variedades_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
             <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{variedades_anual}} no ano</span></p>
             <p class="linha-mes">ou {{variedades_mensal}} por mês</p>
           </div>
+          <a class="botao" href="{{download_willvariedades}}">Baixar instalador</a>
           {{compra_variedades}}
-          <a class="zap" href="{{zap_variedades}}">Assinar</a>
+        </article>
+        <article class="cartao hotel">
+          <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 4v16M2 8h18a2 2 0 0 1 2 2v10M2 17h20M6 8v9"/></svg></span>
+          <p class="olho">Hotel e pousada</p>
+          <h3>Will Hotel</h3>
+          <p>Feito para hotéis e pousadas. Acompanhe a hospedagem e os quartos, lance o consumo do frigobar e do restaurante na conta do hóspede e feche o caixa com os relatórios do movimento.</p>
+          <div class="precos-plano">
+            <p class="preco preco-mes">{{hotel_mensal}}<small>/mês</small></p>
+            <p class="preco preco-ano">{{hotel_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
+            <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{hotel_anual}} no ano</span></p>
+            <p class="linha-mes">ou {{hotel_mensal}} por mês</p>
+          </div>
+          <a class="botao" href="{{download_willhotel}}">Baixar instalador</a>
+          {{compra_hotel}}
         </article>
       </div>
     </section>
@@ -150,9 +164,10 @@
         <button type="button" class="ativo" aria-pressed="true" data-periodo="mensal">Mensal</button>
         <button type="button" aria-pressed="false" data-periodo="anual">Anual <span class="selo-gratis">2 meses grátis</span></button>
       </div>
-      <div class="edicoes quatro">
+      <div class="edicoes cinco">
         <article class="cartao boate">
           <h3>WillPDV · boate e bar</h3>
+          <p>Mesas, comandas e portaria. O cardápio no celular é só consulta.</p>
           <div class="precos-plano">
             <p class="preco preco-mes">{{boate_mensal}}<small>/mês</small></p>
             <p class="preco preco-ano">{{boate_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
@@ -164,6 +179,7 @@
         </article>
         <article class="cartao adega">
           <h3>Will Adega</h3>
+          <p>Adega, depósito e conveniência, com pedido online pelo cardápio.</p>
           <div class="precos-plano">
             <p class="preco preco-mes">{{adega_mensal}}<small>/mês</small></p>
             <p class="preco preco-ano">{{adega_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
@@ -175,6 +191,7 @@
         </article>
         <article class="cartao restaurante">
           <h3>Will Restaurante</h3>
+          <p>Restaurante, pizzaria e lanchonete, com mesas, cozinha e cardápio.</p>
           <div class="precos-plano">
             <p class="preco preco-mes">{{restaurante_mensal}}<small>/mês</small></p>
             <p class="preco preco-ano">{{restaurante_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
@@ -186,6 +203,7 @@
         </article>
         <article class="cartao variedades">
           <h3>Will Variedades</h3>
+          <p>Eletrônicos, utilidades e presentes, com código de barras e venda no balcão.</p>
           <div class="precos-plano">
             <p class="preco preco-mes">{{variedades_mensal}}<small>/mês</small></p>
             <p class="preco preco-ano">{{variedades_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
@@ -194,6 +212,18 @@
           </div>
           {{compra_variedades}}
           <a class="zap" href="{{zap_variedades}}">Assinar</a>
+        </article>
+        <article class="cartao hotel">
+          <h3>Will Hotel</h3>
+          <p>Feito para hotéis e pousadas: hospedagem, consumo do hóspede na conta e o caixa da casa.</p>
+          <div class="precos-plano">
+            <p class="preco preco-mes">{{hotel_mensal}}<small>/mês</small></p>
+            <p class="preco preco-ano">{{hotel_anual}}<small>/ano</small> <span class="selo-gratis">2 meses grátis</span></p>
+            <p class="linha-ano"><span class="selo-gratis">2 meses grátis</span><span>{{hotel_anual}} no ano</span></p>
+            <p class="linha-mes">ou {{hotel_mensal}} por mês</p>
+          </div>
+          {{compra_hotel}}
+          <a class="zap" href="{{zap_hotel}}">Assinar</a>
         </article>
       </div>
       <p class="miudo">Assinar agora paga com Pix ou cartão. No anual, o cartão pode ser em até 10 vezes. Se o pagamento online não estiver disponível, esse botão abre o WhatsApp. Assinar continua abrindo o WhatsApp. A instalação na loja é grátis: alguém vai até a casa, instala o caixa e deixa a primeira venda saindo. <a href="{{zap_instalacao}}">Pedir instalação</a></p>
@@ -211,6 +241,8 @@
             <select name="edicao">
               <option value="willadega">Will Adega (adega, depósito, conveniência)</option>
               <option value="willrestaurante">Will Restaurante (restaurante, pizzaria, lanchonete)</option>
+              <option value="willvariedades">Will Variedades (eletrônicos, utilidades e presentes)</option>
+              <option value="willhotel">Will Hotel (hotel e pousada)</option>
               <option value="willpdv">WillPDV (boate e bar)</option>
             </select>
           </label>
@@ -258,7 +290,7 @@
       </details>
       <details>
         <summary>Qual programa é o meu?</summary>
-        <p>Boate e bar: WillPDV. Adega, depósito e conveniência: Will Adega. Restaurante, pizzaria e lanchonete: Will Restaurante. Loja de variedades, utilidades e presentes: Will Variedades.</p>
+        <p>Boate e bar: WillPDV. Adega, depósito e conveniência: Will Adega. Restaurante, pizzaria e lanchonete: Will Restaurante. Loja de eletrônicos, utilidades e presentes: Will Variedades. Hotel e pousada: Will Hotel.</p>
       </details>
       <details>
         <summary>A boate recebe pedido pelo celular?</summary>

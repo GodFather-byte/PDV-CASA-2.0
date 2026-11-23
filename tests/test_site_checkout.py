@@ -34,6 +34,8 @@ PRECOS = {
     "restaurante-anual": (Decimal("1499.90"), 149_990, 10),
     "variedades-mensal": (Decimal("159.99"), 15_999, 1),
     "variedades-anual": (Decimal("1599.90"), 159_990, 10),
+    "hotel-mensal": (Decimal("199.99"), 19_999, 1),
+    "hotel-anual": (Decimal("1999.90"), 199_990, 10),
     "boate-mensal": (Decimal("249.99"), 24_999, 1),
     "boate-anual": (Decimal("2499.90"), 249_990, 10),
 }
@@ -176,8 +178,8 @@ class TesteCheckoutSite(unittest.TestCase):
         self.assertEqual(r.status_code, 503)
         self.assertIn("WhatsApp", r.json()["detail"])
         self.assertNotIn("checkout-abrir", pagina)
-        self.assertEqual(pagina.count('<span class="so-mes">Assinar agora</span>'), 8)
-        self.assertEqual(pagina.count('<span class="so-ano">Comprar</span>'), 8)
+        self.assertEqual(pagina.count('<span class="so-mes">Assinar agora</span>'), 10)
+        self.assertEqual(pagina.count('<span class="so-ano">Comprar</span>'), 10)
         self.assertIn("https://wa.me/5511915168336", pagina)
         self.assertEqual(pagina.count(">Assinar</a>"), 5)
         self.assertIn('id="form-teste"', pagina)
@@ -189,8 +191,11 @@ class TesteCheckoutSite(unittest.TestCase):
         pagina = self.http.get("/site/").text
         self.assertNotIn("{{", pagina)
         self.assertNotIn("TEST-token-ficticio", pagina)
-        self.assertEqual(pagina.count("checkout-abrir"), 8)
+        self.assertEqual(pagina.count("checkout-abrir"), 10)
         self.assertIn('data-plano="variedades"', pagina)
+        self.assertIn('data-plano="hotel"', pagina)
+        self.assertIn("Will Variedades", pagina)
+        self.assertIn("Will Hotel", pagina)
         self.assertIn('id="form-checkout"', pagina)
         self.assertIn("Nome da loja", pagina)
         self.assertIn('src="/site/checkout.js"', pagina)

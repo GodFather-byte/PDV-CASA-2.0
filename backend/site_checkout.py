@@ -47,12 +47,14 @@ FAMILIAS = (
     ("adega", "Will Adega"),
     ("restaurante", "Will Restaurante"),
     ("variedades", "Will Variedades"),
+    ("hotel", "Will Hotel"),
     ("boate", "WillPDV Boate e Bar"),
 )
 _MENSAL = {
     "adega": precos.ADEGA_MENSAL_CENT,
     "restaurante": precos.RESTAURANTE_MENSAL_CENT,
     "variedades": precos.VARIEDADES_MENSAL_CENT,
+    "hotel": precos.HOTEL_MENSAL_CENT,
     "boate": precos.BOATE_MENSAL_CENT,
 }
 # Pix (bank_transfer) e cartão ficam. Boleto e caixa eletrônico saem.
