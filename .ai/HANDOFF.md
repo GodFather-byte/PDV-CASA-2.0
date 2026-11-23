@@ -27,9 +27,13 @@ Edição nova para hotel e pousada: diárias e uso por horas. Guia em `docs/WILL
 - Sem channel manager, sem sinal antes do check-in, sem envio automático da FNRH nem NFS-e (o cliente faz à parte).
 - Dados dos hóspedes só no computador da loja.
 
+## Marca da loja (branch `marca-da-loja`)
+- Menu principal: logotipo e nome de Dados da Loja no alto (`JanelaPrincipal.atualizar_marca`), "WillPDV · WB Sistemas"
+  pequeno no rodapé; título da janela começa pelo nome da loja. Sem loja cadastrada fica a marca da edição.
+- Tela de entrada: logotipo da loja no alto da capa, nome grande e o crédito do programa embaixo.
+
 ## Próximo
-- Pedido do dono (23/11): mostrar o nome e o logotipo do estabelecimento no lugar da marca WILLPDV, com a nossa marca
-  pequena num canto.
+- Pedido do dono (23/11): ver o PR #118 (Will Variedades) e terminar.
 
 ## Pendências
 - Dono: `MP_ACCESS_TOKEN` (e `MP_WEBHOOK_SECRET`) no Render para o checkout do site; `ANTHROPIC_API_KEY`.
