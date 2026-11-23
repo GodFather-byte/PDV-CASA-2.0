@@ -100,6 +100,61 @@ class TesteSite(unittest.TestCase):
                 self.assertIn("LocalBusiness", tipos)
                 self.assertIn("SoftwareApplication", tipos)
                 self.assertIn("Service", tipos)
+                self.assertIn('href="/site/termos"', texto)
+                self.assertIn('href="/site/privacidade"', texto)
+                self.assertIn("Ao enviar, você concorda com os", texto)
+                self.assertIn(">Termos de Uso</a>", texto)
+                self.assertIn(">Política de Privacidade</a>", texto)
+                self.assertLess(texto.index('id="form-teste"'), texto.index("Ao enviar, você concorda"))
+                self.assertLess(texto.index("Ao enviar, você concorda"), texto.index('id="teste-pronto"'))
+
+    def test_termos_e_privacidade(self):
+        with _sem_whatsapp_no_ambiente():
+            for caminho, titulo in (("/site/termos", "Termos de Uso"), ("/site/termos/", "Termos de Uso"),
+                                    ("/site/privacidade", "Política de Privacidade"),
+                                    ("/site/privacidade/", "Política de Privacidade")):
+                pagina = self.http.get(caminho)
+                self.assertEqual(pagina.status_code, 200, caminho)
+                self.assertIn("text/html", pagina.headers["content-type"])
+                texto = pagina.text
+                self.assertNotIn("{{", texto)
+                self.assertIn(f"<h1>{titulo}</h1>", texto)
+                self.assertIn("Última atualização: 23 de novembro de 2026", texto)
+                self.assertIn("WillPDV - Willyan Neres, Osasco-SP", texto)
+                self.assertIn('href="/site/estilo.css"', texto)
+                self.assertIn('class="topo"', texto)
+                self.assertIn('class="rodape-docs"', texto)
+                self.assertIn('href="/site/termos"', texto)
+                self.assertIn('href="/site/privacidade"', texto)
+                self.assertIn("(11) 91516-8336", texto)
+                self.assertIn('href="/site/#teste"', texto)
+                self.assertEqual(texto.count("[CNPJ]"), 1)
+                self.assertIn("<!-- Identificação fiscal, quando houver: [CNPJ].", texto)
+                self.assertNotRegex(texto, r"[\w.+-]+@[\w.-]+\.[a-z]{2,}")
+            termos = self.http.get("/site/termos").text
+            self.assertIn("instalação na loja é grátis", termos.lower())
+            self.assertIn("paga 10", termos)
+            self.assertIn("12 meses", termos)
+            self.assertIn("foro da Comarca de Osasco-SP", termos)
+            self.assertIn("Código de Defesa do Consumidor", termos)
+            self.assertIn("proporcional", termos)
+            self.assertIn("fidelidade", termos)
+            for nome in ("Will Adega", "Will Restaurante", "Will Variedades", "boate e bar"):
+                self.assertIn(nome, termos)
+            for centavos in (site_precos.ADEGA_MENSAL_CENT, site_precos.RESTAURANTE_MENSAL_CENT,
+                             site_precos.VARIEDADES_MENSAL_CENT, site_precos.BOATE_MENSAL_CENT):
+                self.assertIn(fmt_brl(centavos), termos)
+            self.assertIn(str(site_precos.DIAS_TESTE), termos)
+            privacidade = self.http.get("/site/privacidade").text
+            self.assertIn("Lei 13.709/2018", privacidade)
+            self.assertIn("controlador", privacidade)
+            self.assertIn("operador", privacidade)
+            self.assertIn("Render", privacidade)
+            self.assertIn("Não vendemos dados pessoais", privacidade)
+            self.assertIn("não grava cookie", privacidade)
+            self.assertIn("armazenamento local", privacidade)
+            self.assertIn("WhatsApp {{telefone}}".replace("{{telefone}}", "(11) 91516-8336"), privacidade)
+            self.assertEqual(self.http.get("/v1/saude").json(), {"status": "ok"})
 
     def test_variavel_troca_o_numero(self):
         with mock.patch.dict(os.environ, {site.VAR_WHATSAPP: "(11) 98888-7777"}):

@@ -161,6 +161,8 @@ details[open] summary::after { content: "−"; }
 footer { display: grid; justify-items: center; gap: .6rem; padding: 2.2rem 1rem 2.6rem; text-align: center; }
 footer p { color: var(--suave); margin: 0; }
 footer .telefone { white-space: nowrap; }
+.rodape-docs { display: flex; flex-wrap: wrap; justify-content: center; gap: .15rem 1rem; }
+.rodape-docs a { color: var(--jade); font-weight: 700; padding: .35rem .15rem; }
 .fixo {
   position: fixed; right: max(1rem, env(safe-area-inset-right)); bottom: max(1rem, env(safe-area-inset-bottom));
   z-index: 6; background: var(--jade); color: #fff; border-color: transparent; box-shadow: 0 6px 18px #17392433;
@@ -177,6 +179,11 @@ footer .telefone { white-space: nowrap; }
 .form-teste input:focus, .form-teste select:focus { outline: 3px solid var(--jade); outline-offset: 1px; }
 .form-teste .aceite { display: flex; gap: .55rem; align-items: flex-start; font-weight: 400; color: var(--suave); }
 .form-teste .aceite input { width: auto; margin-top: .3rem; }
+.consentimento { margin: 0; color: var(--suave); font-size: .9rem; font-weight: 400; }
+.consentimento a { color: var(--jade); font-weight: 700; }
+@media (max-width: 899px) {
+  .consentimento { padding-right: 9.5rem; }
+}
 .form-teste .isca { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 #teste-pronto ol { display: grid; gap: .9rem; padding-left: 1.2rem; }
 #teste-pronto .qr svg { width: auto; max-width: 180px; height: auto; background: #fff; padding: 6px; border-radius: 8px; }
@@ -207,6 +214,16 @@ footer .telefone { white-space: nowrap; }
   .duas { display: grid; grid-template-columns: .8fr 1.2fr; gap: 2.5rem; align-items: start; }
   #celular .edicoes { grid-template-columns: 1fr; }
 }
+.documento { max-width: 42rem; padding: clamp(1.4rem, 4vw, 2.8rem) 0 1rem; overflow-wrap: anywhere; }
+.documento h1 { font-size: clamp(2.15rem, 4.4vw, 3.35rem); margin: .35rem 0 .5rem; }
+.documento h2 { font-size: clamp(1.35rem, 2.2vw, 1.75rem); margin: 1.75rem 0 .4rem; letter-spacing: -.03em; }
+.documento p, .documento li { color: var(--suave); }
+.documento strong { color: var(--texto); }
+.documento ul { margin: .35rem 0 0; padding-left: 1.15rem; }
+.documento li { margin: .4rem 0; }
+.documento a { color: var(--jade); }
+.documento .atualizacao { margin-top: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .cartao, .grade li, .botao, .zap, .fantasma { transition: none; }
