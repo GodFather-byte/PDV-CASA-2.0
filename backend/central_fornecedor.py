@@ -145,6 +145,8 @@ INSTALADORES = {
     "willpdv": "https://github.com/GodFather-byte/willpdv-downloads/releases/download/ultima-versao/WillPDV-Instalador.exe",
     "willadega": "https://github.com/GodFather-byte/willpdv-downloads/releases/download/ultima-versao-adega/"
                  "WillAdega-Instalador.exe",
+    "willhotel": "https://github.com/GodFather-byte/willpdv-downloads/releases/download/ultima-versao-hotel/"
+                 "WillHotel-Instalador.exe",
 }
 
 

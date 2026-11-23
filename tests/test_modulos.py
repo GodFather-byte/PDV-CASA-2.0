@@ -45,6 +45,7 @@ class TesteModulosNoBanco(BaseCaixa):
         self.banco.cfg_set("usar_delivery", "S")
         self.banco.cfg_set("usar_cozinha_bar", "S")
         self.banco.cfg_set("usar_quartos", "S")
+        self.banco.cfg_set("usar_hotel", "S")
         self.assertEqual(modulos_desligados(self.banco), set())
 
     def test_fita_do_fechamento_sem_linhas_de_caderneta(self):

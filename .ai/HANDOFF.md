@@ -1,23 +1,28 @@
-# Handoff de 23/11/2026
+# Handoff de 23/11/2026: Will Hotel (branch `will-hotel`)
 
-Branch `cursor/site-checkout-mercadopago-0c21`, a partir da main com o site comercial e os termos.
+Edição nova para hotel e pousada: diárias e uso por horas. Guia em `docs/WILL_HOTEL.md`.
 
-## Checkout do site
+## O que entrou
+- Banco v58 (tabelas aditivas `hotel_*`): tipos de quarto (a diária é um produto do grupo HOSPEDAGEM), quartos (UH) com
+  a arrumação, períodos, hóspedes (campos da FNRH), estadias e acompanhantes.
+- `src/controllers/hotel_controller.py`: reservas sem conflito (intervalo de datas e horas), check-in que confere a ficha
+  e abre a conta como comanda (a partir de `hotel_conta_inicio`, 500), diárias vencidas, café avulso, check-out com
+  atraso (diária extra só se pedir) e hora adicional do período, cancelar, não compareceu, trocar de quarto,
+  prorrogar, painel do dia, mapa, ocupação/diária média/RevPAR, café do dia e exportação das fichas (CSV).
+- `src/ui_qt/hotel.py`: menu "Hotel • recepção" com abas Hoje, Mapa, Reservas, Hóspedes, Governança, Relatórios e
+  Quartos e tarifas (esta só com `cfg_hotel`). Cabe em 1366x768 sem corte.
+- Edição `willhotel` (perfil `hotel`, fixas e padrões em `core/edicao.py`; o botão do hotel some nas outras edições),
+  `instalador/WillHotel.iss` (AppId próprio), workflow `will-hotel.yml`, canal de atualização `willhotel` e link do
+  instalador na central.
 
-- `POST /v1/pagamentos/checkout` cria uma preferência do Checkout Pro (`POST /checkout/preferences`). O preço sai do id do plano em `backend/site_checkout.py` (os mesmos centavos de `site_precos.py`). O corpo pode mandar valor: ele é ignorado.
-- Planos: Adega 90,00 / 900,00; Restaurante 149,99 / 1.499,90; Variedades 159,99 / 1.599,90; Boate 249,99 / 2.499,90. Um item só. Instalação não entra na cobrança.
-- Pix e cartão (boleto e caixa eletrônico ficam de fora). Mensal em 1 vez; anual em até 10 vezes no cartão.
-- O formulário pede nome, e-mail, WhatsApp e nome da loja antes de ir ao `init_point` (token `TEST-` usa o `sandbox_init_point`).
-- Retornos: `/site/obrigado`, `/site/pagamento-pendente`, `/site/pagamento-falhou`, com `auto_return=approved`.
-- Webhook `/v1/pagamentos/webhook` busca o pagamento na API. Com `MP_WEBHOOK_SECRET`, exige `x-signature`. A notificação repetida não duplica (`site_pagamentos`) nem reescreve um pedido já aprovado com um pagamento pior.
-- Pedidos em `site_pedidos` / `site_pagamentos` (mesmo banco da nuvem). Não emite licença.
-- Sem `MP_ACCESS_TOKEN`, os botões Assinar agora / Comprar abrem o WhatsApp e a rota responde 503. O teste grátis e o botão Assinar (WhatsApp) continuam.
-- Variáveis: `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `PUBLIC_BASE_URL` (opcional). Documentadas no README e no `render.yaml`.
+## Limites
+- Sem channel manager, sem sinal antes do check-in, sem envio automático da FNRH nem NFS-e (o cliente faz à parte).
+- Dados dos hóspedes só no computador da loja.
 
-## Conferência
+## Próximo
+- Pedido do dono (23/11): mostrar o nome e o logotipo do estabelecimento no lugar da marca WILLPDV, com a nossa marca
+  pequena num canto.
 
-`tests.test_site_checkout`, `tests.test_site`, `tests.test_site_teste` e `tests.test_cobrancas_mercadopago`. `node --check` em `backend/site_web/checkout.js`.
-
-## Operação pendente da base
-
-Colar `MP_ACCESS_TOKEN` (e, se for validar a assinatura, `MP_WEBHOOK_SECRET`) no Render. Sem o token o site publicado segue no WhatsApp. O checkout não liga a licença da loja: o pedido fica gravado para o acompanhamento.
+## Pendências
+- Dono: `MP_ACCESS_TOKEN` (e `MP_WEBHOOK_SECRET`) no Render para o checkout do site; `ANTHROPIC_API_KEY`.
+- Lojas desatualizadas: Resenha (1.14.9, ainda com o erro ao sair), Império, EA Superações 1/2/3.

@@ -241,7 +241,7 @@ class JanelaPrincipal(QMainWindow):
             self.menu_grupos.addItem(pagina, nome)
         categorias = {
             "Tutoriais": {"tutoriais"} | {f"tutorial_{c}" for c in ROTEIROS},
-            "Operação": {"inicio", "caixa", "porteiro", "quartos", "cozinha", "alertas"},
+            "Operação": {"inicio", "caixa", "hotel", "porteiro", "quartos", "cozinha", "alertas"},
             "Produtos e estoque": {"produtos", "estoque", "contagem", "retornaveis", "promocoes", "importar_produtos", "composicao"},
             "Gestão": {"relatorio_vendas", "relatorios", "contas", "devolucoes", "notas_fiscais", "whatsapp", "auditoria"},
             "Cadastros": {"operadores", "mais_cadastros"},
@@ -258,6 +258,7 @@ class JanelaPrincipal(QMainWindow):
             *tutoriais,
             ("inicio", "Visão geral", self.atualizar),
             ("caixa", "Abrir caixa", self.abrir_caixa),
+            ("hotel", "Hotel • recepção", self.abrir_hotel),
             ("porteiro", "Porteiro no celular", self.abrir_porteiro),
             ("produtos", "Produtos", lambda: self.abrir_cadastro("produtos")),
             ("estoque", "Estoque", self.abrir_estoque),
@@ -555,6 +556,7 @@ class JanelaPrincipal(QMainWindow):
             "util_cozinha" not in desligados and self.ctx.pode("util_cozinha"))
         self.botoes["quartos"].setEnabled(
             "util_quartos" not in desligados and self.ctx.pode("util_quartos"))
+        self.botoes["hotel"].setEnabled("util_hotel" not in desligados and self.ctx.pode("util_hotel"))
         self.botoes["relatorio_vendas"].setEnabled(self.ctx.pode("rel_vendas"))
         self.botoes["contas"].setEnabled(self.ctx.pode("lanc_contas"))
         self.botoes["relatorios"].setEnabled(any(
@@ -759,6 +761,10 @@ class JanelaPrincipal(QMainWindow):
         from src.ui_qt.quartos import JanelaQuartos
         return self._abrir_painel_operacional(
             "quartos", lambda: JanelaQuartos(self.ctx, self))
+
+    def abrir_hotel(self):
+        from src.ui_qt.hotel import JanelaHotel
+        return self._abrir_painel_operacional("hotel", lambda: JanelaHotel(self.ctx, self))
 
     def abrir_diagnostico(self):
         from src.ui_qt.diagnostico import JanelaDiagnostico
