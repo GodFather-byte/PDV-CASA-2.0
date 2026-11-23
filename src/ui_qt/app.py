@@ -207,16 +207,19 @@ class JanelaPrincipal(QMainWindow):
         lateral = QVBoxLayout()
         lateral.setContentsMargins(12, 12, 12, 10)
         lateral.setSpacing(3)  # Mantém as sete categorias visíveis também com as métricas do Windows.
+        # No alto, a casa do cliente: o logotipo e o nome cadastrados em Dados da Loja. A nossa marca fica pequena no
+        # rodapé do menu. Loja sem nome cadastrado continua com a marca da edição.
         cabecalho_menu = QHBoxLayout()
-        self.logo_edicao = QLabel()
-        if self.edicao.logotipo:
-            imagem = QPixmap(str(edicao.pasta_recursos() / self.edicao.logotipo))
-            if not imagem.isNull():
-                self.logo_edicao.setPixmap(imagem.scaledToWidth(36, Qt.TransformationMode.SmoothTransformation))
-                cabecalho_menu.addWidget(self.logo_edicao)
-        cabecalho_menu.addWidget(tema.texto(self.edicao.marca, "marca"), 1)
+        self.logo_loja = QLabel()
+        self.logo_loja.setObjectName("logo_loja_menu")
+        self.logo_loja.setVisible(False)
+        cabecalho_menu.addWidget(self.logo_loja)
+        self.lbl_marca = tema.texto(self.edicao.marca, "marca")
+        self.lbl_marca.setTextFormat(Qt.TextFormat.PlainText)
+        cabecalho_menu.addWidget(self.lbl_marca, 1)
         cabecalho_menu.addWidget(tema.texto(VERSAO, "legenda", quebra=False))
         lateral.addLayout(cabecalho_menu)
+        self._marca_mostrada = None
         self.btn_tema = QPushButton()
         self.btn_tema.setObjectName("discreto")
         self.btn_tema.setAccessibleName("Alternar entre modo claro e modo escuro")
@@ -321,6 +324,19 @@ class JanelaPrincipal(QMainWindow):
         sair = QPushButton("Encerrar sessão")
         sair.clicked.connect(lambda: self.app.encerrar_sessao(confirmar=True))
         lateral.addWidget(sair)
+        credito = QHBoxLayout()
+        credito.setSpacing(5)
+        self.logo_edicao = QLabel()
+        if self.edicao.logotipo:
+            imagem = QPixmap(str(edicao.pasta_recursos() / self.edicao.logotipo))
+            if not imagem.isNull():
+                self.logo_edicao.setPixmap(imagem.scaledToHeight(16, Qt.TransformationMode.SmoothTransformation))
+                credito.addWidget(self.logo_edicao)
+        self.lbl_credito = tema.texto(f"{self.edicao.nome} · WB Sistemas", "credito_marca", quebra=False)
+        credito.addWidget(self.lbl_credito)
+        credito.addStretch(1)
+        lateral.addLayout(credito)
+        self.atualizar_marca()
         lateral_widget = QWidget()
         lateral_widget.setObjectName("navegacao")
         lateral_widget.setLayout(lateral)
@@ -463,7 +479,37 @@ class JanelaPrincipal(QMainWindow):
 
     def _titulo(self) -> str:
         caixa = f" • Caixa {self.ctx.banco.cfg_int('terminal', 1)}" if self.ctx.banco.remoto else ""
-        return f"{self.edicao.nome} • {self.ctx.config.nome_loja()}{caixa}{self.edicao.sufixo_titulo}"
+        loja = self.ctx.config.loja()
+        nome = " ".join((loja.get("nome_fantasia") or loja.get("razao_social") or "").split())
+        inicio = f"{nome} • {self.edicao.nome}" if nome else self.edicao.nome       # a casa do cliente primeiro
+        return f"{inicio}{caixa}{self.edicao.sufixo_titulo}"
+
+    def atualizar_marca(self) -> None:
+        """O nome e o logotipo da loja no alto do menu e no título. Só redesenha quando o cadastro mudou."""
+        try:
+            loja = self.ctx.config.loja()
+        except Exception:  # noqa: BLE001 - a marca não pode impedir o menu de abrir
+            return
+        nome = " ".join((loja.get("nome_fantasia") or loja.get("razao_social") or "").split())
+        caminho = loja.get("logotipo") or ""
+        if (nome, caminho) == self._marca_mostrada:
+            return
+        self._marca_mostrada = (nome, caminho)
+        self.lbl_marca.setText(nome or self.edicao.marca)
+        self.lbl_marca.setObjectName("marca_loja" if nome else "marca")
+        self.lbl_marca.setToolTip(f"{nome} · {self.edicao.nome}" if nome else "")
+        self.lbl_marca.style().unpolish(self.lbl_marca)
+        self.lbl_marca.style().polish(self.lbl_marca)
+        from src.core.identidade_visual import preview_logotipo
+        dados = preview_logotipo(caminho, (96, 40)) if caminho else None
+        imagem = QPixmap()
+        if dados and imagem.loadFromData(dados, "PNG"):
+            self.logo_loja.setPixmap(imagem)
+            self.logo_loja.setVisible(True)
+        else:
+            self.logo_loja.clear()
+            self.logo_loja.setVisible(False)
+        self.setWindowTitle(self._titulo())
 
     def _modo_tema(self) -> str:
         return "claro" if self.ctx.banco.cfg("tema_visual") == "claro" else "escuro"
@@ -525,6 +571,7 @@ class JanelaPrincipal(QMainWindow):
     def atualizar(self):
         if self.ctx.operador is None:
             return
+        self.atualizar_marca()
         cadastro = self.ctx.cadastros.obter("operadores", self.ctx.operador_id)
         if cadastro is None or not cadastro["ativo"]:
             self.app.encerrar_sessao()
@@ -839,8 +886,11 @@ class JanelaPrincipal(QMainWindow):
     def abrir_configuracoes(self):
         try:
             from src.ui_qt.configuracoes import JanelaConfiguracoes
-            return self._unica(
-                "configuracoes", lambda: JanelaConfiguracoes(self.ctx, self))
+            nova = "configuracoes" not in self.janelas
+            janela = self._unica("configuracoes", lambda: JanelaConfiguracoes(self.ctx, self))
+            if nova and janela is not None:
+                janela.finished.connect(lambda _=0: self.atualizar_marca())       # o nome ou o logotipo podem ter mudado
+            return janela
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
 
@@ -875,7 +925,7 @@ class JanelaPrincipal(QMainWindow):
             from src.ui_qt.configuracoes import JanelaCadastroLoja
             janela = self._unica(
                 "cadastro_loja", lambda: JanelaCadastroLoja(self.ctx, self))
-            janela.accepted.connect(lambda: self.setWindowTitle(self._titulo()))
+            janela.accepted.connect(self.atualizar_marca)
             return janela
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))

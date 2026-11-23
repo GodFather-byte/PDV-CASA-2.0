@@ -6,9 +6,10 @@ from queue import Empty, Queue
 from threading import Event, Thread
 
 from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame,
-    QHBoxLayout, QInputDialog, QLineEdit, QPushButton, QVBoxLayout,
+    QHBoxLayout, QInputDialog, QLabel, QLineEdit, QPushButton, QVBoxLayout,
 )
 
 from src.core import edicao, licenca
@@ -77,12 +78,30 @@ class JanelaLogin(QDialog):
         capa = CapaBalcao(vertical=True)
         marca = QVBoxLayout(capa)
         marca.setContentsMargins(24, 24, 24, 24)
-        marca.addWidget(texto(ed.marca, "foto_marca"))
+        # A casa do cliente em destaque (logotipo e nome de Dados da Loja); a marca do programa fica pequena embaixo.
+        self.logo_loja = QLabel()
+        self.logo_loja.setObjectName("logo_loja_menu")
+        dados_logo = None
+        try:
+            from src.core.identidade_visual import preview_logotipo
+            dados_logo = preview_logotipo(ctx.config.loja().get("logotipo"), (200, 80))
+        except Exception:  # noqa: BLE001 - o logotipo não pode impedir a entrada
+            logging.getLogger("pdv.qt").exception("Logotipo da loja ilegível na tela de entrada.")
+        imagem = QPixmap()
+        if dados_logo and imagem.loadFromData(dados_logo, "PNG"):
+            self.logo_loja.setPixmap(imagem)
+            marca.addWidget(self.logo_loja, 0, Qt.AlignmentFlag.AlignLeft)
+        else:
+            self.logo_loja.setVisible(False)
         marca.addStretch()
         marca.addWidget(texto(f"Terminal  {ctx.banco.cfg_int('terminal', 1):02d}", "foto_detalhe"))
-        loja = texto(ctx.config.nome_loja(), "foto_titulo")
+        dados_loja = ctx.config.loja()
+        nome = " ".join((dados_loja.get("nome_fantasia") or dados_loja.get("razao_social") or "").split())
+        loja = texto(nome or ed.marca, "foto_titulo")
         loja.setTextFormat(Qt.TextFormat.PlainText)
         marca.addWidget(loja)
+        self.credito = texto(f"{ed.nome} · WB Sistemas", "foto_detalhe")
+        marca.addWidget(self.credito)
         if ed.aviso_entrada:
             marca.addWidget(texto(ed.aviso_entrada, "foto_aviso"))
         layout.addWidget(capa, 1)
