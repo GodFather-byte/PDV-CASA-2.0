@@ -542,10 +542,11 @@ class HotelController:
             raise ErroNegocio(f"O quarto {uh['numero']} já está com {c['titular_nome']} {quando}.")
 
     def disponiveis(self, inicio, fim, pessoas: int = 1) -> list[dict]:
-        """Quartos livres no intervalo, que cabem `pessoas`; os em manutenção ficam de fora."""
+        """Quartos livres no intervalo, que cabem `pessoas`; os em manutenção ficam de fora e os prontos vêm primeiro."""
         ini, ate = _momento(inicio), _momento(fim)
-        return [u for u in self.uhs() if u["limpeza"] != "manutencao" and u["capacidade"] >= pessoas
-                and not self.conflitos(u["id"], ini, ate)]
+        livres = [u for u in self.uhs() if u["limpeza"] != "manutencao" and u["capacidade"] >= pessoas
+                  and not self.conflitos(u["id"], ini, ate)]
+        return sorted(livres, key=lambda u: u["limpeza"] != "limpo")
 
     def _datas_diaria(self, entrada, saida) -> tuple[datetime, datetime]:
         c = self.config()
