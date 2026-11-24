@@ -1176,6 +1176,16 @@
     );
     if (!r) return;
     renderizarLucro(r.dados);
+    try {
+      await carregarGestao();
+    } catch (e) {
+      if (e.status === 401) throw e;
+      const nota = $("nota-gestao");
+      if (nota) {
+        nota.hidden = false;
+        nota.textContent = e.message || "Não consegui carregar o restante dos relatórios.";
+      }
+    }
   }
 
   function renderizarLucro(d) {
@@ -1226,6 +1236,88 @@
     listaFormas.forEach((f) => {
       formas.append(el("li", null, el("span", { text: f.tipo }), el("span", { class: "total", text: formatarCentavos(f.lucro_cent) })));
     });
+  }
+
+  function preencherGestao(idLista, idVazio, itens, montar) {
+    const lista = $(idLista);
+    const vazio = $(idVazio);
+    if (!lista) return;
+    limpar(lista);
+    const linhas = Array.isArray(itens) ? itens : [];
+    if (vazio) vazio.hidden = linhas.length > 0;
+    linhas.forEach((item) => lista.append(montar(item)));
+  }
+
+  function linhaNomeValor(nome, secundario, valor) {
+    return el("li", null,
+      el("div", { class: "nome" }, el("strong", { text: nome || "—" }), secundario ? el("span", { class: "sec", text: secundario }) : null),
+      el("span", { class: "valor", text: valor }));
+  }
+
+  function textoLucro(item) {
+    if (item.lucro_cent === null || item.lucro_cent === undefined) return "";
+    return " · lucro " + formatarCentavos(item.lucro_cent) + (item.margem ? " (" + item.margem + ")" : "");
+  }
+
+  async function carregarGestao() {
+    const nota = $("nota-gestao");
+    if (nota) { nota.hidden = true; nota.textContent = ""; }
+    const q = "de=" + encodeURIComponent(estado.lucroDe) + "&ate=" + encodeURIComponent(estado.lucroAte);
+    const dados = await chamarApi("/gestao/painel?" + q);
+    const abc = dados.abc || {};
+    const notaAbc = $("nota-abc");
+    if (notaAbc) notaAbc.textContent = abc.nota || "";
+    preencherGestao("lista-gestao-abc", "vazio-gestao-abc", (abc.linhas || []).slice(0, 20), (p) => linhaNomeValor(
+      p.nome,
+      "Classe " + p.classe + (p.grupo ? " · " + p.grupo : "") + " · " + formatarQuantidade(p.quantidade),
+      formatarCentavos(p.valor_cent) + textoLucro(p)));
+    preencherGestao("lista-gestao-categorias", "vazio-gestao-categorias", (dados.categorias || {}).linhas, (c) => linhaNomeValor(
+      c.categoria, formatarQuantidade(c.quantidade), formatarCentavos(c.valor_cent) + textoLucro(c)));
+    preencherGestao("lista-gestao-operadores", "vazio-gestao-operadores", (dados.operadores || {}).linhas, (o) => linhaNomeValor(
+      o.operador,
+      o.vendas + (o.vendas === 1 ? " venda" : " vendas") + " · ticket " + formatarCentavos(o.ticket_medio_cent),
+      formatarCentavos(o.faturamento_cent)));
+    preencherGestao("lista-gestao-dias", "vazio-gestao-dias", (dados.vendas || {}).por_dia, (d) => linhaNomeValor(
+      formatarData(d.dia), d.vendas + (d.vendas === 1 ? " venda" : " vendas"), formatarCentavos(d.faturamento_cent)));
+    const est = dados.estoque || {};
+    const notaEst = $("nota-estoque-gestao");
+    if (notaEst) notaEst.textContent = est.nota || "";
+    preencherGestao("lista-gestao-baixo", "vazio-gestao-baixo", est.baixo, (p) => linhaNomeValor(
+      p.nome, (p.grupo ? p.grupo + " · " : "") + "mínimo " + formatarQuantidade(p.estoque_minimo),
+      formatarQuantidade(p.qt_atual)));
+    preencherGestao("lista-gestao-parados", "vazio-gestao-parados", est.parados, (p) => linhaNomeValor(
+      p.nome, formatarQuantidade(p.qt_atual) + " parados", formatarCentavos(p.valor_parado_cent)));
+    preencherGestao("lista-gestao-sugestao", "vazio-gestao-sugestao", est.sugestao, (p) => linhaNomeValor(
+      p.nome,
+      "estoque " + formatarQuantidade(p.qt_atual) + " · vendeu " + formatarQuantidade(p.vendido),
+      "comprar " + formatarQuantidade(p.comprar)));
+    const situacao = { pendente: "Aguardando o caixa", aplicado: "Aplicada", recusado: "Recusada pelo caixa" };
+    preencherGestao("lista-gestao-auditoria", "vazio-gestao-auditoria", dados.auditoria, (c) => linhaNomeValor(
+      c.resumo || c.tipo, (c.autor || "dono") + " · " + (c.criado_em || ""), situacao[c.situacao] || c.situacao || ""));
+  }
+
+  async function baixarRelatorio(formato, tipo, de, ate) {
+    const url = API_BASE + "/gestao/relatorio?tipo=" + encodeURIComponent(tipo)
+      + "&de=" + encodeURIComponent(de) + "&ate=" + encodeURIComponent(ate) + "&formato=" + formato;
+    const resposta = await fetch(url, {
+      headers: { Authorization: "Bearer " + estado.token }, cache: "no-store", credentials: "same-origin",
+    });
+    if (resposta.status === 401) {
+      encerrarSessao(false);
+      throw new ErroApi(401, "Sessão expirada. Entre novamente.");
+    }
+    if (!resposta.ok) {
+      let detalhe = "Não consegui baixar o relatório.";
+      try { const dados = await resposta.json(); if (dados && dados.detail) detalhe = String(dados.detail); } catch (_) { /* arquivo */ }
+      throw new ErroApi(resposta.status, detalhe);
+    }
+    const blob = await resposta.blob();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "relatorio-" + tipo + "." + formato;
+    document.body.append(link);
+    link.click();
+    link.remove();
   }
 
   function renderizarPeriodo(d) {
@@ -1435,15 +1527,18 @@
     const vendas = loja.vendas === undefined || loja.vendas === null ? null
       : loja.vendas + (loja.vendas === 1 ? " venda" : " vendas");
     const lucro = temCusto ? "lucro " + formatarCentavos(loja.lucro_cent) + (loja.margem && loja.margem !== "—" ? " (" + loja.margem + ")" : "") : null;
+    const ticket = loja.ticket_medio_cent === undefined || loja.ticket_medio_cent === null
+      ? null : "ticket " + formatarCentavos(loja.ticket_medio_cent);
     const situacao = situacaoNaRede(loja);
     const barra = el("span", { class: "rede-barra", "aria-hidden": "true" }, el("span", {}));
     barra.firstChild.style.width = parte + "%";
-    const botao = el("button", { type: "button", class: "rede-loja", "aria-label": "Abrir " + (loja.nome || loja.chave) },
+    const botao = el("button", { type: "button", class: "rede-loja", "data-seletor": "rede-loja", "data-loja": loja.chave || "",
+      "aria-label": "Abrir " + (loja.nome || loja.chave) },
       el("span", { class: "rede-loja-topo" },
         el("strong", { text: loja.nome || loja.chave }),
         el("strong", { class: "valor", text: formatarCentavos(loja.faturamento_cent) })),
       barra,
-      el("span", { class: "sec", text: [parte + "% da rede", vendas, lucro].filter(Boolean).join(" · ") }),
+      el("span", { class: "sec", text: [parte + "% da rede", vendas, ticket, lucro].filter(Boolean).join(" · ") }),
       el("span", { class: "rede-loja-rodape" },
         el("span", { class: situacao.alerta ? "sec rede-alerta" : "sec", text: situacao.texto }),
         el("span", { class: "rede-abrir", text: "Abrir ›" })));
@@ -1586,6 +1681,11 @@
   // Renderização: aba Hoje
   // ------------------------------------------------------------------
 
+  function renderizarTopDia(produtos) {
+    preencherGestao("lista-top-dia", "vazio-top-dia", (produtos || []).slice(0, 5), (p) => linhaNomeValor(
+      p.nome, formatarQuantidade(p.quantidade), formatarCentavos(p.valor_cent)));
+  }
+
   function renderizarResumo(r) {
     const v = r.vendas || {};
     const loja = r.loja || estado.loja;
@@ -1606,6 +1706,7 @@
     mostrarAtraso(r.atraso_min);
     renderizarAlertas(r.alertas || []);
     renderizarMesAtual(r);
+    renderizarTopDia(r.produtos || []);
 
     $("v-faturamento").textContent = formatarCentavos(v.faturamento_cent);
     $("v-devolucoes").textContent = typeof v.devolucoes_cent === "number" ? formatarCentavos(v.devolucoes_cent) : "—";
@@ -2789,6 +2890,29 @@
       estado.lucroDe = $("lucro-de").value;
       estado.lucroAte = $("lucro-ate").value;
       carregarLucro();
+    });
+    async function baixarDaAba(formato) {
+      const nota = $("nota-gestao");
+      try {
+        await baixarRelatorio(formato, $("exportar-relatorio-tipo").value, estado.lucroDe, estado.lucroAte);
+      } catch (e) {
+        if (e.status === 401) return;
+        if (nota) { nota.hidden = false; nota.textContent = e.message || "Não consegui baixar."; }
+      }
+    }
+    const csvRel = $("exportar-relatorio-csv");
+    const xlsxRel = $("exportar-relatorio-xlsx");
+    if (csvRel) csvRel.addEventListener("click", () => baixarDaAba("csv"));
+    if (xlsxRel) xlsxRel.addEventListener("click", () => baixarDaAba("xlsx"));
+    const csvRede = $("exportar-rede-csv");
+    if (csvRede) csvRede.addEventListener("click", async () => {
+      const erro = $("erro-rede");
+      try {
+        await baixarRelatorio("csv", "rede", estado.redeDe, estado.redeAte);
+      } catch (e) {
+        if (e.status === 401) return;
+        if (erro) { erro.hidden = false; erro.textContent = e.message || "Não consegui baixar o comparativo."; }
+      }
     });
     $("botao-periodo").addEventListener("click", () => {
       estado.atalhoPeriodo = null;

@@ -258,6 +258,199 @@
     return primeiro ? String(linha[primeiro.nome]) : "#" + linha.id;
   }
 
+  function categoriasDoEsquema() {
+    const nomes = [];
+    (estado.esquema.lookups.grupos || []).forEach((o) => { if (o[1] && nomes.indexOf(o[1]) < 0) nomes.push(o[1]); });
+    (estado.esquema.lookups.subgrupos || []).forEach((o) => { if (o[1] && nomes.indexOf(o[1]) < 0) nomes.push(o[1]); });
+    return nomes;
+  }
+
+  async function gestao(caminho, metodo, corpo) {
+    const opcoes = { method: metodo || "GET", cache: "no-store", headers: { Authorization: "Bearer " + estado.token } };
+    if (corpo !== undefined) {
+      opcoes.headers["Content-Type"] = "application/json";
+      opcoes.body = JSON.stringify(corpo);
+    }
+    let resposta;
+    try { resposta = await fetch("/v1/painel/gestao" + caminho, opcoes); }
+    catch (_) { throw new Error("Sem conexão com a nuvem. Tente de novo."); }
+    let dados = null;
+    try { dados = await resposta.json(); } catch (_) { /* resposta sem JSON */ }
+    if (!resposta.ok) {
+      const detalhe = dados && typeof dados.detail === "string" ? dados.detail : "Não foi possível concluir.";
+      throw new Error(detalhe);
+    }
+    return dados;
+  }
+
+  async function enviarLote(caminho, corpo) {
+    let inicio = 0;
+    let faltam = 1;
+    let enviados = 0;
+    let volta = 0;
+    while (faltam > 0 && volta < 8) {
+      const r = await gestao(caminho, "POST", Object.assign({ dry_run: false, inicio: inicio }, corpo));
+      enviados += r.enviados || 0;
+      faltam = r.faltam || 0;
+      inicio = r.proximo || 0;
+      volta += 1;
+      if (!r.enviados) break;
+    }
+    return { enviados: enviados, faltam: faltam };
+  }
+
+  function abrirReajuste() {
+    const { corpo, rodape } = abrirDialogo("Reajuste por categoria");
+    corpo.append(el("p", "Vale para os produtos ativos da categoria. Nada grava na prévia. O caixa aplica na sincronização.", "suave"));
+    const cat = el("select");
+    cat.id = "reajuste-categoria";
+    cat.dataset.seletor = "reajuste-categoria";
+    categoriasDoEsquema().forEach((nome) => cat.append(new Option(nome, nome)));
+    const rotuloCat = el("label", null, "campo");
+    rotuloCat.append(el("span", "Categoria"), cat);
+    const pct = el("input");
+    pct.id = "reajuste-percentual";
+    pct.dataset.seletor = "reajuste-percentual";
+    pct.inputMode = "decimal";
+    pct.placeholder = "10 ou -5";
+    const rotuloPct = el("label", null, "campo");
+    rotuloPct.append(el("span", "Percentual"), pct);
+    const previa = el("ul", null, "lista");
+    previa.id = "reajuste-previa";
+    previa.dataset.seletor = "reajuste-previa";
+    corpo.append(rotuloCat, rotuloPct, previa);
+    const ver = el("button", "Ver prévia", "botao secundario");
+    ver.type = "button";
+    ver.dataset.seletor = "reajuste-previa-botao";
+    const ok = el("button", "Confirmar reajuste", "botao");
+    ok.type = "button";
+    ok.dataset.seletor = "reajuste-confirmar";
+    ok.disabled = true;
+    let pronto = null;
+    function invalidar() { ok.disabled = true; pronto = null; }
+    pct.addEventListener("input", invalidar);
+    cat.addEventListener("change", invalidar);
+    ver.addEventListener("click", async () => {
+      invalidar();
+      $("dialogo-aviso").textContent = "";
+      const numero = paraNumero(pct.value);
+      if (!cat.value) { $("dialogo-aviso").textContent = "Escolha a categoria."; return; }
+      if (numero === null || numero === 0) { $("dialogo-aviso").textContent = "Informe o percentual, por exemplo 10 ou -5."; return; }
+      ver.disabled = true;
+      try {
+        const r = await gestao("/reajuste", "POST", { categoria: cat.value, percentual: numero, dry_run: true });
+        limpar(previa);
+        (r.alteracoes || []).slice(0, 12).forEach((a) => {
+          previa.append(el("li", a.nome + ": " + dinheiro(a.antes.preco_cent) + " → " + dinheiro(a.valores.preco_cent)));
+        });
+        if ((r.total || 0) > (r.alteracoes || []).length) {
+          previa.append(el("li", "e mais " + (r.total - r.alteracoes.length) + " produto(s)"));
+        }
+        previa.append(el("li", (r.total || 0) + " produto(s) no total"));
+        pronto = { categoria: cat.value, percentual: numero };
+        ok.disabled = false;
+      } catch (erro) {
+        $("dialogo-aviso").textContent = erro.message;
+      } finally { ver.disabled = false; }
+    });
+    ok.addEventListener("click", () => enviarDoDialogo(ok, async () => {
+      if (!pronto) throw new Error("Veja a prévia antes de confirmar.");
+      const r = await enviarLote("/reajuste", pronto);
+      recado(r.enviados + " preço(s) enviado(s) ao caixa." + (r.faltam ? " Ainda faltam " + r.faltam + "." : ""));
+    }));
+    rodape.append(ver, ok);
+  }
+
+  function marcadosNaPagina() {
+    return Array.from(document.querySelectorAll("[data-seletor=marcar-produto]:checked"))
+      .map((c) => Number(c.dataset.produtoId)).filter((id) => id > 0);
+  }
+
+  function abrirEmMassa() {
+    const ids = marcadosNaPagina();
+    if (!ids.length) { recado("Marque pelo menos um produto desta página."); return; }
+    const { corpo, rodape } = abrirDialogo("Editar " + ids.length + " produto(s)");
+    corpo.append(el("p", "Em branco não muda. A prévia não grava. O caixa aplica na sincronização.", "suave"));
+    const preco = el("input");
+    preco.id = "massa-preco";
+    preco.dataset.seletor = "massa-preco";
+    preco.inputMode = "decimal";
+    preco.placeholder = "Novo preço, em reais";
+    const cat = el("select");
+    cat.id = "massa-categoria";
+    cat.dataset.seletor = "massa-categoria";
+    cat.append(new Option("Não mudar a categoria", ""));
+    (estado.esquema.lookups.subgrupos || []).forEach((o) => cat.append(new Option(o[1], String(o[0]))));
+    const minimo = el("input");
+    minimo.id = "massa-minimo";
+    minimo.dataset.seletor = "massa-minimo";
+    minimo.inputMode = "decimal";
+    minimo.placeholder = "Estoque mínimo";
+    const inativar = el("input");
+    inativar.type = "checkbox";
+    inativar.id = "massa-inativar";
+    inativar.dataset.seletor = "massa-inativar";
+    const previa = el("ul", null, "lista");
+    previa.id = "massa-previa";
+    previa.dataset.seletor = "massa-previa";
+    const campo = (rotulo, controle) => {
+      const no = el("label", null, "campo");
+      no.append(el("span", rotulo), controle);
+      return no;
+    };
+    const marca = el("label", null, "campo sn");
+    marca.append(inativar, el("span", "Inativar os marcados"));
+    corpo.append(campo("Novo preço", preco), campo("Categoria", cat), campo("Estoque mínimo", minimo), marca, previa);
+    const ver = el("button", "Ver prévia", "botao secundario");
+    ver.type = "button";
+    ver.dataset.seletor = "massa-previa-botao";
+    const ok = el("button", "Confirmar", "botao");
+    ok.type = "button";
+    ok.dataset.seletor = "massa-confirmar";
+    ok.disabled = true;
+    let itens = null;
+    function lerItens() {
+      const base = {};
+      if (preco.value.trim()) {
+        const cent = paraCentavos(preco.value);
+        if (cent === null) throw new Error("Preço inválido. Use 8,50.");
+        base.preco_cent = cent;
+      }
+      if (cat.value) base.subgrupo_id = Number(cat.value);
+      if (minimo.value.trim()) {
+        const qtd = paraNumero(minimo.value);
+        if (qtd === null || qtd < 0) throw new Error("Estoque mínimo inválido.");
+        base.estoque_minimo = qtd;
+      }
+      if (inativar.checked) base.ativo = 0;
+      if (!Object.keys(base).length) throw new Error("Preencha o que deve mudar.");
+      return ids.map((id) => Object.assign({ id: id }, base));
+    }
+    ver.addEventListener("click", async () => {
+      ok.disabled = true;
+      itens = null;
+      $("dialogo-aviso").textContent = "";
+      ver.disabled = true;
+      try {
+        const lista = lerItens();
+        const r = await gestao("/precos", "POST", { itens: lista, dry_run: true });
+        limpar(previa);
+        (r.alteracoes || []).slice(0, 12).forEach((a) => previa.append(el("li", a.resumo)));
+        if ((r.total || 0) > (r.alteracoes || []).length) previa.append(el("li", "e mais " + (r.total - r.alteracoes.length)));
+        itens = lista;
+        ok.disabled = false;
+      } catch (erro) {
+        $("dialogo-aviso").textContent = erro.message;
+      } finally { ver.disabled = false; }
+    });
+    ok.addEventListener("click", () => enviarDoDialogo(ok, async () => {
+      if (!itens) throw new Error("Veja a prévia antes de confirmar.");
+      const r = await enviarLote("/precos", { itens: itens });
+      recado(r.enviados + " alteração(ões) enviada(s) ao caixa.");
+    }));
+    rodape.append(ver, ok);
+  }
+
   async function telaCadastro(ent) {
     const parametros = new URLSearchParams({ busca: estado.busca, pagina: String(estado.pagina), inativos: estado.inativos ? "1" : "0" });
     const dados = await api("/cadastro/" + ent.chave + "?" + parametros.toString());
@@ -294,8 +487,21 @@
     }
     const novo = el("button", "Novo", "botao");
     novo.type = "button";
+    novo.dataset.seletor = "cadastro-novo";
     novo.addEventListener("click", () => abrirFormulario(ent, null));
     barra.append(novo);
+    const comMarca = ent.chave === "produtos" && estado.modo === "dono";
+    if (comMarca) {
+      const reaj = el("button", "Reajuste %", "botao secundario");
+      reaj.type = "button";
+      reaj.dataset.seletor = "reajuste-abrir";
+      reaj.addEventListener("click", abrirReajuste);
+      const massa = el("button", "Editar marcados", "botao secundario");
+      massa.type = "button";
+      massa.dataset.seletor = "massa-abrir";
+      massa.addEventListener("click", abrirEmMassa);
+      barra.append(reaj, massa);
+    }
     raiz.append(barra);
 
     const esperando = {};
@@ -332,6 +538,20 @@
     const cabeca = el("tr");
     const rotuloColuna = (campo) => campo.rotulo.replace(/\s*\(.*\)$/, "");
     const campoTitulo = colunas.find((c) => c.nome === "nome" || c.nome === "descricao") || colunas[0];
+    const comMarcaTabela = ent.chave === "produtos" && estado.modo === "dono";
+    if (comMarcaTabela) {
+      const th = el("th", "", "marca");
+      const tudo = el("input");
+      tudo.type = "checkbox";
+      tudo.dataset.seletor = "marcar-pagina";
+      tudo.setAttribute("aria-label", "Marcar os produtos desta página");
+      tudo.addEventListener("click", (ev) => ev.stopPropagation());
+      tudo.addEventListener("change", () => {
+        document.querySelectorAll("[data-seletor=marcar-produto]").forEach((c) => { c.checked = tudo.checked; });
+      });
+      th.append(tudo);
+      cabeca.append(th);
+    }
     colunas.forEach((c) => cabeca.append(el("th", rotuloColuna(c), ["dinheiro", "decimal", "int"].includes(c.tipo) ? "numero" : "")));
     cabeca.append(el("th", ""));
     const thead = el("thead");
@@ -341,7 +561,22 @@
       const linha = {};
       dados.campos.forEach((nome, i) => { linha[nome] = valores[i]; });
       const tr = el("tr");
+      tr.dataset.seletor = ent.chave === "produtos" ? "produto" : "cadastro";
+      tr.dataset.produtoId = String(linha.id);
       if (ent.tem_ativo && !linha.ativo) tr.className = "inativo";
+      if (comMarcaTabela) {
+        const td = el("td", "", "marca");
+        td.dataset.rotulo = "Selecionar";
+        const caixa = el("input");
+        caixa.type = "checkbox";
+        caixa.dataset.seletor = "marcar-produto";
+        caixa.dataset.produtoId = String(linha.id);
+        caixa.setAttribute("aria-label", "Marcar " + nomeDaLinha(ent, linha));
+        caixa.addEventListener("click", (ev) => ev.stopPropagation());
+        td.addEventListener("click", (ev) => ev.stopPropagation());
+        td.append(caixa);
+        tr.append(td);
+      }
       colunas.forEach((c) => {
         const celula = el("td", valorDaCelula(c, linha[c.nome]), ["dinheiro", "decimal", "int"].includes(c.tipo) ? "numero" : "");
         celula.dataset.rotulo = rotuloColuna(c);
@@ -496,8 +731,12 @@
                               opcoes: (estado.esquema.estoque_tipos || []).map((t) => [t, TIPOS_ESTOQUE[t] || t]) }, "entrada");
       const quantidade = controle({ rotulo: "Quantidade", tipo: "decimal" }, null);
       const motivo = controle({ rotulo: "Motivo (aparece no caixa)", tipo: "texto", tamanho: 80 }, null);
+      tipo.entrada.dataset.seletor = "estoque-tipo";
+      quantidade.entrada.dataset.seletor = "estoque-quantidade";
+      motivo.entrada.dataset.seletor = "estoque-motivo";
       const mover = el("button", "Enviar movimento", "botao secundario");
       mover.type = "button";
+      mover.dataset.seletor = "estoque-enviar";
       mover.addEventListener("click", () => enviarDoDialogo(mover, async () => {
         const qt = quantidade.ler();
         if (qt === null || qt < 0 || (qt === 0 && tipo.ler() !== "contagem")) throw new Error("Informe a quantidade do movimento.");

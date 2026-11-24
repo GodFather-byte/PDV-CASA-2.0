@@ -433,6 +433,11 @@ h3 { font-size: .95rem; color: var(--texto-suave); margin-top: .75rem; }
 .temperatura .nat { background: var(--barra); }
 .temperatura .gel { background: #0ea5e9; }
 
+.etiqueta-a { background: var(--verde-claro); color: var(--verde-escuro); }
+.etiqueta-b { background: var(--ambar-fundo); color: var(--ambar); }
+.etiqueta-c { background: var(--azul-fundo); color: var(--azul); }
+.acoes-resumo select { min-height: 40px; border: 1px solid var(--borda); border-radius: 10px; background: var(--superficie); padding: 0 .6rem; }
+
 .etiqueta {
   display: inline-block;
   font-size: .72rem;

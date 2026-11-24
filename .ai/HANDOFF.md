@@ -1,23 +1,27 @@
-# Handoff: importar planilha no painel
+# Handoff: painel controla cadastro e relatórios
 
-O dono importa vários produtos pela aba **Produtos** do painel (`Importar planilha`), com a mesma planilha do caixa.
-Na rede (`/painel/?grupo=CHAVE`), escolhe a loja e abre a importação dela. Nada é gravado na prévia: confirmar
-enfileira `produtos.importar` e o caixa aplica na sincronização. O mesmo código de barras atualiza; não duplica.
-A quantidade **substitui** o estoque (padrão) ou **soma**, à escolha na tela.
+O dono acompanha e mexe na loja pelo painel, sem comando novo no caixa. A aba **Relatórios**
+mostra curva ABC, categoria, operador, por dia, estoque baixo, parados, sugestão de compra (7 dias)
+e o histórico do que foi pedido ao caixa. CSV e planilha saem do mesmo período. **Hoje** lista os
+mais vendidos do dia. Na rede, cada loja mostra o ticket e o comparativo baixa em CSV.
 
-O assistente usa a mesma rota com a sessão do painel ou com um token `wpdv_...` gerado nessa tela (aparece uma vez;
-no banco só fica o hash). `POST /v1/painel/importacao` sem `dry_run: false` só devolve a prévia.
+Na retaguarda, em Produtos: **Reajuste %** por categoria e **Editar marcados** (preço, categoria,
+estoque mínimo, inativar), sempre com prévia. A entrada de mercadoria continua na ficha, com motivo.
+
+O assistente usa a sessão ou o token `wpdv_` (o mesmo da importação). Sem `dry_run: false` a escrita
+só devolve a prévia. Guia em `docs/api-assistente.md`.
 
 ## O que entrou
-- Prévia: criados, atualizados, erros com motivo, aviso de dígito EAN-8/EAN-13.
-- Texto colado, arquivo `.csv`/`.xlsx` e lista JSON. Modelo para baixar. Busca e exportação CSV/XLSX.
-- Histórico e desfazer a última (o caixa restaura o preço/estoque e desativa o produto novo se ainda não foi vendido).
-- Testes em `tests/test_importacao_painel.py`.
+- `GET/POST /v1/painel/gestao/...` (resumo, relatórios, produtos, auditoria, preços, reajuste, estoque).
+- Testes em `tests/test_gestao_painel.py`.
 
 ## Fora deste pedido
-- Não houve merge nem deploy. Caixa antigo recusa `produtos.desfazer` até atualizar; a importação em si usa o comando
-  que ele já conhece (`produtos.importar`). Somar e casar por código de barras também pedem o programa novo.
-- A rota genérica de comandos continua sem deixar o dono mandar lote; só esta tela libera.
+- Não houve merge nem deploy.
+- Não mexe na recusa de custo na importação nem na velocidade em que o caixa aplica a fila.
+- Reajuste e estoque usam `cadastro.salvar` e `estoque.movimento`. Caixa com a retaguarda ligada
+  não precisa atualizar. Sem a retaguarda ligada, a escrita espera o cadastro subir.
+- Sugestão de compra e parados leem o espelho da retaguarda. Fechamento e sangria vêm do retrato
+  (cerca de 31 dias). Custo e lucro só entram quando o caixa já enviou o custo do item.
 
 ## Pendências
 - Dono: `MP_ACCESS_TOKEN` (e `MP_WEBHOOK_SECRET`) no Render para o checkout do site; `ANTHROPIC_API_KEY`.
