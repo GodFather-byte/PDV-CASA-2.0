@@ -154,7 +154,11 @@ class RetaguardaController:
         ent = ENTIDADES[chave]
         nomes = ["id"] + [c.nome for c in ent.campos if c.tipo != "senha"]
         total = self.banco.valor(f"SELECT COUNT(*) FROM {ent.tabela}", (), 0)
-        consulta = f"SELECT {', '.join(nomes)} FROM {ent.tabela} ORDER BY {ent.ordem}, id LIMIT {LIMITE_LINHAS}"
+        colunas = list(nomes)
+        if chave == "produtos":            # a retaguarda mostra e filtra quem tem foto (a imagem não sobe)
+            colunas.append("EXISTS(SELECT 1 FROM produto_fotos f WHERE f.produto_id = produtos.id) AS tem_foto")
+            nomes = nomes + ["tem_foto"]
+        consulta = f"SELECT {', '.join(colunas)} FROM {ent.tabela} ORDER BY {ent.ordem}, id LIMIT {LIMITE_LINHAS}"
         return {"campos": nomes, "linhas": [list(l) for l in self.banco.todos(consulta)], "total": total}
 
     def financeiro(self) -> dict:
@@ -240,7 +244,51 @@ class RetaguardaController:
             return self._importar_produtos(dados)
         if tipo == "produtos.desfazer":
             return self._desfazer_produtos(dados)
+        if tipo == "produto.foto":
+            return self._foto_produto(dados)
         raise ErroNegocio("Este caixa não conhece este tipo de alteração. Atualize o programa da loja.")
+
+    def _produto_do_comando(self, dados: dict) -> int:
+        """O produto pelo id ou, para o cadastrado agora pela retaguarda (o id só existe depois), pelo código."""
+        if dados.get("produto_id") not in (None, ""):
+            return _inteiro(dados.get("produto_id"), "Produto")
+        codigo = re.sub(r"\D", "", str(dados.get("codigo") or ""))
+        if not codigo or len(codigo) > 13:
+            raise ErroNegocio("Informe o produto da foto.")
+        achado = self.banco.valor("SELECT id FROM produtos WHERE codigo = ?", (codigo.zfill(13),))
+        if achado is None:
+            raise ErroNegocio(f"Produto {codigo} não encontrado no caixa.")
+        return int(achado)
+
+    def _foto_produto(self, dados: dict):
+        """Foto do produto pedida pela retaguarda: buscada pelo código de barras na base pública (o caixa baixa), enviada
+        do celular (JPEG pequeno em base64) ou removida. A imagem passa pelas mesmas regras da foto escolhida no caixa."""
+        import base64
+        import binascii
+        from src.controllers import foto_produto_controller as fotos
+        produto_id = self._produto_do_comando(dados)
+        controle = fotos.FotoProdutoController(self.banco)
+        controle._existe(produto_id)
+        origem = str(dados.get("origem") or "")
+        if origem == "remover":
+            controle.remover(produto_id)
+            self.ultimo_detalhe = "Foto removida."
+            return produto_id
+        if origem == "codigo_barras":
+            cbarra = str(dados.get("cbarra") or "") or str(
+                self.banco.valor("SELECT cbarra FROM produtos WHERE id = ?", (produto_id,), "") or "")
+            controle.gravar(produto_id, fotos.buscar_na_internet(cbarra))
+            self.ultimo_detalhe = "Foto baixada pelo código de barras."
+            return produto_id
+        if origem == "arquivo":
+            try:
+                imagem = base64.b64decode(str(dados.get("imagem_b64") or ""), validate=True)
+            except (binascii.Error, ValueError):
+                raise ErroNegocio("A foto enviada está estragada.") from None
+            controle.gravar(produto_id, fotos.preparar(imagem))
+            self.ultimo_detalhe = "Foto enviada pela retaguarda."
+            return produto_id
+        raise ErroNegocio("Pedido de foto inválido.")
 
     def _importar_produtos(self, dados: dict):
         """Lote de produtos (planilha enviada pela central): mesmas regras da importação do caixa, numa transação só.

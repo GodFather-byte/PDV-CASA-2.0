@@ -19,7 +19,7 @@
   const FILTROS_PRODUTO = [["", "Todos os produtos"], ["estoque_baixo", "Estoque no mínimo ou abaixo"],
     ["sem_estoque", "Sem estoque (zero ou negativo)"], ["sem_preco", "Sem preço de venda"],
     ["abaixo_custo", "Vendendo abaixo do custo"], ["sem_ncm", "Sem NCM (nota fiscal)"],
-    ["sem_codigo_barras", "Sem código de barras"]];
+    ["sem_codigo_barras", "Sem código de barras"], ["sem_foto", "Sem foto"]];
   const SITUACOES = { pendente: ["Aguardando o caixa", "espera"], aplicado: ["Aplicada", "ok"], recusado: ["Recusada pelo caixa", "erro"] };
 
   // ---------------------------------------------------------------- utilidades
@@ -668,6 +668,7 @@
         tr.append(celula);
       });
       const fim = el("td");
+      if (ent.chave === "produtos" && linha.tem_foto) fim.append(el("span", "com foto", "selo ok"));
       if (esperando[linha.id]) fim.append(el("span", "aguardando o caixa", "selo espera"));
       tr.append(fim);
       tr.tabIndex = 0;
@@ -788,6 +789,145 @@
     return String(a) === String(b);
   }
 
+  // ---------------------------------------------------------------- foto e código de barras do produto
+  const LIMITE_FOTO_B64 = 56000;            // o comando inteiro cabe em 64 KB
+
+  /** Lê a foto do celular, reduz para até 480 px e JPEG pequeno (cabe num comando). Devolve {dataUrl, b64}. */
+  function reduzirFoto(arquivo) {
+    return new Promise((resolve, reject) => {
+      if (!arquivo || !/^image\//.test(arquivo.type || "")) { reject(new Error("Escolha uma imagem (foto JPG ou PNG).")); return; }
+      const leitor = new FileReader();
+      leitor.onerror = () => reject(new Error("Não foi possível ler a foto."));
+      leitor.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("Esta imagem não abriu. Tente outra foto."));
+        img.onload = () => {
+          let lado = 480;
+          for (let tentativa = 0; tentativa < 8; tentativa += 1) {
+            const escala = Math.min(1, lado / Math.max(img.width, img.height));
+            const tela = document.createElement("canvas");
+            tela.width = Math.max(1, Math.round(img.width * escala));
+            tela.height = Math.max(1, Math.round(img.height * escala));
+            const ctx = tela.getContext("2d");
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(0, 0, tela.width, tela.height);
+            ctx.drawImage(img, 0, 0, tela.width, tela.height);
+            const qualidade = Math.max(0.45, 0.82 - tentativa * 0.08);
+            const dataUrl = tela.toDataURL("image/jpeg", qualidade);
+            const b64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+            if (b64.length <= LIMITE_FOTO_B64) { resolve({ dataUrl: dataUrl, b64: b64 }); return; }
+            if (tentativa >= 3) lado = Math.round(lado * 0.8);
+          }
+          reject(new Error("A foto ficou grande demais mesmo reduzida. Tente outra."));
+        };
+        img.src = leitor.result;
+      };
+      leitor.readAsDataURL(arquivo);
+    });
+  }
+
+  /** Bloco "Foto e código de barras" da ficha do produto. Guarda em `escolha` o que mandar ao caixa depois de salvar. */
+  function blocoFotoProduto(corpo, controles, linha) {
+    const escolha = { origem: "", b64: "", cbarra: "" };
+    const ctlNome = controles.find((c) => c.campo.nome === "nome");
+    const ctlBarras = controles.find((c) => c.campo.nome === "cbarra");
+    corpo.append(el("h3", "Foto e código de barras"));
+    const caixa = el("div", null, "foto-produto");
+    const previa = el("img");
+    previa.alt = "Prévia da foto";
+    previa.hidden = true;
+    previa.dataset.seletor = "foto-previa";
+    const situacao = el("p", linha ? (linha.tem_foto ? "Este produto já tem foto no caixa." : "Este produto ainda não tem foto.")
+      : "Digite o código de barras e busque: o nome e a foto vêm da base pública de produtos.", "suave");
+    situacao.dataset.seletor = "foto-situacao";
+    const botoes = el("div", null, "botoes-foto");
+    const buscar = el("button", "Buscar nome e foto pelo código de barras", "botao secundario");
+    buscar.type = "button";
+    buscar.dataset.seletor = "buscar-codigo-barras";
+    const arquivo = el("input");
+    arquivo.type = "file";
+    arquivo.accept = "image/*";
+    arquivo.setAttribute("capture", "environment");
+    arquivo.hidden = true;
+    arquivo.dataset.seletor = "foto-arquivo";
+    const tirar = el("button", "Tirar ou escolher foto", "botao secundario");
+    tirar.type = "button";
+    tirar.dataset.seletor = "foto-escolher";
+    tirar.addEventListener("click", () => arquivo.click());
+    botoes.append(buscar, tirar, arquivo);
+    const marcar = (texto) => { situacao.textContent = texto; };
+    buscar.addEventListener("click", async () => {
+      const codigo = ctlBarras ? String(ctlBarras.entrada.value || "").replace(/\D/g, "") : "";
+      if (codigo.length < 8) { marcar("Preencha o código de barras (8 a 14 números) antes de buscar."); return; }
+      buscar.disabled = true;
+      marcar("Procurando " + codigo + "…");
+      try {
+        const achado = await api("/codigo-barras/" + encodeURIComponent(codigo));
+        const partes = [];
+        if (achado.nome && ctlNome) {
+          const atual = String(ctlNome.entrada.value || "").trim();
+          if (!atual || !linha) { ctlNome.entrada.value = achado.nome; partes.push("nome preenchido: " + achado.nome); }
+          else if (atual.toUpperCase() !== achado.nome) partes.push("nome na base: " + achado.nome + " (o seu foi mantido)");
+        }
+        if (achado.tem_foto) {
+          escolha.origem = "codigo_barras";
+          escolha.cbarra = codigo;
+          escolha.b64 = "";
+          if (achado.miniatura) { previa.src = achado.miniatura; previa.hidden = false; }
+          partes.push("a foto vai para o caixa ao salvar");
+        } else {
+          partes.push("a base não tem foto deste produto; use Tirar ou escolher foto");
+        }
+        marcar(partes.join(" · ") + ".");
+      } catch (erro) {
+        marcar(erro.message);
+      } finally {
+        buscar.disabled = false;
+      }
+    });
+    arquivo.addEventListener("change", async () => {
+      try {
+        const foto = await reduzirFoto(arquivo.files && arquivo.files[0]);
+        escolha.origem = "arquivo";
+        escolha.b64 = foto.b64;
+        previa.src = foto.dataUrl;
+        previa.hidden = false;
+        marcar("Foto pronta: vai para o caixa ao salvar.");
+      } catch (erro) {
+        marcar(erro.message);
+      } finally {
+        arquivo.value = "";
+      }
+    });
+    if (linha && linha.tem_foto) {
+      const remover = el("button", "Remover foto", "botao secundario");
+      remover.type = "button";
+      remover.dataset.seletor = "foto-remover";
+      remover.addEventListener("click", () => {
+        escolha.origem = "remover";
+        escolha.b64 = "";
+        previa.hidden = true;
+        marcar("A foto será removida do caixa ao salvar.");
+      });
+      botoes.append(remover);
+    }
+    caixa.append(previa, el("div", null, "foto-lado"));
+    caixa.lastChild.append(situacao, botoes);
+    corpo.append(caixa);
+    return escolha;
+  }
+
+  /** Manda a foto escolhida ao caixa (pelo id, ou pelo código do produto que acabou de ser cadastrado). */
+  async function enviarFoto(escolha, alvo, nome) {
+    if (!escolha || !escolha.origem) return false;
+    const dados = Object.assign({ origem: escolha.origem }, alvo);
+    if (escolha.origem === "arquivo") dados.imagem_b64 = escolha.b64;
+    if (escolha.origem === "codigo_barras") dados.cbarra = escolha.cbarra;
+    const acao = { arquivo: "foto enviada", codigo_barras: "foto pelo código de barras", remover: "remover foto" }[escolha.origem];
+    await pedir("produto.foto", dados, "Produtos: " + nome + " (" + acao + ")");
+    return true;
+  }
+
   // O que não se copia ao duplicar um produto: identidade (código, barras), saldo e o que o caixa calcula.
   const NAO_DUPLICA = ["id", "codigo", "cbarra", "atalho", "qt_atual", "qt_inicial", "custo_medio_cent", "ult_preco_cent",
                        "ult_atualizacao"];
@@ -814,6 +954,8 @@
       });
       corpo.append(grade);
     });
+
+    const fotoEscolhida = ent.chave === "produtos" ? blocoFotoProduto(corpo, controles, linha) : null;
 
     if (linha && ent.chave === "produtos") {
       corpo.append(el("h3", "Movimentar estoque"));
@@ -875,7 +1017,11 @@
           rotulos.push(c.rotulo.replace(/\s*\(.*\)$/, "").toLowerCase()
             + (c.tipo === "dinheiro" && valor !== null ? " " + reais(valor) : ""));
         });
-        if (!Object.keys(valores).length) throw new Error(linha ? "Nada foi alterado." : "Preencha os campos do cadastro.");
+        const soFoto = fotoEscolhida && fotoEscolhida.origem && linha;
+        if (!Object.keys(valores).length) {
+          if (soFoto) { await enviarFoto(fotoEscolhida, { produto_id: linha.id }, nome); return; }
+          throw new Error(linha ? "Nada foi alterado." : "Preencha os campos do cadastro.");
+        }
         const faltam = controles.filter((ctl) => {
           const c = ctl.campo;
           if (!c.obrigatorio || c.somente_leitura || c.tipo === "sn" || (c.tipo === "senha" && linha)) return false;
@@ -887,6 +1033,10 @@
         if (linha) dados.id = linha.id;
         const alvo = linha ? nome : String(valores.nome || valores.descricao || "novo");
         await pedir("cadastro.salvar", dados, tituloCurto(ent) + ": " + (linha ? "" : "novo ") + alvo + " (" + rotulos.slice(0, 4).join(", ") + (rotulos.length > 4 ? "…" : "") + ")");
+        if (fotoEscolhida && fotoEscolhida.origem) {
+          // Depois do cadastro: o caixa aplica na ordem, então o produto novo já existe quando a foto chegar.
+          await enviarFoto(fotoEscolhida, linha ? { produto_id: linha.id } : { codigo: String(valores.codigo || "") }, alvo);
+        }
       });
     };
     rodape.append(salvar);

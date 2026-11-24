@@ -1,3 +1,14 @@
+# Handoff de 24/11/2026: foto e código de barras na retaguarda (branch `retaguarda-barras-foto`, em cima do #162)
+
+- Nuvem: `GET .../retaguarda/codigo-barras/{gtin}` (`consultar_gtin`) consulta o Open Food Facts e devolve o nome e
+  a miniatura como data URL, porque a página só aceita imagem do próprio site. Fica 12 h em cache e não grava nada.
+  Comando novo: `produto.foto` (`origem`: `codigo_barras`, `arquivo` com `imagem_b64` até 56 KB, ou `remover`). O
+  produto vai por `produto_id` ou, se foi recém-cadastrado, por `codigo`. Filtro `sem_foto`.
+- Caixa: `RetaguardaController._foto_produto` usa `foto_produto_controller` (as mesmas regras e limpeza da foto do
+  caixa). O espelho de produtos ganhou a coluna `tem_foto`.
+- Tela: bloco "Foto e código de barras" na ficha do produto. A foto do celular é reduzida no próprio navegador
+  (canvas). Teste: `tests/test_retaguarda_foto.py`.
+
 # Handoff de 24/11/2026: hotel só hotel, papéis das garotas, mostrar senha e retaguarda (PRs #160, #161, #162)
 
 - **#160 Will Hotel** (`hotel-so-hotel`): `Edicao.inicio = "hotel"` faz a recepção abrir sozinha depois da entrada
