@@ -12,9 +12,14 @@
     modo: lojaDaCentral ? "fornecedor" : "dono",
     base: lojaDaCentral ? "/v1/fornecedor/lojas/" + encodeURIComponent(lojaDaCentral) + "/retaguarda" : "/v1/painel/retaguarda",
     token: null, csrf: "", esquema: null, visao: null, secao: null, busca: "", pagina: 1, inativos: true, pedido: 0,
+    filtro: "", ordem: "", desc: false,
   };
   const GRUPOS = [["produtos", "Produtos e estoque"], ["pessoas", "Pessoas"], ["financeiro", "Financeiro"], ["outros", "Outros cadastros"]];
   const TIPOS_ESTOQUE = { entrada: "Entrada", saida: "Saída", contagem: "Contagem (o que há na prateleira)", quebra: "Quebra", descarte: "Descarte" };
+  const FILTROS_PRODUTO = [["", "Todos os produtos"], ["estoque_baixo", "Estoque no mínimo ou abaixo"],
+    ["sem_estoque", "Sem estoque (zero ou negativo)"], ["sem_preco", "Sem preço de venda"],
+    ["abaixo_custo", "Vendendo abaixo do custo"], ["sem_ncm", "Sem NCM (nota fiscal)"],
+    ["sem_codigo_barras", "Sem código de barras"]];
   const SITUACOES = { pendente: ["Aguardando o caixa", "espera"], aplicado: ["Aplicada", "ok"], recusado: ["Recusada pelo caixa", "erro"] };
 
   // ---------------------------------------------------------------- utilidades
@@ -209,7 +214,7 @@
   }
 
   async function abrir(secao, mesmaBusca) {
-    if (estado.secao !== secao || !mesmaBusca) { estado.busca = ""; estado.pagina = 1; }
+    if (estado.secao !== secao || !mesmaBusca) { estado.busca = ""; estado.pagina = 1; estado.filtro = ""; estado.ordem = ""; estado.desc = false; }
     estado.secao = secao;
     $("menu-compacto").value = secao;
     document.querySelectorAll("#menu button").forEach((b) => {
@@ -451,8 +456,49 @@
     rodape.append(ver, ok);
   }
 
+  function parametrosDaLista(extra) {
+    return Object.assign({ busca: estado.busca, pagina: String(estado.pagina), inativos: estado.inativos ? "1" : "0",
+                           filtro: estado.filtro, ordem: estado.ordem, desc: estado.desc ? "1" : "0" }, extra || {});
+  }
+
+  /** Texto da célula na planilha: dinheiro com vírgula, lookup pelo nome, sim/não por extenso. */
+  function valorPlanilha(campo, valor) {
+    if (valor === null || valor === undefined) return "";
+    if (campo.tipo === "dinheiro") return ((Number(valor) || 0) / 100).toFixed(2).replace(".", ",");
+    if (campo.tipo === "decimal") return String(valor).replace(".", ",");
+    if (campo.tipo === "sn") return valor ? "Sim" : "Não";
+    if (campo.tipo === "lookup") return rotuloLookup(campo.lookup, valor) || String(valor);
+    if (campo.tipo === "escolha" && campo.opcoes) {
+      const achada = campo.opcoes.find((o) => String(o[0]) === String(valor));
+      return achada ? achada[1] : String(valor);
+    }
+    return String(valor);
+  }
+
+  /** Baixa a lista (com a busca, o filtro e a ordem da tela) como CSV que o Excel abre direto. */
+  async function exportarCsv(ent) {
+    const dados = await api("/cadastro/" + ent.chave + "?" + new URLSearchParams(parametrosDaLista({ todas: "1" })).toString());
+    const campos = ent.campos.filter((c) => c.tipo !== "senha" && dados.campos.includes(c.nome));
+    const celula = (t) => /[";\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+    const linhas = [campos.map((c) => celula(c.rotulo)).join(";")];
+    dados.linhas.forEach((valores) => {
+      const linha = {};
+      dados.campos.forEach((nome, i) => { linha[nome] = valores[i]; });
+      linhas.push(campos.map((c) => celula(valorPlanilha(c, linha[c.nome]))).join(";"));
+    });
+    const blob = new Blob(["\ufeff" + linhas.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = ent.chave + (estado.filtro ? "-" + estado.filtro : "") + "-" + hoje() + ".csv";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+    recado(dados.linhas.length + " registro(s) exportado(s)" + (dados.encontradas > dados.linhas.length ? " (limite da planilha)" : "") + ".");
+  }
+
   async function telaCadastro(ent) {
-    const parametros = new URLSearchParams({ busca: estado.busca, pagina: String(estado.pagina), inativos: estado.inativos ? "1" : "0" });
+    const parametros = new URLSearchParams(parametrosDaLista());
     const dados = await api("/cadastro/" + ent.chave + "?" + parametros.toString());
     const raiz = el("section");
     raiz.append(el("h1", tituloCurto(ent)));
@@ -485,11 +531,33 @@
       rotulo.append(caixa, el("span", "Mostrar inativos"));
       barra.append(rotulo);
     }
+    if (ent.chave === "produtos") {
+      const filtro = el("select");
+      filtro.dataset.seletor = "filtro-produtos";
+      filtro.setAttribute("aria-label", "Filtrar produtos");
+      FILTROS_PRODUTO.forEach(([valor, rotulo]) => {
+        const opcao = el("option", rotulo);
+        opcao.value = valor;
+        filtro.append(opcao);
+      });
+      filtro.value = estado.filtro;
+      filtro.addEventListener("change", () => { estado.filtro = filtro.value; estado.pagina = 1; recarregar(); });
+      barra.append(filtro);
+    }
     const novo = el("button", "Novo", "botao");
     novo.type = "button";
     novo.dataset.seletor = "cadastro-novo";
     novo.addEventListener("click", () => abrirFormulario(ent, null));
     barra.append(novo);
+    const exportar = el("button", "Exportar planilha", "botao secundario");
+    exportar.type = "button";
+    exportar.dataset.seletor = "exportar-csv";
+    exportar.title = "Baixa a lista (com a busca e o filtro) em CSV, que abre no Excel";
+    exportar.addEventListener("click", async () => {
+      exportar.disabled = true;
+      try { await exportarCsv(ent); } catch (erro) { recado(erro.message); } finally { exportar.disabled = false; }
+    });
+    barra.append(exportar);
     const comMarca = ent.chave === "produtos" && estado.modo === "dono";
     if (comMarca) {
       const reaj = el("button", "Reajuste %", "botao secundario");
@@ -531,7 +599,8 @@
     const colunas = preferidas ? preferidas.map((n) => ent.campos.find((c) => c.nome === n)).filter(Boolean)
       : ent.campos.filter((c) => c.na_grade && c.tipo !== "senha").slice(0, 7);
     if (!dados.linhas.length) {
-      raiz.append(el("p", estado.busca ? "Nada encontrado para “" + estado.busca + "”." : "Nenhum registro neste cadastro.", "vazio cartao"));
+      raiz.append(el("p", estado.busca ? "Nada encontrado para “" + estado.busca + "”."
+        : estado.filtro ? "Nenhum produto neste filtro." : "Nenhum registro neste cadastro.", "vazio cartao"));
       return raiz;
     }
     const tabela = el("table", null, "tabela-cadastro");
@@ -552,7 +621,22 @@
       th.append(tudo);
       cabeca.append(th);
     }
-    colunas.forEach((c) => cabeca.append(el("th", rotuloColuna(c), ["dinheiro", "decimal", "int"].includes(c.tipo) ? "numero" : "")));
+    colunas.forEach((c) => {
+      const seta = estado.ordem === c.nome ? (estado.desc ? " ▼" : " ▲") : "";
+      const th = el("th", null, ["dinheiro", "decimal", "int"].includes(c.tipo) ? "numero" : "");
+      const ordenar = el("button", rotuloColuna(c) + seta, "ordenar");
+      ordenar.type = "button";
+      ordenar.dataset.seletor = "ordenar-" + c.nome;
+      ordenar.title = "Ordenar por " + rotuloColuna(c).toLowerCase();
+      ordenar.addEventListener("click", () => {
+        if (estado.ordem === c.nome) estado.desc = !estado.desc; else { estado.ordem = c.nome; estado.desc = false; }
+        estado.pagina = 1;
+        recarregar();
+      });
+      th.setAttribute("aria-sort", estado.ordem === c.nome ? (estado.desc ? "descending" : "ascending") : "none");
+      th.append(ordenar);
+      cabeca.append(th);
+    });
     cabeca.append(el("th", ""));
     const thead = el("thead");
     thead.append(cabeca);
@@ -704,9 +788,14 @@
     return String(a) === String(b);
   }
 
-  function abrirFormulario(ent, linha) {
+  // O que não se copia ao duplicar um produto: identidade (código, barras), saldo e o que o caixa calcula.
+  const NAO_DUPLICA = ["id", "codigo", "cbarra", "atalho", "qt_atual", "qt_inicial", "custo_medio_cent", "ult_preco_cent",
+                       "ult_atualizacao"];
+
+  function abrirFormulario(ent, linha, modelo) {
     const nome = linha ? nomeDaLinha(ent, linha) : "";
-    const { corpo, rodape } = abrirDialogo(linha ? tituloCurto(ent) + ": " + nome : "Novo em " + tituloCurto(ent));
+    const { corpo, rodape } = abrirDialogo(linha ? tituloCurto(ent) + ": " + nome
+      : modelo ? "Novo a partir de " + nomeDaLinha(ent, modelo) : "Novo em " + tituloCurto(ent));
     const controles = [];
     const secoes = [];
     ent.campos.forEach((c) => { if (!secoes.includes(c.secao)) secoes.push(c.secao); });
@@ -716,7 +805,9 @@
       corpo.append(el("h3", secao));
       const grade = el("div", null, "grade-campos");
       campos.forEach((c) => {
-        const ctl = controle(c, linha ? linha[c.nome] : c.padrao);
+        const inicial = linha ? linha[c.nome]
+          : modelo && !NAO_DUPLICA.includes(c.nome) && modelo[c.nome] !== undefined ? modelo[c.nome] : c.padrao;
+        const ctl = controle(c, inicial);
         if (c.tipo === "senha" && linha) ctl.no.firstChild.textContent = c.rotulo + " (em branco = não muda)";
         controles.push(ctl);
         grade.append(ctl.no);
@@ -747,6 +838,14 @@
       corpo.append(grade);
     }
 
+    if (linha && ent.chave === "produtos") {
+      const duplicar = el("button", "Duplicar", "botao secundario");
+      duplicar.type = "button";
+      duplicar.dataset.seletor = "duplicar-produto";
+      duplicar.title = "Abre um produto novo com os mesmos dados (sem código, barras e estoque)";
+      duplicar.addEventListener("click", () => { fecharDialogo(); abrirFormulario(ent, null, linha); });
+      rodape.append(duplicar);
+    }
     if (linha) {
       const excluir = el("button", "Excluir", "botao perigo");
       excluir.type = "button";

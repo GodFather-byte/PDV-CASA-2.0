@@ -149,3 +149,8 @@ tbody tr:last-child td { border-bottom: 0; }
 .recado { position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%); background: var(--topo); color: #fff;
   padding: .7rem 1rem; border-radius: 10px; box-shadow: var(--sombra); max-width: calc(100vw - 2rem); z-index: 20; }
 @media (prefers-reduced-motion: no-preference) { .botao, .menu button { transition: filter .15s, background .15s; } }
+
+/* Cabeçalho da tabela que ordena ao clicar, e o filtro de produtos */
+th .ordenar { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: inherit; }
+th .ordenar:hover, th .ordenar:focus-visible { text-decoration: underline; }
+.barra select { padding: .5rem; border-radius: .5rem; border: 1px solid #c9d3d0; background: #fff; font: inherit; max-width: 100%; }
