@@ -165,8 +165,34 @@ class TesteCheckoutSite(unittest.TestCase):
         self.chamadas.clear()
         with mock.patch.dict(os.environ, {
                 "PUBLIC_BASE_URL": "http://inseguro.exemplo",
-                "RENDER_EXTERNAL_URL": "https://render.exemplo.com/nao"}):
-            self.assertEqual(checkout.base_publica(), site_precos.URL_PUBLICA)
+                "RENDER_EXTERNAL_URL": "https://willpdv-nuvem-6sp0.onrender.com"}):
+            self.assertEqual(checkout.base_publica(), "https://willpdv.com.br")
+            self.assertEqual(site_precos.URL_PUBLICA, "https://willpdv.com.br")
+        self.chamadas.clear()
+        with mock.patch.dict(os.environ, {
+                "PUBLIC_BASE_URL": "",
+                "RENDER_EXTERNAL_URL": "https://willpdv-nuvem-6sp0.onrender.com"}):
+            r = self.comprar("adega-mensal")
+        self.assertEqual(r.status_code, 200, r.text)
+        pref = self.preferencia()["corpo"]
+        self.assertEqual(pref["back_urls"]["success"], "https://willpdv.com.br/site/obrigado")
+        self.assertEqual(pref["back_urls"]["pending"], "https://willpdv.com.br/site/pagamento-pendente")
+        self.assertEqual(pref["back_urls"]["failure"], "https://willpdv.com.br/site/pagamento-falhou")
+        self.assertEqual(pref["notification_url"], "https://willpdv.com.br/v1/pagamentos/webhook")
+        pedido_id = r.json()["pedido"]
+        self.pagamento["external_reference"] = pedido_id
+        no_dominio = TestClient(nuvem.app, base_url="https://willpdv.com.br")
+        aviso = no_dominio.post(
+            "/v1/pagamentos/webhook", params={"data.id": "555", "type": "payment"},
+            json={"status": "approved", "transaction_amount": 1}, follow_redirects=False)
+        self.assertEqual(aviso.status_code, 200, aviso.text)
+        self.assertEqual(aviso.json()["situacao"], "processado")
+        no_onrender = TestClient(nuvem.app, base_url="https://willpdv-nuvem-6sp0.onrender.com")
+        de_novo = no_onrender.post(
+            "/v1/pagamentos/webhook", params={"data.id": "555", "type": "payment"},
+            json={"status": "approved"}, follow_redirects=False)
+        self.assertEqual(de_novo.status_code, 200, de_novo.text)
+        self.assertNotIn("location", de_novo.headers)
         with mock.patch.dict(os.environ, {"MP_ACCESS_TOKEN": "APP_USR-ficticio", "PUBLIC_BASE_URL": ""}):
             r = self.comprar("adega-mensal")
         self.assertTrue(r.json()["init_point"].startswith("https://www.mercadopago.com.br/checkout/"))

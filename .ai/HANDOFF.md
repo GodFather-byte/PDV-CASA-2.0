@@ -1,43 +1,42 @@
-# Handoff de 24/11/2026: painel do dono com autoridade de dono no caixa (branch `painel-autoridade-dono`)
+# Handoff: site público no domínio willpdv.com.br
 
-A importação de produtos da EA-SUPERACOES2 seguia recusada com "Custo e lucro só aparecem para o gerente": o caixa
-aplicava o comando do painel com a autoridade de quem estava logado nele (operador comum) ou, sem gerente ativo na
-loja, sem autoridade nenhuma. Agora `RetaguardaController._como_gerente` marca `banco._autoridade_dono` durante o
-comando e `entidades` aceita o custo com essa marca; `_gerente()` prefere um gerente ao operador comum para assinar.
-No caixa, o operador comum continua sem mexer no custo. Teste em `tests/test_retaguarda.py`.
+O código passa a publicar o site em https://willpdv.com.br. Não houve merge nem deploy.
+O serviço no Render continua em https://willpdv-nuvem-6sp0.onrender.com para os caixas,
+o painel, o cardápio, o porteiro, a central, a retaguarda e o health check.
 
-Depois de instalar a versão com a correção: no painel, Alterações enviadas > Enviar de novo nos comandos recusados.
+## O que este PR muda
 
-## Antes: Handoff: painel com a main atual
+- Canonical, og:url, og:image, JSON-LD, sitemap.xml e robots.txt usam https://willpdv.com.br.
+- O checkout (`POST /v1/pagamentos/checkout`) manda `back_urls` e `notification_url` para
+  esse domínio. `RENDER_EXTERNAL_URL` não entra mais nessa escolha.
+- GET e HEAD de página pública no host `*.onrender.com` respondem 301 para o domínio,
+  preservando a query. `/v1`, webhooks, painel e `/health` não redirecionam.
 
-A branch do painel está em cima da main. Continuam valendo os dois lados: os relatórios e o
-reajuste deste pedido, e o que a main já mergeou (custo da importação em comando separado, com
-autoridade de gerente; aviso rápido da fila; no boot a nuvem rearma o aviso das alterações
-pendentes; a primeira pergunta de um token desconhecido olha a loja no banco uma vez).
+## O que o dono faz
 
-## O que o painel acrescenta
-A aba **Relatórios** mostra curva ABC, categoria, operador, por dia, estoque baixo, parados,
-sugestão de compra (7 dias) e o histórico do que foi pedido ao caixa. CSV e planilha saem do
-mesmo período. **Hoje** lista os mais vendidos do dia. Na rede, cada loja mostra o ticket e o
-comparativo baixa em CSV.
+No Render, no serviço da nuvem, defina:
 
-Na retaguarda, em Produtos: **Reajuste %** por categoria e **Editar marcados** (preço, categoria,
-estoque mínimo, inativar), sempre com prévia. A entrada de mercadoria continua na ficha, com motivo.
-O assistente usa a sessão ou o token `wpdv_`. Sem `dry_run: false` a escrita só devolve a prévia.
-Guia em `docs/api-assistente.md`.
+`PUBLIC_BASE_URL` = `https://willpdv.com.br`
 
-Reajuste e estoque usam `cadastro.salvar` e `estoque.movimento`. Caixa com a retaguarda ligada
-não precisa atualizar. O custo da planilha continua no segundo comando `produtos.importar`: o
-caixa antigo grava o produto e pode recusar só o custo, que se reenvia em Alterações enviadas.
+Sem barra no fim. Se essa variável já estiver com o endereço `*.onrender.com`, troque:
+valor preenchido ganha do padrão do código. Não altere `RENDER_EXTERNAL_URL`.
 
-## O que o dono faz na loja EA-SUPERACOES2
-A Importação #4 ficou em "Aguardando o caixa" porque o deploy zerou a memória do aviso. No caixa,
-feche o turno (ou registre uma venda): o programa que já está rodando manda na hora. O comando
-de produtos deve aplicar no 1.14.21. O comando de custo pode ser recusado até instalar o programa
-que contém a #149; depois, em Alterações enviadas, use Enviar de novo.
+Depois do deploy (este PR não publica):
+
+- Google Search Console: propriedade https://willpdv.com.br e o sitemap
+  https://willpdv.com.br/sitemap.xml.
+- Mercado Pago: pedido novo já avisa `https://willpdv.com.br/v1/pagamentos/webhook`.
+  O webhook das mensalidades (`/v1/webhooks/mercadopago`) continua no host onrender.
+  Não troque esse.
+
+A loja EA-SUPERACOES2 não foi mexida. Se o caixa ainda não recebeu a correção de custo,
+instale a versão e, em Alterações enviadas, use Enviar de novo nos comandos recusados.
 
 ## Testes
-`tests/test_gestao_painel.py`, `tests/test_importacao_painel.py` e `tests/test_ociosidade_neon.py`.
+
+`tests/test_site.py`, `tests/test_site_checkout.py` e `tests/test_site_teste.py`,
+mais a fumaça do caixa.
 
 ## Fora
-Não houve merge deste PR nem deploy.
+
+Sem mudança de preço, texto de venda, dado de produção, merge ou deploy.

@@ -2,8 +2,13 @@
 
 Páginas: `/`, `/site`, `/site/`, `/site/termos`, `/site/privacidade` e os retornos
 do checkout (`/site/obrigado`, `/site/pagamento-pendente`, `/site/pagamento-falhou`).
-O CSS fica em `/site/estilo.css`. Não monta arquivo estático na raiz, para não
-encobrir `/v1`, `/porteiro`, `/cardapio`, `/painel` e `/central`.
+O CSS fica em `/site/estilo.css`. Também publica `/robots.txt` e `/sitemap.xml`.
+Não monta arquivo estático na raiz, para não encobrir `/v1`, `/porteiro`,
+`/cardapio`, `/painel` e `/central`.
+
+Quem abre uma página pública pelo host `*.onrender.com` recebe 301 para
+https://willpdv.com.br. `/v1`, painel, webhooks, health e o resto da API ficam
+no host antigo, que os caixas usam.
 """
 from __future__ import annotations
 
@@ -15,7 +20,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 
 from backend import site_precos as precos
 from src.core.formatacao import fmt_brl
@@ -110,8 +115,14 @@ def _oferta(nome: str, cent: int, descricao: str) -> dict:
             "description": descricao}
 
 
+def url_publica() -> str:
+    """Mesma origem do checkout: PUBLIC_BASE_URL válida, senão https://willpdv.com.br."""
+    from backend.site_checkout import base_publica
+    return base_publica()
+
+
 def json_ld() -> str:
-    base = precos.URL_PUBLICA.rstrip("/")
+    base = url_publica().rstrip("/")
     negocio = f"{base}/#negocio"
     cidades = [{"@type": "City", "name": cidade} for cidade in precos.CIDADES]
     planos = (
@@ -202,7 +213,7 @@ def _trocas() -> dict[str, str]:
     return {
         "{{titulo}}": html.escape(TITULO, quote=True),
         "{{meta_descricao}}": html.escape(meta_descricao(), quote=True),
-        "{{url_publica}}": html.escape(precos.URL_PUBLICA.rstrip("/"), quote=True),
+        "{{url_publica}}": html.escape(url_publica().rstrip("/"), quote=True),
         "{{json_ld}}": json_ld(),
         "{{grade_servicos}}": grade_servicos(),
         "{{adega_mensal}}": adega,
@@ -292,9 +303,93 @@ def pagina_retorno(chave: str, request: Request) -> str:
     return texto
 
 
+# Só estas páginas mudam de host. O conjunto é fechado de propósito: um prefixo
+# /site pegaria no futuro uma rota que não é vitrine, e /v1 nunca entra aqui.
+PAGINAS_PUBLICAS = frozenset({
+    "/",
+    "/site",
+    "/site/",
+    "/site/termos",
+    "/site/termos/",
+    "/site/privacidade",
+    "/site/privacidade/",
+    "/site/obrigado",
+    "/site/obrigado/",
+    "/site/pagamento-pendente",
+    "/site/pagamento-pendente/",
+    "/site/pagamento-falhou",
+    "/site/pagamento-falhou/",
+    "/robots.txt",
+    "/sitemap.xml",
+})
+_CAMINHOS_SITEMAP = ("/", "/site/termos", "/site/privacidade")
+_HOST = re.compile(r"[a-z0-9.-]+")
+
+
+def _host_limpo(bruto: str) -> str:
+    """Primeiro host do cabeçalho, sem porta e sem ponto final."""
+    return bruto.split(",")[0].strip().split(":")[0].lower().rstrip(".")
+
+
+def host_pedido(request: Request) -> str:
+    """Host que o cliente pediu, sem porta."""
+    return _host_limpo(request.headers.get("host") or request.url.hostname or "")
+
+
+def destino_se_onrender(request: Request) -> str | None:
+    """URL absoluta do 301, ou None para a API seguir normal.
+
+    Só GET e HEAD, só página pública, só host *.onrender.com. Se o endereço
+    público também for onrender, não redireciona (evita laço). Se o proxy já
+    diz que o host original é o domínio público, também não redireciona.
+    """
+    if request.method not in ("GET", "HEAD"):
+        return None
+    host = host_pedido(request)
+    if not _HOST.fullmatch(host) or not host.endswith(".onrender.com"):
+        return None
+    if request.url.path not in PAGINAS_PUBLICAS:
+        return None
+    base = url_publica().rstrip("/")
+    destino_host = base.split("://", 1)[-1].lower().rstrip(".")
+    if not destino_host or destino_host == host or destino_host.endswith(".onrender.com"):
+        return None
+    encaminhado = _host_limpo(request.headers.get("x-forwarded-host") or "")
+    if encaminhado == destino_host:
+        return None
+    consulta = request.url.query
+    if any(ord(c) < 32 or c in " \\" for c in consulta):
+        consulta = ""
+    return base + request.url.path + (("?" + consulta) if consulta else "")
+
+
+def robots_txt() -> str:
+    base = url_publica().rstrip("/")
+    return f"User-agent: *\nAllow: /\n\nSitemap: {base}/sitemap.xml\n"
+
+
+def sitemap_xml() -> str:
+    base = url_publica().rstrip("/")
+    linhas = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for caminho in _CAMINHOS_SITEMAP:
+        linhas.append(f"  <url><loc>{html.escape(base + caminho)}</loc></url>")
+    linhas.append("</urlset>")
+    return "\n".join(linhas) + "\n"
+
+
 def instalar(app: FastAPI) -> None:
     cabecalho_html = {"Cache-Control": "no-cache"}
     cabecalho_css = {"Cache-Control": "public, max-age=3600"}
+
+    @app.middleware("http")
+    async def redirecionar_site_no_onrender(request: Request, call_next):
+        destino = destino_se_onrender(request)
+        if destino is None:
+            return await call_next(request)
+        return RedirectResponse(destino, status_code=301)
 
     @app.get("/", include_in_schema=False)
     @app.get("/site", include_in_schema=False)
@@ -311,6 +406,14 @@ def instalar(app: FastAPI) -> None:
     @app.get("/site/privacidade/", include_in_schema=False)
     def site_privacidade():
         return HTMLResponse(pagina("privacidade.html"), headers=cabecalho_html)
+
+    @app.get("/robots.txt", include_in_schema=False)
+    def site_robots():
+        return Response(robots_txt(), media_type="text/plain; charset=utf-8", headers=cabecalho_html)
+
+    @app.get("/sitemap.xml", include_in_schema=False)
+    def site_sitemap():
+        return Response(sitemap_xml(), media_type="application/xml; charset=utf-8", headers=cabecalho_html)
 
     @app.get("/site/estilo.css", include_in_schema=False)
     def site_css():

@@ -5,6 +5,7 @@ import json
 import os
 import re
 import unittest
+import xml.etree.ElementTree as ET
 from unittest import mock
 
 from backend import site, site_precos
@@ -194,3 +195,109 @@ class TesteSite(unittest.TestCase):
         self.assertNotIn("R$ 149,90", porteiro.text)
         self.assertEqual(self.http.get("/painel/").status_code, 200)
         self.assertEqual(self.http.get("/cardapio", follow_redirects=False).status_code, 307)
+
+    def test_dominio_publico_nas_metatags_no_sitemap_e_no_robots(self):
+        with mock.patch.dict(os.environ, {
+                "PUBLIC_BASE_URL": "",
+                "RENDER_EXTERNAL_URL": "https://willpdv-nuvem-6sp0.onrender.com"}):
+            self.assertEqual(site_precos.URL_PUBLICA, "https://willpdv.com.br")
+            self.assertEqual(site.url_publica(), "https://willpdv.com.br")
+            pagina = self.http.get("/")
+            termos = self.http.get("/site/termos")
+            privacidade = self.http.get("/site/privacidade")
+            robots = self.http.get("/robots.txt")
+            sitemap = self.http.get("/sitemap.xml")
+        self.assertEqual(pagina.status_code, 200)
+        texto = pagina.text
+        self.assertIn('rel="canonical" href="https://willpdv.com.br/"', texto)
+        self.assertIn('property="og:url" content="https://willpdv.com.br/"', texto)
+        self.assertIn('property="og:image" content="https://willpdv.com.br/site/balcao.webp"', texto)
+        self.assertNotIn("onrender.com", texto)
+        dados = json.loads(re.search(
+            r'<script type="application/ld\+json">(.*?)</script>', texto, re.S).group(1))
+        negocio = next(item for item in dados["@graph"] if item["@type"] == "LocalBusiness")
+        self.assertEqual(negocio["url"], "https://willpdv.com.br/")
+        self.assertEqual(negocio["image"], "https://willpdv.com.br/site/balcao.webp")
+        self.assertEqual(negocio["@id"], "https://willpdv.com.br/#negocio")
+        self.assertIn('rel="canonical" href="https://willpdv.com.br/site/termos"', termos.text)
+        self.assertIn('rel="canonical" href="https://willpdv.com.br/site/privacidade"', privacidade.text)
+        self.assertNotIn("onrender.com", termos.text)
+        self.assertNotIn("onrender.com", privacidade.text)
+        self.assertEqual(robots.status_code, 200)
+        self.assertIn("text/plain", robots.headers["content-type"])
+        self.assertIn("Sitemap: https://willpdv.com.br/sitemap.xml", robots.text)
+        self.assertNotIn("onrender.com", robots.text)
+        self.assertEqual(sitemap.status_code, 200)
+        self.assertIn("xml", sitemap.headers["content-type"])
+        self.assertNotIn("onrender.com", sitemap.text)
+        ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+        locs = [el.text for el in ET.fromstring(sitemap.text).findall("s:url/s:loc", ns)]
+        self.assertEqual(locs, [
+            "https://willpdv.com.br/",
+            "https://willpdv.com.br/site/termos",
+            "https://willpdv.com.br/site/privacidade",
+        ])
+        with mock.patch.dict(os.environ, {"PUBLIC_BASE_URL": "https://loja.exemplo.com"}):
+            self.assertIn('href="https://loja.exemplo.com/"', self.http.get("/").text)
+            self.assertIn("Sitemap: https://loja.exemplo.com/sitemap.xml", self.http.get("/robots.txt").text)
+
+    def test_onrender_redireciona_so_a_pagina_publica(self):
+        with mock.patch.dict(os.environ, {
+                "PUBLIC_BASE_URL": "",
+                "RENDER_EXTERNAL_URL": "https://willpdv-nuvem-6sp0.onrender.com"}):
+            antigo = TestClient(app, base_url="https://willpdv-nuvem-6sp0.onrender.com")
+            oficial = TestClient(app, base_url="https://willpdv.com.br")
+            www = TestClient(app, base_url="https://www.willpdv.com.br")
+            for caminho in ("/", "/site", "/site/", "/site/termos", "/site/termos/",
+                            "/site/privacidade", "/site/privacidade/", "/site/obrigado",
+                            "/site/pagamento-pendente", "/site/pagamento-falhou",
+                            "/robots.txt", "/sitemap.xml"):
+                resposta = antigo.get(caminho, follow_redirects=False)
+                self.assertEqual(resposta.status_code, 301, caminho)
+                self.assertEqual(resposta.headers["location"], "https://willpdv.com.br" + caminho)
+            cabeca = antigo.head("/site/termos", follow_redirects=False)
+            self.assertEqual(cabeca.status_code, 301)
+            self.assertEqual(cabeca.headers["location"], "https://willpdv.com.br/site/termos")
+            volta = antigo.get(
+                "/site/obrigado?payment_id=42&collection_id=99&status=approved",
+                follow_redirects=False)
+            self.assertEqual(volta.status_code, 301)
+            self.assertEqual(
+                volta.headers["location"],
+                "https://willpdv.com.br/site/obrigado?payment_id=42&collection_id=99&status=approved")
+            for caminho in ("/site/estilo.css", "/site/balcao.webp", "/site/teste.js", "/site/checkout.js"):
+                self.assertEqual(antigo.get(caminho, follow_redirects=False).status_code, 200, caminho)
+            for caminho in ("/health", "/v1/saude"):
+                self.assertEqual(antigo.get(caminho, follow_redirects=False).json(), {"status": "ok"})
+            for caminho in ("/painel/", "/cardapio/", "/porteiro/", "/central/", "/retaguarda/",
+                            "/v1/versao", "/v1/sync/pedido"):
+                resposta = antigo.get(caminho, follow_redirects=False)
+                self.assertNotEqual(resposta.status_code, 301, caminho)
+                self.assertNotIn("willpdv.com.br", resposta.headers.get("location", ""))
+            cardapio = antigo.get("/cardapio", follow_redirects=False)
+            self.assertEqual(cardapio.status_code, 307)
+            self.assertNotIn("willpdv.com.br", cardapio.headers.get("location", ""))
+            for caminho, metodo in (
+                    ("/v1/pagamentos/checkout", "post"),
+                    ("/v1/pagamentos/webhook", "post"),
+                    ("/v1/webhooks/mercadopago", "post"),
+                    ("/v1/sincronizar", "post"),
+                    ("/", "post")):
+                resposta = getattr(antigo, metodo)(caminho, follow_redirects=False)
+                self.assertNotEqual(resposta.status_code, 301, (metodo, caminho))
+                self.assertNotIn("willpdv.com.br", resposta.headers.get("location", ""))
+            self.assertEqual(oficial.get("/", follow_redirects=False).status_code, 200)
+            self.assertIn('href="https://willpdv.com.br/"', oficial.get("/").text)
+            self.assertEqual(www.get("/", follow_redirects=False).status_code, 200)
+            self.assertEqual(
+                antigo.get("/", headers={"x-forwarded-host": "willpdv.com.br"},
+                           follow_redirects=False).status_code, 200)
+            self.assertEqual(
+                antigo.get("/", headers={"x-forwarded-host": "evil.example"},
+                           follow_redirects=False).headers["location"],
+                "https://willpdv.com.br/")
+        with mock.patch.dict(os.environ, {
+                "PUBLIC_BASE_URL": "https://willpdv-nuvem-6sp0.onrender.com"}):
+            antigo = TestClient(app, base_url="https://willpdv-nuvem-6sp0.onrender.com")
+            self.assertEqual(antigo.get("/", follow_redirects=False).status_code, 200)
+            self.assertEqual(antigo.get("/v1/saude", follow_redirects=False).json(), {"status": "ok"})
