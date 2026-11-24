@@ -1558,6 +1558,9 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             registro["liquido_cent"] = registro["faturamento_cent"] - registro["devolucoes_cent"]
         return {"dias": list(por_dia.values())}
 
+    from backend.importacao_painel import instalar as instalar_importacao
+    instalar_importacao(router, Loja)
+
     app.include_router(router)
 
     # ---- o app web: /painel/ abre o index; os demais arquivos são estáticos. Sem a pasta (instalação parcial) só a API sobe.

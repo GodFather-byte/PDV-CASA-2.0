@@ -61,6 +61,104 @@ GRUPO_PADRAO, UNIDADE_PADRAO = "DIVERSOS", "UN"
 LIMITE_LINHAS = 5000
 
 
+def aviso_ean(codigo: str) -> str | None:
+    """Aviso (não recusa) quando o código tem 8 ou 13 dígitos e o dígito verificador do EAN não fecha."""
+    digitos = re.sub(r"\D", "", str(codigo or ""))
+    if len(digitos) not in (8, 13) or not digitos.isdigit():
+        return None
+    if digitos[-1] != _digito_ean(digitos[:-1]):
+        return (f"O código de barras {digitos} não confere o dígito do EAN-{len(digitos)}. "
+                "Confira; a linha ainda pode ser importada.")
+    return None
+
+
+def _digito_ean(corpo: str) -> str:
+    total = 0
+    for i, ch in enumerate(reversed(corpo)):
+        total += int(ch) * (3 if i % 2 == 0 else 1)
+    return str((10 - (total % 10)) % 10)
+
+
+def escrever_xlsx(linhas: list[list]) -> bytes:
+    """Planilha .xlsx mínima (textos compartilhados), no formato que `ler_tabela_dados` lê."""
+    def xml(texto: str) -> str:
+        return str(texto).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    textos: list[str] = []
+    indice: dict[str, int] = {}
+
+    def idx(valor) -> int:
+        texto = "" if valor is None else str(valor)
+        if texto not in indice:
+            indice[texto] = len(textos)
+            textos.append(texto)
+        return indice[texto]
+
+    def ref(col: int, row: int) -> str:
+        letras, n = "", col
+        while n:
+            n, resto = divmod(n - 1, 26)
+            letras = chr(65 + resto) + letras
+        return f"{letras}{row}"
+
+    linhas_xml = []
+    for i, linha in enumerate(linhas, start=1):
+        celulas = []
+        for j, valor in enumerate(linha, start=1):
+            if valor is None or valor == "":
+                continue
+            celulas.append(f'<c r="{ref(j, i)}" t="s"><v>{idx(valor)}</v></c>')
+        linhas_xml.append(f'<row r="{i}">{"".join(celulas)}</row>')
+    compartilhadas = "".join(f"<si><t>{xml(t)}</t></si>" for t in textos)
+    ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    pacote = {
+        "[Content_Types].xml": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            '<Override PartName="/xl/workbook.xml" '
+            'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+            '<Override PartName="/xl/worksheets/sheet1.xml" '
+            'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+            '<Override PartName="/xl/sharedStrings.xml" '
+            'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>'
+            "</Types>"
+        ),
+        "_rels/.rels": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+            'Target="xl/workbook.xml"/></Relationships>'
+        ),
+        "xl/workbook.xml": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            f'<workbook xmlns="{ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            '<sheets><sheet name="Produtos" sheetId="1" r:id="rId1"/></sheets></workbook>'
+        ),
+        "xl/_rels/workbook.xml.rels": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+            'Target="worksheets/sheet1.xml"/>'
+            '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" '
+            'Target="sharedStrings.xml"/></Relationships>'
+        ),
+        "xl/sharedStrings.xml": (
+            f'<?xml version="1.0" encoding="UTF-8"?><sst xmlns="{ns}" count="{len(textos)}" '
+            f'uniqueCount="{len(textos)}">{compartilhadas}</sst>'
+        ),
+        "xl/worksheets/sheet1.xml": (
+            f'<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="{ns}"><sheetData>{"".join(linhas_xml)}</sheetData></worksheet>'
+        ),
+    }
+    bruto = io.BytesIO()
+    with zipfile.ZipFile(bruto, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        for nome, conteudo in pacote.items():
+            z.writestr(nome, conteudo)
+    return bruto.getvalue()
+
+
 # ------------------------------------------------------------------------------------------- leitura de arquivo
 def _chave(texto) -> str:
     s = unicodedata.normalize("NFKD", str(texto or "")).encode("ascii", "ignore").decode().lower()
@@ -441,8 +539,13 @@ class ImportacaoProdutos:
         grupo_id = g["id"] if g else self.banco.inserir("grupos", {"nome": grupo})
         return self.banco.inserir("subgrupos", {"nome": grupo, "grupo_id": grupo_id})
 
-    def importar(self, previa: Previa) -> dict:
-        """Grava os produtos criados/atualizados da prévia, numa transação só. Devolve {'criados', 'atualizados', 'estoque'}."""
+    def importar(self, previa: Previa, *, modo_quantidade: str = "substituir") -> dict:
+        """Grava os produtos criados/atualizados da prévia, numa transação só. Devolve {'criados', 'atualizados', 'estoque'}.
+
+        `modo_quantidade`: `substituir` (padrão, o mesmo do caixa) faz a quantidade da planilha virar o estoque;
+        `somar` acrescenta a quantidade ao saldo do produto que já existe. Produto novo sempre começa com a quantidade."""
+        if modo_quantidade not in ("substituir", "somar"):
+            raise ErroNegocio("Modo de quantidade inválido: use substituir ou somar.")
         itens = previa.importaveis
         if not itens:
             raise ErroNegocio("Nada para importar: todas as linhas foram recusadas.")
@@ -486,12 +589,30 @@ class ImportacaoProdutos:
                 if p.quantidade is not None or p.estoque_minimo is not None:
                     com_estoque.append((pid, p))
             if com_estoque:
-                lanc = self.estoque.criar_lancamento("inicial", descricao="Importação de produtos")
+                substituir, somar, minimos = [], [], []
                 for pid, p in com_estoque:
-                    if p.quantidade is not None:
-                        self.estoque.adicionar_item(lanc, pid, p.quantidade, estoque_minimo=p.estoque_minimo)
+                    # Somar não zera o saldo de quem já existe: quantidade vazia ou zero não mexe no estoque.
+                    if modo_quantidade == "somar" and p.acao == "atualizar":
+                        if p.quantidade:
+                            somar.append((pid, p))
+                        elif p.estoque_minimo is not None:
+                            minimos.append((pid, p))
                     else:
-                        self.estoque.definir_minimo(pid, p.estoque_minimo or 0)
+                        substituir.append((pid, p))
+                if substituir:
+                    lanc = self.estoque.criar_lancamento("inicial", descricao="Importação de produtos")
+                    for pid, p in substituir:
+                        if p.quantidade is not None:
+                            self.estoque.adicionar_item(lanc, pid, p.quantidade, estoque_minimo=p.estoque_minimo)
+                        else:
+                            self.estoque.definir_minimo(pid, p.estoque_minimo or 0)
+                for pid, p in minimos:
+                    self.estoque.definir_minimo(pid, p.estoque_minimo or 0)
+                if somar:
+                    lanc = self.estoque.criar_lancamento("entrada", descricao="Importação de produtos (soma)")
+                    for pid, p in somar:
+                        self.estoque.adicionar_item(lanc, pid, p.quantidade, estoque_minimo=p.estoque_minimo,
+                                                    ligar_controle=True)
             self.banco.log("importacao_produtos", f"{criados} criados, {atualizados} atualizados, {len(com_estoque)} com estoque")
         return {"criados": criados, "atualizados": atualizados, "estoque": len(com_estoque)}
 
@@ -535,6 +656,222 @@ class ImportacaoProdutos:
                            fmt.fmt_qtd(r["atacado_qtd"], 4).rstrip("0").rstrip(",") if atacado else "",
                            fmt.fmt_num(r["preco_atacado_cent"]) if atacado else ""])
         return self._csv(linhas)
+
+
+def codigo_curto(codigo) -> str:
+    c = str(codigo or "").strip()
+    return str(int(c)) if c.isdigit() else c
+
+
+def _qtd_txt(valor) -> str:
+    if valor is None:
+        return ""
+    return fmt.fmt_qtd(valor, 4).rstrip("0").rstrip(",") or "0"
+
+
+def comando_de(p: LinhaPrevia) -> dict:
+    """A linha no formato que o caixa importa (`CAMPOS_LOTE`), com os valores já conferidos."""
+    return {
+        "codigo": codigo_curto(p.codigo),
+        "nome": p.nome,
+        "preco": fmt.fmt_num(p.preco_cent),
+        "custo": fmt.fmt_num(p.custo_cent) if p.custo_cent is not None else "",
+        "comissao": "",
+        "comissao_pct": str(p.comissao_pct).replace(".", ",") if p.comissao_pct is not None else "",
+        "grupo": p.grupo,
+        "unidade": p.unidade,
+        "quantidade": _qtd_txt(p.quantidade),
+        "estoque_minimo": _qtd_txt(p.estoque_minimo),
+        "codigo_barras": p.codigo_barras,
+        "atalho": p.atalho,
+        "controla_estoque": "",
+        "preco_gelada": fmt.fmt_num(p.preco_gelada_cent) if p.preco_gelada_cent is not None else "",
+        "atacado_qtd": _qtd_txt(p.atacado_qtd),
+        "preco_atacado": fmt.fmt_num(p.preco_atacado_cent) if p.preco_atacado_cent is not None else "",
+        "ncm": "",
+    }
+
+
+def _anterior_de(prod: dict, p: LinhaPrevia) -> dict:
+    ant = {
+        "codigo": codigo_curto(prod.get("codigo")),
+        "nome": str(prod.get("nome") or ""),
+        "preco_cent": int(prod.get("preco_cent") or 0),
+        "codigo_barras": re.sub(r"\D", "", str(prod.get("cbarra") or prod.get("codigo_barras") or "")),
+        "grupo": str(prod.get("grupo") or ""),
+        "unidade": str(prod.get("unidade") or UNIDADE_PADRAO),
+    }
+    if p.custo_cent is not None:
+        ant["custo_cent"] = int(prod.get("custo_medio_cent") or prod.get("custo_cent") or 0)
+    if p.quantidade is not None:
+        ant["qt_atual"] = 0 if prod.get("qt_atual") is None else prod.get("qt_atual")
+    return ant
+
+
+def _mesmo_produto(a: dict | None, b: dict | None) -> bool:
+    if a is None or b is None:
+        return False
+    if a is b:
+        return True
+    ia, ib = a.get("id"), b.get("id")
+    return ia is not None and ia == ib
+
+
+def classificar_espelho(tabela: list[dict], produtos: list[dict], *, unidades: set[str], grupos: set[str]) -> list[dict]:
+    """Prévia contra o cadastro que o caixa já enviou. Não grava nada.
+
+    O mesmo código de barras atualiza o produto (não cria outro). Sem código de barras, vale o código ou o nome,
+    como na importação do caixa. Linha inválida volta como `recusar`, com o motivo.
+    """
+    val = object.__new__(ImportacaoProdutos)
+    por_barras: dict[str, dict] = {}
+    por_nome: dict[str, dict] = {}
+    por_codigo: dict[str, dict] = {}
+
+    def preferir(atual: dict | None, novo: dict) -> dict:
+        if atual is None or (novo.get("ativo", True) and not atual.get("ativo", True)):
+            return novo
+        return atual
+
+    for prod in produtos:
+        barras = re.sub(r"\D", "", str(prod.get("cbarra") or prod.get("codigo_barras") or ""))
+        if barras:
+            por_barras[barras] = preferir(por_barras.get(barras), prod)
+        nome = str(prod.get("nome") or "").strip().casefold()
+        if nome:
+            por_nome[nome] = preferir(por_nome.get(nome), prod)
+        cod = str(prod.get("codigo") or "").strip()
+        if cod.isdigit():
+            por_codigo[_cod13(cod)] = preferir(por_codigo.get(_cod13(cod)), prod)
+
+    vistos_barras: dict[str, int] = {}
+    vistos_nome: dict[str, int] = {}
+    vistos_cod: dict[str, int] = {}
+    vistos_id: dict[int, int] = {}
+    saida: list[dict] = []
+    for bruto in tabela:
+        p = LinhaPrevia(linha=int(bruto.get("_linha") or 0), acao="criar")
+        try:
+            val._preencher(p, bruto, True, grupos, unidades)
+        except ValueError as erro:
+            p.acao, p.motivo = "recusar", str(erro)
+            saida.append(_linha_classificada(p, None))
+            continue
+        aviso = aviso_ean(p.codigo_barras)
+        if aviso:
+            p.avisos.append(aviso)
+        codigo_planilha = str(bruto.get("codigo") or "").strip()
+        dono_cod = None
+        if codigo_planilha:
+            if not (codigo_planilha.isdigit() and len(codigo_planilha) <= 13):
+                p.acao, p.motivo = "recusar", f"Código '{codigo_planilha}' inválido: use só números, até 13 dígitos."
+                saida.append(_linha_classificada(p, None))
+                continue
+            dono_cod = por_codigo.get(_cod13(codigo_planilha))
+        dono_barras = por_barras.get(p.codigo_barras) if p.codigo_barras else None
+        dono_nome = por_nome.get(p.nome.casefold())
+        anterior = None
+        if dono_barras is not None:
+            if dono_cod is not None and not _mesmo_produto(dono_cod, dono_barras):
+                p.acao, p.motivo = "recusar", (
+                    f"O código de barras {p.codigo_barras} já é de '{dono_barras.get('nome')}' "
+                    f"e o código {int(codigo_planilha)} é de '{dono_cod.get('nome')}'.")
+            elif (dono_nome is not None and not _mesmo_produto(dono_nome, dono_barras)
+                  and dono_nome.get("ativo", True)):
+                p.acao, p.motivo = "recusar", (
+                    f"O código de barras {p.codigo_barras} já é de '{dono_barras.get('nome')}' "
+                    f"e o nome '{p.nome}' é de outro produto.")
+            elif not dono_barras.get("ativo", True) and str(dono_barras.get("nome") or "").casefold() != p.nome.casefold():
+                p.acao, p.motivo = "recusar", (
+                    f"O código de barras {p.codigo_barras} é de '{dono_barras.get('nome')}' (inativo). "
+                    "Use o mesmo nome para reativar ou exclua o cadastro no caixa.")
+            else:
+                p.acao = "atualizar"
+                p.produto_id = dono_barras.get("id")
+                p.codigo = codigo_curto(dono_barras.get("codigo"))
+                if str(dono_barras.get("nome") or "").casefold() != p.nome.casefold():
+                    p.avisos.append(f"O nome vai mudar de '{dono_barras.get('nome')}' para '{p.nome}'.")
+                if not dono_barras.get("ativo", True):
+                    p.avisos.append("Estava inativo e volta a ficar ativo.")
+                anterior = _anterior_de(dono_barras, p)
+        elif dono_cod is not None:
+            if dono_nome is not None and not _mesmo_produto(dono_nome, dono_cod) and dono_nome.get("ativo", True):
+                p.acao, p.motivo = "recusar", (
+                    f"O código {int(codigo_planilha)} já é de '{dono_cod.get('nome')}' "
+                    f"e o nome '{p.nome}' é de outro produto.")
+            else:
+                p.acao = "atualizar"
+                p.produto_id = dono_cod.get("id")
+                p.codigo = codigo_curto(dono_cod.get("codigo"))
+                if str(dono_cod.get("nome") or "").casefold() != p.nome.casefold():
+                    p.avisos.append(f"O nome vai mudar de '{dono_cod.get('nome')}' para '{p.nome}'.")
+                anterior = _anterior_de(dono_cod, p)
+        elif dono_nome is not None:
+            barras_dele = re.sub(r"\D", "", str(dono_nome.get("cbarra") or dono_nome.get("codigo_barras") or ""))
+            if p.codigo_barras and barras_dele and barras_dele != p.codigo_barras:
+                p.acao, p.motivo = "recusar", (
+                    f"Já existe '{dono_nome.get('nome')}' com outro código de barras ({barras_dele}).")
+            else:
+                p.acao = "atualizar"
+                p.produto_id = dono_nome.get("id")
+                p.codigo = codigo_curto(dono_nome.get("codigo"))
+                if not dono_nome.get("ativo", True):
+                    p.avisos.append("Estava inativo e volta a ficar ativo.")
+                anterior = _anterior_de(dono_nome, p)
+        else:
+            p.acao = "criar"
+            if codigo_planilha:
+                p.codigo = codigo_curto(codigo_planilha)
+        if p.acao != "recusar" and p.codigo_barras:
+            if p.codigo_barras in vistos_barras:
+                p.acao, p.motivo = "recusar", f"O código de barras aparece de novo na linha {vistos_barras[p.codigo_barras]}."
+                anterior = None
+            else:
+                vistos_barras[p.codigo_barras] = p.linha
+        if p.acao != "recusar":
+            if p.nome.casefold() in vistos_nome:
+                p.acao, p.motivo = "recusar", f"O produto '{p.nome}' aparece de novo na linha {vistos_nome[p.nome.casefold()]}."
+                anterior = None
+            else:
+                vistos_nome[p.nome.casefold()] = p.linha
+        if p.acao != "recusar" and p.codigo:
+            chave = _cod13(p.codigo) if str(p.codigo).isdigit() else p.codigo
+            if chave in vistos_cod:
+                mostrado = int(p.codigo) if str(p.codigo).isdigit() else p.codigo
+                p.acao, p.motivo = "recusar", f"O código {mostrado} aparece de novo na linha {vistos_cod[chave]}."
+                anterior = None
+            else:
+                vistos_cod[chave] = p.linha
+        if p.acao == "atualizar" and p.produto_id is not None:
+            if p.produto_id in vistos_id:
+                p.acao, p.motivo = "recusar", f"Este produto já foi usado na linha {vistos_id[p.produto_id]}."
+                anterior = None
+            else:
+                vistos_id[p.produto_id] = p.linha
+        saida.append(_linha_classificada(p, anterior if p.acao == "atualizar" else None))
+    return saida
+
+
+def _linha_classificada(p: LinhaPrevia, anterior: dict | None) -> dict:
+    linha = {
+        "linha": p.linha,
+        "acao": p.acao,
+        "codigo": codigo_curto(p.codigo),
+        "nome": p.nome,
+        "preco": "" if p.acao == "recusar" and p.motivo.startswith(("Preço", "Falta o preço")) else (
+            fmt.fmt_num(p.preco_cent) if p.nome else ""),
+        "preco_cent": p.preco_cent,
+        "custo": fmt.fmt_num(p.custo_cent) if p.custo_cent is not None else "",
+        "grupo": p.grupo,
+        "unidade": p.unidade,
+        "quantidade": _qtd_txt(p.quantidade),
+        "codigo_barras": p.codigo_barras,
+        "motivo": p.motivo,
+        "avisos": list(p.avisos),
+        "anterior": anterior,
+        "comando": comando_de(p) if p.acao != "recusar" else None,
+    }
+    return linha
 
 
 @dataclass

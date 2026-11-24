@@ -1012,6 +1012,42 @@ body.valores-ocultos .grafico-svg { pointer-events: none; }
 #aviso-lojas { margin-top: .6rem; }
 a.botao-arquivo { text-decoration: none; }
 
+/* ---- Importar planilha (painel) ---- */
+#bloco-importar-produtos label, #bloco-importar-rede label { display: block; font-weight: 600; margin-top: .7rem; }
+#bloco-importar-produtos textarea,
+#bloco-importar-produtos input,
+#bloco-importar-produtos select,
+#bloco-importar-rede select {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: .3rem;
+  padding: .7rem .8rem;
+  border-radius: 10px;
+  border: 1px solid var(--borda);
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+  font-size: 1rem;
+}
+.acoes-importar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .4rem 0 .8rem; }
+.escolha-quantidade { border: 1px solid var(--borda); border-radius: 10px; padding: .6rem .8rem; margin: .8rem 0; }
+.escolha-quantidade label { font-weight: 500; display: flex; gap: .45rem; align-items: flex-start; margin-top: .35rem; }
+.escolha-quantidade input { width: auto; margin-top: .2rem; }
+.lista-previa { list-style: none; padding: 0; margin: .4rem 0 .8rem; display: grid; gap: .45rem; }
+.lista-previa li { display: grid; gap: .15rem; padding: .55rem .7rem; border: 1px solid var(--borda); border-radius: 10px; }
+.lista-previa .detalhe { color: var(--texto-suave); overflow-wrap: anywhere; }
+.linha-criar { background: var(--verde-claro); }
+.linha-atualizar { background: var(--azul-fundo); }
+.linha-recusar { background: var(--vermelho-fundo); }
+.linha-criar strong { color: var(--verde-medio); }
+.linha-atualizar strong { color: var(--azul); }
+.linha-recusar strong { color: var(--vermelho); }
+.busca-produto { display: grid; gap: .35rem; margin-bottom: .6rem; }
+#token-novo { word-break: break-all; font-family: ui-monospace, monospace; background: var(--fundo); padding: .6rem; border-radius: 8px; }
+@media (min-width: 1000px) {
+  #aba-produtos > #bloco-importar-produtos { grid-column: 1 / -1; }
+}
+
 /* ---- Rede de lojas ---- */
 .faixa-rede { display: flex; align-items: center; gap: .6rem; padding: .35rem .75rem; background: #0b3b31;
   color: #fff; position: sticky; top: 0; z-index: 11; height: 48px; box-sizing: border-box; }
