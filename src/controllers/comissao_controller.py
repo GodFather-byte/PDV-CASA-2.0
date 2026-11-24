@@ -420,6 +420,62 @@ class ComissaoController:
                 "recebeu_no_caixa": bool(recebido and movimento is not None),
                 "lancamentos": itens, "pago_em": agora, "tirou_do_caixa": tirou}
 
+    # ------------------------------------------------------------ reimpressão
+    def _inicio_periodo(self, dias: int) -> str:
+        """Início do período de `dias` dias operacionais (1 = só a noite de hoje), com a virada da casa."""
+        virada = min(max(self.banco.cfg_int("virada_dia_hora", 6), 0), 23)
+        hoje = fmt.dia_operacional(None, virada)
+        return fmt.faixa_dia_operacional(fmt.somar_dias(hoje, -(max(1, int(dias)) - 1)), virada)[0]
+
+    def acertos(self, dias: int = 7, garota=None, limite: int = 300) -> list[dict]:
+        """Pagamentos (acertos) dos últimos `dias` dias, do mais novo para o mais velho: o que o recibo mostra."""
+        sql = """SELECT a.*, COALESCE(a.nome, g.nome, '') AS nome_garota, o.nome AS operador
+                 FROM acertos_garotas a LEFT JOIN garotas g ON g.numero = a.garota
+                 LEFT JOIN operadores o ON o.id = a.operador_id WHERE a.criado_em >= ?"""
+        params: list = [self._inicio_periodo(dias)]
+        if garota not in (None, ""):
+            sql += " AND a.garota = ?"
+            params.append(self.validar_numero(garota))
+        return [dict(r) for r in self.banco.todos(sql + " ORDER BY a.criado_em DESC, a.id DESC LIMIT ?", params + [limite])]
+
+    def lancamentos_periodo(self, dias: int = 7, garota=None, limite: int = 500) -> list[dict]:
+        """Comissões lançadas (pendentes e pagas) dos últimos `dias` dias: cada uma teve a sua via."""
+        sql = """SELECT c.*, COALESCE(g.nome, '') AS nome_garota, o.nome AS operador
+                 FROM comissoes_garotas c LEFT JOIN garotas g ON g.numero = c.garota
+                 LEFT JOIN operadores o ON o.id = c.operador_id
+                 WHERE c.status IN ('pendente', 'paga') AND c.criado_em >= ?"""
+        params: list = [self._inicio_periodo(dias)]
+        if garota not in (None, ""):
+            sql += " AND c.garota = ?"
+            params.append(self.validar_numero(garota))
+        return [dict(r) for r in self.banco.todos(sql + " ORDER BY c.criado_em DESC, c.id DESC LIMIT ?", params + [limite])]
+
+    def recibo_do_acerto(self, acerto_id: int) -> dict:
+        """Remonta, a partir do banco, o mesmo resumo que `pagar` devolveu, para imprimir a segunda via do recibo."""
+        a = self.banco.um("SELECT * FROM acertos_garotas WHERE id = ?", (int(acerto_id),))
+        if a is None:
+            raise ErroNegocio("Pagamento não encontrado.")
+        a = dict(a)
+        quantidade = self.banco.valor(
+            "SELECT COUNT(*) FROM comissoes_garotas WHERE garota = ? AND status = 'paga' AND paga_em = ?",
+            (a["garota"], a["criado_em"]), 0)
+        consumos = [dict(r) for r in self.banco.todos(
+            "SELECT * FROM consumos_garotas WHERE acerto_id = ? ORDER BY id", (a["id"],))]
+        quartos = self.banco.valor("SELECT COALESCE(SUM(quantidade), 0) FROM shows_quartos WHERE acerto_id = ?",
+                                   (a["id"],), 0)
+        total, vale, consumo, pix = a["total_cent"], a["vale_cent"] or 0, a.get("consumo_cent") or 0, a["pix_cent"] or 0
+        a_pagar = total - vale - consumo
+        recebido = max(0, -a_pagar)
+        dinheiro = max(0, a_pagar) - pix
+        operador = self.banco.valor("SELECT nome FROM operadores WHERE id = ?", (a["operador_id"],), "") or ""
+        return {"garota": a["garota"], "nome": a["nome"] or self.nome(a["garota"]), "total_cent": total,
+                "comissao_cent": a["comissao_cent"], "quantidade": int(quantidade), "shows": a["shows_qtd"],
+                "valor_show_cent": a["show_valor_cent"], "shows_cent": a["shows_cent"], "shows_quartos": int(quartos),
+                "shows_manuais": a["shows_qtd"] - int(quartos), "pix_cent": pix, "vale_cent": vale,
+                "dinheiro_cent": dinheiro, "consumo_cent": consumo, "consumos": consumos, "recebido_cent": recebido,
+                "tirou_do_caixa": bool(a["tirou_do_caixa"]), "pago_em": a["criado_em"], "acerto_id": a["id"],
+                "operador": operador}
+
     def pix_do_turno(self, turno_id: int) -> int:
         """Quanto das contas das garotas foi pago por Pix neste turno (não passa pela gaveta; aparece no fechamento)."""
         return self.banco.valor("SELECT COALESCE(SUM(pix_cent), 0) FROM acertos_garotas WHERE turno_id = ?", (turno_id,), 0)

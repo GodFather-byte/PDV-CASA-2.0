@@ -621,7 +621,23 @@ def _comissoes_publicas(dados: dict) -> dict | None:
             "valor_cent": _int(item.get("valor_cent")), "status": item["status"],
             "criado_em": _txt(item.get("criado_em"), 19), "dia": dia,
         })
-    return {"linhas": linhas, "pendente_total_cent": _int(bloco.get("pendente_total_cent"))}
+    acertos = None
+    if isinstance(bloco.get("acertos"), list):          # caixa antes da 1.14.24 não manda os pagamentos
+        acertos = []
+        for item in bloco["acertos"][:200]:
+            if not isinstance(item, dict):
+                continue
+            dia = _txt(item.get("dia"), 10)
+            if not DIA_RE.fullmatch(dia):
+                continue
+            acertos.append({
+                "garota": _int(item.get("garota")), "nome": _txt(item.get("nome"), 60), "dia": dia,
+                "criado_em": _txt(item.get("criado_em"), 19), "operador": _txt(item.get("operador"), 60),
+                **{campo: _int(item.get(campo)) for campo in ("comissao_cent", "shows", "shows_cent", "total_cent",
+                                                              "pix_cent", "dinheiro_cent", "vale_cent", "consumo_cent")},
+            })
+    return {"linhas": linhas, "pendente_total_cent": _int(bloco.get("pendente_total_cent")), "acertos": acertos,
+            "consumo_pendente_cent": _int(bloco.get("consumo_pendente_cent"))}
 
 
 def _fechamentos_publicos(dados: dict) -> list[dict] | None:
@@ -934,8 +950,8 @@ def _com_origem(itens: list[dict], origem: str) -> list[dict]:
 def _gestao_dos_retratos(pares: list[tuple], ultimo: date) -> dict:
     """Junta o que cada caixa mandou no retrato. Lista ausente (PDV antigo) não é o mesmo que lista vazia."""
     varios = len(pares) > 1
-    comandas, linhas, fechamentos, sangrias = [], [], [], []
-    pendente = 0
+    comandas, linhas, fechamentos, sangrias, acertos = [], [], [], [], []
+    pendente = drinks = com_acertos = 0
     com_comandas = com_movimento = com_meses = 0
     somas: dict[str, dict] = defaultdict(lambda: {"faturamento_cent": 0, "quantidade": 0})
     modulos_fonte = [(linha, dados) for linha, dados in pares if _modulos_publicos(dados)]
@@ -949,7 +965,11 @@ def _gestao_dos_retratos(pares: list[tuple], ultimo: date) -> dict:
         bloco = _comissoes_publicas(dados)
         if bloco is not None:
             pendente += bloco["pendente_total_cent"]
+            drinks += bloco["consumo_pendente_cent"]
             linhas.extend(_com_origem(bloco["linhas"], origem))
+            if bloco["acertos"] is not None:
+                com_acertos += 1
+                acertos.extend(_com_origem(bloco["acertos"], origem))
         fechados = _fechamentos_publicos(dados)
         if fechados is not None:
             com_movimento += 1
@@ -968,7 +988,8 @@ def _gestao_dos_retratos(pares: list[tuple], ultimo: date) -> dict:
         "comandas": comandas,
         "comandas_sincronizadas": com_comandas > 0,
         "comandas_parciais": bool(n) and com_comandas != n,
-        "comissoes": {"linhas": linhas, "pendente_total_cent": pendente},
+        "comissoes": {"linhas": linhas, "pendente_total_cent": pendente, "acertos": acertos,
+                      "acertos_sincronizados": com_acertos > 0, "consumo_pendente_cent": drinks},
         "fechamentos": fechamentos, "sangrias": sangrias,
         "movimento_sincronizado": com_movimento > 0,
         "movimento_parcial": bool(n) and com_movimento != n,

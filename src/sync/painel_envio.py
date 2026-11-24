@@ -37,6 +37,7 @@ LOTE = 200                    # vendas por envio: cabe numa chamada curta mesmo 
 LIMITE_ABAIXO_MINIMO = 50     # produtos listados no retrato (o resto vira só contagem)
 LIMITE_COMANDAS = 80          # comandas abertas no retrato; o resto não cabe numa chamada curta
 LIMITE_COMISSOES = 300        # lançamentos de comissão dos últimos 30 dias
+LIMITE_ACERTOS = 200          # pagamentos às garotas (acertos) dos últimos 30 dias
 LIMITE_FECHAMENTOS = 40
 LIMITE_SANGRIAS = 200
 LIMITE_NOTAS_LUCRO = 24          # notas de compra no retrato: só totais, sem os itens
@@ -283,7 +284,26 @@ def _comissoes(banco, virada: int, hoje: str) -> dict:
         })
     pendente = banco.valor(
         "SELECT COALESCE(SUM(valor_cent), 0) FROM comissoes_garotas WHERE status = 'pendente'", (), 0)
-    return {"linhas": linhas, "pendente_total_cent": int(pendente)}
+    acertos = []
+    for r in banco.todos(
+            """SELECT a.garota, COALESCE(a.nome, g.nome, '') AS nome, a.criado_em, a.comissao_cent, a.shows_qtd,
+                      a.shows_cent, a.total_cent, a.pix_cent, a.vale_cent, a.consumo_cent, o.nome AS operador
+               FROM acertos_garotas a LEFT JOIN garotas g ON g.numero = a.garota
+               LEFT JOIN operadores o ON o.id = a.operador_id
+               WHERE a.criado_em >= ? ORDER BY a.criado_em DESC, a.id DESC LIMIT ?""", (inicio, LIMITE_ACERTOS)):
+        total, pix = int(r["total_cent"]), int(r["pix_cent"] or 0)
+        vale, consumo = int(r["vale_cent"] or 0), int(r["consumo_cent"] or 0)
+        acertos.append({
+            "garota": int(r["garota"]), "nome": r["nome"] or "", "criado_em": (r["criado_em"] or "")[:19],
+            "dia": fmt.dia_operacional(r["criado_em"], virada), "comissao_cent": int(r["comissao_cent"]),
+            "shows": int(r["shows_qtd"]), "shows_cent": int(r["shows_cent"]), "total_cent": total, "pix_cent": pix,
+            "dinheiro_cent": max(0, total - vale - consumo) - pix, "vale_cent": vale, "consumo_cent": consumo,
+            "operador": r["operador"] or "",
+        })
+    drinks = banco.valor(
+        "SELECT COALESCE(SUM(valor_cent), 0) FROM consumos_garotas WHERE status = 'pendente'", (), 0)
+    return {"linhas": linhas, "pendente_total_cent": int(pendente), "acertos": acertos,
+            "consumo_pendente_cent": int(drinks)}
 
 
 def _fechamentos_e_sangrias(banco, virada: int, hoje: str) -> tuple[list[dict], list[dict]]:
