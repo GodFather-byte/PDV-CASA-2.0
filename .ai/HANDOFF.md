@@ -1,4 +1,17 @@
-# Handoff: site público no domínio willpdv.com.br
+# Handoff de 24/11/2026: "Atualizar o caixa agora" na central (branch `atualizar-caixa-agora`)
+
+- **Intervalo:** o caixa consulta versão nova de hora em hora (`src/atualizacao/cliente.py` `INTERVALO_HORAS = 1`).
+  Para isso não acordar o Neon, `/v1/atualizacao/ultima` usa `ultima_em_cache` (30 min) e `publicar` limpa o cache.
+- **Botão na central** (Suporte e caixas): `POST /v1/fornecedor/lojas/{chave}/atualizar-agora` grava o pedido em
+  `memoria_nuvem.pedir_atualizacao` (6 h, número = segundos do relógio, para não se repetir depois de reiniciar).
+  O pedido sai em `GET /v1/sync/pedido` no campo `atualizar`.
+- **Caixa:** `Sincronizador._anotar_pedido_atualizacao` guarda o pedido pendente e `_atualizar_se_pedido` chama
+  `rodada(..., imediata=True)`. Assim instala com o turno aberto e passa por cima do "adiar", mas venda aberta ainda
+  segura. O PDV aberto também ouve o pedido (`ServicoAtualizacao` chama `atender_central`) quando a sincronização
+  completa não roda nele.
+- Testes em `tests/test_atualizar_caixa_agora.py`. Documentação em `docs/ATUALIZACAO.md`.
+
+## Antes: site público no domínio willpdv.com.br
 
 O código passa a publicar o site em https://willpdv.com.br. Não houve merge nem deploy.
 O serviço no Render continua em https://willpdv-nuvem-6sp0.onrender.com para os caixas,

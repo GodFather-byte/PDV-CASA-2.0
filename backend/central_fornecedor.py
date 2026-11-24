@@ -671,6 +671,18 @@ def instalar(app, Loja):
         db.commit()
         return {"consultadas": total}
 
+    @app.post("/v1/fornecedor/lojas/{chave}/atualizar-agora")
+    def atualizar_agora(chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
+        """Os caixas da loja instalam a versão publicada na próxima pergunta à nuvem (segundos), sem esperar o turno
+        fechar. Venda, mesa ou comanda aberta ainda seguram a instalação até o caixa ficar livre."""
+        obter(db, chave)
+        motivo = texto(dados, "motivo", 500)
+        from backend.memoria_nuvem import memoria
+        ident = memoria.pedir_atualizacao(chave)
+        auditar(db, "atualizar_caixa_agora", chave, motivo)
+        db.commit()
+        return {"pedido": ident}
+
     @app.post("/v1/fornecedor/lojas/{chave}/plano")
     def definir_plano(chave: str, dados: dict = Body(...), _=Depends(sessao), db=Depends(get_db)):
         obter(db, chave)

@@ -19,8 +19,8 @@ from src.versao import VERSAO, chave, mais_nova, valida
 
 log = logging.getLogger("pdv.atualizacao")
 
-INTERVALO_HORAS = 6
-RETENTAR_MINUTOS = 15             # nuvem sem resposta (o Render acorda devagar): tenta de novo logo, não em 6 horas
+INTERVALO_HORAS = 1
+RETENTAR_MINUTOS = 15             # nuvem sem resposta (o Render acorda devagar): tenta de novo logo, não em 1 hora
 OCIOSO_MINUTOS = 10               # instalação automática só com o turno fechado há este tempo
 CANAL = "estavel"
 CHAVE_CONSULTA = "atualizacao_pacote_em"
@@ -294,7 +294,7 @@ def conferir_tentativa(banco) -> dict | None:
 
 
 def rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: str | None = None,
-           somente_local: bool = False) -> dict:
+           somente_local: bool = False, imediata: bool = False) -> dict:
     """Serializa a atualização por banco, inclusive entre o aplicativo e o --sync."""
     from src.core.instancia import InstanciaUnica
     if getattr(banco, "remoto", False):
@@ -304,15 +304,16 @@ def rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: s
     if trava is not None and not trava.adquirir():
         return {"acao": "em_andamento"}
     try:
-        return _rodada(banco, http, forcar, instalar, publica_hex, somente_local)
+        return _rodada(banco, http, forcar, instalar, publica_hex, somente_local, imediata)
     finally:
         if trava is not None:
             trava.liberar()
 
 
 def _rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: str | None = None,
-           somente_local: bool = False) -> dict:
-    """Consulta, baixa e, se o caixa estiver livre, dispara a instalação. Devolve o que fez."""
+           somente_local: bool = False, imediata: bool = False) -> dict:
+    """Consulta, baixa e, se o caixa estiver livre, dispara a instalação. Devolve o que fez.
+    `imediata` (pedido da central): não espera o turno fechar nem respeita o "adiar"; venda aberta ainda segura."""
     if not banco.cfg("api_url").strip():
         return {"acao": "sem_nuvem"}
     tentativa = banco.cfg(CHAVE_TENTATIVA)
@@ -352,9 +353,9 @@ def _rodada(banco, http=None, forcar: bool = False, instalar=None, publica_hex: 
     if not atual.get("versao") or not mais_nova(atual["versao"], VERSAO):
         return {"acao": "em_dia"}
     forcada = bool(atual.get("obrigatoria")) or abaixo_da_minima(VERSAO, atual.get("minima") or "")
-    if not forcada and adiada(banco, atual["versao"]):
+    if not forcada and not imediata and adiada(banco, atual["versao"]):
         return {"acao": "adiada", "versao": atual["versao"]}
-    motivo = caixa_ocupado(banco) if forcar else motivo_automatico(banco)
+    motivo = caixa_ocupado(banco) if (forcar or imediata) else motivo_automatico(banco)
     if motivo:
         return {"acao": "esperar", "versao": atual["versao"], "motivo": motivo}
     if instalar is not None:

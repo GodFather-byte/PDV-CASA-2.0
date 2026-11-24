@@ -23,6 +23,9 @@ from src.database.conexao import RAIZ, BancoDados
 log = logging.getLogger("pdv.sync")
 
 INTERVALO_MINIMO = 5
+CHAVE_ATUALIZAR_PENDENTE = "atualizacao_central_pendente"
+CHAVE_ATUALIZAR_FORCAR = "atualizacao_central_consultar"
+CHAVE_ATUALIZAR_ATENDIDO = "atualizacao_central_atendida"
 ESPERA_MAXIMA = 600
 
 
@@ -53,6 +56,7 @@ class Sincronizador:
         try:
             from src.sync import ociosidade
             pedido = self._pedido_remoto()
+            self._atualizar_se_pedido()
             forcar = pedido is not None or ociosidade.flush_pedido(self.banco)
             try:
                 ultimo = float(self.banco.cfg("sync_ultima_rodada_epoch", "0") or 0)
@@ -98,6 +102,8 @@ class Sincronizador:
         except Exception:
             log.debug("Não consultei o pedido de atualização do celular.", exc_info=True)
             return None
+        if isinstance(dados, dict):
+            self._anotar_pedido_atualizacao(dados.get("atualizar"))
         if not isinstance(dados, dict) or not dados.get("pedido"):
             return None
         ident = dados.get("id")
@@ -105,6 +111,48 @@ class Sincronizador:
             return None
         self._pedido_visto = ident
         return ident
+
+    def atender_central(self) -> None:
+        """Só o pedido "Atualizar o caixa agora" (GET leve, só memória do Render). O PDV aberto chama isto quando a
+        sincronização completa não roda nele, para o botão da central chegar mesmo sem o --sync."""
+        self._pedido_remoto()
+        self._atualizar_se_pedido()
+
+    def _anotar_pedido_atualizacao(self, ident) -> None:
+        """A central pediu "Atualizar o caixa agora". Guarda o id novo como pendente; um id já atendido não volta."""
+        try:
+            ident = int(ident or 0)
+        except (TypeError, ValueError):
+            return
+        if ident <= 0 or str(ident) in (self.banco.cfg(CHAVE_ATUALIZAR_ATENDIDO), self.banco.cfg(CHAVE_ATUALIZAR_PENDENTE)):
+            return
+        log.info("A central pediu a atualização do programa agora (pedido %s).", ident)
+        self.banco.cfg_set(CHAVE_ATUALIZAR_PENDENTE, str(ident))
+        self.banco.cfg_set(CHAVE_ATUALIZAR_FORCAR, "1")
+
+    def _atualizar_se_pedido(self) -> None:
+        """Pedido da central pendente: consulta na hora (só na primeira vez) e instala assim que não houver venda aberta,
+        mesmo com o turno aberto. Sai da fila quando instala, quando já está em dia ou quando não há pacote."""
+        pendente = self.banco.cfg(CHAVE_ATUALIZAR_PENDENTE)
+        if not pendente or not self.configuracao()["url"]:
+            return
+        forcar = self.banco.cfg(CHAVE_ATUALIZAR_FORCAR) == "1"
+        try:
+            from src.atualizacao.cliente import disparar_instalacao, rodada
+            resultado = rodada(self.banco, self._http, forcar=forcar, instalar=disparar_instalacao, imediata=True)
+        except Exception:
+            log.exception("Falha ao atender o pedido de atualização da central.")
+            self.banco.cfg_set(CHAVE_ATUALIZAR_PENDENTE, "")       # erro de verdade: não insiste a cada rodada
+            self.banco.cfg_set(CHAVE_ATUALIZAR_ATENDIDO, pendente)
+            return
+        acao = (resultado or {}).get("acao")
+        if acao in ("sem_resposta", "em_andamento"):
+            return                                              # tenta de novo na próxima rodada, consultando outra vez
+        self.banco.cfg_set(CHAVE_ATUALIZAR_FORCAR, "")
+        if acao == "esperar":
+            return                                              # venda aberta: instala quando o caixa ficar livre
+        self.banco.cfg_set(CHAVE_ATUALIZAR_PENDENTE, "")
+        self.banco.cfg_set(CHAVE_ATUALIZAR_ATENDIDO, pendente)
 
     def _avisar_conclusao(self, pedido) -> None:
         from src.core import formatacao as fmt
@@ -126,7 +174,7 @@ class Sincronizador:
             log.debug("Não avisei o celular que o envio terminou.", exc_info=True)
 
     def _rodada(self, forcar: bool = False) -> bool:
-        """Uma rodada: vê se há versão nova e renova a licença (cada um no máximo a cada 6 horas). Devolve False se falhou."""
+        """Uma rodada: vê se há versão nova (a cada hora) e renova a licença (a cada 6 horas). Devolve False se falhou."""
         if not self.configuracao()["url"]:
             return True                              # nuvem desligada: nada a fazer
         self._ponte()
