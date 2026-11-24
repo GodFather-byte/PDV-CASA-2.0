@@ -43,7 +43,7 @@ MODULOS = [
     'src.sync.painel_status',
     'src.ui_qt.cardapio_qr',
     'src.ui_qt.estado_nuvem',
-    "src.autoteste", "src.autoteste_qt", "src.atualizacao.cliente", "src.atualizacao.manifesto", "src.atualizacao.tarefa",
+    "src.autoteste", "src.autoteste_qt", "src.atualizacao.cliente", "src.atualizacao.adicional", "src.atualizacao.manifesto", "src.atualizacao.tarefa",
     "src.fiscal.nfce", "src.fiscal.ncm", "src.fiscal.focus", "src.fiscal.danfe", "src.fiscal.servico",
     "src.fiscal.sefaz.chave", "src.fiscal.sefaz.qrcode", "src.fiscal.sefaz.xml_nfce", "src.fiscal.sefaz.assinatura",
     "src.fiscal.sefaz.cliente", "src.fiscal.sefaz.provedor", "src.pagamentos.mercadopago_pix", "src.controllers.pix_controller",

@@ -1246,10 +1246,28 @@ class App:
                     self.estado_servicos.append(f"{nome}: indisponível; veja o log")
         else:
             self.estado_servicos = ["Serviços de arquivo não iniciados"]
+        if self.banco.remoto and self.banco.caminho != ":memory:":
+            # Caixa adicional parado na entrada também percebe quando o principal se atualiza (e se atualiza junto).
+            self._vigia_principal = QTimer()
+            self._vigia_principal.setInterval(VIGIA_PRINCIPAL_MS)
+            sinais.ligar_metodo(self._vigia_principal.timeout, self, "_vigiar_principal")
+            self._vigia_principal.start()
         self.entrar()
+
+    def _vigiar_principal(self) -> None:
+        if self._finalizada or getattr(self, "_atualizando_adicional", False):
+            return
+        try:
+            self.banco.valor("SELECT 1")
+        except rede.ErroVersaoDiferente as erro:
+            self._atualizar_adicional_em_uso(erro)
+        except Exception:                                     # noqa: BLE001 - queda comum: a tela avisa quando usar
+            logging.getLogger("pdv.qt").debug("Caixa principal sem resposta na vigia.", exc_info=True)
 
     def _erro_na_tela(self, tipo, valor, traceback):
         registro.registrar_excecao(tipo, valor, traceback, "tela Qt")
+        if not self._finalizada and self._atualizar_adicional_em_uso(valor):
+            return
         if not self._finalizada and isinstance(valor, rede.ErroLigacao):
             QMessageBox.warning(self.principal or self.login, "Caixa principal fora do ar", str(valor))
         elif not self._finalizada:
@@ -1257,6 +1275,35 @@ class App:
                 self.principal or self.login, "Erro nesta tela",
                 "Ocorreu um erro inesperado. O que já estava gravado foi preservado. "
                 "Consulte o log; se repetir, reinicie o programa.")
+
+    def _atualizar_adicional_em_uso(self, erro) -> bool:
+        """O principal se atualizou com este caixa adicional aberto: oferece instalar a mesma versão já. A venda aberta
+        fica no banco do principal e continua lá quando este caixa reabrir."""
+        from src.atualizacao import adicional
+        if getattr(self, "_atualizando_adicional", False) or not adicional.pode_atualizar(erro):
+            return False
+        self._atualizando_adicional = True
+        try:
+            pai = self.principal or self.login
+            ninguem_usando = getattr(self.ctx, "operador", None) is None      # na tela de entrada: atualiza sem perguntar
+            if not ninguem_usando and QMessageBox.question(
+                    pai, "Caixa principal atualizado",
+                    f"O caixa principal foi atualizado para a versão {erro.versao_principal}. Este caixa precisa da "
+                    "mesma versão para continuar.\n\nAtualizar agora? O programa fecha e reabre sozinho; o que está "
+                    "aberto fica guardado no caixa principal.",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes) != QMessageBox.StandardButton.Yes:
+                return False
+            from src.ui_qt.rede_caixas import atualizar_adicional
+            resultado = atualizar_adicional(pai, erro)
+            if resultado.get("acao") == "instalar":
+                self.finalizar()
+                self.aplicacao.quit()
+                return True
+            QMessageBox.warning(pai, "Caixa adicional", resultado.get("mensagem") or str(erro))
+            return True
+        finally:
+            self._atualizando_adicional = False
 
     def entrar(self):
         if self._finalizada:
@@ -1324,6 +1371,9 @@ class App:
         if self._finalizada:
             return
         self._finalizada = True
+        vigia = getattr(self, "_vigia_principal", None)
+        if vigia is not None:
+            vigia.stop()
         if self._gancho is not None and sys.excepthook is self._gancho:
             sys.excepthook = self._gancho_anterior
         try:
@@ -1400,6 +1450,9 @@ def aplicar_icone(aplicacao) -> bool:
         return False
 
 
+VIGIA_PRINCIPAL_MS = 60_000
+
+
 def main():
     """Entrada de produção; nunca continua se a proteção inicial falhar."""
     existente = QApplication.instance()
@@ -1418,8 +1471,17 @@ def main():
             try:
                 app = App(aplicacao=aplicacao)
             except rede.ErroLigacao as erro:
-                from src.ui_qt.rede_caixas import perguntar_sem_ligacao
+                from src.atualizacao import adicional
+                from src.ui_qt.rede_caixas import atualizar_adicional, perguntar_sem_ligacao
+                if adicional.pode_atualizar(erro):
+                    # Principal atualizado: este caixa instala a mesma versão sozinho (parado, sem venda aqui).
+                    resultado = atualizar_adicional(None, erro)
+                    if resultado.get("acao") == "instalar":
+                        return 0                    # o instalador fecha e reabre o programa
+                    erro = rede.ErroLigacao(f"{erro}\n\n{resultado.get('mensagem') or ''}".strip())
                 escolha = perguntar_sem_ligacao(None, erro)
+                if escolha == "tentar":
+                    adicional.esquecer_tentativa()      # o operador pediu: pode tentar instalar de novo
                 if escolha == "fechar":
                     return 1
                 if escolha == "desligar":       # volta ao banco deste computador: recomeça a proteção pelo arquivo

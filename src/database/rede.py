@@ -60,6 +60,17 @@ class ErroLigacao(sqlite3.OperationalError):
     """Sem conversa com o caixa principal. É um erro do SQLite para as telas tratarem como falha de banco."""
 
 
+class ErroVersaoDiferente(ErroLigacao):
+    """O principal recusou por versão diferente e disse qual é a dele e onde está a nuvem: com isso o caixa adicional
+    baixa e instala a mesma versão sozinho (src/atualizacao/adicional.py)."""
+
+    def __init__(self, mensagem: str, versao_principal: str = "", nuvem: str = "", loja: str = ""):
+        super().__init__(mensagem)
+        self.versao_principal = versao_principal
+        self.nuvem = nuvem
+        self.loja = loja
+
+
 # ----------------------------------------------------------------- mensagens
 def _para_json(valor):
     if isinstance(valor, (bytes, bytearray, memoryview)):
@@ -421,6 +432,10 @@ class ConexaoRemota:
                 continue
             if "e" in resposta:
                 canal.fechar()
+                versao = resposta.get("versao_principal")
+                if isinstance(versao, str) and versao:
+                    raise ErroVersaoDiferente(resposta["e"][1], versao, str(resposta.get("nuvem") or "")[:300],
+                                              str(resposta.get("loja") or "")[:64])
                 raise ErroLigacao(resposta["e"][1])
             self._canal = canal
             self.principal = resposta
@@ -660,6 +675,17 @@ class ServidorBanco:
         canal.protocolo = cabecalho[len(_MAGICA)]
         return canal
 
+    @staticmethod
+    def _dados_da_versao(banco: BancoDados, ola: dict) -> dict:
+        """Recusa por versão (mesma edição): a versão do principal e a nuvem (sem o token) para o adicional se atualizar.
+        O canal já é cifrado com o código de ligação, então só um caixa desta loja recebe isto."""
+        from src.core import edicao
+        from src.versao import VERSAO
+        if ola.get("o") != "ola" or ola.get("edicao") != edicao.atual().chave or ola.get("versao") == VERSAO:
+            return {}
+        return {"versao_principal": VERSAO, "nuvem": banco.cfg("api_url").strip(),
+                "loja": banco.cfg("chave_loja").strip()}
+
     def _conferir(self, banco: BancoDados, ola: dict, protocolo: int) -> str | None:
         """None se o caixa adicional pode entrar; senão, o motivo, em texto para o operador dele."""
         from src.core import edicao
@@ -698,7 +724,7 @@ class ServidorBanco:
             banco.conexao.set_authorizer(_nega_anexos)
             motivo = self._conferir(banco, ola, canal.protocolo)
             if motivo:
-                canal.enviar({"e": ["ErroLigacao", motivo]})
+                canal.enviar({"e": ["ErroLigacao", motivo], **self._dados_da_versao(banco, ola)})
                 return
             if ola.get("operador") is not None:
                 try:

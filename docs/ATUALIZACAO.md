@@ -208,3 +208,22 @@ publicada já, sem esperar a consulta de hora em hora nem o fechamento do turno 
 
 A nuvem guarda a última versão publicada em memória por 30 minutos (`ultima_em_cache`), e publicar limpa esse cache.
 Assim a consulta de hora em hora dos caixas quase nunca acorda o Neon.
+
+## Caixa adicional (vários caixas na mesma loja)
+
+O caixa adicional usa o banco do principal e não entra na rodada de atualização. Quando o principal se atualiza, ele
+recusa o adicional por versão diferente e manda, no canal cifrado com o código de ligação, a versão dele, a nuvem (sem
+o token) e a chave da loja (`rede.ErroVersaoDiferente`). O adicional então segue `src/atualizacao/adicional.py`:
+
+- consulta a nuvem e só aceita **exatamente a versão do principal**, com a assinatura e o SHA-256 conferidos, como no
+  principal. Em seguida entrega a instalação à mesma tarefa do Windows;
+- **na abertura**, ou parado na tela de entrada, instala sem perguntar. **Com operador**, pergunta antes. A venda
+  aberta fica no banco do principal;
+- percebe a troca de versão do principal sozinho: uma vigia de 60 s roda só no adicional. Por isso o botão
+  "Atualizar o caixa agora" da central também acaba atualizando o adicional;
+- faz uma tentativa por versão a cada 30 minutos, para não entrar em laço se o instalador falhar. "Tentar de novo"
+  libera outra tentativa;
+- se o adicional estiver mais novo que o principal, a mensagem pede para atualizar o principal.
+
+Só funciona a partir da 1.14.25 instalada no adicional. Um adicional mais antigo precisa receber essa versão à mão
+uma vez.
