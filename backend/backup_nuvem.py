@@ -20,7 +20,10 @@ from sqlalchemy import Column, Integer, LargeBinary, String, inspect, text
 from sqlalchemy.orm import Session, defer
 
 from backend.database import Base, engine, get_db
-from src.core.backup_seguro import CABECALHO as CABECALHO_CIFRADO
+
+# Mesmo prefixo de src/core/backup_seguro.CABECALHO. A API só confere o começo do arquivo;
+# não abre a cifra, então não puxa a biblioteca cryptography (ela não está na nuvem).
+CABECALHO_CIFRADO = b"WILLPDV-BKP\x01"
 
 LIMITE_ARQUIVO = 40 * 1024 * 1024          # gzip de um envio
 LIMITE_LOJA_BYTES = 80 * 1024 * 1024       # soma guardada por loja

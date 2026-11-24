@@ -33,6 +33,13 @@ class _Http:
         return self.http.get(url, headers=headers)
 
 
+@unittest.skipIf(nuvem_backup is None, "Dependências da nuvem ausentes")
+class TesteCabecalhoDoBackup(unittest.TestCase):
+    def test_o_prefixo_conferido_na_nuvem_e_o_do_caixa(self):
+        from src.core.backup_seguro import CABECALHO
+        self.assertEqual(nuvem_backup.CABECALHO_CIFRADO, CABECALHO)
+
+
 @unittest.skipIf(TestClient is None or nuvem_backup is None, "Dependências da nuvem ausentes")
 class BaseBackup(unittest.TestCase):
     def setUp(self):

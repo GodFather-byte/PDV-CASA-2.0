@@ -22,3 +22,6 @@ O dono aprovou os achados. Este trabalho só corrige; não publica nem faz merge
 
 Precisa de versão nova do caixa para o backup cifrado e para recusar HTTP público.
 Sem essa versão, a nuvem recusa backup em claro.
+
+A API confere só o prefixo `WILLPDV-BKP`. Não importa a cifra: o job do PostgreSQL
+não instala `cryptography`, e puxar esse módulo derrubava a subida da API nesse job.
