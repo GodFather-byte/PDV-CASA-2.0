@@ -16,6 +16,7 @@ LOTE_PADRAO = 900
 LOTE_MIN = 60
 LOTE_MAX = 3600
 SONDA_SEG = 25
+SONDA_RETAGUARDA_SEG = 5          # com a retaguarda ligada, a pergunta (só memória) fica mais curta
 ESPERA_LOCAL = 5
 BATIMENTO_SEG = 15 * 60
 OCIOSO_MIN = 15
@@ -49,6 +50,18 @@ def url_base(api_url: str) -> str:
     if base.endswith("/v1/sincronizar"):
         base = base[: -len("/v1/sincronizar")]
     return base
+
+
+def intervalo_sonda(banco) -> int:
+    """Segundos entre perguntas ao Render (não acorda o banco). Com a retaguarda ligada, mais curto,
+    para uma importação do painel chegar em poucos segundos."""
+    try:
+        from src.sync import retaguarda
+        if retaguarda.ligado(banco):
+            return SONDA_RETAGUARDA_SEG
+    except Exception:
+        pass
+    return SONDA_SEG
 
 
 def url_pedido(api_url: str) -> str:

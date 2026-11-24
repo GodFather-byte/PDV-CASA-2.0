@@ -1,24 +1,29 @@
-# Handoff: importar planilha no painel
+# Handoff: custo da importação e fila rápida
 
-O dono importa vários produtos pela aba **Produtos** do painel (`Importar planilha`), com a mesma planilha do caixa.
-Na rede (`/painel/?grupo=CHAVE`), escolhe a loja e abre a importação dela. Nada é gravado na prévia: confirmar
-enfileira `produtos.importar` e o caixa aplica na sincronização. O mesmo código de barras atualiza; não duplica.
-A quantidade **substitui** o estoque (padrão) ou **soma**, à escolha na tela.
+Importação pedida pelo painel com coluna de custo era recusada pelo caixa com
+"Custo e lucro só aparecem para o gerente" quando quem estava logado não era gerente
+(ou ninguém estava). O lote inteiro caía, inclusive os produtos sem problema de custo.
+O custo agora entra com autoridade de gerente, só nessa aplicação da retaguarda. Na tela
+do caixa, operador continua sem ver nem gravar custo.
 
-O assistente usa a mesma rota com a sessão do painel ou com um token `wpdv_...` gerado nessa tela (aparece uma vez;
-no banco só fica o hash). `POST /v1/painel/importacao` sem `dry_run: false` só devolve a prévia.
+Planilha com custo vira dois comandos: o primeiro grava nome, preço e estoque; o segundo
+só o custo, sem repetir a quantidade. Caixa antigo aplica o primeiro e pode recusar o
+segundo. Em Alterações enviadas, **Enviar de novo** recoloca o comando recusado na fila.
 
-## O que entrou
-- Prévia: criados, atualizados, erros com motivo, aviso de dígito EAN-8/EAN-13.
-- Texto colado, arquivo `.csv`/`.xlsx` e lista JSON. Modelo para baixar. Busca e exportação CSV/XLSX.
-- Histórico e desfazer a última (o caixa restaura o preço/estoque e desativa o produto novo se ainda não foi vendido).
-- Testes em `tests/test_importacao_painel.py`.
+A fila não espera os 15 minutos: ao gravar o comando a nuvem toca o mesmo aviso em memória
+que o botão do celular (`GET /v1/sync/pedido`, sem abrir o banco). Caixa já instalado, com
+o envio para a nuvem ligado, busca em até cerca de 30 s. Programa atualizado pergunta a
+cada 5 s com a retaguarda ligada.
 
-## Fora deste pedido
-- Não houve merge nem deploy. Caixa antigo recusa `produtos.desfazer` até atualizar; a importação em si usa o comando
-  que ele já conhece (`produtos.importar`). Somar e casar por código de barras também pedem o programa novo.
-- A rota genérica de comandos continua sem deixar o dono mandar lote; só esta tela libera.
+## Testes
+`tests/test_importacao_painel.py`: custo com operador de caixa logado, separação do custo,
+aviso que acorda o caixa, reenvio só do que foi recusado.
+
+## Fora
+Não houve merge nem deploy. Outro agente mexe nas telas grandes do painel; este pedido não.
 
 ## Pendências
-- Dono: `MP_ACCESS_TOKEN` (e `MP_WEBHOOK_SECRET`) no Render para o checkout do site; `ANTHROPIC_API_KEY`.
-- Lojas desatualizadas: Resenha (1.14.9, ainda com o erro ao sair), Império, EA Superações 1/2/3.
+- Dono: `MP_ACCESS_TOKEN` (e `MP_WEBHOOK_SECRET`) no Render; `ANTHROPIC_API_KEY`.
+- Lojas desatualizadas: Resenha (1.14.9), Império, EA Superações 1/2/3. O custo da
+  importação e a pergunta a cada 5 s pedem o programa novo. O aviso de meio minuto e o
+  reenvio já valem no programa que está na loja.

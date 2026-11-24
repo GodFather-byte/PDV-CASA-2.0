@@ -77,7 +77,7 @@ class Sincronizador:
         """Lê o pedido do celular na memória do Render. None se não há pedido ou ainda não deu o intervalo."""
         from src.sync import ociosidade
         agora = time.monotonic()
-        if agora - self._ultima_sonda < ociosidade.SONDA_SEG:
+        if agora - self._ultima_sonda < ociosidade.intervalo_sonda(self.banco):
             return None
         self._ultima_sonda = agora
         cfg = self.configuracao()

@@ -983,7 +983,8 @@
     const dados = await api("/comandos");
     const raiz = el("section");
     raiz.append(el("h1", "Alterações enviadas"));
-    raiz.append(el("p", "O caixa busca as alterações na sincronização (em geral em até 15 minutos com a loja aberta) e responde se aplicou.", "suave"));
+    raiz.append(el("p", "O caixa busca as alterações em seguida (em geral em menos de meio minuto com a loja aberta; " +
+      "com o programa atualizado, em poucos segundos) e esta lista se atualiza sozinha enquanto alguma espera.", "suave"));
     if (!dados.comandos.length) { raiz.append(el("p", "Nenhuma alteração enviada ainda.", "vazio cartao")); return raiz; }
     const lista = el("ul", null, "lista");
     dados.comandos.forEach((c) => {
@@ -997,6 +998,21 @@
       const [rotulo, classe] = SITUACOES[c.situacao] || [c.situacao, "espera"];
       const acoes = el("div", null, "acoes");
       acoes.append(el("span", rotulo, "selo " + classe));
+      if (c.situacao === "recusado" && (c.tipo === "produtos.importar" || c.tipo === "produtos.desfazer")) {
+        const deNovo = el("button", "Enviar de novo", "botao pequeno");
+        deNovo.type = "button";
+        deNovo.dataset.reenviar = String(c.id);
+        deNovo.addEventListener("click", async () => {
+          deNovo.disabled = true;
+          try {
+            await api("/comandos/" + c.id + "/reenviar", "POST");
+            recado("Enviado de novo. O caixa busca em seguida.");
+          } catch (erro) { recado(erro.message); }
+          await atualizarContador();
+          await recarregar();
+        });
+        acoes.append(deNovo);
+      }
       if (c.situacao === "pendente") {
         const cancelar = el("button", "Cancelar", "botao pequeno secundario");
         cancelar.type = "button";
@@ -1036,11 +1052,21 @@
     await carregar();
     $("botao-atualizar").disabled = false;
   });
-  // Com alteração esperando o caixa, olha de novo a cada minuto (aba visível, sem diálogo aberto).
+  // Na lista de alterações, olha a cada 5 s enquanto alguma espera (a tela acompanha o caixa).
+  // Fora dela, o contador do menu continua a cada minuto.
+  let pulsosFora = 0;
   setInterval(() => {
     if (document.hidden || $("dialogo").open || !estado.visao || !estado.visao.pendentes || $("tela-app").hidden) return;
     if (document.activeElement && document.activeElement.tagName === "INPUT") return;
-    atualizarContador().then(recarregar);
-  }, 60000);
+    if (estado.secao === "alteracoes") {
+      atualizarContador().then(recarregar);
+      return;
+    }
+    pulsosFora += 1;
+    if (pulsosFora >= 12) {
+      pulsosFora = 0;
+      atualizarContador().then(recarregar);
+    }
+  }, 5000);
   iniciar();
 })();

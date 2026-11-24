@@ -69,6 +69,17 @@ class TesteParserEPrevia(unittest.TestCase):
         self.assertTrue(por_linha[6]["avisos"])
 
 
+class TesteSeparacaoDoCusto(unittest.TestCase):
+    def test_o_custo_vai_num_segundo_lote_sem_repetir_a_quantidade(self):
+        from backend.importacao_painel import separar_custo
+        sem, com = separar_custo([
+            {"nome": "A", "preco": "1,00", "custo": "0,50", "quantidade": "4", "codigo_barras": "1"},
+            {"nome": "B", "preco": "2,00", "custo": "", "quantidade": "1"},
+        ])
+        self.assertEqual([(l["nome"], l["custo"], l["quantidade"]) for l in sem], [("A", "", "4"), ("B", "", "1")])
+        self.assertEqual([(l["nome"], l["custo"], l["quantidade"]) for l in com], [("A", "0,50", "")])
+
+
 class TesteAplicacaoNoCaixa(BaseTeste):
     def setUp(self):
         super().setUp()
@@ -111,6 +122,26 @@ class TesteAplicacaoNoCaixa(BaseTeste):
             "codigo_barras": BARRAS, "grupo": grupo, "unidade": "UN"}}]}, "produtos.desfazer")
         self.assertEqual(volta["situacao"], "aplicado", volta)
         self.assertEqual(self.banco.valor("SELECT preco_cent FROM produtos WHERE id = ?", (self.pid,)), 800)
+
+    def test_custo_entra_mesmo_com_operador_de_caixa_logado(self):
+        from src.controllers.cadastro_controller import CadastroController
+        from src.core.erros import ErroPermissao
+        from src.sync.ociosidade import SONDA_RETAGUARDA_SEG, SONDA_SEG, intervalo_sonda
+        caixa = self.banco.inserir("operadores", {"nome": "CAIXA", "senha": "x", "nivel": 1, "cargo_id": 1, "ativo": 1})
+        self.banco.definir_operador_auditoria(caixa)
+        r = self.aplicar(1, {"casar_barras": True, "linhas": [
+            {"nome": "SKOL", "preco": "9,00", "custo": "4,00", "codigo_barras": BARRAS}]})
+        self.assertEqual(r["situacao"], "aplicado", r)
+        self.assertEqual(self.banco.valor("SELECT custo_medio_cent FROM produtos WHERE id = ?", (self.pid,)), 400)
+        self.assertEqual(self.banco._operador_auditoria, caixa)
+        with self.assertRaises(ErroPermissao):
+            CadastroController(self.banco).salvar("produtos", {"custo_medio_cent": "1,00"}, self.pid)
+        self.banco.cfg_set("painel_dono", "S")
+        self.banco.cfg_set("api_url", "http://testserver/v1/sincronizar")
+        self.banco.cfg_set("api_token", "t")
+        self.assertEqual(intervalo_sonda(self.banco), SONDA_RETAGUARDA_SEG)
+        self.banco.cfg_set("retaguarda_nuvem", "N")
+        self.assertEqual(intervalo_sonda(self.banco), SONDA_SEG)
 
 
 try:
@@ -250,6 +281,53 @@ class TesteEndpoint(BaseNuvem):
         self.assertEqual(com.status_code, 200, com.text)
         self.assertEqual(com.json()["criados"], 1)
         self.assertEqual(self.previa({"loja": "ADEGA-2", "texto": "Produto;Preço\nAgua teste rede;3,00\n"}, token).status_code, 404)
+
+    def test_custo_acorda_o_caixa_e_a_recusa_pode_ser_reenviada(self):
+        import json
+        from backend.memoria_nuvem import memoria
+        from backend.retaguarda import RetaguardaComando
+        memoria.lembrar_token("token-da-adega-1", "ADEGA-1")
+        token_caixa = {"Authorization": "Bearer token-da-adega-1"}
+        antes = self.http.get("/v1/sync/pedido", headers=token_caixa).json()
+        r = self.aplicar({"texto": "Produto;Preço de venda;Preço de custo;Código de barras\n"
+                          "Cerveja teste;" + "9,00;4,00;" + BARRAS + "\n"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIn("segunda alteração", r.json()["mensagem"])
+        with nuvem.SessionLocal() as db:
+            comandos = (db.query(RetaguardaComando).filter_by(chave_loja="ADEGA-1", situacao="pendente")
+                        .order_by(RetaguardaComando.id).all())
+            corpos = [json.loads(c.dados) for c in comandos]
+        self.assertEqual(len(corpos), 2)
+        self.assertEqual(corpos[0]["linhas"][0]["custo"], "")
+        self.assertEqual(corpos[1]["linhas"][0]["custo"], "4,00")
+        self.assertEqual(corpos[1]["linhas"][0]["quantidade"], "")
+        caixa = self.banco.inserir("operadores", {"nome": "CAIXA", "senha": "x", "nivel": 1, "cargo_id": 1, "ativo": 1})
+        self.banco.definir_operador_auditoria(caixa)
+        retaguarda.sincronizar(self.banco, self.ponte, forcar=True)
+        self.assertEqual(self.banco.valor("SELECT custo_medio_cent FROM produtos WHERE id = ?", (self.pid,)), 400)
+        self.assertEqual(self.banco.valor("SELECT preco_cent FROM produtos WHERE id = ?", (self.pid,)), 900)
+        self.assertEqual(self.banco._operador_auditoria, caixa)
+        depois = self.http.get("/v1/sync/pedido", headers=token_caixa).json()
+        self.assertTrue(depois["pedido"])
+        self.assertNotEqual(depois.get("id"), antes.get("id"))
+        with nuvem.SessionLocal() as db:
+            recusado = (db.query(RetaguardaComando).filter_by(chave_loja="ADEGA-1")
+                        .order_by(RetaguardaComando.id.desc()).first())
+            recusado.situacao = "recusado"
+            recusado.detalhe = "Custo e lucro só aparecem para o gerente."
+            db.commit()
+            ident = recusado.id
+        self.assertEqual(self.http.post(f"/v1/painel/retaguarda/comandos/{ident}/reenviar").status_code, 401)
+        de_novo = self.http.post(f"/v1/painel/retaguarda/comandos/{ident}/reenviar", headers=self.dono)
+        self.assertEqual(de_novo.status_code, 200, de_novo.text)
+        self.assertEqual(de_novo.json()["comando"]["situacao"], "pendente")
+        self.assertTrue(de_novo.json()["comando"]["resumo"].startswith("Reenvio:"))
+        novo_id = de_novo.json()["comando"]["id"]
+        self.assertEqual(self.http.post(f"/v1/painel/retaguarda/comandos/{novo_id}/reenviar",
+                                        headers=self.dono).status_code, 409)
+        pagina = self.http.get("/retaguarda/app.js").text
+        self.assertIn("Enviar de novo", pagina)
+        self.assertIn("5000", pagina)
 
     def _limpar_rede(self, grupo_id):
         from backend.grupos import Grupo
