@@ -1559,7 +1559,9 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         return {"dias": list(por_dia.values())}
 
     from backend.importacao_painel import instalar as instalar_importacao
+    from backend.gestao_painel import instalar as instalar_gestao
     instalar_importacao(router, Loja)
+    instalar_gestao(router, Loja)
 
     app.include_router(router)
 

@@ -301,13 +301,15 @@ def consolidado(db: Session, grupo: Grupo, inicio, fim) -> dict:
             bloco = painel.montar_lucro(da_loja, [])
             pares = painel._ler_caixas(db, loja.chave_loja)
             _, momento, recebido_em = painel._mais_recente(pares)
+            vendas_loja = sum(1 for v in da_loja if v.get("status") == "fechada")
             por_loja.append({
                 "chave": loja.chave_loja, "nome": loja.nome,
                 "faturamento_cent": bloco["faturamento_cent"],
                 "custo_cent": bloco["custo_cent"], "lucro_cent": bloco["lucro_cent"],
                 "margem": bloco["margem"],
                 # Para a tela da rede: quantas vendas no período e se o caixa da loja está enviando.
-                "vendas": sum(1 for v in da_loja if v.get("status") == "fechada"),
+                "vendas": vendas_loja,
+                "ticket_medio_cent": round(bloco["faturamento_cent"] / vendas_loja) if vendas_loja else 0,
                 "atualizado_em": recebido_em, "atraso_min": painel._atraso_min(momento, recebido_em),
             })
             retratos.extend(dados for _, dados in pares)

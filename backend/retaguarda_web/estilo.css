@@ -79,6 +79,8 @@ body:has(#tela-app[hidden]) #botao-atualizar { display: none; }
 .conteudo { min-width: 0; outline: none; }
 .barra { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); padding: .65rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: .75rem 0; }
 .barra input[type="search"] { flex: 1 1 14rem; }
+.tabela-cadastro .marca { width: 2.4rem; text-align: center; }
+.tabela-cadastro .marca input { width: 1.15rem; height: 1.15rem; }
 .marcar { display: inline-flex; align-items: center; gap: .4rem; font-size: .9rem; }
 
 input, select, textarea { font: inherit; color: inherit; background: var(--superficie); border: 1px solid var(--borda);

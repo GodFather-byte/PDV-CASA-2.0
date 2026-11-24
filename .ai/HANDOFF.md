@@ -8,40 +8,36 @@ No caixa, o operador comum continua sem mexer no custo. Teste em `tests/test_ret
 
 Depois de instalar a versão com a correção: no painel, Alterações enviadas > Enviar de novo nos comandos recusados.
 
-## Antes (23/11): fila da importação #4 parada depois do deploy
+## Antes: Handoff: painel com a main atual
 
-A Importação #4 da loja EA-SUPERACOES2 (E&A SUPERACOES 2) ficou em
-"Aguardando o caixa" porque o deploy da #149 zerou a memória do Render. O aviso
-que faz o caixa ocioso buscar a fila dura 90 s e só é visto se o token da loja
-já estiver na memória. O último envio autenticado dessa loja foi 23:25 BRT,
-antes do deploy das 23:26. As sondas seguintes não acharam a loja e o aviso
-expirou. A retaguarda está ligada; há um caixa (1.14.21, "EeAsuperaçoes").
+A branch do painel está em cima da main. Continuam valendo os dois lados: os relatórios e o
+reajuste deste pedido, e o que a main já mergeou (custo da importação em comando separado, com
+autoridade de gerente; aviso rápido da fila; no boot a nuvem rearma o aviso das alterações
+pendentes; a primeira pergunta de um token desconhecido olha a loja no banco uma vez).
 
-O texto "custo de 1 produto(s)" contava o lote, não as linhas. O comando 8 tem
-67 linhas, todas com custo e nenhuma com quantidade. O comando 7 tem as 67
-linhas de nome, preço e estoque. Nada foi reenviado nem apagado na produção.
+## O que o painel acrescenta
+A aba **Relatórios** mostra curva ABC, categoria, operador, por dia, estoque baixo, parados,
+sugestão de compra (7 dias) e o histórico do que foi pedido ao caixa. CSV e planilha saem do
+mesmo período. **Hoje** lista os mais vendidos do dia. Na rede, cada loja mostra o ticket e o
+comparativo baixa em CSV.
 
-## O que este PR muda
+Na retaguarda, em Produtos: **Reajuste %** por categoria e **Editar marcados** (preço, categoria,
+estoque mínimo, inativar), sempre com prévia. A entrada de mercadoria continua na ficha, com motivo.
+O assistente usa a sessão ou o token `wpdv_`. Sem `dry_run: false` a escrita só devolve a prévia.
+Guia em `docs/api-assistente.md`.
 
-- `GET /v1/sync/pedido`: token ainda desconhecido olha a loja no banco uma vez
-  e guarda o resultado. Token que não é de loja não volta ao banco por 10 min.
-  `/health` continua sem abrir o banco.
-- No boot, a nuvem rearma o aviso das lojas que ainda têm comando pendente.
-- O resumo do segundo comando passa a dizer "custo de 67 produto(s)". O texto
-  já gravado na #4 não muda.
+Reajuste e estoque usam `cadastro.salvar` e `estoque.movimento`. Caixa com a retaguarda ligada
+não precisa atualizar. O custo da planilha continua no segundo comando `produtos.importar`: o
+caixa antigo grava o produto e pode recusar só o custo, que se reenvia em Alterações enviadas.
 
-## O que o dono faz agora, sem esperar o deploy
-
-No caixa da loja, feche o turno (ou registre uma venda). O programa que já está
-rodando manda na hora, porque a janela de 15 minutos desde o último envio
-(23:25) já passou. O comando "56 novos, 11 atualizações" deve aplicar no
-1.14.21. O comando de custo deve ser recusado de novo até instalar o programa
+## O que o dono faz na loja EA-SUPERACOES2
+A Importação #4 ficou em "Aguardando o caixa" porque o deploy zerou a memória do aviso. No caixa,
+feche o turno (ou registre uma venda): o programa que já está rodando manda na hora. O comando
+de produtos deve aplicar no 1.14.21. O comando de custo pode ser recusado até instalar o programa
 que contém a #149; depois, em Alterações enviadas, use Enviar de novo.
 
 ## Testes
-`tests/test_ociosidade_neon.py` (primeira pergunta acha a loja; a segunda de um
-token inválido não abre o banco) e `tests/test_importacao_painel.py` (resumo
-conta as linhas).
+`tests/test_gestao_painel.py`, `tests/test_importacao_painel.py` e `tests/test_ociosidade_neon.py`.
 
 ## Fora
-Não houve alteração de dados em produção, reenvio, merge nem deploy.
+Não houve merge deste PR nem deploy.
