@@ -477,8 +477,12 @@ def _postar(banco, corpo: dict, http=None) -> dict:
         import requests as http
     r = None
     try:
-        r = http.post(url_envio(banco.cfg("api_url")), json=corpo,
-                      headers={"Authorization": f"Bearer {banco.cfg('api_token').strip()}"}, timeout=(5, 30))
+        from src.core.endereco_nuvem import autorizar
+        destino = url_envio(banco.cfg("api_url"))
+        cabecalho = autorizar(destino, banco.cfg("api_token"))
+        if cabecalho is None:
+            raise RuntimeError("Painel do dono: o endereço da nuvem precisa ser HTTPS.")
+        r = http.post(destino, json=corpo, headers=cabecalho, timeout=(5, 30))
         if r.status_code != 200:
             raise RuntimeError(f"Painel do dono: a nuvem respondeu HTTP {r.status_code}.")
         dados = r.json()
@@ -602,11 +606,15 @@ def trocar_senha_na_nuvem(url_api: str, token: str, senha: str | None = None, ht
     senha = validar_senha(senha) if (senha or "").strip() else None
     if not (url_api or "").strip() or not (token or "").strip():
         raise ErroNegocio("Preencha o endereço da nuvem e o token da API em Configurações > Nuvem antes de trocar a senha do painel.")
+    from src.core.endereco_nuvem import autorizar
+    destino = url_senha(url_api)
+    cabecalho = autorizar(destino, token)
+    if cabecalho is None:
+        raise ErroNegocio("O endereço da nuvem precisa ser HTTPS. A senha do painel NÃO foi trocada.")
     if http is None:
         import requests as http
     try:
-        r = http.post(url_senha(url_api), json={"senha": senha} if senha else {},
-                      headers={"Authorization": f"Bearer {token.strip()}"}, timeout=timeout)
+        r = http.post(destino, json={"senha": senha} if senha else {}, headers=cabecalho, timeout=timeout)
     except OSError as e:
         raise ErroNegocio("Sem conexão com a nuvem: a senha NÃO foi trocada. Confira a internet e o endereço em "
                           "Configurações > Nuvem.") from e

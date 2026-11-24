@@ -19,7 +19,6 @@ PREFIXO = "WILL1-"
 CHAVE = re.compile(r"[A-Za-z0-9._-]{1,64}")
 TOKEN = re.compile(r"[A-Za-z0-9_-]{16,200}")
 URL_MAX = 200
-LOCAIS = ("localhost", "127.0.0.1")
 
 
 def _url_valida(url: str) -> bool:
@@ -31,7 +30,8 @@ def _url_valida(url: str) -> bool:
         return False
     if partes.username or partes.password or not partes.hostname or partes.query or partes.fragment:
         return False
-    return partes.scheme == "https" or (partes.scheme == "http" and partes.hostname in LOCAIS)
+    from src.core.endereco_nuvem import aceita_credencial
+    return aceita_credencial(url)
 
 
 def gerar(url: str, chave: str, token: str) -> str:

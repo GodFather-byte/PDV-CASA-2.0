@@ -145,9 +145,16 @@ class TesteCentralFornecedor(unittest.TestCase):
         self.assertIn("Secure", r.headers["set-cookie"])
         self.assertIn("SameSite=strict", r.headers["set-cookie"])
         self.assertEqual(r.headers["cache-control"], "no-store")
-        for _ in range(6):
+        for _ in range(8):
             self.assertEqual(self.http.post("/v1/fornecedor/login", json={"credencial": "errada"}, headers={"X-Central-Login": "1"}).status_code, 401)
         self.assertEqual(self.http.post("/v1/fornecedor/login", json={"credencial": "errada"}, headers={"X-Central-Login": "1"}).status_code, 429)
+        # A senha certa não entra na conta e destrava este IP. Outro IP não foi travado.
+        self.assertEqual(self.http.post("/v1/fornecedor/login", json={"credencial": "token-de-teste"},
+                                        headers={"X-Central-Login": "1"}).status_code, 200)
+        with central._trava:
+            central._tentativas["203.0.113.8|fornecedor"].extend([central.time.monotonic()] * 8)
+        self.assertEqual(self.http.post("/v1/fornecedor/login", json={"credencial": "token-de-teste"},
+                                        headers={"X-Central-Login": "1"}).status_code, 200)
 
     def test_lista_traz_a_saude_de_cada_loja_sem_expor_vendas(self):
         from datetime import datetime

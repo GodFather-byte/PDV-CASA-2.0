@@ -87,6 +87,10 @@ class Sincronizador:
         cfg = self.configuracao()
         if not cfg["url"] or not cfg["token"]:
             return None
+        from src.core.endereco_nuvem import autorizar
+        cabecalho = autorizar(cfg["url"], cfg["token"])
+        if cabecalho is None:
+            return None
         http = self._http
         if http is None:
             try:
@@ -95,7 +99,7 @@ class Sincronizador:
                 return None
         try:
             resposta = http.get(ociosidade.url_pedido(cfg["url"]),
-                                headers={"Authorization": f"Bearer {cfg['token']}"}, timeout=(3, 8))
+                                headers=cabecalho, timeout=(3, 8))
             if getattr(resposta, "status_code", 0) != 200:
                 return None
             dados = resposta.json()
@@ -160,6 +164,10 @@ class Sincronizador:
         cfg = self.configuracao()
         if not cfg["url"] or not cfg["token"]:
             return
+        from src.core.endereco_nuvem import autorizar
+        cabecalho = autorizar(cfg["url"], cfg["token"])
+        if cabecalho is None:
+            return
         http = self._http
         if http is None:
             try:
@@ -169,7 +177,7 @@ class Sincronizador:
         try:
             http.post(ociosidade.url_concluido(cfg["url"]),
                       json={"momento": fmt.agora(), "id": pedido},
-                      headers={"Authorization": f"Bearer {cfg['token']}"}, timeout=(3, 8))
+                      headers=cabecalho, timeout=(3, 8))
         except Exception:
             log.debug("Não avisei o celular que o envio terminou.", exc_info=True)
 

@@ -38,7 +38,10 @@ def _pedir(base: str, token: str, metodo: str, caminho: str, http=None, corpo: d
     if http is None:
         import requests as http
     url = f"{base}{caminho}"
-    cabecalho = {"Authorization": f"Bearer {token}"}
+    from src.core.endereco_nuvem import autorizar
+    cabecalho = autorizar(url, token)
+    if cabecalho is None:
+        raise RuntimeError("Pedido online: o endereço da nuvem precisa ser HTTPS.")
     try:
         if metodo == "GET":
             resposta = http.get(url, headers=cabecalho, timeout=(5, 15))

@@ -32,6 +32,11 @@ def consultar(api_url: str, token: str, http=None, versao: str = VERSAO) -> dict
     """Só a parte de rede (pode rodar fora da thread da tela). Devolve a resposta da nuvem ou None se não deu."""
     if not (api_url or "").strip() or not (token or "").strip():
         return None
+    from src.core.endereco_nuvem import autorizar
+    cabecalho = autorizar(api_url, token)
+    if cabecalho is None:
+        log.info("Consulta de atualizações não saiu: o endereço da nuvem precisa ser HTTPS.")
+        return None
     if http is None:
         try:
             import requests as http
@@ -39,7 +44,7 @@ def consultar(api_url: str, token: str, http=None, versao: str = VERSAO) -> dict
             return None
     try:
         r = http.get(url_atualizacoes(api_url), params={"versao": versao},
-                     headers={"Authorization": f"Bearer {token.strip()}"}, timeout=(3, 10))
+                     headers=cabecalho, timeout=(3, 10))
         if r.status_code != 200:
             log.info("Consulta de atualizações: HTTP %s.", r.status_code)
             return None

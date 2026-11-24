@@ -40,7 +40,10 @@ def _pedir(banco, metodo: str, caminho: str, http=None, corpo: dict | None = Non
     if http is None:
         import requests as http
     url = f"{_base_nuvem(banco.cfg('api_url'))}{caminho}"
-    cabecalho = {"Authorization": f"Bearer {banco.cfg('api_token').strip()}"}
+    from src.core.endereco_nuvem import autorizar
+    cabecalho = autorizar(url, banco.cfg("api_token"))
+    if cabecalho is None:
+        raise RuntimeError("Notas do dono: o endereço da nuvem precisa ser HTTPS.")
     try:
         if metodo == "GET":
             resposta = http.get(url, headers=cabecalho, timeout=(5, 30))

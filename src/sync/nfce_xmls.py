@@ -84,9 +84,12 @@ def _postar(banco, corpo: dict, http=None) -> dict:
     if http is None:
         import requests as http
     url = f"{_base_nuvem(banco.cfg('api_url'))}/v1/nfce/xmls"
+    from src.core.endereco_nuvem import autorizar
+    cabecalho = autorizar(url, banco.cfg("api_token"))
+    if cabecalho is None:
+        raise RuntimeError("XMLs da NFC-e: o endereço da nuvem precisa ser HTTPS.")
     try:
-        r = http.post(url, json=corpo, headers={"Authorization": f"Bearer {banco.cfg('api_token').strip()}"},
-                      timeout=(5, 60))
+        r = http.post(url, json=corpo, headers=cabecalho, timeout=(5, 60))
     except OSError as e:
         raise RuntimeError("XMLs da NFC-e: sem conexão com a nuvem.") from e
     if r.status_code == 404:

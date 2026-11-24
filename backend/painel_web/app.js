@@ -13,6 +13,8 @@
   // Sessão da rede (um dono, várias lojas): fica fora do PREFIXO de propósito. Ao abrir uma loja o painel apaga o que
   // é da loja anterior (tudo sob PREFIXO); a sessão da rede precisa sobreviver a isso, a recarregar e a fechar o app.
   const REDE_TOKEN = "willpdv.rede.token";
+  const REDE_FLAG = "willpdv.rede.ativa";
+  const SESSAO_COOKIE = "cookie";
   const REDE_GRUPO = "willpdv.rede.grupo";
   const REDE_EXPIRA = "willpdv.rede.expira_em";
   const INTERVALO_AUTO_MS = 60000;
@@ -313,10 +315,12 @@
   class ErroRede extends Error {}
 
   async function chamarApi(caminho, opcoes = {}) {
-    const cabecalhos = { Accept: "application/json" };
+    const cabecalhos = { Accept: "application/json", "X-PDV-Painel": "1" };
     if ((opcoes.metodo || "GET") === "GET") cabecalhos["X-PDV-Leitura"] = "1";
     if (opcoes.corpo !== undefined) cabecalhos["Content-Type"] = "application/json";
-    if (estado.token && !opcoes.semToken) cabecalhos.Authorization = "Bearer " + estado.token;
+    if (estado.token && estado.token !== SESSAO_COOKIE && !opcoes.semToken) {
+      cabecalhos.Authorization = "Bearer " + estado.token;
+    }
     const tokenUsado = estado.token;
 
     let resposta;
@@ -394,21 +398,16 @@
       voltarParaRede();
       return;
     }
-    const tokenAnterior = estado.token;
     const chaveLoja = estado.loja && estado.loja.chave;
-    const rede = redeGuardada();
-    if (avisarServidor && rede && rede.token !== tokenAnterior) {
-      fetch(API_BASE + "/sair", { method: "POST", headers: { Authorization: "Bearer " + rede.token }, keepalive: true })
-        .catch(() => { /* já estamos saindo */ });
-    }
-    esquecerRede();
-    if (avisarServidor && tokenAnterior) {
+    if (avisarServidor && estado.token) {
       fetch(API_BASE + "/sair", {
         method: "POST",
-        headers: { Authorization: "Bearer " + tokenAnterior },
+        headers: { "X-PDV-Painel": "1" },
+        credentials: "same-origin",
         keepalive: true,
       }).catch(() => { /* já estamos saindo */ });
     }
+    esquecerRede();
     estado.token = null;
     estado.loja = null;
     estado.grupo = null;
@@ -732,9 +731,9 @@
 
   // Guarda a sessão recebida no login ou na troca de loja.
   function guardarSessao(dados, chavePadrao) {
-    estado.token = dados.token;
+    estado.token = SESSAO_COOKIE;
     estado.loja = dados.loja || { chave: chavePadrao, nome: chavePadrao };
-    gravarArmazenamento(CHAVE_TOKEN, estado.token);
+    try { localStorage.removeItem(CHAVE_TOKEN); } catch (_) { /* o token fica no cookie */ }
     gravarArmazenamento(CHAVE_LOJA, JSON.stringify(estado.loja));
     gravarArmazenamento(CHAVE_LOJA + ".chave", estado.loja.chave || chavePadrao);
     if (dados.expira_em) gravarArmazenamento(CHAVE_EXPIRA, dados.expira_em);
@@ -870,7 +869,7 @@
     aviso.textContent = "Preparando o arquivo…";
     try {
       const r = await fetch(API_BASE + "/nfce/xmls?mes=" + encodeURIComponent(mes), {
-        headers: { Authorization: "Bearer " + estado.token }, cache: "no-store", credentials: "same-origin" });
+        headers: { "X-PDV-Painel": "1" }, cache: "no-store", credentials: "same-origin" });
       if (!r.ok) throw new Error(r.status === 404 ? "Nenhum XML neste mês." : "Não consegui baixar (HTTP " + r.status + ").");
       const url = URL.createObjectURL(await r.blob());
       const a = document.createElement("a");
@@ -1300,7 +1299,7 @@
     const url = API_BASE + "/gestao/relatorio?tipo=" + encodeURIComponent(tipo)
       + "&de=" + encodeURIComponent(de) + "&ate=" + encodeURIComponent(ate) + "&formato=" + formato;
     const resposta = await fetch(url, {
-      headers: { Authorization: "Bearer " + estado.token }, cache: "no-store", credentials: "same-origin",
+      headers: { "X-PDV-Painel": "1" }, cache: "no-store", credentials: "same-origin",
     });
     if (resposta.status === 401) {
       encerrarSessao(false);
@@ -1400,7 +1399,8 @@
     try {
       const r = await fetch("/v1/sync/pedido", {
         method: "POST",
-        headers: { Accept: "application/json", Authorization: "Bearer " + estado.token },
+        headers: { Accept: "application/json", "X-PDV-Painel": "1" },
+        credentials: "same-origin",
         cache: "no-store"
       });
       pedido = await r.json().catch(() => ({}));
@@ -1418,7 +1418,8 @@
       await new Promise((resolver) => setTimeout(resolver, 2000));
       try {
         const e = await fetch("/v1/sync/estado", {
-          headers: { Accept: "application/json", Authorization: "Bearer " + estado.token },
+          headers: { Accept: "application/json", "X-PDV-Painel": "1" },
+          credentials: "same-origin",
           cache: "no-store"
         });
         const j = await e.json().catch(() => ({}));
@@ -1436,13 +1437,12 @@
 
   function entrarNaRede(dados) {
     estado.modo = "rede";
-    estado.token = dados.token;
+    estado.token = SESSAO_COOKIE;
     estado.grupo = dados.grupo;
     estado.loja = null;
     apagarTudoLocal();                                   // nada de uma loja aberta antes neste aparelho
-    gravarArmazenamento(CHAVE_TOKEN, dados.token);
     if (dados.expira_em) gravarArmazenamento(CHAVE_EXPIRA, dados.expira_em);
-    guardarRede(dados.token, dados.grupo, dados.expira_em);
+    guardarRede(dados.grupo, dados.expira_em);
     if (dados.deve_trocar_senha) {
       $("tela-login").hidden = false;
       $("form-login").hidden = true;
@@ -1455,26 +1455,26 @@
   }
 
   // ---- sessão da rede guardada no aparelho
-  function guardarRede(token, grupo, expira) {
-    gravarArmazenamento(REDE_TOKEN, token);
+  function guardarRede(grupo, expira) {
+    gravarArmazenamento(REDE_FLAG, "1");
     gravarArmazenamento(REDE_GRUPO, JSON.stringify(grupo));
     if (expira) gravarArmazenamento(REDE_EXPIRA, expira);
+    try { localStorage.removeItem(REDE_TOKEN); } catch (_) { /* o token da rede fica no cookie */ }
   }
 
-  /** {token, grupo} da rede em que o dono entrou neste aparelho, ou null (sem rede ou sessão vencida). */
+  /** Grupo da rede neste aparelho, ou null. O token não fica no navegador. */
   function redeGuardada() {
-    const token = lerArmazenamento(REDE_TOKEN);
-    if (!token) return null;
+    if (lerArmazenamento(REDE_FLAG) !== "1") return null;
     const expira = lerArmazenamento(REDE_EXPIRA);
     if (expira && expira < agoraLocalIso()) return null;
     try {
       const grupo = JSON.parse(lerArmazenamento(REDE_GRUPO) || "null");
-      return grupo ? { token: token, grupo: grupo, expira: expira } : null;
+      return grupo ? { grupo: grupo, expira: expira } : null;
     } catch (_) { return null; }
   }
 
   function esquecerRede() {
-    try { [REDE_TOKEN, REDE_GRUPO, REDE_EXPIRA].forEach((k) => localStorage.removeItem(k)); } catch (_) { /* navegador privado */ }
+    try { [REDE_TOKEN, REDE_FLAG, REDE_GRUPO, REDE_EXPIRA].forEach((k) => localStorage.removeItem(k)); } catch (_) { /* navegador privado */ }
   }
 
   function mostrarFaixaDaRede() {
@@ -1619,19 +1619,15 @@
   }
 
   /** Sai da loja aberta pela rede e volta para a lista de lojas, sem pedir senha de novo. */
-  function voltarParaRede() {
+  async function voltarParaRede() {
     const rede = redeGuardada();
     if (!rede) { encerrarSessao(true); return; }
-    const tokenDaLoja = estado.token;
-    if (tokenDaLoja && tokenDaLoja !== rede.token) {
-      fetch(API_BASE + "/sair", { method: "POST", headers: { Authorization: "Bearer " + tokenDaLoja }, keepalive: true })
-        .catch(() => { /* a sessão da loja vence sozinha */ });
-    }
+    try { await chamarApi("/grupo/voltar", { metodo: "POST", corpo: {} }); }
+    catch (_) { encerrarSessao(true); return; }
     apagarTudoLocal();
-    Object.assign(estado, { token: rede.token, grupo: rede.grupo, loja: null, resumo: null, historico: null, ranking: null,
+    Object.assign(estado, { token: SESSAO_COOKIE, grupo: rede.grupo, loja: null, resumo: null, historico: null, ranking: null,
       periodo: null, vendas: null, dia: null, paginaVendas: 1, lojas: null, mesAtual: null, carregando: false });
-    gravarArmazenamento(CHAVE_TOKEN, rede.token);
-    if (rede.expira) gravarArmazenamento(CHAVE_EXPIRA, rede.expira);
+    guardarRede(rede.grupo, rede.expira);
     $("faixa-rede").hidden = true;
     esconderFaixas();
     mostrarRede();
@@ -2575,7 +2571,8 @@
 
   async function baixarComSessao(caminho, nome) {
     const resposta = await fetch(API_BASE + caminho, {
-      headers: { Authorization: "Bearer " + estado.token },
+      headers: { "X-PDV-Painel": "1" },
+      credentials: "same-origin",
       cache: "no-store",
     });
     if (resposta.status === 401) {
@@ -2827,7 +2824,8 @@
   // ------------------------------------------------------------------
 
   function iniciar() {
-    estado.token = lerArmazenamento(CHAVE_TOKEN);
+    try { localStorage.removeItem(CHAVE_TOKEN); localStorage.removeItem(REDE_TOKEN); } catch (_) { /* token antigo sai do aparelho */ }
+    estado.token = null;
     try { estado.loja = JSON.parse(lerArmazenamento(CHAVE_LOJA) || "null"); } catch (_) { estado.loja = null; }
 
     $("form-login").addEventListener("submit", entrar);
@@ -2972,28 +2970,7 @@
       const rotulo = document.querySelector("label[for=campo-loja]");
       if (rotulo) rotulo.textContent = "Rede";
     }
-    // Quem entrou pela rede numa versão anterior tinha a sessão guardada em outro lugar: traz para o lugar novo.
-    try {
-      const antigo = lerArmazenamento(PREFIXO + "grupo");
-      if (antigo && !lerArmazenamento(REDE_TOKEN)) {
-        const tokenAntigo = estado.loja ? sessionStorage.getItem(PREFIXO + "redeToken") : estado.token;
-        if (tokenAntigo) guardarRede(tokenAntigo, JSON.parse(antigo), estado.loja ? null : lerArmazenamento(CHAVE_EXPIRA));
-      }
-      localStorage.removeItem(PREFIXO + "grupo");
-    } catch (_) { /* navegador privado */ }
-    const redeNoAparelho = redeGuardada();
-    if (estado.loja && estado.token && sessaoValida()) {
-      estado.modo = "loja";                               // estava dentro de uma loja: continua nela, com a volta para a rede
-    } else if (redeNoAparelho) {
-      estado.modo = "rede";
-      estado.token = redeNoAparelho.token;
-      estado.grupo = redeNoAparelho.grupo;
-      aplicarAppDaRede(redeNoAparelho.grupo.chave, redeNoAparelho.grupo.nome);
-      estado.loja = null;
-      gravarArmazenamento(CHAVE_TOKEN, redeNoAparelho.token);
-      if (redeNoAparelho.expira) gravarArmazenamento(CHAVE_EXPIRA, redeNoAparelho.expira);
-      try { localStorage.removeItem(CHAVE_LOJA); } catch (_) { /* navegador privado */ }
-    }
+    try { localStorage.removeItem(PREFIXO + "grupo"); sessionStorage.removeItem(PREFIXO + "redeToken"); } catch (_) { /* navegador privado */ }
     const formSenha = $("form-senha-rede");
     if (formSenha) formSenha.addEventListener("submit", async (evento) => {
       evento.preventDefault();
@@ -3025,15 +3002,41 @@
     if (sairRede) sairRede.addEventListener("click", () => encerrarSessao(true));
     $("botao-voltar-rede").addEventListener("click", voltarParaRede);
     $("botao-atualizar-rede").addEventListener("click", atualizarRede);
-    if (sessaoValida() && estado.modo === "rede") {
-      mostrarRede();
-    } else if (sessaoValida()) {
-      mostrarApp();
-      atualizarTudo();
-    } else {
-      if (estado.token) encerrarSessao(false);
-      else mostrarLogin();
+    retomarPeloCookie();
+  }
+
+  async function retomarPeloCookie() {
+    let dados = null;
+    try { dados = await chamarApi("/eu", { semToken: true }); }
+    catch (_) { dados = null; }
+    if (!dados) {
+      mostrarLogin();
+      return;
     }
+    estado.token = SESSAO_COOKIE;
+    if (dados.expira_em) gravarArmazenamento(CHAVE_EXPIRA, dados.expira_em);
+    if (dados.grupo && !dados.loja) {
+      estado.modo = "rede";
+      estado.grupo = dados.grupo;
+      estado.loja = null;
+      guardarRede(dados.grupo, dados.expira_em);
+      if (dados.deve_trocar_senha) {
+        $("tela-login").hidden = false;
+        $("form-login").hidden = true;
+        $("form-senha-rede").hidden = false;
+        $("tela-app").hidden = true;
+        $("tela-rede").hidden = true;
+        return;
+      }
+      mostrarRede();
+      return;
+    }
+    estado.modo = "loja";
+    estado.loja = dados.loja || estado.loja;
+    if (dados.tem_rede && dados.rede) guardarRede(dados.rede, dados.expira_em);
+    else if (!dados.tem_rede) esquecerRede();
+    mostrarApp();
+    atualizarTudo();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", iniciar);

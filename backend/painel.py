@@ -35,7 +35,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, FastAPI, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Column, Integer, String, Text, UniqueConstraint, inspect, text
@@ -50,6 +50,8 @@ log = logging.getLogger("pdv.nuvem.painel")
 
 PASTA_WEB = Path(__file__).resolve().parent / "painel_web"
 DIAS_SESSAO = 30
+COOKIE_PAINEL = "willpdv_painel"
+COOKIE_REDE = "willpdv_rede"
 TENTATIVAS_LOGIN = 8          # por loja, na janela abaixo; depois 429 até a janela passar
 JANELA_LOGIN_SEG = 15 * 60
 LOTE_MAXIMO = 500
@@ -247,8 +249,53 @@ def abrir_sessao(db: Session, chave_loja: str, grupo_id: int | None = None) -> t
     return token, expira
 
 
-def sessao_do_dono(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> PainelSessao:
-    token = authorization[7:].strip() if authorization and authorization.startswith("Bearer ") else ""
+def _https(request) -> bool:
+    return request.url.scheme == "https"
+
+
+def navegador_do_painel(request) -> bool:
+    """O app em /painel/ manda este cabeçalho e recebe a sessão só no cookie."""
+    return request.headers.get("x-pdv-painel") == "1"
+
+
+def gravar_cookie(response, request, token: str, *, rede: bool = False) -> None:
+    """Cookie que o JavaScript não lê. O assistente continua com o Bearer do login."""
+    opcoes = dict(httponly=True, secure=_https(request), samesite="strict",
+                  max_age=DIAS_SESSAO * 86400, path="/v1")
+    response.set_cookie(COOKIE_PAINEL, token, **opcoes)
+    if rede:
+        response.set_cookie(COOKIE_REDE, token, **opcoes)
+
+
+def apagar_cookies(response) -> None:
+    response.delete_cookie(COOKIE_PAINEL, path="/v1")
+    response.delete_cookie(COOKIE_REDE, path="/v1")
+
+
+def entregar_sessao(response, request, corpo: dict, token: str, *, rede: bool = False) -> dict:
+    """O navegador fica só com o cookie. Quem chama a API (assistente, teste) recebe o token no JSON."""
+    if navegador_do_painel(request):
+        gravar_cookie(response, request, token, rede=rede)
+        return corpo
+    return {**corpo, "token": token}
+
+
+def token_apresentado(request, authorization: str | None) -> str:
+    """Bearer (assistente e testes) ou o cookie do navegador. POST com cookie exige o cabeçalho do painel."""
+    bearer = authorization[7:].strip() if authorization and authorization.startswith("Bearer ") else ""
+    if bearer:
+        return bearer
+    cookie = request.cookies.get(COOKIE_PAINEL, "") if request is not None else ""
+    if not cookie:
+        return ""
+    if request.method not in ("GET", "HEAD", "OPTIONS") and not navegador_do_painel(request):
+        raise HTTPException(status_code=403, detail="Abra o painel de novo para continuar.")
+    return cookie
+
+
+def sessao_do_dono(request: Request, authorization: Optional[str] = Header(None),
+                   db: Session = Depends(get_db)) -> PainelSessao:
+    token = token_apresentado(request, authorization)
     sessao = db.query(PainelSessao).filter_by(token_hash=_hash(token)).first() if token else None
     if sessao is None or sessao.expira_em <= _agora():
         raise HTTPException(status_code=401, detail="Sessão inválida ou vencida. Entre de novo.")
@@ -1244,7 +1291,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
 
     # ---- sessão do dono
     @router.post("/v1/painel/login")
-    def login(dados: dict = Body(...), db: Session = Depends(get_db)):
+    def login(request: Request, response: Response, dados: dict = Body(...), db: Session = Depends(get_db)):
         chave = str(dados.get("loja") or "").strip()
         senha = str(dados.get("senha") or "")
         if not chave or not senha:
@@ -1263,7 +1310,8 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             token, expira = abrir_sessao(db, chave)
             from backend.memoria_nuvem import memoria
             memoria.lembrar_sessao(token, chave)
-            return {"token": token, "loja": {"chave": loja.chave_loja, "nome": loja.nome}, "expira_em": expira}
+            return entregar_sessao(response, request,
+                                   {"loja": {"chave": loja.chave_loja, "nome": loja.nome}, "expira_em": expira}, token)
         from backend.grupos import por_identificador
         grupo = por_identificador(db, chave)
         if grupo is None or not conferir_senha(senha, grupo.senha_hash):
@@ -1271,17 +1319,53 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             raise HTTPException(status_code=401, detail="Loja ou senha inválida.")
         tentativas.acertou(chave)
         token, expira = abrir_sessao(db, grupo.chave, grupo.id)
-        return {"token": token, "grupo": {"id": grupo.id, "chave": grupo.chave, "nome": grupo.nome},
-                "deve_trocar_senha": bool(grupo.deve_trocar_senha), "expira_em": expira,
-                "link": f"/painel/?grupo={grupo.chave}"}
+        from backend.memoria_nuvem import memoria
+        memoria.lembrar_sessao(token, grupo.chave)
+        return entregar_sessao(
+            response, request,
+            {"grupo": {"id": grupo.id, "chave": grupo.chave, "nome": grupo.nome},
+             "deve_trocar_senha": bool(grupo.deve_trocar_senha), "expira_em": expira,
+             "link": f"/painel/?grupo={grupo.chave}"},
+            token, rede=True)
 
     @router.post("/v1/painel/sair")
-    def sair(sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
+    def sair(request: Request, response: Response, sessao: PainelSessao = Depends(sessao_ativa),
+             db: Session = Depends(get_db)):
         db.delete(sessao)
+        rede = request.cookies.get(COOKIE_REDE, "")
+        if rede:
+            outra = db.query(PainelSessao).filter_by(token_hash=_hash(rede)).first()
+            if outra is not None and outra.id != sessao.id:
+                db.delete(outra)
         db.commit()
+        apagar_cookies(response)
         from backend.cache_leitura import limpar
         limpar()
         return {"ok": True}
+
+    @router.get("/v1/painel/eu")
+    def eu(request: Request, sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
+        """Quem está no cookie, sem devolver o token. O navegador usa isto ao reabrir o painel."""
+        from backend.grupos import Grupo
+        corpo: dict = {"expira_em": sessao.expira_em, "tem_rede": False}
+        if sessao.grupo_id:
+            grupo = db.get(Grupo, sessao.grupo_id)
+            if grupo is not None:
+                corpo["grupo"] = {"id": grupo.id, "chave": grupo.chave, "nome": grupo.nome}
+                corpo["deve_trocar_senha"] = bool(grupo.deve_trocar_senha)
+                corpo["tem_rede"] = True
+        else:
+            loja = db.query(Loja).filter(Loja.chave_loja == sessao.chave_loja).first()
+            corpo["loja"] = {"chave": sessao.chave_loja, "nome": loja.nome if loja is not None else sessao.chave_loja}
+            rede = request.cookies.get(COOKIE_REDE, "")
+            if rede:
+                linha = db.query(PainelSessao).filter_by(token_hash=_hash(rede)).first()
+                if linha is not None and linha.grupo_id and linha.expira_em > _agora():
+                    grupo = db.get(Grupo, linha.grupo_id)
+                    if grupo is not None:
+                        corpo["tem_rede"] = True
+                        corpo["rede"] = {"id": grupo.id, "chave": grupo.chave, "nome": grupo.nome}
+        return corpo
 
     def _rede(sessao: PainelSessao, db: Session):
         from backend.grupos import Grupo
@@ -1324,8 +1408,8 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         return consolidado(db, grupo, inicio, fim)
 
     @router.post("/v1/painel/grupo/entrar")
-    def entrar_loja(dados: dict = Body(...), sessao: PainelSessao = Depends(sessao_ativa),
-                    db: Session = Depends(get_db)):
+    def entrar_loja(request: Request, response: Response, dados: dict = Body(...),
+                    sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
         """Abre o painel de uma loja da rede. A sessão da rede continua valendo."""
         grupo = _rede(sessao, db)
         chave = str((dados or {}).get("loja") or "").strip()
@@ -1335,7 +1419,28 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         token, expira = abrir_sessao(db, loja.chave_loja)
         from backend.memoria_nuvem import memoria
         memoria.lembrar_sessao(token, loja.chave_loja)
-        return {"token": token, "loja": {"chave": loja.chave_loja, "nome": loja.nome}, "expira_em": expira}
+        return entregar_sessao(response, request,
+                               {"loja": {"chave": loja.chave_loja, "nome": loja.nome}, "expira_em": expira}, token)
+
+    @router.post("/v1/painel/grupo/voltar")
+    def voltar_rede(request: Request, response: Response, sessao: PainelSessao = Depends(sessao_ativa),
+                    db: Session = Depends(get_db)):
+        """Volta da loja para a rede usando o cookie da rede. O navegador não vê o token."""
+        from backend.grupos import Grupo
+        rede = request.cookies.get(COOKIE_REDE, "")
+        linha = db.query(PainelSessao).filter_by(token_hash=_hash(rede)).first() if rede else None
+        if linha is None or not linha.grupo_id or linha.expira_em <= _agora():
+            raise HTTPException(status_code=401, detail="Sessão da rede vencida. Entre de novo.")
+        grupo = db.get(Grupo, linha.grupo_id)
+        if grupo is None:
+            raise HTTPException(status_code=401, detail="Sessão da rede vencida. Entre de novo.")
+        if sessao.id != linha.id:
+            db.delete(sessao)
+            db.commit()
+        response.set_cookie(COOKIE_PAINEL, rede, httponly=True, secure=_https(request), samesite="strict",
+                            max_age=DIAS_SESSAO * 86400, path="/v1")
+        return {"grupo": {"id": grupo.id, "chave": grupo.chave, "nome": grupo.nome},
+                "deve_trocar_senha": bool(grupo.deve_trocar_senha), "expira_em": linha.expira_em}
 
     # ---- consultas do dono
     @router.get("/v1/painel/resumo")

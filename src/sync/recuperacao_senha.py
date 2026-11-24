@@ -13,9 +13,13 @@ def buscar_liberacao(banco, pedido: str, http=None) -> str | None:
         return None
     if http is None:
         import requests as http
+    from src.core.endereco_nuvem import autorizar
+    url = f"{_base_nuvem(banco.cfg('api_url'))}/v1/recuperacao-senha"
+    cabecalho = autorizar(url, banco.cfg("api_token"))
+    if cabecalho is None:
+        raise RuntimeError("O endereço da nuvem precisa ser HTTPS. Cole o código que o fornecedor enviar.")
     try:
-        resposta = http.get(f"{_base_nuvem(banco.cfg('api_url'))}/v1/recuperacao-senha", params={"pedido": pedido},
-                            headers={"Authorization": f"Bearer {banco.cfg('api_token').strip()}"}, timeout=(4, 8))
+        resposta = http.get(url, params={"pedido": pedido}, headers=cabecalho, timeout=(4, 8))
     except OSError as erro:
         raise RuntimeError("Sem conexão com a nuvem. Cole o código que o fornecedor enviar.") from erro
     if resposta.status_code == 404:

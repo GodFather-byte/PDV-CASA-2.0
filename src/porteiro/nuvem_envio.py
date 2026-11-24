@@ -123,7 +123,11 @@ def _post(banco, corpo: dict, http) -> None:
     if http is None:
         import requests as http
     url = url_retrato(banco.cfg("api_url"))
-    cabecalhos = {"Authorization": f"Bearer {banco.cfg('api_token').strip()}"}
+    from src.core.endereco_nuvem import autorizar
+    cabecalhos = autorizar(url, banco.cfg("api_token"))
+    if cabecalhos is None:
+        log.warning("Porteiro não enviado: o endereço da nuvem precisa ser HTTPS.")
+        raise RuntimeError("Porteiro: o endereço da nuvem precisa ser HTTPS.")
     try:
         resposta = http.post(url, json=corpo, headers=cabecalhos, timeout=(5, 20))
     except OSError as exc:

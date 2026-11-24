@@ -43,11 +43,40 @@ CHAVE_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _CAMPOS = ("situacao", "titulo", "motivo", "detalhe", "cabecalho", "rotulo", "nome", "apelido",
            "comanda", "numero", "devido_cent", "total_cent", "pago_cent", "valor_txt", "itens", "cupom",
            "garota", "aberta_em", "aberta_txt")
-_CORS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Authorization, Content-Type",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-}
+MAX_FALHAS_LOJA = 20
+
+
+def _origem_permitida(request: Request) -> str | None:
+    """A página no mesmo host, ou o porteiro do caixa em HTTP na rede local. Nunca '*'."""
+    from urllib.parse import urlsplit
+    from src.core.endereco_nuvem import aceita_credencial
+    origem = (request.headers.get("origin") or "").strip()
+    if not origem or any(c in origem for c in "\r\n\\"):
+        return None
+    try:
+        partes = urlsplit(origem)
+    except ValueError:
+        return None
+    host = (partes.hostname or "").lower()
+    if not host or partes.scheme not in ("http", "https"):
+        return None
+    if host == (request.url.hostname or "").lower():
+        return origem
+    if partes.scheme == "http" and aceita_credencial(origem):
+        return origem
+    return None
+
+
+def _cors(request: Request) -> dict:
+    origem = _origem_permitida(request)
+    if not origem:
+        return {}
+    return {
+        "Access-Control-Allow-Origin": origem,
+        "Access-Control-Allow-Headers": "Authorization, Content-Type",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Vary": "Origin",
+    }
 
 
 class PorteiroRetrato(Base):
@@ -76,17 +105,22 @@ class _Sessoes:
             falta = ate - time.monotonic()
             return int(falta) + 1 if falta > 0 else 0
 
-    def falhou(self, chave: str) -> int:
+    def falhou(self, chave: str, limite: int = MAX_FALHAS) -> int:
         with self._lock:
             n, ate = self._falhas.get(chave, (0, 0.0))
             if ate > time.monotonic():
                 return int(ate - time.monotonic()) + 1
             n += 1
-            if n >= MAX_FALHAS:
+            if n >= limite:
                 self._falhas[chave] = (0, time.monotonic() + BLOQUEIO_SEGUNDOS)
                 return BLOQUEIO_SEGUNDOS
             self._falhas[chave] = (n, 0.0)
             return 0
+
+    def acertou(self, *chaves: str) -> None:
+        with self._lock:
+            for chave in chaves:
+                self._falhas.pop(chave, None)
 
     def abrir(self, chave: str, selo: str, freio: str) -> str:
         token = secrets.token_urlsafe(32)
@@ -346,8 +380,10 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
     def entrar(corpo: dict, request: Request, db: Session):
         chave = (corpo.get("chave") or "").strip()
         loja = _loja(db, chave)
-        freio = f"{request.client.host if request.client else '?'}|{loja.chave_loja}"
-        espera = sessoes.bloqueado(freio)
+        ip = request.client.host if request.client else "?"
+        freio = f"{ip}|{loja.chave_loja}"
+        freio_loja = f"loja|{loja.chave_loja}"
+        espera = max(sessoes.bloqueado(freio), sessoes.bloqueado(freio_loja))
         if espera:
             raise HTTPException(status_code=429, detail="Muitas tentativas. Espere um minuto e tente de novo.",
                                 headers={"Retry-After": str(espera)})
@@ -362,10 +398,12 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         if len(pin) > 32:
             pin = ""
         if not any(seguranca.conferir(pin, guardado) for guardado in hashes):
-            if sessoes.falhou(freio):
+            travou = sessoes.falhou(freio) or sessoes.falhou(freio_loja, MAX_FALHAS_LOJA)
+            if travou:
                 raise HTTPException(status_code=429, detail="Muitas tentativas. Espere um minuto e tente de novo.",
                                     headers={"Retry-After": str(BLOQUEIO_SEGUNDOS)})
             raise HTTPException(status_code=401, detail="PIN incorreto.")
+        sessoes.acertou(freio_loja)
         token = sessoes.abrir(loja.chave_loja, _selo(hashes), freio)
         from backend.memoria_nuvem import memoria
         memoria.lembrar_sessao(token, loja.chave_loja)
@@ -439,10 +477,11 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         caminho = request.url.path
         if not (caminho.startswith("/porteiro/api/") or caminho.startswith("/v1/porteiro/")):
             return await call_next(request)
+        cabecalhos = _cors(request)
         if request.method == "OPTIONS":
-            return Response(status_code=204, headers=_CORS)
+            return Response(status_code=204, headers=cabecalhos)
         resposta = await call_next(request)
-        for nome, valor in _CORS.items():
+        for nome, valor in cabecalhos.items():
             resposta.headers[nome] = valor
         return resposta
 
