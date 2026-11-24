@@ -1,4 +1,14 @@
-# Handoff: fila da importação #4 parada depois do deploy
+# Handoff de 24/11/2026: painel do dono com autoridade de dono no caixa (branch `painel-autoridade-dono`)
+
+A importação de produtos da EA-SUPERACOES2 seguia recusada com "Custo e lucro só aparecem para o gerente": o caixa
+aplicava o comando do painel com a autoridade de quem estava logado nele (operador comum) ou, sem gerente ativo na
+loja, sem autoridade nenhuma. Agora `RetaguardaController._como_gerente` marca `banco._autoridade_dono` durante o
+comando e `entidades` aceita o custo com essa marca; `_gerente()` prefere um gerente ao operador comum para assinar.
+No caixa, o operador comum continua sem mexer no custo. Teste em `tests/test_retaguarda.py`.
+
+Depois de instalar a versão com a correção: no painel, Alterações enviadas > Enviar de novo nos comandos recusados.
+
+## Antes (23/11): fila da importação #4 parada depois do deploy
 
 A Importação #4 da loja EA-SUPERACOES2 (E&A SUPERACOES 2) ficou em
 "Aguardando o caixa" porque o deploy da #149 zerou a memória do Render. O aviso

@@ -45,6 +45,30 @@ class TesteControleDoCaixa(BaseTeste):
         self.assertEqual(self.produto()["preco_cent"], 900)
         self.assertEqual(self.aplicar(900, "produtos.importar", {"linhas": []})["detalhe"], r["detalhe"])   # uma vez só
 
+    def test_custo_do_painel_vale_mesmo_com_operador_comum_no_caixa_e_sem_gerente(self):
+        """EA Superações (23/11): o caixa logado com um operador de nível 2 e nenhum gerente ativo recusava a planilha
+        do dono com "Custo e lucro só aparecem para o gerente". O dono manda mais que o gerente."""
+        from src.controllers.cadastro_controller import CadastroController
+        caixa = CadastroController(self.banco).salvar("operadores", {"nome": "CAIXA NOITE", "senha": "1234", "nivel": 2})
+        self.banco.executar("UPDATE operadores SET ativo = 0 WHERE nivel >= 4")
+        self.banco.definir_operador_auditoria(caixa)                     # o operador logado no caixa
+        self.controle = RetaguardaController(self.banco, caixa)
+        r = self.aplicar(905, "produtos.importar", {"linhas": [
+            {"nome": "SKOL", "preco": "9,00", "custo": "4,50"},
+            {"nome": "HEINEKEN LONG NECK", "preco": "12,00", "custo": "6,00"}]})
+        self.assertEqual(r["situacao"], "aplicado", r)
+        self.assertEqual((self.produto()["preco_cent"], self.produto()["custo_medio_cent"]), (900, 450))
+        self.assertEqual(self.banco.valor("SELECT custo_medio_cent FROM produtos WHERE nome = 'HEINEKEN LONG NECK'"), 600)
+        r = self.aplicar(906, "cadastro.salvar", {"entidade": "produtos", "id": self.skol,
+                                                   "valores": {"custo_medio_cent": 500}})
+        self.assertEqual(r["situacao"], "aplicado", r)
+        self.assertEqual(self.produto()["custo_medio_cent"], 500)
+        self.assertEqual(self.banco._operador_auditoria, caixa)          # a sessão do caixa volta como estava
+        self.assertFalse(getattr(self.banco, "_autoridade_dono", False))
+        from src.controllers.entidades import ErroPermissao
+        with self.assertRaises(ErroPermissao):                            # no caixa, o operador comum continua sem
+            CadastroController(self.banco).salvar("produtos", {"custo_medio_cent": 700}, self.skol)
+
     def test_lote_sem_nenhum_produto_valido_e_recusado(self):
         r = self.aplicar(901, "produtos.importar", {"linhas": [{"nome": "", "preco": "1"}]})
         self.assertEqual(r["situacao"], "recusado")
