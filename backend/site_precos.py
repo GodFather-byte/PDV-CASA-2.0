@@ -15,7 +15,9 @@ BOATE_MENSAL_CENT = 24_999         # R$ 249,99
 MESES_GRATIS_NO_ANUAL = 2
 DIAS_TESTE = 7
 
-URL_PUBLICA = "https://willpdv-nuvem-6sp0.onrender.com"
+# Domínio do site público. O host *.onrender.com continua sendo o da API dos caixas e do painel.
+# PUBLIC_BASE_URL, se for uma origem https sem caminho, substitui este endereço.
+URL_PUBLICA = "https://willpdv.com.br"
 CIDADES = ("Osasco", "Carapicuíba", "Barueri", "São Paulo", "Cotia", "Itapevi")
 
 # chave, nome, centavos, prefixo, período

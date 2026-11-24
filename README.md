@@ -75,7 +75,7 @@ O pedido fica nas tabelas `site_pedidos` e `site_pagamentos` do mesmo banco da n
 | --- | --- | --- |
 | `MP_ACCESS_TOKEN` | Servidor (Render) | Access Token da aplicação. O de teste começa com `TEST-`. Nunca commitar e nunca logar. |
 | `MP_WEBHOOK_SECRET` | Servidor | Se estiver preenchido, `POST /v1/pagamentos/webhook` exige o cabeçalho `x-signature`. Vazio: o webhook ainda busca o pagamento na API e não acredita no corpo. |
-| `PUBLIC_BASE_URL` | Servidor | Opcional. Origem `https` (sem caminho) dos retornos e do `notification_url`. Sem ela, vale `RENDER_EXTERNAL_URL` e, se não houver, o endereço em `backend/site_precos.py`. |
+| `PUBLIC_BASE_URL` | Servidor | Origem `https` (sem caminho) do site público, dos retornos do checkout e do `notification_url`. Sem ela, vale `https://willpdv.com.br` (`backend/site_precos.py`). Não coloque o host `*.onrender.com`: esse continua sendo o da API dos caixas. |
 
 Como testar com um token de teste:
 

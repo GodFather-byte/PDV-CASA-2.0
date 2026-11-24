@@ -152,11 +152,17 @@ def _base_ok(base: str) -> bool:
 
 
 def base_publica() -> str:
-    """PUBLIC_BASE_URL, senão RENDER_EXTERNAL_URL, senão o endereço publicado do site."""
-    for var in (VAR_BASE, "RENDER_EXTERNAL_URL"):
-        base = os.environ.get(var, "").strip().rstrip("/")
-        if _base_ok(base):
-            return base
+    """Origem https do site, dos retornos e do notification_url do checkout.
+
+    PUBLIC_BASE_URL, quando é uma origem https sem caminho. Sem ela, o endereço
+    publicado em site_precos (https://willpdv.com.br).
+
+    RENDER_EXTERNAL_URL não entra: no Render ele é o host *.onrender.com dos
+    caixas e do painel. O checkout público não pode apontar para lá.
+    """
+    base = os.environ.get(VAR_BASE, "").strip().rstrip("/")
+    if _base_ok(base):
+        return base
     return precos.URL_PUBLICA.rstrip("/")
 
 

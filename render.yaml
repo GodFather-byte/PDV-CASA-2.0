@@ -28,7 +28,7 @@ services:
         sync: false
       - key: MP_WEBHOOK_SECRET       # Assinatura secreta de Suas integrações > Webhooks. Não commitar.
         sync: false
-      - key: PUBLIC_BASE_URL        # Opcional. Origem https do site (sem caminho) para o retorno do checkout. Vazio = RENDER_EXTERNAL_URL.
+      - key: PUBLIC_BASE_URL        # Origem https do site e do checkout, sem caminho. Padrão no código: https://willpdv.com.br. Não use o host onrender.com.
         sync: false
       - key: MP_BOLETO_METODO        # opcional; padrão bolbradesco. Outro código de boleto da conta, se o painel exigir.
         value: bolbradesco
