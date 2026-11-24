@@ -1,3 +1,14 @@
+# Handoff de 24/11/2026: caixa adicional se atualiza junto (branch `adicional-atualiza`)
+
+- `rede.ErroVersaoDiferente`: o principal recusa por versão e manda `versao_principal`, `nuvem` (sem token) e `loja`
+  (`ServidorBanco._dados_da_versao`).
+- `src/atualizacao/adicional.py`: `pode_atualizar`, `atualizar` (consulta, confere, baixa e dispara a tarefa; aceita
+  só a mesma versão; uma tentativa a cada 30 min) e `esquecer_tentativa`.
+- Telas: `rede_caixas.atualizar_adicional` (espera com a tela viva). `app.main` atualiza na abertura.
+  `App._vigiar_principal` roda a cada 60 s só no adicional, e `_atualizar_adicional_em_uso` só pergunta se houver
+  operador logado.
+- Teste: `tests/test_atualizacao_adicional.py`. Documentação: `docs/ATUALIZACAO.md`, "Caixa adicional".
+
 # Handoff de 24/11/2026: foto e código de barras na retaguarda (branch `retaguarda-barras-foto`, em cima do #162)
 
 - Nuvem: `GET .../retaguarda/codigo-barras/{gtin}` (`consultar_gtin`) consulta o Open Food Facts e devolve o nome e

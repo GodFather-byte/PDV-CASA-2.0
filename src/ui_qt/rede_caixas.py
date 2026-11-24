@@ -248,6 +248,47 @@ def ligar_este_computador(parent, banco) -> bool:
     return True
 
 
+def atualizar_adicional(parent, erro, executar=None) -> dict:
+    """Mostra "Atualizando este caixa…" enquanto baixa (em outra linha de execução, para a tela não travar) e dispara a
+    instalação da versão do principal. Devolve o resultado de src/atualizacao/adicional.atualizar."""
+    import threading
+    from PySide6.QtCore import QEventLoop
+    from PySide6.QtWidgets import QProgressDialog
+    from src.atualizacao import adicional
+    executar = executar or adicional.atualizar
+    versao = getattr(erro, "versao_principal", "")
+    aviso = QProgressDialog(f"O caixa principal está na versão {versao}.\n"
+                            "Baixando e instalando a mesma versão neste caixa…", None, 0, 0, parent)
+    aviso.setWindowTitle(f"{edicao.atual().nome} • atualizando o caixa adicional")
+    aviso.setMinimumDuration(0)
+    aviso.setMinimumWidth(460)
+    aviso.show()
+    resultado: dict = {}
+    pronto = threading.Event()
+
+    def trabalhar():
+        try:
+            resultado.update(executar(erro))
+        except Exception as falha:                                 # noqa: BLE001 - vira mensagem para o operador
+            import logging
+            logging.getLogger("pdv.atualizacao").exception("Caixa adicional: atualização falhou.")
+            resultado.update({"acao": "falha", "mensagem": f"Não consegui atualizar este caixa: {falha}"})
+        finally:
+            pronto.set()
+
+    threading.Thread(target=trabalhar, name="atualizar-adicional", daemon=True).start()
+    laco = QEventLoop()
+    relogio = QTimer()
+    relogio.timeout.connect(lambda: laco.quit() if pronto.is_set() else None)
+    relogio.start(100)
+    laco.exec()
+    relogio.stop()
+    aviso.close()
+    if resultado.get("acao") == "instalar":
+        QMessageBox.information(parent, f"{edicao.atual().nome} • caixa adicional", resultado["mensagem"])
+    return resultado
+
+
 def perguntar_sem_ligacao(parent, erro) -> str:
     """Na abertura, sem conversa com o principal: 'tentar', 'desligar' (voltar ao banco próprio) ou 'fechar'."""
     caixa = QMessageBox(parent)
