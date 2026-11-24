@@ -445,16 +445,21 @@ def enfileirar(db: Session, chave: str, autor: str, modo: str, linhas: list[dict
     for rotulo, grupo in partes:
         total = len(grupo)
         for i, dados in enumerate(grupo, start=1):
-            if rotulo == "custo":
-                resumo = f"Importação #{registro.id}: custo de {total} produto(s) ({i}/{total})"
-            else:
-                resumo = f"Importação #{registro.id}: {criados} novos, {atualizados} atualizações ({i}/{total})"
+            resumo = resumo_do_lote(registro.id, rotulo, dados, i, total, criados, atualizados)
             comando = criar(db, chave, {"tipo": "produtos.importar", "dados": dados, "resumo": resumo[:200]},
                             autor, liberar_importacao=True)
             ids.append(comando.id)
     registro.comando_ids = ",".join(str(i) for i in ids)
     db.commit()
     return ids
+
+
+def resumo_do_lote(ident: int, rotulo: str, dados: dict, indice: int, lotes: int, criados: int = 0,
+                   atualizados: int = 0) -> str:
+    qtd = len(dados.get("linhas") or [])
+    if rotulo == "custo":
+        return f"Importação #{ident}: custo de {qtd} produto(s) ({indice}/{lotes})"
+    return f"Importação #{ident}: {criados} novos, {atualizados} atualizações ({indice}/{lotes})"
 
 
 def snapshot(linhas: list[dict]) -> list[dict]:

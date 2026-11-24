@@ -8,7 +8,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 
 | Comando | O que abre |
 |---|---|
-| `python -m src.app` | PDV (`--sync`: segundo plano com a nuvem; `--autoteste`: autoteste). Configurações > Nuvem > `sync_quase_tempo_real` olha a fila na própria aplicação; o lote sobe a cada `sync_lote_seg` (padrão 900 s) (`ServicoSincronizacao`, `src/sync/sincronizador.py`, `src/sync/ociosidade.py`). Fechamento de turno, o botão do celular e uma alteração da retaguarda (o aviso fica só na memória do Render) enviam na hora. Com o porteiro ligado, a página do celular sobe na rede do caixa e o retrato das comandas abertas vai no mesmo lote |
+| `python -m src.app` | PDV (`--sync`: segundo plano com a nuvem; `--autoteste`: autoteste). Configurações > Nuvem > `sync_quase_tempo_real` olha a fila na própria aplicação; o lote sobe a cada `sync_lote_seg` (padrão 900 s) (`ServicoSincronizacao`, `src/sync/sincronizador.py`, `src/sync/ociosidade.py`). Fechamento de turno, o botão do celular e uma alteração da retaguarda enviam na hora. O aviso da retaguarda fica só na memória do Render: no boot a nuvem rearma o das alterações ainda pendentes, e a primeira pergunta de cada token depois do deploy olha a loja uma vez. Com o porteiro ligado, a página do celular sobe na rede do caixa e o retrato das comandas abertas vai no mesmo lote |
 | `/cozinha/` no caixa principal (porta padrão 8766) | Cozinha web local com PIN; configure em Cozinha/Bar > Tablet / TV; `src/cozinha/` |
 | `python -m src.app --edicao willrestaurante` | Will Restaurante: hamburgueria, pizzaria, à la carte e rodízio; guia `docs/WILL_RESTAURANTE.md` |
 | `python -m src.app --edicao willhotel` | Will Hotel: hotel e pousada (diárias e uso por horas); guia `docs/WILL_HOTEL.md` |

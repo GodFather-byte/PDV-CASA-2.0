@@ -113,6 +113,11 @@ async def _ciclo_de_vida(_aplicacao):
     except Exception:
         log.error("Não foi possível iniciar a varredura do Mercado Pago.")
     try:
+        from backend.retaguarda import rearmar_pedidos_pendentes
+        rearmar_pedidos_pendentes()
+    except Exception:
+        log.error("Não foi possível rearmar o aviso das alterações que esperam o caixa.")
+    try:
         yield
     finally:
         cobranca.parar_varredura()
@@ -365,8 +370,25 @@ def _sync_sem_banco(authorization: Optional[str]):
 
 @app.get("/v1/sync/pedido")
 def sync_pedido(authorization: Optional[str] = Header(None)):
-    """O caixa pergunta se o celular pediu envio. Só memória do processo."""
+    """O caixa pergunta se o celular pediu envio. A memória basta quando o token já é conhecido.
+
+    Depois de um deploy a memória zera. Aí a primeira pergunta de cada token olha a loja no banco
+    uma vez e guarda o resultado: as seguintes não acordam o Neon, e o aviso da retaguarda volta a valer."""
     memoria, token = _sync_sem_banco(authorization)
+    visto = memoria.consultar_loja(token)
+    if visto.get("conhecido") or not token or memoria.token_ja_descartado(token):
+        return visto
+    from backend.database import SessionLocal
+    db = SessionLocal()
+    try:
+        loja = db.query(Loja).filter(Loja.token_hash == hash_token(token), Loja.ativa.is_(True)).first()
+        chave = loja.chave_loja if loja is not None else None
+    finally:
+        db.close()
+    if not chave:
+        memoria.descartar_token(token)
+        return visto
+    memoria.lembrar_token(token, chave)
     return memoria.consultar_loja(token)
 
 
