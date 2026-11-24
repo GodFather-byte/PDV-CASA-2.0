@@ -36,11 +36,20 @@ class ServicoAtualizacao:
             banco = BancoDados(self.caminho, semear=False)
             if banco.remoto:
                 return
+            central = None
             while not self._parar.is_set():
                 try:
                     rodada(banco, instalar=disparar_instalacao)
                 except Exception:
                     log.exception('Atualização automática não concluída; o caixa continua disponível.')
+                if not banco.cfg_bool('sync_quase_tempo_real'):       # ligado, a sincronização do próprio PDV já ouve
+                    try:
+                        if central is None:
+                            from src.sync.sincronizador import Sincronizador
+                            central = Sincronizador(banco)
+                        central.atender_central()
+                    except Exception:
+                        log.exception('Não consegui ouvir o pedido de atualização da central.')
                 self._parar.wait(30)
         except Exception:
             log.exception('Não foi possível iniciar o verificador de atualização.')

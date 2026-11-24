@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import hashlib
 import os
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -88,6 +90,7 @@ def publicar(db: Session, pacote: dict) -> PacoteAtualizacao:
         setattr(linha, campo, valor)
     linha.publicada_em = _agora()
     db.commit()
+    limpar_cache()
     return linha
 
 
@@ -98,15 +101,46 @@ def ultima(db: Session, edicao: str, canal: str) -> PacoteAtualizacao | None:
     return max(linhas, key=lambda linha: chave(linha.versao))
 
 
-def resposta_publica(linha: PacoteAtualizacao, versao_instalada: str | None) -> dict:
+# Os caixas perguntam a cada hora. O pacote só muda quando se publica, então a resposta fica guardada em memória
+# por um tempo e a pergunta não acorda o Neon. Publicar aqui limpa na hora.
+TTL_ULTIMA_SEG = 30 * 60
+_cache_ultima: dict[tuple[str, str], tuple[float, dict | None]] = {}
+_trava_cache = threading.Lock()
+
+
+def limpar_cache() -> None:
+    with _trava_cache:
+        _cache_ultima.clear()
+
+
+def ultima_em_cache(db: Session, edicao: str, canal: str) -> dict | None:
+    """O pacote mais novo como dicionário (os campos de `resposta_publica`), com cache curto."""
+    agora = time.monotonic()
+    with _trava_cache:
+        achado = _cache_ultima.get((edicao, canal))
+    if achado is not None and achado[0] > agora:
+        return achado[1]
+    linha = ultima(db, edicao, canal)
+    dados = None if linha is None else {campo: getattr(linha, campo) for campo in CAMPOS_PUBLICOS}
+    with _trava_cache:
+        _cache_ultima[(edicao, canal)] = (agora + TTL_ULTIMA_SEG, dados)
+    return dados
+
+
+CAMPOS_PUBLICOS = ("edicao", "canal", "versao", "sha256", "tamanho", "url", "notas", "obrigatoria", "minima", "assinatura")
+
+
+def resposta_publica(linha, versao_instalada: str | None) -> dict:
+    """`linha` é a linha do banco ou o dicionário guardado em cache."""
+    ler = linha.get if isinstance(linha, dict) else (lambda campo: getattr(linha, campo))
     pacote = {
-        "edicao": linha.edicao, "canal": linha.canal, "versao": linha.versao, "sha256": linha.sha256,
-        "tamanho": linha.tamanho, "url": linha.url, "notas": linha.notas or "",
-        "obrigatoria": int(linha.obrigatoria or 0), "minima": linha.minima or "",
-        "assinatura": linha.assinatura,
+        "edicao": ler("edicao"), "canal": ler("canal"), "versao": ler("versao"), "sha256": ler("sha256"),
+        "tamanho": ler("tamanho"), "url": ler("url"), "notas": ler("notas") or "",
+        "obrigatoria": int(ler("obrigatoria") or 0), "minima": ler("minima") or "",
+        "assinatura": ler("assinatura"),
     }
     # Campos assinados não podem mudar conforme a versão de quem consulta.
-    disponivel = not versao_instalada or not valida(versao_instalada) or mais_nova(linha.versao, versao_instalada)
+    disponivel = not versao_instalada or not valida(versao_instalada) or mais_nova(pacote["versao"], versao_instalada)
     return {"disponivel": disponivel, "pacote": pacote}
 
 
@@ -135,7 +169,7 @@ def instalar_no_app(app: FastAPI, autenticar) -> None:
         if cliente_minimo and (not valida(cliente_minimo) or not valida(versao)
                                or chave(versao) < chave(cliente_minimo)):
             return {"disponivel": False, "pacote": None, "instalacao_manual_necessaria": True}
-        linha = ultima(db, edicao, canal)
+        linha = ultima_em_cache(db, edicao, canal)
         if linha is None:
             return {"disponivel": False, "pacote": None}
         return resposta_publica(linha, versao or None)

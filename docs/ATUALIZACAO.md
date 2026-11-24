@@ -1,6 +1,6 @@
 # Atualização automática do caixa (Windows)
 
-A partir da 1.14.4, o PDV aberto mantém verificador próprio, independente de sync_quase_tempo_real. Ele consulta a nuvem a cada 6 horas; o --sync também pode verificar. A abertura só retoma arquivo já baixado, sem esperar a rede.
+A partir da 1.14.4, o PDV aberto mantém verificador próprio, independente de sync_quase_tempo_real. Ele consulta a nuvem a cada hora (até a 1.14.22, a cada 6 horas); o --sync também pode verificar. A abertura só retoma arquivo já baixado, sem esperar a rede.
 Se houver pacote mais novo, **assinado** e com o SHA-256 certo, ele baixa em segundo plano e instala com o
 Inno Setup em silêncio (`/VERYSILENT`) **só com turno fechado e sem venda, mesa ou comanda aberta**. Se o caixa
 estiver ocupado, fica para a próxima abertura. Dá para adiar um dia, salvo atualização obrigatória ou
@@ -152,7 +152,7 @@ Roteiro na loja piloto:
 4. No caixa: Atualizações do programa > Instalar com o caixa livre (o Verificar mostra a versão desde a 1.14.7; antes
    dela só mostrava o aviso antigo, que não conhece o piloto). Esperar: sem a janela "Deseja permitir..." do Windows, o
    programa fecha, instala e reabre na versão nova. Ou deixar sozinho: com o turno fechado há 10 minutos e nada na fila
-   de impressão, a consulta (de 6 em 6 horas) instala sem ninguém clicar.
+   de impressão, a consulta (de hora em hora) instala sem ninguém clicar.
 5. Conferir a versão nova no caixa e na central (sem selo "Atualização travada").
 
 ## Contenção e recuperação de instalação
@@ -193,3 +193,18 @@ Depois disso, as próximas versões usam o mecanismo automático corrigido.
 O CI abre cada executável instalado com banco e servidor HTTP fictícios, envio
 quase em tempo real desligado, e exige consulta real automática sem fechar o PDV.
 O teste não usa credenciais, licença ou banco de uma loja real.
+
+## Atualizar o caixa agora (central do fornecedor)
+
+Na central, em **Suporte e caixas**, o botão **Atualizar o caixa agora** pede que os caixas da loja instalem a versão
+publicada já, sem esperar a consulta de hora em hora nem o fechamento do turno (o motivo fica na auditoria).
+
+- O pedido fica na memória do Render por 6 horas. O caixa pergunta a cada 25 segundos (5 com a retaguarda ligada),
+  pelo `--sync` ou pelo próprio PDV aberto, e essa pergunta não acorda o Neon.
+- Com o pedido, o caixa consulta a versão na hora e instala mesmo com o turno aberto e mesmo se o dono tiver adiado.
+  Venda, mesa ou comanda aberta ainda seguram a instalação, que sai assim que o caixa ficar livre.
+- Cada caixa guarda o número do pedido que já atendeu: o mesmo pedido não instala duas vezes.
+- Um novo deploy da nuvem apaga o pedido da memória. Se o caixa não atualizar, aperte o botão de novo.
+
+A nuvem guarda a última versão publicada em memória por 30 minutos (`ultima_em_cache`), e publicar limpa esse cache.
+Assim a consulta de hora em hora dos caixas quase nunca acorda o Neon.

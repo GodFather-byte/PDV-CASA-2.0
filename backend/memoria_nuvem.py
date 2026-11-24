@@ -16,6 +16,7 @@ TTL_SESSAO_SEG = 12 * 3600
 TTL_PEDIDO_SEG = 90
 TTL_TOKEN_NEGATIVO_SEG = 10 * 60
 TTL_CONCLUSAO_SEG = 10 * 60
+TTL_ATUALIZAR_SEG = 6 * 3600     # o botão "Atualizar o caixa agora" da central vale por 6 horas (caixa desligado pega quando ligar)
 
 
 class MemoriaNuvem:
@@ -26,6 +27,7 @@ class MemoriaNuvem:
         self._pedidos: dict[str, dict] = {}
         self._conclusoes: dict[str, dict] = {}
         self._tokens_desconhecidos: dict[str, float] = {}
+        self._atualizar: dict[str, dict] = {}
         self._seq = 0
 
     def zerar(self) -> None:
@@ -35,6 +37,7 @@ class MemoriaNuvem:
             self._pedidos.clear()
             self._conclusoes.clear()
             self._tokens_desconhecidos.clear()
+            self._atualizar.clear()
             self._seq = 0
 
     def lembrar_token(self, token: str, chave: str) -> None:
@@ -76,6 +79,25 @@ class MemoriaNuvem:
             self._pedidos[chave] = {"id": self._seq, "em": agora}
             return {"conhecido": True, "pedido": True, "id": self._seq}
 
+    def pedir_atualizacao(self, chave: str) -> int:
+        """A central pede que os caixas da loja instalem a versão nova já. Cada caixa guarda o id que já atendeu."""
+        with self._trava:
+            # Segundos do relógio, não o contador: depois de um reinício do servidor o número não se repete.
+            anterior = self._atualizar.get(chave, {}).get("id", 0)
+            ident = max(int(time.time()), anterior + 1)
+            self._atualizar[chave] = {"id": ident, "em": time.monotonic()}
+            return ident
+
+    def _atualizacao_pedida(self, chave: str, agora: float) -> int:
+        """Chamado com a trava já tomada."""
+        ped = self._atualizar.get(chave)
+        if ped is None:
+            return 0
+        if agora - ped["em"] > TTL_ATUALIZAR_SEG:
+            self._atualizar.pop(chave, None)
+            return 0
+        return ped["id"]
+
     def token_ja_descartado(self, token: str) -> bool:
         """Token que não é de loja: não consulta o banco de novo por alguns minutos."""
         if not token:
@@ -103,11 +125,13 @@ class MemoriaNuvem:
             return {"conhecido": False, "pedido": False}
         agora = time.monotonic()
         with self._trava:
+            atualizar = self._atualizacao_pedida(chave, agora)
+            extra = {"atualizar": atualizar} if atualizar else {}
             ped = self._pedidos.get(chave)
             if ped is None or agora - ped["em"] > TTL_PEDIDO_SEG:
                 self._pedidos.pop(chave, None)
-                return {"conhecido": True, "pedido": False}
-            return {"conhecido": True, "pedido": True, "id": ped["id"]}
+                return {"conhecido": True, "pedido": False, **extra}
+            return {"conhecido": True, "pedido": True, "id": ped["id"], **extra}
 
     def concluir(self, token: str, momento: str, pedido_id: int | None = None) -> dict:
         chave = self.chave_do_token(token)

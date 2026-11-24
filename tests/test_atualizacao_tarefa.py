@@ -193,7 +193,7 @@ class TesteSituacao(unittest.TestCase):
         with mock.patch.object(cliente, "consultar", return_value=resposta):
             self.assertEqual(cliente.rodada(self.banco, http=object())["acao"], "em_dia")
         self.assertEqual(self.banco.cfg(cliente.CHAVE_FALHA_CONSULTA), "")
-        self.assertFalse(cliente.precisa_consultar(self.banco))                  # respondeu: agora só em 6 horas
+        self.assertFalse(cliente.precisa_consultar(self.banco))                  # respondeu: agora só daqui a 1 hora
 
     def _turno(self, fechado_ha_min=None):
         quando = (datetime.now() - timedelta(minutes=fechado_ha_min or 0)).strftime("%Y-%m-%d %H:%M:%S")
