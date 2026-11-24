@@ -249,10 +249,14 @@ def executar(db: Session, Loja, quem: AcessoImportacao, corpo: dict, *, aplicar:
         raise HTTPException(status_code=409, detail=(
             "Ainda há uma importação esperando o caixa. Aguarde a sincronização ou cancele em Alterações enviadas."))
     comandos = enfileirar(db, chave, quem.autor, modo, importaveis, resposta["erros"])
+    mensagem = ("Enviado ao caixa. Ele busca em seguida: em geral em menos de meio minuto com a loja aberta, "
+                "e em poucos segundos se o programa do caixa estiver atualizado.")
+    if any(str((l.get("comando") or {}).get("custo") or "").strip() for l in importaveis):
+        mensagem += (" O custo segue numa segunda alteração. Um caixa antigo grava os produtos e pode recusar só "
+                     "o custo; em Alterações enviadas, use Enviar de novo depois de atualizar o programa.")
     resposta.update({"dry_run": False, "enfileirado": True, "comandos": comandos,
                      "importacao_id": comandos and _ultima_id(db, chave),
-                     "mensagem": "Enviado ao caixa. Ele aplica na próxima sincronização. "
-                                 "Os números acima são a prévia, não o que o caixa já gravou."})
+                     "mensagem": mensagem})
     return resposta
 
 
@@ -404,10 +408,28 @@ def linha_publica(linha: dict) -> dict:
     return {k: v for k, v in linha.items() if k not in ("anterior", "comando")}
 
 
+def separar_custo(linhas: list[dict]) -> tuple[list[dict], list[dict]]:
+    """O caixa antigo recusa o lote inteiro se uma atualização traz custo e quem está logado não é gerente.
+
+    O primeiro comando grava nome, preço e estoque sem custo (entra mesmo no programa antigo). O segundo
+    só completa o custo, sem mexer de novo na quantidade. O programa novo aplica os dois; o antigo aplica
+    o primeiro e pode recusar o segundo, que continua na fila para o botão Enviar de novo."""
+    sem, com = [], []
+    for linha in linhas:
+        if str(linha.get("custo") or "").strip():
+            sem.append({**linha, "custo": ""})
+            com.append({**linha, "quantidade": ""})
+        else:
+            sem.append(dict(linha))
+    return sem, com
+
+
 def enfileirar(db: Session, chave: str, autor: str, modo: str, linhas: list[dict], erros: int = 0) -> list[int]:
-    comandos_dados = fatiar("linhas", [l["comando"] for l in linhas], {
-        "casar_barras": True, "modo_quantidade": modo, "atualizar_existentes": True})
-    if pendentes(db, chave) + len(comandos_dados) > LIMITE_PENDENTES:
+    extra = {"casar_barras": True, "modo_quantidade": modo, "atualizar_existentes": True}
+    sem_custo, so_custo = separar_custo([l["comando"] for l in linhas])
+    lotes = fatiar("linhas", sem_custo, extra) if sem_custo else []
+    lotes_custo = fatiar("linhas", so_custo, {**extra, "modo_quantidade": "substituir"}) if so_custo else []
+    if pendentes(db, chave) + len(lotes) + len(lotes_custo) > LIMITE_PENDENTES:
         raise HTTPException(status_code=409, detail=(
             "Há alterações demais esperando o caixa. Aguarde a loja aplicar as que já estão na fila."))
     criados = sum(l["acao"] == "criar" for l in linhas)
@@ -419,15 +441,25 @@ def enfileirar(db: Session, chave: str, autor: str, modo: str, linhas: list[dict
     db.add(registro)
     db.flush()
     ids = []
-    total = len(comandos_dados)
-    for i, dados in enumerate(comandos_dados, start=1):
-        resumo = f"Importação #{registro.id}: {criados} novos, {atualizados} atualizações ({i}/{total})"
-        comando = criar(db, chave, {"tipo": "produtos.importar", "dados": dados, "resumo": resumo[:200]},
-                        autor, liberar_importacao=True)
-        ids.append(comando.id)
+    partes = [("produtos", lotes), ("custo", lotes_custo)]
+    for rotulo, grupo in partes:
+        total = len(grupo)
+        for i, dados in enumerate(grupo, start=1):
+            resumo = resumo_do_lote(registro.id, rotulo, dados, i, total, criados, atualizados)
+            comando = criar(db, chave, {"tipo": "produtos.importar", "dados": dados, "resumo": resumo[:200]},
+                            autor, liberar_importacao=True)
+            ids.append(comando.id)
     registro.comando_ids = ",".join(str(i) for i in ids)
     db.commit()
     return ids
+
+
+def resumo_do_lote(ident: int, rotulo: str, dados: dict, indice: int, lotes: int, criados: int = 0,
+                   atualizados: int = 0) -> str:
+    qtd = len(dados.get("linhas") or [])
+    if rotulo == "custo":
+        return f"Importação #{ident}: custo de {qtd} produto(s) ({indice}/{lotes})"
+    return f"Importação #{ident}: {criados} novos, {atualizados} atualizações ({indice}/{lotes})"
 
 
 def snapshot(linhas: list[dict]) -> list[dict]:

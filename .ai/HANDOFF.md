@@ -1,28 +1,33 @@
-# Handoff: painel controla cadastro e relatórios
+# Handoff: painel com a main atual
 
-O dono acompanha e mexe na loja pelo painel, sem comando novo no caixa. A aba **Relatórios**
-mostra curva ABC, categoria, operador, por dia, estoque baixo, parados, sugestão de compra (7 dias)
-e o histórico do que foi pedido ao caixa. CSV e planilha saem do mesmo período. **Hoje** lista os
-mais vendidos do dia. Na rede, cada loja mostra o ticket e o comparativo baixa em CSV.
+A branch do painel está em cima da main. Continuam valendo os dois lados: os relatórios e o
+reajuste deste pedido, e o que a main já mergeou (custo da importação em comando separado, com
+autoridade de gerente; aviso rápido da fila; no boot a nuvem rearma o aviso das alterações
+pendentes; a primeira pergunta de um token desconhecido olha a loja no banco uma vez).
+
+## O que o painel acrescenta
+A aba **Relatórios** mostra curva ABC, categoria, operador, por dia, estoque baixo, parados,
+sugestão de compra (7 dias) e o histórico do que foi pedido ao caixa. CSV e planilha saem do
+mesmo período. **Hoje** lista os mais vendidos do dia. Na rede, cada loja mostra o ticket e o
+comparativo baixa em CSV.
 
 Na retaguarda, em Produtos: **Reajuste %** por categoria e **Editar marcados** (preço, categoria,
 estoque mínimo, inativar), sempre com prévia. A entrada de mercadoria continua na ficha, com motivo.
+O assistente usa a sessão ou o token `wpdv_`. Sem `dry_run: false` a escrita só devolve a prévia.
+Guia em `docs/api-assistente.md`.
 
-O assistente usa a sessão ou o token `wpdv_` (o mesmo da importação). Sem `dry_run: false` a escrita
-só devolve a prévia. Guia em `docs/api-assistente.md`.
+Reajuste e estoque usam `cadastro.salvar` e `estoque.movimento`. Caixa com a retaguarda ligada
+não precisa atualizar. O custo da planilha continua no segundo comando `produtos.importar`: o
+caixa antigo grava o produto e pode recusar só o custo, que se reenvia em Alterações enviadas.
 
-## O que entrou
-- `GET/POST /v1/painel/gestao/...` (resumo, relatórios, produtos, auditoria, preços, reajuste, estoque).
-- Testes em `tests/test_gestao_painel.py`.
+## O que o dono faz na loja EA-SUPERACOES2
+A Importação #4 ficou em "Aguardando o caixa" porque o deploy zerou a memória do aviso. No caixa,
+feche o turno (ou registre uma venda): o programa que já está rodando manda na hora. O comando
+de produtos deve aplicar no 1.14.21. O comando de custo pode ser recusado até instalar o programa
+que contém a #149; depois, em Alterações enviadas, use Enviar de novo.
 
-## Fora deste pedido
-- Não houve merge nem deploy.
-- Não mexe na recusa de custo na importação nem na velocidade em que o caixa aplica a fila.
-- Reajuste e estoque usam `cadastro.salvar` e `estoque.movimento`. Caixa com a retaguarda ligada
-  não precisa atualizar. Sem a retaguarda ligada, a escrita espera o cadastro subir.
-- Sugestão de compra e parados leem o espelho da retaguarda. Fechamento e sangria vêm do retrato
-  (cerca de 31 dias). Custo e lucro só entram quando o caixa já enviou o custo do item.
+## Testes
+`tests/test_gestao_painel.py`, `tests/test_importacao_painel.py` e `tests/test_ociosidade_neon.py`.
 
-## Pendências
-- Dono: `MP_ACCESS_TOKEN` (e `MP_WEBHOOK_SECRET`) no Render para o checkout do site; `ANTHROPIC_API_KEY`.
-- Lojas desatualizadas: Resenha (1.14.9, ainda com o erro ao sair), Império, EA Superações 1/2/3.
+## Fora
+Não houve merge deste PR nem deploy.

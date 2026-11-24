@@ -14,6 +14,7 @@ import time
 TTL_TOKEN_SEG = 24 * 3600
 TTL_SESSAO_SEG = 12 * 3600
 TTL_PEDIDO_SEG = 90
+TTL_TOKEN_NEGATIVO_SEG = 10 * 60
 TTL_CONCLUSAO_SEG = 10 * 60
 
 
@@ -24,6 +25,7 @@ class MemoriaNuvem:
         self._sessoes: dict[str, tuple[str, float]] = {}
         self._pedidos: dict[str, dict] = {}
         self._conclusoes: dict[str, dict] = {}
+        self._tokens_desconhecidos: dict[str, float] = {}
         self._seq = 0
 
     def zerar(self) -> None:
@@ -32,6 +34,7 @@ class MemoriaNuvem:
             self._sessoes.clear()
             self._pedidos.clear()
             self._conclusoes.clear()
+            self._tokens_desconhecidos.clear()
             self._seq = 0
 
     def lembrar_token(self, token: str, chave: str) -> None:
@@ -72,6 +75,26 @@ class MemoriaNuvem:
             self._seq += 1
             self._pedidos[chave] = {"id": self._seq, "em": agora}
             return {"conhecido": True, "pedido": True, "id": self._seq}
+
+    def token_ja_descartado(self, token: str) -> bool:
+        """Token que não é de loja: não consulta o banco de novo por alguns minutos."""
+        if not token:
+            return True
+        agora = time.monotonic()
+        with self._trava:
+            expira = self._tokens_desconhecidos.get(_hash(token))
+            if expira is None:
+                return False
+            if expira < agora:
+                self._tokens_desconhecidos.pop(_hash(token), None)
+                return False
+            return True
+
+    def descartar_token(self, token: str) -> None:
+        if not token:
+            return
+        with self._trava:
+            self._tokens_desconhecidos[_hash(token)] = time.monotonic() + TTL_TOKEN_NEGATIVO_SEG
 
     def consultar_loja(self, token: str) -> dict:
         """O caixa pergunta se o celular pediu envio. Não abre banco."""
