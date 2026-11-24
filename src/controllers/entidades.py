@@ -127,13 +127,13 @@ def _antes_produto(banco, d, id_):
             "SELECT custo_medio_cent FROM produtos WHERE id = ?", (id_,), 0) or 0)
         if d["custo_medio_cent"] == anterior:
             pass
-        elif nivel < 4:
+        elif nivel < 4 and not getattr(banco, "_autoridade_dono", False):   # o painel do dono pode
             if id_ is None:
                 d.pop("custo_medio_cent")
             else:
                 raise ErroPermissao("Custo e lucro só aparecem para o gerente.")
         elif id_ is not None:
-            from src.controllers.estoque_controller import EstoqueController
+            from src.controllers.estoque_controller import EstoqueController       # o histórico de custo registra
             EstoqueController(banco, operador)._gravar_custo(
                 id_, anterior, d["custo_medio_cent"],
                 banco.valor("SELECT qt_atual FROM produtos WHERE id = ?", (id_,), 0), "cadastro")

@@ -82,11 +82,13 @@ class RetaguardaController:
         self.operador_id = operador_id
 
     def _gerente(self) -> int | None:
-        """Quem assina os lançamentos da retaguarda no caixa: o operador da sessão ou, na sincronização (sem ninguém
-        logado), o primeiro gerente ativo. O dono e o fornecedor mexem com autoridade de gerente."""
-        if self.operador_id:
+        """Quem assina os lançamentos da retaguarda no caixa: o operador da sessão quando ele é gerente; senão o
+        primeiro gerente ativo; sem gerente nenhum na loja, o operador da sessão. A autoridade não depende disso: o
+        que vem do painel vale como do dono (`_como_gerente`)."""
+        if self.operador_id and self.banco.valor("SELECT nivel FROM operadores WHERE id = ?", (self.operador_id,), 0) >= 4:
             return self.operador_id
-        return self.banco.valor("SELECT id FROM operadores WHERE ativo = 1 AND nivel >= 4 ORDER BY id LIMIT 1")
+        gerente = self.banco.valor("SELECT id FROM operadores WHERE ativo = 1 AND nivel >= 4 ORDER BY id LIMIT 1")
+        return gerente or self.operador_id
 
     @contextmanager
     def _como_gerente(self):
@@ -95,12 +97,17 @@ class RetaguardaController:
         custo e lucro de quem não é gerente."""
         gerente = self._gerente()
         anterior = getattr(self.banco, "_operador_auditoria", None)
+        autoridade_antes = getattr(self.banco, "_autoridade_dono", False)
         trocou = type(gerente) is int and gerente != anterior
         if trocou:
             self.banco.definir_operador_auditoria(gerente)
+        # O dono manda mais que o gerente: quem estiver logado no caixa (ou a falta de gerente na loja) não barra o
+        # que ele mandou pelo painel, como o custo dos produtos.
+        self.banco._autoridade_dono = True
         try:
             yield
         finally:
+            self.banco._autoridade_dono = autoridade_antes
             if trocou:
                 self.banco.definir_operador_auditoria(anterior)
 
