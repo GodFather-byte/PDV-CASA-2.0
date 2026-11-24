@@ -22,6 +22,12 @@ Edição do WillPDV para hotel e pousada, com diárias e uso por horas. Mesmo c�
 
 ## No dia a dia
 
+Depois da entrada, o Will Hotel abre direto a **Recepção do hotel** em tela cheia, inclusive para quem só faz caixa.
+O menu mostra só o que é de hotel: cozinha, promoções, retornáveis, portaria, quartos por tempo, composição, devoluções e
+contagem ficam escondidos. O caixa continua existindo para três coisas: abrir e fechar o turno, a sangria e receber a
+conta (cupom e NFC-e). Na aba Hoje, a linha "Caixa" mostra se o turno está aberto e tem o botão
+**Caixa: turno e recebimentos**. **Receber a conta** abre o caixa já na conta do hóspede.
+
 - **Nova reserva**: diária (datas) ou período (hora). Só aparecem quartos livres que cabem as pessoas; os prontos vêm
   primeiro. O hóspede cadastrado é opcional na reserva.
 - **Check-in**: exige o titular maior de idade com a ficha completa (documento e nascimento; brasileiro adulto, também

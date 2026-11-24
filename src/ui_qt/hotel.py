@@ -692,6 +692,11 @@ class JanelaHotel(QDialog):
     # ------------------------------------------------------------ Hoje
     def _montar_hoje(self):
         _, layout = self._aba("Hoje")
+        caixa = tema.LinhaFluida()
+        self.lbl_turno = texto("", "legenda")
+        caixa.addWidget(self.lbl_turno)
+        caixa.addWidget(_botao("Caixa: turno e recebimentos", self.abrir_caixa_do_hotel))
+        layout.addLayout(caixa)
         layout.addWidget(texto("Chegadas de hoje (e reservas atrasadas)", "subtitulo"))
         self.tab_chegadas = _tabela(["Quarto", "Hóspede", "Quando", "Estadia", "Pessoas", "Telefone", "Origem"], elastica=1)
         self.tab_chegadas.doubleClicked.connect(lambda _: self.fazer_checkin())
@@ -707,13 +712,16 @@ class JanelaHotel(QDialog):
         layout.addWidget(self.tab_hospedados, 2)
         linha = tema.LinhaFluida()
         linha.addWidget(_botao("Check-out", self.fazer_checkout, "primario"))
-        linha.addWidget(_botao("Conta no caixa", self.abrir_conta_no_caixa))
+        linha.addWidget(_botao("Receber a conta", self.abrir_conta_no_caixa))
         linha.addWidget(_botao("Café avulso", self.lancar_cafe))
         linha.addWidget(_botao("Prorrogar / antecipar", self.prorrogar))
         linha.addWidget(_botao("Trocar de quarto", lambda: self.trocar_quarto(self.tab_hospedados)))
         layout.addLayout(linha)
 
     def _atualizar_hoje(self, painel: dict):
+        turno = self.ctx.turnos.atual()
+        self.lbl_turno.setText(f"Caixa: turno {turno['id']} aberto." if turno else
+                               "Caixa: turno fechado. Abra o turno no caixa antes de receber contas.")
         _preencher(self.tab_chegadas, [
             (e["uh"], e["titular_nome"], _quando(e), _noites(e), e["adultos"] + e["criancas"], e["telefone"] or "",
              ORIGENS.get(e["origem"], e["origem"])) for e in painel["chegadas"]], [e["id"] for e in painel["chegadas"]])
@@ -1292,6 +1300,14 @@ class JanelaHotel(QDialog):
         if janela is not None and hasattr(janela, "ent_pos"):
             janela.ent_pos.setText(str(conta))
             janela.chamar_posicao()
+
+    def abrir_caixa_do_hotel(self):
+        """O caixa do hotel: abrir e fechar o turno, sangria e receber contas avulsas."""
+        abrir = getattr(self.app, "abrir_caixa", None)
+        if abrir is None:
+            self.avisar("Abra o caixa pelo menu.")
+            return None
+        return abrir()
 
     def abrir_conta_no_caixa(self):
         estadia_id = _selecionado(self.tab_hospedados)
