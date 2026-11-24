@@ -16,6 +16,7 @@ from src.controllers.config_controller import ConfigController
 from src.controllers.relatorio_controller import RelatorioController
 from src.core import fita
 from src.core import formatacao as fmt
+from src.core.erros import ErroNegocio
 from src.core.posicao import nome as nome_posicao
 from src.core.relatorio import para_texto
 from src.database.conexao import RAIZ
@@ -406,6 +407,32 @@ class ImpressaoController:
         info = {"nome": nome_posicao(v["comanda"], v["posicao"]), "rotulo": self.caixa.rotular_posicao(v["comanda"], v["posicao"]),
                 "quando": v["fechada_em"], "comanda": bool(v["comanda"]), "numero": v["posicao"], "cupom": v["cupom"]}
         return self.comprovante_saida(info, operador)
+
+    @staticmethod
+    def _segunda_via(texto: str, w: int) -> str:
+        """Marca o papel reimpresso logo abaixo do título, para não ser confundido com um pagamento novo."""
+        linhas = texto.split("\n")
+        marca = "** SEGUNDA VIA - REIMPRESSÃO **".center(w)
+        for i, linha in enumerate(linhas):
+            if linha.strip() in ("RECIBO DE COMISSÃO", "RECIBO DE ACERTO", "COMISSÃO LANÇADA"):
+                return "\n".join(linhas[:i + 2] + [marca] + linhas[i + 2:])
+        return "\n".join([marca] + linhas)
+
+    def reimpressao_recibo_garota(self, acerto_id: int) -> str:
+        """Segunda via do recibo do pagamento da garota (quanto foi em dinheiro e quanto no Pix), refeita pelo banco."""
+        from src.controllers.comissao_controller import ComissaoController
+        pag = ComissaoController(self.banco).recibo_do_acerto(acerto_id)
+        return self._segunda_via(self.recibo_comissao(pag, pag["operador"]), self.largura())
+
+    def reimpressao_via_comissao(self, lancamento_id: int) -> str:
+        """Segunda via do papel de uma comissão lançada."""
+        from src.controllers.comissao_controller import ComissaoController
+        comissoes = ComissaoController(self.banco)
+        lanc = comissoes.lancamento(lancamento_id)
+        if lanc is None:
+            raise ErroNegocio("Comissão não encontrada.")
+        operador = self.banco.valor("SELECT nome FROM operadores WHERE id = ?", (lanc["operador_id"],), "") or ""
+        return self._segunda_via(self.via_comissao(lanc, comissoes.nome(lanc["garota"]), operador), self.largura())
 
     def via_comissao(self, lancamento: dict, nome: str, operador: str) -> str:
         """A via que a garota leva a cada comissão marcada para ela: só o valor DESTE lançamento (não fiscal). O que já estava

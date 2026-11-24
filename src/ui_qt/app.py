@@ -297,7 +297,7 @@ class JanelaPrincipal(QMainWindow):
             ("composicao", "Composição / ficha técnica", self.abrir_composicao),
             ("outros", "Escopo e homologação", self.mostrar_limites),
         ):
-            botao = QPushButton(titulo)
+            botao = QPushButton(self.edicao.rotulos.get(chave, titulo))
             botao.clicked.connect(acao)
             self.botoes[chave] = botao
             if chave in self.edicao.menu_oculto:          # não existe nesta edição: nem aparece
@@ -403,7 +403,10 @@ class JanelaPrincipal(QMainWindow):
         atalhos = QHBoxLayout()
         atalhos.addWidget(tema.texto("Acesso rápido", "subtitulo", quebra=False))
         self.atalhos = {}
-        for chave, rotulo in (("produtos", "Produtos"), ("estoque", "Estoque"), ("relatorio_vendas", "Vendas")):
+        rapidos = ((("hotel", "Recepção"), ("caixa", "Receber conta"), ("produtos", "Produtos"))
+                   if self.edicao.inicio == "hotel" else
+                   (("produtos", "Produtos"), ("estoque", "Estoque"), ("relatorio_vendas", "Vendas")))
+        for chave, rotulo in rapidos:
             atalho = QPushButton(rotulo)
             atalho.clicked.connect(self.botoes[chave].click)
             self.atalhos[chave] = atalho
@@ -812,6 +815,16 @@ class JanelaPrincipal(QMainWindow):
     def abrir_hotel(self):
         from src.ui_qt.hotel import JanelaHotel
         return self._abrir_painel_operacional("hotel", lambda: JanelaHotel(self.ctx, self))
+
+    def abrir_inicio_hotel(self):
+        """Will Hotel: depois da entrada abre a recepção em tela cheia. Sem acesso à recepção, fica no menu."""
+        if not (self.botoes["hotel"].isEnabled()):
+            self.mensagem.setText("Seu acesso não abre a recepção do hotel.")
+            return None
+        janela = self.abrir_hotel()
+        if janela is not None:
+            janela.showMaximized()
+        return janela
 
     def abrir_diagnostico(self):
         from src.ui_qt.diagnostico import JanelaDiagnostico
@@ -1268,7 +1281,9 @@ class App:
             self.principal._primeiro_uso_timer.start(150)
         self.principal._atualizacoes_timer.start()
         self.principal.consultar_atualizacoes()
-        if operador.so_caixa:
+        if self.principal.edicao.inicio == "hotel":
+            self.principal.abrir_inicio_hotel()          # o hotel começa na recepção, nunca no caixa de PDV
+        elif operador.so_caixa:
             self.principal.abrir_caixa()
 
     def encerrar_sessao(self, confirmar=False):

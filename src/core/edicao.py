@@ -66,6 +66,8 @@ class Edicao:
     padroes: dict = field(default_factory=dict)  # aplicados somente na primeira entrada da edição
     sem_gelada: bool = False           # loja que não vende bebida: preço gelada e casco somem do cadastro, do caixa e da etiqueta
     recebimento_direto: bool = False   # balcão: na primeira entrada sai a taxa do crédito da boate e o recebimento é o direto
+    inicio: str = ""                   # tela que abre sozinha depois da entrada ("hotel": a recepção, no lugar do caixa)
+    rotulos: dict = field(default_factory=dict)        # botão do menu -> texto próprio desta edição
 
     def perfil_fixo(self) -> bool:
         return bool(self.perfil and not self.perfis)
@@ -124,7 +126,13 @@ EDICOES = {
                           or c in {"exigir_senha_comissao", "codigo_comissao", "imprimir_via_comissao", "show_valores",
                                    "codigo_saida", "imprimir_saida_ao_pagar", "limite_comanda", "tempo_inatividade_min",
                                    "posicao_padrao"}),
-        menu_oculto=frozenset({"quartos", "porteiro"}),
+        # O hotel vê só o que é de hotel: a recepção abre sozinha e o caixa fica para receber a conta (cupom, NFC-e, turno).
+        menu_oculto=frozenset({"quartos", "porteiro", "cozinha", "retornaveis", "promocoes", "composicao",
+                               "importar_produtos", "devolucoes", "contagem", "alertas", "tutorial_venda"}),
+        inicio="hotel",
+        rotulos={"hotel": "Recepção do hotel", "caixa": "Caixa • receber contas e turno",
+                 "produtos": "Produtos, consumo e frigobar", "relatorio_vendas": "Recebimentos • relatório",
+                 "inicio": "Visão geral do hotel"},
         executavel="WillHotel", script_instalador="WillHotel.iss"),
 }
 
