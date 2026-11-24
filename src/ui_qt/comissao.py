@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QDialog, QGroupBox, QHBoxLayout, QHeaderView,
-                               QLabel, QLineEdit, QPushButton, QRadioButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout,
+from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDialog, QGroupBox, QHBoxLayout, QHeaderView,
+                               QLabel, QLineEdit, QPushButton, QRadioButton, QScrollArea, QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout,
                                QWidget)
 
 from src.controllers.comissao_controller import LIMITE_CONFIRMAR_CENT
@@ -581,9 +581,12 @@ class JanelaComissoes(QDialog):
         self.btn_cancelar.clicked.connect(self.cancelar)
         self.btn_atualizar = QPushButton("Atualizar")
         self.btn_atualizar.clicked.connect(self.atualizar)
+        self.btn_reimprimir = QPushButton("Reimprimir papéis")
+        self.btn_reimprimir.setToolTip("Segunda via do recibo de pagamento (dinheiro/Pix) ou do papel de cada comissão.")
+        self.btn_reimprimir.clicked.connect(self.reimprimir)
         fechar = QPushButton("Fechar")
         fechar.clicked.connect(self.close)
-        for b in (self.btn_lancar, self.btn_pagar, self.btn_cancelar, self.btn_atualizar):
+        for b in (self.btn_lancar, self.btn_pagar, self.btn_cancelar, self.btn_reimprimir, self.btn_atualizar):
             b.setAutoDefault(False)
             barra.addWidget(b)
         barra.addStretch(1)
@@ -648,6 +651,11 @@ class JanelaComissoes(QDialog):
             self.lbl_status.setText(texto_pagamento(pag))
         self._mudou()                              # nada a pagar (ou já pago em outro lugar): a lista se corrige
 
+    def reimprimir(self) -> "DialogoReimpressao":
+        dlg = DialogoReimpressao(self.caixa, self.garota_escolhida())
+        dlg.show()
+        return dlg
+
     def cancelar(self) -> None:
         lid = _chave(self.tabela_lancamentos)
         if lid is None:
@@ -658,3 +666,108 @@ class JanelaComissoes(QDialog):
         if cancelar_lancamento(self.caixa, lid, f"o lançamento {lid} de R$ {valor}"):
             self.lbl_status.setText(f"Lançamento {lid} cancelado.")
             self._mudou()
+
+
+PERIODOS_REIMPRESSAO = (("Hoje", 1), ("Últimos 7 dias", 7), ("Últimos 30 dias", 30))
+
+
+class DialogoReimpressao(QDialog):
+    """Segunda via dos papéis das garotas: o recibo de cada pagamento (com o que foi em dinheiro e no Pix) e o papel de
+    cada comissão lançada. O papel sai marcado como SEGUNDA VIA e não abre a gaveta; a reimpressão fica no registro."""
+
+    def __init__(self, caixa, garota: int | None = None):
+        super().__init__(caixa)
+        self.caixa = caixa
+        self.ctx = caixa.ctx
+        self.setWindowTitle("Reimprimir papéis das garotas")
+        self.resize(900, 520)
+        geral = QVBoxLayout(self)
+        filtro = QHBoxLayout()
+        filtro.addWidget(QLabel("Período:"))
+        self.periodo = QComboBox()
+        for rotulo, dias in PERIODOS_REIMPRESSAO:
+            self.periodo.addItem(rotulo, dias)
+        self.periodo.setCurrentIndex(1)
+        filtro.addWidget(self.periodo)
+        filtro.addWidget(QLabel("Garota nº (vazio: todas):"))
+        self.ent_garota = _campo(90, 12, direita=True)
+        self.ent_garota.setText("" if garota is None else str(garota))
+        filtro.addWidget(self.ent_garota)
+        filtrar = QPushButton("Procurar")
+        filtrar.setAutoDefault(False)
+        filtrar.clicked.connect(self.atualizar)
+        filtro.addWidget(filtrar)
+        filtro.addStretch(1)
+        geral.addLayout(filtro)
+        self.abas = QTabWidget()
+        self.tabela_recibos = _tabela(["Nº", "Quando", "Garota", "Total", "Dinheiro", "Pix", "Operador"], elastica=2)
+        self.tabela_vias = _tabela(["Nº", "Quando", "Garota", "Valor", "Situação", "Operador"], elastica=2)
+        self.abas.addTab(self.tabela_recibos, "Recibos de pagamento")
+        self.abas.addTab(self.tabela_vias, "Papéis das comissões")
+        geral.addWidget(self.abas, 1)
+        self.lbl_status = _mudo()
+        geral.addWidget(self.lbl_status)
+        barra = QHBoxLayout()
+        self.btn_imprimir = QPushButton("Reimprimir o escolhido")
+        self.btn_imprimir.setObjectName("primario")
+        self.btn_imprimir.setAutoDefault(False)
+        self.btn_imprimir.clicked.connect(self.imprimir)
+        fechar = QPushButton("Fechar")
+        fechar.setAutoDefault(False)
+        fechar.clicked.connect(self.close)
+        barra.addWidget(self.btn_imprimir)
+        barra.addStretch(1)
+        barra.addWidget(fechar)
+        geral.addLayout(barra)
+        self.periodo.currentIndexChanged.connect(lambda *_: self.atualizar())
+        self.ent_garota.returnPressed.connect(self.atualizar)
+        self.tabela_recibos.doubleClicked.connect(lambda *_: self.imprimir())
+        self.tabela_vias.doubleClicked.connect(lambda *_: self.imprimir())
+        self.atualizar()
+
+    def _filtro(self):
+        texto = self.ent_garota.text().strip()
+        return (self.periodo.currentData(), texto or None)
+
+    def atualizar(self) -> None:
+        dias, garota = self._filtro()
+        try:
+            acertos = self.ctx.comissoes.acertos(dias, garota)
+            vias = self.ctx.comissoes.lancamentos_periodo(dias, garota)
+        except ErroNegocio as e:
+            self.lbl_status.setText(str(e))
+            return
+        quem = lambda r: f"{r['garota']} {r['nome_garota']}".strip()          # noqa: E731
+        _preencher(self.tabela_recibos, [
+            [a["id"], fmt.fmt_datahora(a["criado_em"])[:16], quem(a), fmt.fmt_num(a["total_cent"]),
+             fmt.fmt_num(max(0, a["total_cent"] - a["vale_cent"] - (a.get("consumo_cent") or 0)) - a["pix_cent"]),
+             fmt.fmt_num(a["pix_cent"]), a["operador"] or ""] for a in acertos],
+            [int(a["id"]) for a in acertos], direita=(0, 3, 4, 5))
+        _preencher(self.tabela_vias, [
+            [c["id"], fmt.fmt_datahora(c["criado_em"])[:16], quem(c), fmt.fmt_num(c["valor_cent"]),
+             "paga" if c["status"] == "paga" else "a pagar", c["operador"] or ""] for c in vias],
+            [int(c["id"]) for c in vias], direita=(0, 3))
+        self.lbl_status.setText(f"{len(acertos)} pagamento(s) e {len(vias)} comissão(ões) no período.")
+
+    def imprimir(self) -> bool:
+        recibo = self.abas.currentIndex() == 0
+        tabela = self.tabela_recibos if recibo else self.tabela_vias
+        chave = _chave(tabela)
+        if chave is None:
+            self.caixa.dialogos.aviso("Reimprimir", "Escolha na lista o papel que vai sair de novo.")
+            return False
+        try:
+            if recibo:
+                texto = self.ctx.impressao.reimpressao_recibo_garota(chave)
+                titulo, nome, tipo = "Recibo (segunda via)", f"recibo_comissao_2via_{chave}", "recibo_garota"
+            else:
+                texto = self.ctx.impressao.reimpressao_via_comissao(chave)
+                titulo, nome, tipo = "Comissão (segunda via)", f"via_comissao_2via_{chave}", "via_comissao"
+        except ErroNegocio as e:
+            self.caixa.dialogos.erro("Reimprimir", str(e))
+            return False
+        self.caixa._emitir(titulo, texto, nome, tipo=tipo)
+        self.ctx.banco.log("reimpressao_garota", f"{'recibo do pagamento' if recibo else 'comissão'} {chave}",
+                           self.ctx.operador_id)
+        self.lbl_status.setText(f"Segunda via {'do pagamento' if recibo else 'da comissão'} nº {chave} enviada.")
+        return True

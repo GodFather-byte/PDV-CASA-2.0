@@ -486,7 +486,10 @@
           <ol id="lista-garcons" class="lista lista-produtos"></ol>
           <p id="vazio-garcons" class="vazio" hidden>Nenhuma mesa fechada com garçom neste dia.</p>
         </section>
+      </section>
 
+      <!-- Aba Garotas: comissões, pagamentos (dinheiro e Pix) e consumo -->
+      <section id="aba-garotas" class="aba" role="tabpanel" aria-labelledby="tab-garotas" hidden>
         <section class="bloco" id="bloco-comissoes">
           <h2>Comissões das garotas</h2>
           <div class="filtros" role="group" aria-label="Período das comissões">
@@ -503,6 +506,44 @@
           <p class="linha-detalhes">A pagar agora: <strong id="comissoes-pendente">R$ 0,00</strong></p>
           <ol id="lista-comissoes" class="lista lista-produtos"></ol>
           <p id="vazio-comissoes" class="vazio" hidden>Nenhuma comissão neste período.</p>
+        </section>
+
+        <section class="bloco" id="bloco-pagamentos-garotas">
+          <h2>Pagamentos às garotas</h2>
+          <p class="legenda">Mesmo período escolhido acima. O recibo de cada pagamento pode ser reimpresso no caixa, em
+            Comissões &gt; Reimprimir papéis.</p>
+          <p id="nota-pagamentos-garotas" class="legenda" hidden></p>
+          <div class="grade-cartoes">
+            <article class="cartao">
+              <span class="rotulo">Pago no período</span>
+              <strong id="garotas-pago" class="valor-grande">R$ 0,00</strong>
+              <small id="garotas-pago-detalhe" class="detalhe"></small>
+            </article>
+            <article class="cartao">
+              <span class="rotulo">Em dinheiro (saiu da gaveta)</span>
+              <strong id="garotas-dinheiro" class="valor-grande">R$ 0,00</strong>
+            </article>
+            <article class="cartao">
+              <span class="rotulo">No Pix</span>
+              <strong id="garotas-pix" class="valor-grande">R$ 0,00</strong>
+            </article>
+            <article class="cartao">
+              <span class="rotulo">Vales e consumo descontados</span>
+              <strong id="garotas-descontos" class="valor-grande">R$ 0,00</strong>
+              <small id="garotas-descontos-detalhe" class="detalhe"></small>
+            </article>
+            <article class="cartao">
+              <span class="rotulo">Shows pagos</span>
+              <strong id="garotas-shows" class="valor-grande">0</strong>
+              <small id="garotas-shows-detalhe" class="detalhe"></small>
+            </article>
+            <article class="cartao">
+              <span class="rotulo">Consumo a descontar agora</span>
+              <strong id="garotas-consumo-pendente" class="valor-grande">R$ 0,00</strong>
+            </article>
+          </div>
+          <ol id="lista-pagamentos-garotas" class="lista lista-produtos"></ol>
+          <p id="vazio-pagamentos-garotas" class="vazio" hidden>Nenhum pagamento neste período.</p>
         </section>
       </section>
 
@@ -838,6 +879,9 @@
       </button>
       <button type="button" role="tab" id="tab-abertas" class="aba-botao" data-aba="abertas" aria-selected="false" aria-controls="aba-abertas">
         <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10h6"/><path d="M9 14h6"/></svg></span>Salão
+      </button>
+      <button type="button" role="tab" id="tab-garotas" class="aba-botao" data-aba="garotas" aria-selected="false" aria-controls="aba-garotas" hidden>
+        <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4h5"/><path d="M18.5 4v6"/><path d="M16 13h5"/></svg></span>Garotas
       </button>
       <button type="button" role="tab" id="tab-produtos" class="aba-botao" data-aba="produtos" aria-selected="false" aria-controls="aba-produtos">
         <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/></svg></span>

@@ -2073,7 +2073,8 @@
       ));
     const mostrarGarotas = perfil.mostrar_garotas === true;
     $("cartao-garotas").hidden = !mostrarGarotas;
-    $("bloco-comissoes").hidden = !mostrarGarotas;
+    $("tab-garotas").hidden = !mostrarGarotas;
+    if (!mostrarGarotas && estado.aba === "garotas") trocarAba("hoje");
     const salao = perfil.mostrar_salao !== false;
     $("tab-abertas").hidden = !salao;
     if (!salao && estado.aba === "abertas") trocarAba("hoje");
@@ -2212,6 +2213,55 @@
             (g.caixa ? " · " + g.caixa : "") })
         ),
         el("span", { class: "valor", text: formatarCentavos(g.pendente + g.paga) })
+      ));
+    }
+    renderizarPagamentosGarotas(r, dias);
+  }
+
+  /** Pagamentos às garotas (acertos) do mesmo período: dinheiro, Pix, vales, consumo descontado e shows. */
+  function renderizarPagamentosGarotas(r, dias) {
+    const bloco = r.comissoes || {};
+    const nota = $("nota-pagamentos-garotas");
+    const lista = $("lista-pagamentos-garotas");
+    limpar(lista);
+    $("garotas-consumo-pendente").textContent = formatarCentavos(bloco.consumo_pendente_cent || 0);
+    if (!bloco.acertos_sincronizados) {
+      nota.hidden = false;
+      nota.textContent = "Os pagamentos às garotas aparecem depois que o caixa for atualizado (1.14.24 ou mais nova).";
+    } else {
+      nota.hidden = true;
+    }
+    const acertos = (bloco.acertos || []).filter((a) => dias.has(a.dia));
+    const soma = (campo) => acertos.reduce((t, a) => t + (Number(a[campo]) || 0), 0);
+    const pago = soma("dinheiro_cent") + soma("pix_cent");
+    $("garotas-pago").textContent = formatarCentavos(pago);
+    $("garotas-pago-detalhe").textContent = acertos.length
+      ? formatarInteiro(acertos.length) + " pagamento(s) · comissão " + formatarCentavos(soma("comissao_cent"))
+      : "";
+    $("garotas-dinheiro").textContent = formatarCentavos(soma("dinheiro_cent"));
+    $("garotas-pix").textContent = formatarCentavos(soma("pix_cent"));
+    $("garotas-descontos").textContent = formatarCentavos(soma("vale_cent") + soma("consumo_cent"));
+    $("garotas-descontos-detalhe").textContent = "vales " + formatarCentavos(soma("vale_cent")) +
+      " · consumo " + formatarCentavos(soma("consumo_cent"));
+    $("garotas-shows").textContent = formatarInteiro(soma("shows"));
+    $("garotas-shows-detalhe").textContent = formatarCentavos(soma("shows_cent"));
+    $("vazio-pagamentos-garotas").hidden = acertos.length > 0;
+    for (const a of acertos) {
+      const nome = a.nome ? " · " + a.nome : "";
+      const partes = [];
+      if (a.dinheiro_cent) partes.push("dinheiro " + formatarCentavos(a.dinheiro_cent));
+      if (a.pix_cent) partes.push("Pix " + formatarCentavos(a.pix_cent));
+      if (a.vale_cent) partes.push("vale " + formatarCentavos(a.vale_cent));
+      if (a.consumo_cent) partes.push("consumo " + formatarCentavos(a.consumo_cent));
+      if (a.shows) partes.push(a.shows + " show(s)");
+      const quando = (a.criado_em || "").slice(8, 10) + "/" + (a.criado_em || "").slice(5, 7) + " " + (a.criado_em || "").slice(11, 16);
+      lista.append(el("li", null,
+        el("div", { class: "nome" },
+          el("span", { text: "Garota " + a.garota + nome }),
+          el("span", { class: "sec", text: quando + (partes.length ? " · " + partes.join(" · ") : "") +
+            (a.operador ? " · " + a.operador : "") + (a.caixa ? " · " + a.caixa : "") })
+        ),
+        el("span", { class: "valor", text: formatarCentavos(a.total_cent) })
       ));
     }
   }
