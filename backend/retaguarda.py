@@ -266,6 +266,25 @@ def criar(db: Session, chave_loja: str, corpo: dict, autor: str, *, liberar_impo
     return comando
 
 
+def rearmar_pedidos_pendentes() -> int:
+    """Depois de um deploy a memória zera e o aviso de 90 s some. Loja com comando pendente ganha o aviso
+    de novo, senão um caixa ocioso (que só pergunta na memória) não busca a fila."""
+    from backend.memoria_nuvem import memoria
+    chaves = [c for (c,) in db_chaves_pendentes()]
+    for chave in chaves:
+        memoria.pedir(chave)
+    return len(chaves)
+
+
+def db_chaves_pendentes() -> list:
+    from backend.database import SessionLocal
+    db = SessionLocal()
+    try:
+        return db.query(RetaguardaComando.chave_loja).filter_by(situacao="pendente").distinct().all()
+    finally:
+        db.close()
+
+
 TIPOS_REENVIAR = ("produtos.importar", "produtos.desfazer")
 
 

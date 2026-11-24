@@ -79,6 +79,11 @@ class TesteSeparacaoDoCusto(unittest.TestCase):
         self.assertEqual([(l["nome"], l["custo"], l["quantidade"]) for l in sem], [("A", "", "4"), ("B", "", "1")])
         self.assertEqual([(l["nome"], l["custo"], l["quantidade"]) for l in com], [("A", "0,50", "")])
 
+    def test_o_resumo_do_custo_conta_produtos_e_nao_lotes(self):
+        from backend.importacao_painel import resumo_do_lote
+        self.assertEqual(resumo_do_lote(4, "custo", {"linhas": [{}] * 67}, 1, 1),
+                         "Importação #4: custo de 67 produto(s) (1/1)")
+
 
 class TesteAplicacaoNoCaixa(BaseTeste):
     def setUp(self):

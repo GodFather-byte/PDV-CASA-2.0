@@ -81,7 +81,11 @@ class TesteMemoriaSemBanco(BaseTeste):
         memoria.zerar()
         self.http = TestClient(nuvem.app)
 
-    def test_health_e_pedido_nao_abrem_o_neon(self):
+    def test_health_nao_abre_o_banco_e_token_desconhecido_so_uma_vez(self):
+        self.assertEqual(self.http.get("/health").json()["status"], "ok")
+        primeiro = self.http.get("/v1/sync/pedido", headers={"Authorization": "Bearer nada"})
+        self.assertEqual(primeiro.status_code, 200)
+        self.assertFalse(primeiro.json()["conhecido"])
         with mock.patch("backend.database.SessionLocal", side_effect=AssertionError("neon")), \
                 mock.patch("backend.main.SessionLocal", side_effect=AssertionError("neon")):
             self.assertEqual(self.http.get("/health").json()["status"], "ok")
@@ -90,6 +94,12 @@ class TesteMemoriaSemBanco(BaseTeste):
             self.assertFalse(r.json()["conhecido"])
             r = self.http.post("/v1/sync/pedido", headers={"Authorization": "Bearer nada"})
             self.assertFalse(r.json()["conhecido"])
+
+    def test_depois_do_deploy_o_caixa_ve_o_aviso_sem_ter_falado_antes(self):
+        memoria.pedir("LOJA-1")
+        visto = self.http.get("/v1/sync/pedido", headers=cabecalho()).json()
+        self.assertTrue(visto["conhecido"])
+        self.assertTrue(visto["pedido"])
 
     def test_botao_grava_pedido_e_o_caixa_ve_sem_banco(self):
         memoria.lembrar_token("token-da-loja-1", "LOJA-1")
