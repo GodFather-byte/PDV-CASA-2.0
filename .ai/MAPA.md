@@ -114,7 +114,7 @@ PostgreSQL fica na nuvem, sem dependência de internet para vender no caixa.
 | Perfil do estabelecimento (boate, bar, restaurante, churrascaria, comércio: liga os módulos de uma vez) | `perfil_controller.py` (`PERFIS`) · UI Qt (`ui_qt/configuracoes.py`, primeiro acesso em `ui_qt/app.py`) |
 | Códigos especiais do caixa (comissão 50, saída 1002) e o módulo de cada um | `config_controller.py` (`CODIGOS_ESPECIAIS`, `codigo_especial`) |
 | Foto do produto (arquivo ou Open Food Facts pelo código de barras; caixa ao lançar; cardápio) | `controllers/foto_produto_controller.py` (tabela `produto_fotos`, v37), UI `ui_qt/foto_produto.py` (aba Foto do cadastro, `QuadroFoto` no caixa), `sync/cardapio_envio.py`, `backend/cardapio.py` (`_url` aceita miniatura JPEG) |
-| Código de instalação da loja (central gera; caixa cola na tela de entrada e configura nuvem + licença) | `src/core/codigo_instalacao.py`, `src/sync/instalacao_nuvem.py`, `ui_qt/login.py` (`instalar_loja`), `backend/central_fornecedor.py` (`novo-token`, `senha-painel`) |
+| Código de instalação da loja (central gera; caixa cola na tela de entrada e configura nuvem + licença) | `src/core/codigo_instalacao.py`, `src/core/endereco_nuvem.py` (token só em HTTPS, localhost ou rede local), `src/sync/instalacao_nuvem.py`, `ui_qt/login.py` (`instalar_loja`), `backend/central_fornecedor.py` (`novo-token`, `senha-painel`) |
 | Aviso diário de licenças vencendo (e-mail ao fornecedor) | `backend/avisos_fornecedor.py`; alerta e botão em `backend/central_web/` |
 | Alterar quantidade da linha no caixa | `CaixaController.alterar_quantidade`; UI `ui_qt/caixa.py` (`alterar_quantidade`, Ctrl+Q) |
 | Promoção da gelada | `ProdutoController.regra_preco_gelada`; campos em `entidades.py` (aba Promoções) |

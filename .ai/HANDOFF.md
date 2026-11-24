@@ -25,3 +25,4 @@ Sem essa versão, a nuvem recusa backup em claro.
 
 A API confere só o prefixo `WILLPDV-BKP`. Não importa a cifra: o job do PostgreSQL
 não instala `cryptography`, e puxar esse módulo derrubava a subida da API nesse job.
+`src.core.endereco_nuvem` está em `src/autoteste.py` (`MODULOS`).
