@@ -23,6 +23,7 @@ from sqlalchemy import Column, Integer, String, Text
 from sqlalchemy.orm import Session
 
 from backend.database import Base, engine, get_db
+from src.core.formatacao import texto_planilha
 from backend.retaguarda import (
     LIMITE_LOTE, LIMITE_PENDENTES, LIMITE_PLANILHA_BYTES, criar, pendentes, secao,
 )
@@ -596,8 +597,9 @@ def _linha_csv(p: dict) -> list:
 
 def csv_produtos(produtos: list[dict]) -> str:
     buf = io.StringIO()
+    linhas = [[TITULOS[c] for c in COLUNAS_CSV]] + [_linha_csv(p) for p in produtos]
     csv.writer(buf, delimiter=";", lineterminator="\r\n").writerows(
-        [[TITULOS[c] for c in COLUNAS_CSV]] + [_linha_csv(p) for p in produtos])
+        [[texto_planilha(celula) for celula in linha] for linha in linhas])
     return buf.getvalue()
 
 

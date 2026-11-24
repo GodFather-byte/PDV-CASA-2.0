@@ -141,7 +141,10 @@ def conferir_senha(senha: str, guardado: str | None) -> bool:
         algoritmo, iteracoes, sal, esperado = (guardado or "").split("$")
         if algoritmo != "pbkdf2_sha256":
             return False
-        digesto = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), bytes.fromhex(sal), int(iteracoes))
+        n = int(iteracoes)
+        if n < 1 or n > 2_000_000:
+            return False
+        digesto = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), bytes.fromhex(sal), n)
     except (ValueError, TypeError):
         return False
     return hmac.compare_digest(digesto.hex(), esperado)

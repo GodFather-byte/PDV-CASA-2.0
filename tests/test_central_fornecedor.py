@@ -139,6 +139,19 @@ class TesteCentralFornecedor(unittest.TestCase):
             db.commit()
         self.assertEqual(self.http.get("/v1/fornecedor/lojas").status_code, 401)
 
+    def test_senha_propria_da_central_nao_abre_com_o_token_da_api(self):
+        self.http.cookies.clear()
+        with central._trava:
+            central._tentativas.clear()
+        with patch.dict(os.environ, {"PDV_CENTRAL_SENHA": "senha-so-da-central-123"}):
+            antigo = self.http.post("/v1/fornecedor/login", json={"credencial": "token-de-teste"},
+                                    headers={"X-Central-Login": "1"})
+            self.assertEqual(antigo.status_code, 401)
+            ok = self.http.post("/v1/fornecedor/login", json={"credencial": "senha-so-da-central-123"},
+                                headers={"X-Central-Login": "1"})
+            self.assertEqual(ok.status_code, 200, ok.text)
+            self.assertEqual(self.http.get("/v1/fornecedor/lojas").status_code, 200)
+
     def test_login_limita_tentativas_cookie_http_only_e_nao_cache(self):
         r = self.http.post("/v1/fornecedor/login", json={"credencial": "token-de-teste"}, headers={"X-Central-Login": "1"})
         self.assertIn("HttpOnly", r.headers["set-cookie"])

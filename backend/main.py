@@ -123,7 +123,13 @@ async def _ciclo_de_vida(_aplicacao):
         cobranca.parar_varredura()
 
 
-app = FastAPI(title="WillPDV - API de nuvem", lifespan=_ciclo_de_vida)
+app = FastAPI(
+    title="WillPDV - API de nuvem",
+    lifespan=_ciclo_de_vida,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 
 @app.middleware("http")
@@ -597,3 +603,37 @@ _recuperacao_senha.instalar(app, autenticar)
 from backend import site as _site  # noqa: E402
 
 _site.instalar(app)
+
+
+_CSP_CENTRAL = (
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+    "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+)
+_CSP_PAGINA = (
+    "script-src 'self'; img-src 'self' data: https: http:; connect-src 'self'; "
+    "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+)
+_CSP_BASE = "frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"
+
+
+def _politica_csp(caminho: str) -> str:
+    if caminho.startswith(("/central", "/v1/fornecedor")):
+        return _CSP_CENTRAL
+    if caminho.startswith(("/painel", "/retaguarda", "/cardapio", "/porteiro")):
+        return _CSP_PAGINA
+    return _CSP_BASE
+
+
+@app.middleware("http")
+async def _cabecalhos_de_seguranca(request: Request, call_next):
+    """Cabeçalhos em toda resposta. O caixa lê JSON e ignora isto; o navegador do painel deixa de poder ser enquadrado."""
+    resposta = await call_next(request)
+    resposta.headers["X-Content-Type-Options"] = "nosniff"
+    resposta.headers["X-Frame-Options"] = "DENY"
+    resposta.headers["Referrer-Policy"] = "no-referrer"
+    resposta.headers["Content-Security-Policy"] = _politica_csp(request.url.path)
+    resposta.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").split(",")[0].strip().lower()
+    if proto == "https":
+        resposta.headers["Strict-Transport-Security"] = "max-age=15552000"
+    return resposta

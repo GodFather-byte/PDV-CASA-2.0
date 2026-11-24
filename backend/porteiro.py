@@ -189,6 +189,13 @@ def guardar_retrato(db: Session, chave: str, corpo: dict) -> None:
     pin_hash = corpo.get("pin_hash") or ""
     if not isinstance(pin_hash, str) or not pin_hash.startswith("pbkdf2$") or len(pin_hash) > 300:
         raise HTTPException(status_code=422, detail="O retrato precisa do hash do PIN.")
+    partes_pin = pin_hash.split("$")
+    try:
+        iteracoes_pin = int(partes_pin[1]) if len(partes_pin) > 1 else 0
+    except ValueError:
+        iteracoes_pin = 0
+    if not 1 <= iteracoes_pin <= 2_000_000:
+        raise HTTPException(status_code=422, detail="Hash do PIN inválido.")
     momento = (corpo.get("momento") or "")[:19]
     try:
         datetime.strptime(momento, "%Y-%m-%d %H:%M:%S")

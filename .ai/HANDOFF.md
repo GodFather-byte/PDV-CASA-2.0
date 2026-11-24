@@ -1,55 +1,34 @@
-# Handoff de 24/11/2026: "Atualizar o caixa agora" na central (branch `atualizar-caixa-agora`)
+# Handoff de 24/11/2026: auditoria de segurança (branch `cursor/auditoria-seguranca-7e21`)
 
-- **Intervalo:** o caixa consulta versão nova de hora em hora (`src/atualizacao/cliente.py` `INTERVALO_HORAS = 1`).
-  Para isso não acordar o Neon, `/v1/atualizacao/ultima` usa `ultima_em_cache` (30 min) e `publicar` limpa o cache.
-- **Botão na central** (Suporte e caixas): `POST /v1/fornecedor/lojas/{chave}/atualizar-agora` grava o pedido em
-  `memoria_nuvem.pedir_atualizacao` (6 h, número = segundos do relógio, para não se repetir depois de reiniciar).
-  O pedido sai em `GET /v1/sync/pedido` no campo `atualizar`.
-- **Caixa:** `Sincronizador._anotar_pedido_atualizacao` guarda o pedido pendente e `_atualizar_se_pedido` chama
-  `rodada(..., imediata=True)`. Assim instala com o turno aberto e passa por cima do "adiar", mas venda aberta ainda
-  segura. O PDV aberto também ouve o pedido (`ServicoAtualizacao` chama `atender_central`) quando a sincronização
-  completa não roda nele.
-- Testes em `tests/test_atualizar_caixa_agora.py`. Documentação em `docs/ATUALIZACAO.md`.
+Relatório em `docs/seguranca/auditoria-2026-11.md`. Não houve merge nem deploy. A produção só foi lida
+(cabeçalhos e se `/docs` responde). Nenhum segredo foi copiado para o relatório.
 
-## Antes: site público no domínio willpdv.com.br
+## O que o código passa a fazer
 
-O código passa a publicar o site em https://willpdv.com.br. Não houve merge nem deploy.
-O serviço no Render continua em https://willpdv-nuvem-6sp0.onrender.com para os caixas,
-o painel, o cardápio, o porteiro, a central, a retaguarda e o health check.
+- `/v1/pagamentos/webhook` exige `x-signature` (`MP_WEBHOOK_SECRET`), como a mensalidade. Sem segredo, 503.
+- Respostas HTTP ganham `X-Frame-Options: DENY`, CSP (`frame-ancestors 'none'`), `nosniff` e, em HTTPS, HSTS.
+- `/docs`, `/redoc` e `/openapi.json` ficam desligados.
+- Leitura de XLSX limita entradas e tamanho e recusa DTD. CSV de relatório, painel, hotel e central
+  neutraliza fórmula. Número brasileiro negativo continua número.
+- Hash PBKDF2 acima de 2.000.000 iterações é recusado (PIN do porteiro e senha do painel).
+- `PDV_CENTRAL_SENHA`, se existir no Render, substitui `PDV_API_TOKEN` só no login da central.
 
-## O que este PR muda
-
-- Canonical, og:url, og:image, JSON-LD, sitemap.xml e robots.txt usam https://willpdv.com.br.
-- O checkout (`POST /v1/pagamentos/checkout`) manda `back_urls` e `notification_url` para
-  esse domínio. `RENDER_EXTERNAL_URL` não entra mais nessa escolha.
-- GET e HEAD de página pública no host `*.onrender.com` respondem 301 para o domínio,
-  preservando a query. `/v1`, webhooks, painel e `/health` não redirecionam.
+O caixa 1.14.21 não muda de contrato: mesmo Bearer, mesmo JSON, sem comando novo.
 
 ## O que o dono faz
 
-No Render, no serviço da nuvem, defina:
-
-`PUBLIC_BASE_URL` = `https://willpdv.com.br`
-
-Sem barra no fim. Se essa variável já estiver com o endereço `*.onrender.com`, troque:
-valor preenchido ganha do padrão do código. Não altere `RENDER_EXTERNAL_URL`.
-
-Depois do deploy (este PR não publica):
-
-- Google Search Console: propriedade https://willpdv.com.br e o sitemap
-  https://willpdv.com.br/sitemap.xml.
-- Mercado Pago: pedido novo já avisa `https://willpdv.com.br/v1/pagamentos/webhook`.
-  O webhook das mensalidades (`/v1/webhooks/mercadopago`) continua no host onrender.
-  Não troque esse.
-
-A loja EA-SUPERACOES2 não foi mexida. Se o caixa ainda não recebeu a correção de custo,
-instale a versão e, em Alterações enviadas, use Enviar de novo nos comandos recusados.
+1. Confirmar `MP_WEBHOOK_SECRET` no Render, igual ao segredo da aplicação no Mercado Pago, antes de
+   contar com a confirmação automática do site.
+2. Criar `PDV_CENTRAL_SENHA` diferente do token da API e entrar de novo em `/central/`.
+3. Depois do deploy: `/docs` e `/openapi.json` em 404; painel com `X-Frame-Options: DENY`.
+4. Não cifrar o backup da nuvem enquanto o caixa 1.14.21 precisar do gzip atual.
+5. Pillow e cryptography têm avisos fora da faixa do `requirements.in`. Subir versão é outro trabalho.
 
 ## Testes
 
-`tests/test_site.py`, `tests/test_site_checkout.py` e `tests/test_site_teste.py`,
-mais a fumaça do caixa.
+`python -m tools.verificar` (fumaça do caixa, 55 módulos, `node --check`).
 
 ## Fora
 
-Sem mudança de preço, texto de venda, dado de produção, merge ou deploy.
+Sem mudança de preço, dado de produção, merge ou deploy. Backup cifrado na nuvem e troca de
+Pillow/cryptography ficaram de propósito.

@@ -9,6 +9,7 @@ import os
 import re
 
 _ITERACOES = 600_000     # OWASP para PBKDF2-SHA256; hashes antigos (60 mil) seguem válidos e são regravados no login
+TETO_ITERACOES = 2_000_000  # acima disto o hash é recusado: um número enorme travaria o login (caixa ou porteiro)
 FORMATO_SENHA = re.compile(r"[A-Za-z0-9]{1,10}")     # manual: até 10 caracteres alfanuméricos
 
 
@@ -27,7 +28,10 @@ def conferir(senha: str, armazenado: str | None) -> bool:
         return False
     try:
         _, iteracoes, sal_hex, hash_hex = armazenado.split("$")
-        h = hashlib.pbkdf2_hmac("sha256", _normalizar(senha), bytes.fromhex(sal_hex), int(iteracoes))
+        n = int(iteracoes)
+        if n < 1 or n > TETO_ITERACOES:
+            return False
+        h = hashlib.pbkdf2_hmac("sha256", _normalizar(senha), bytes.fromhex(sal_hex), n)
         return hmac.compare_digest(h.hex(), hash_hex)
     except (ValueError, TypeError):
         return False

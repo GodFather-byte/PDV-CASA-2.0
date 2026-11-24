@@ -133,3 +133,9 @@ class TestePorteiroNuvem(unittest.TestCase):
         consulta = self.http.get("/v1/porteiro/consulta", params={"q": "12"}, headers=dono)
         self.assertEqual(consulta.json()["situacao"], "devendo")
         self.assertTrue(consulta.json()["garota"])
+
+    def test_hash_de_pin_com_iteracoes_absurdas_e_recusado(self):
+        corpo = _corpo([])
+        corpo["pin_hash"] = "pbkdf2$999999999$" + ("ab" * 16) + "$" + ("cd" * 32)
+        recusa = self.http.post("/v1/porteiro/retrato", json=corpo, headers=cabecalho())
+        self.assertEqual(recusa.status_code, 422)

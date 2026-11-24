@@ -1108,8 +1108,8 @@ class HotelController:
         linhas = self.fichas(de, ate)
         with caminho.open("w", newline="", encoding="utf-8-sig") as arquivo:
             escritor = csv.writer(arquivo, delimiter=";")
-            escritor.writerow([rotulo for _, rotulo in self.COLUNAS_FICHA])
+            escritor.writerow([fmt.texto_planilha(rotulo) for _, rotulo in self.COLUNAS_FICHA])
             for linha in linhas:
-                escritor.writerow([linha[chave] for chave, _ in self.COLUNAS_FICHA])
+                escritor.writerow([fmt.texto_planilha(linha[chave]) for chave, _ in self.COLUNAS_FICHA])
         self.banco.log("hotel_fichas_exportadas", f"{len(linhas)} ficha(s) de {de} a {ate}", self.operador_id)
         return caminho

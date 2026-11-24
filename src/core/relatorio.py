@@ -5,6 +5,8 @@ import csv
 import io
 from dataclasses import dataclass, field
 
+from src.core.formatacao import texto_planilha
+
 
 @dataclass
 class Coluna:
@@ -87,14 +89,14 @@ def para_csv(rel: Relatorio) -> str:
     """CSV com separador ';' e vírgula decimal, como o Excel em português espera."""
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\r\n")
-    w.writerow([rel.titulo])
+    w.writerow([texto_planilha(rel.titulo)])
     for c in rel.criterios:
-        w.writerow([c])
-    w.writerow([c.titulo for c in rel.colunas])
+        w.writerow([texto_planilha(c)])
+    w.writerow([texto_planilha(c.titulo) for c in rel.colunas])
     for valores, estilo in zip(rel.linhas, rel.estilos or [""] * len(rel.linhas)):
-        w.writerow(valores)
+        w.writerow([texto_planilha(v) for v in valores])
     for rotulo, valor in rel.rodape:
-        w.writerow([rotulo, valor])
+        w.writerow([texto_planilha(rotulo), texto_planilha(valor)])
     return buf.getvalue()
 
 
