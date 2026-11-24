@@ -1,37 +1,23 @@
-# Handoff de 23/11/2026: bandeira 2 (branch `bandeira-2`)
+# Handoff: importar planilha no painel
 
-Pedido de um cliente de adega: o dono liga pelo painel um "preço da noite" e o caixa passa a cobrar.
+O dono importa vários produtos pela aba **Produtos** do painel (`Importar planilha`), com a mesma planilha do caixa.
+Na rede (`/painel/?grupo=CHAVE`), escolhe a loja e abre a importação dela. Nada é gravado na prévia: confirmar
+enfileira `produtos.importar` e o caixa aplica na sincronização. O mesmo código de barras atualiza; não duplica.
+A quantidade **substitui** o estoque (padrão) ou **soma**, à escolha na tela.
 
-- Produto: `bandeira2` (entra ou não, padrão sim), `preco_bandeira2_cent`, `preco_gelada_bandeira2_cent` (migração 59).
-- Configuração: `bandeira2_ativa` (S/N) e `bandeira2_pct` (acréscimo padrão), seção Caixa; publicadas na retaguarda,
-  então o dono muda pelo painel (`config.salvar`) e o caixa aplica na rodada da sincronização.
-- Regra em `ProdutoController.preco_bandeira2` / `regra_preco_vigente(..., bandeira=)` / `regra_preco_gelada`: preço
-  próprio > acréscimo; produto que muda fica sem promoção e sem atacado (`_reprecificar_balcao`); item lançado não muda.
-- Cardápio digital e pedido online: `cardapio_envio._aplicar_bandeira2` sobe o preço já resolvido.
-- Caixa: aviso BANDEIRA 2 no cabeçalho (confere a cada 5 s). Guia em `docs/ADEGA.md`. Testes `tests/test_bandeira2.py`.
-
-## Antes disso (23/11)
-
-O site público (`/site/`) mostra as cinco versões. O preço do checkout continua no servidor.
+O assistente usa a mesma rota com a sessão do painel ou com um token `wpdv_...` gerado nessa tela (aparece uma vez;
+no banco só fica o hash). `POST /v1/painel/importacao` sem `dry_run: false` só devolve a prévia.
 
 ## O que entrou
-- **Will Hotel** no site: card em Programas e em Planos, FAQ, termos, meta e JSON-LD.
-  Planos `hotel-mensal` R$ 199,99 e `hotel-anual` R$ 1.999,90 (12 meses pelo preço de 10).
-  Instalador e teste grátis (`willhotel`) no formulário.
-- **Will Variedades** no mesmo formato das outras versões: descrição, preço, baixar instalador e
-  assinar mensal/anual. Entra no teste grátis (`willvariedades`). Preços: `variedades-mensal`
-  R$ 159,99 e `variedades-anual` R$ 1.599,90.
-- Grade `.edicoes.cinco`: 5 colunas a partir de 1200 px, 3+2 no meio, 2 colunas com o quinto card
-  em largura cheia no tablet, 1 coluna no celular.
+- Prévia: criados, atualizados, erros com motivo, aviso de dígito EAN-8/EAN-13.
+- Texto colado, arquivo `.csv`/`.xlsx` e lista JSON. Modelo para baixar. Busca e exportação CSV/XLSX.
+- Histórico e desfazer a última (o caixa restaura o preço/estoque e desativa o produto novo se ainda não foi vendido).
+- Testes em `tests/test_importacao_painel.py`.
 
-## Edições já na main
-- Will Hotel: diárias e uso por horas. Guia `docs/WILL_HOTEL.md`. Sem channel manager, sem sinal
-  antes do check-in, sem envio automático da FNRH nem NFS-e. Dados dos hóspedes só no computador.
-- Will Variedades, etapa 1: balcão, caderneta, atacado, catálogo e etiqueta. Guia
-  `docs/WILL_VARIEDADES.md`. Etapa 2 não começada: garantia e número de série/IMEI na venda.
-
-## Próximo
-- Nada pendente deste pedido do site. Não houve merge nem deploy.
+## Fora deste pedido
+- Não houve merge nem deploy. Caixa antigo recusa `produtos.desfazer` até atualizar; a importação em si usa o comando
+  que ele já conhece (`produtos.importar`). Somar e casar por código de barras também pedem o programa novo.
+- A rota genérica de comandos continua sem deixar o dono mandar lote; só esta tela libera.
 
 ## Pendências
 - Dono: `MP_ACCESS_TOKEN` (e `MP_WEBHOOK_SECRET`) no Render para o checkout do site; `ANTHROPIC_API_KEY`.

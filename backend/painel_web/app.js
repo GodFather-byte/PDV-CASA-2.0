@@ -1497,6 +1497,15 @@
         el("span", { class: "total", text: formatarCentavos(forma.lucro_cent) })));
     });
     $("bloco-rede-formas").hidden = !(dados.formas || []).length;
+    const selectLoja = $("importar-rede-loja");
+    if (selectLoja) {
+      const atual = selectLoja.value;
+      limpar(selectLoja);
+      (dados.lojas || porLoja).forEach((loja) => {
+        selectLoja.append(el("option", { value: loja.chave, text: (loja.nome || loja.chave) + " (" + loja.chave + ")" }));
+      });
+      if (atual) selectLoja.value = atual;
+    }
     $("rede-atualizado").textContent = "Atualizado às " + p(base.getHours()) + ":" + p(base.getMinutes());
   }
 
@@ -2374,7 +2383,7 @@
     if (nome === "vendas" && estado.token) carregarVendas();
     if (nome === "periodo" && estado.token) carregarPeriodo();
     if (nome === "lucro" && estado.token) carregarLucro();
-    if (nome === "produtos" && estado.token) { carregarNotas(); carregarXmls(); carregarVendasTeste(); }
+    if (nome === "produtos" && estado.token) { carregarNotas(); carregarXmls(); carregarVendasTeste(); carregarImportacao(); }
   }
 
   function mudarDia(novoDia) {
@@ -2431,6 +2440,285 @@
     // Em produção o app vive em /painel/; fora dele usa o diretório atual para não falhar.
     const escopo = location.pathname.startsWith(ESCOPO) ? ESCOPO : new URL("./", location.href).pathname;
     navigator.serviceWorker.register("sw.js", { scope: escopo }).catch(() => { /* sem SW: app segue funcionando */ });
+  }
+
+  // ------------------------------------------------------------------
+  // Importar planilha (aba Produtos) e atalho da rede
+  // ------------------------------------------------------------------
+
+  let previaImportacao = null;
+
+  function modoQuantidade() {
+    const marcado = document.querySelector('input[name="modo-quantidade"]:checked');
+    return marcado ? marcado.value : "substituir";
+  }
+
+  function avisarImportar(texto, erro) {
+    const aviso = $("aviso-importar");
+    if (!aviso) return;
+    aviso.textContent = texto || "";
+    aviso.hidden = !texto;
+    aviso.classList.toggle("erro", !!erro);
+  }
+
+  function marcarLojaImportacao() {
+    const bloco = $("bloco-importar-produtos");
+    if (!bloco) return;
+    const chave = estado.loja && estado.loja.chave ? estado.loja.chave : "";
+    bloco.dataset.loja = chave;
+    const rotulo = $("importar-loja-atual");
+    if (!rotulo) return;
+    rotulo.dataset.chave = chave;
+    rotulo.textContent = chave ? "Loja: " + ((estado.loja && estado.loja.nome) || chave) : "";
+  }
+
+  async function baixarComSessao(caminho, nome) {
+    const resposta = await fetch(API_BASE + caminho, {
+      headers: { Authorization: "Bearer " + estado.token },
+      cache: "no-store",
+    });
+    if (resposta.status === 401) {
+      encerrarSessao(false);
+      throw new ErroApi(401, "Sessão expirada. Entre novamente.");
+    }
+    if (!resposta.ok) {
+      let detalhe = "Não consegui baixar o arquivo.";
+      try {
+        const dados = await resposta.json();
+        if (dados && dados.detail) detalhe = String(dados.detail);
+      } catch (_) { /* resposta sem JSON */ }
+      throw new ErroApi(resposta.status, detalhe);
+    }
+    const blob = await resposta.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nome;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function lerArquivoPlanilha(arquivo) {
+    return new Promise((ok, falha) => {
+      const leitor = new FileReader();
+      leitor.onload = () => ok(String(leitor.result).split(",")[1] || "");
+      leitor.onerror = () => falha(new Error("Não consegui ler o arquivo."));
+      leitor.readAsDataURL(arquivo);
+    });
+  }
+
+  function pintarPrevia(dados) {
+    $("previa-importar").hidden = false;
+    const criados = dados.criados || 0;
+    const atualizados = dados.atualizados || 0;
+    const erros = dados.erros || 0;
+    $("resumo-importar").textContent = criados + " serão criados, " + atualizados +
+      " serão atualizados, " + erros + " com erro.";
+    $("nota-quantidade").textContent = dados.quantidade_texto || "";
+    const corpo = $("corpo-previa-importar");
+    limpar(corpo);
+    const linhas = Array.isArray(dados.linhas) ? dados.linhas : [];
+    const mostrar = linhas.filter((l) => l.acao === "recusar").concat(linhas.filter((l) => l.acao !== "recusar")).slice(0, 80);
+    const rotulo = { criar: "Criar", atualizar: "Atualizar", recusar: "Erro" };
+    mostrar.forEach((l) => {
+      const motivo = [l.motivo || ""].concat(l.avisos || []).filter(Boolean).join(" ");
+      const detalhe = [l.preco ? "R$ " + l.preco : "", l.quantidade ? "qtd " + l.quantidade : "", motivo].filter(Boolean).join(" · ");
+      corpo.append(el("li", { class: "linha-" + (l.acao || ""), "data-linha": String(l.linha) },
+        el("strong", { text: (rotulo[l.acao] || l.acao || "") + " · linha " + l.linha }),
+        el("span", { text: (l.nome || "—") + (l.codigo_barras ? " · " + l.codigo_barras : "") }),
+        detalhe ? el("span", { class: "detalhe", text: detalhe }) : null
+      ));
+    });
+    if (linhas.length > mostrar.length) {
+      corpo.append(el("li", { class: "vazio", text: "E mais " + (linhas.length - mostrar.length) + " linhas." }));
+    }
+    $("confirmar-importar").disabled = (criados + atualizados) === 0;
+  }
+
+  async function pedirPrevia(corpo) {
+    avisarImportar("Conferindo a planilha…");
+    const dados = await chamarApi("/importacao/previa", {
+      metodo: "POST",
+      corpo: Object.assign({ modo_quantidade: modoQuantidade() }, corpo),
+    });
+    previaImportacao = corpo;
+    pintarPrevia(dados);
+    avisarImportar("");
+  }
+
+  function pintarHistorico(dados) {
+    const lista = $("lista-importacoes");
+    const itens = (dados && dados.importacoes) || [];
+    limpar(lista);
+    $("vazio-importacoes").hidden = itens.length > 0;
+    itens.forEach((item) => {
+      const texto = (item.criado_em || "") + " · " + (item.autor || "dono") + " · " +
+        (item.criados || 0) + " criados, " + (item.atualizados || 0) + " atualizados" +
+        (item.desfeito_em ? " · desfeita" : "");
+      lista.append(el("li", { "data-importacao": String(item.id) }, el("span", { text: texto })));
+    });
+    $("desfazer-importacao").disabled = !(itens.length && itens[0].pode_desfazer);
+  }
+
+  function pintarTokens(dados) {
+    const lista = $("lista-tokens");
+    limpar(lista);
+    ((dados && dados.tokens) || []).forEach((t) => {
+      const botao = el("button", { type: "button", class: "botao-secundario", text: "Revogar", "data-revogar": String(t.id) });
+      botao.addEventListener("click", async () => {
+        botao.disabled = true;
+        try {
+          await chamarApi("/importacao/tokens/" + t.id, { metodo: "DELETE" });
+          await carregarImportacao();
+        } catch (e) {
+          avisarImportar(e.message, true);
+          botao.disabled = false;
+        }
+      });
+      lista.append(el("li", { "data-token": String(t.id) },
+        el("span", { text: t.nome + (t.ultimo_uso ? " · usado " + t.ultimo_uso : " · ainda não usado") }),
+        botao));
+    });
+  }
+
+  function pintarBusca(dados) {
+    const lista = $("lista-busca-produto");
+    limpar(lista);
+    const produtos = (dados && dados.produtos) || [];
+    $("vazio-busca-produto").hidden = produtos.length > 0;
+    produtos.forEach((p) => {
+      const qtd = p.quantidade === null || p.quantidade === undefined ? "sem controle de estoque" : "estoque " + p.quantidade;
+      lista.append(el("li", { "data-codigo": p.codigo || "", "data-barras": p.codigo_barras || "" },
+        el("span", { text: (p.nome || "") + (p.codigo_barras ? " · " + p.codigo_barras : "") }),
+        el("span", { class: "total", text: formatarCentavos(p.preco_cent) + " · " + qtd })));
+    });
+    if (dados && dados.total > produtos.length) {
+      lista.append(el("li", { class: "vazio", text: "Mostrando " + produtos.length + " de " + dados.total + ". Exporte para ver todos." }));
+    }
+  }
+
+  async function carregarImportacao() {
+    if (!$("lista-importacoes") || !estado.token || estado.modo === "rede") return;
+    marcarLojaImportacao();
+    try {
+      const hist = await chamarApi("/importacao/historico");
+      const tokens = await chamarApi("/importacao/tokens");
+      pintarHistorico(hist);
+      pintarTokens(tokens);
+    } catch (e) {
+      if (e.status !== 401) avisarImportar(e.message, true);
+    }
+  }
+
+  function configurarImportacao() {
+    if (!$("arquivo-planilha")) return;
+    $("desfazer-importacao").disabled = true;
+    $("baixar-modelo-produtos").addEventListener("click", () => {
+      baixarComSessao("/importacao/modelo", "modelo-produtos.csv").catch((e) => avisarImportar(e.message, true));
+    });
+    $("arquivo-planilha").addEventListener("change", async () => {
+      const arquivo = $("arquivo-planilha").files && $("arquivo-planilha").files[0];
+      if (!arquivo) return;
+      try {
+        await pedirPrevia({ nome: arquivo.name, conteudo_b64: await lerArquivoPlanilha(arquivo) });
+      } catch (e) { avisarImportar(e.message, true); }
+      $("arquivo-planilha").value = "";
+    });
+    $("previa-texto-planilha").addEventListener("click", async () => {
+      const texto = $("texto-planilha").value;
+      if (!texto.trim()) { avisarImportar("Cole a planilha na caixa de texto.", true); return; }
+      try { await pedirPrevia({ texto: texto }); }
+      catch (e) { avisarImportar(e.message, true); }
+    });
+    document.querySelectorAll('input[name="modo-quantidade"]').forEach((radio) => {
+      radio.addEventListener("change", () => {
+        if ($("previa-importar").hidden) return;
+        $("nota-quantidade").textContent = radio.value === "somar"
+          ? "A quantidade da planilha soma ao estoque atual. Produto novo começa com essa quantidade."
+          : "A quantidade da planilha substitui o estoque atual do produto.";
+      });
+    });
+    $("cancelar-previa").addEventListener("click", () => {
+      previaImportacao = null;
+      $("previa-importar").hidden = true;
+      limpar($("corpo-previa-importar"));
+    });
+    $("confirmar-importar").addEventListener("click", async () => {
+      if (!previaImportacao) return;
+      const botao = $("confirmar-importar");
+      botao.disabled = true;
+      try {
+        const dados = await chamarApi("/importacao/aplicar", {
+          metodo: "POST",
+          corpo: Object.assign({ modo_quantidade: modoQuantidade() }, previaImportacao),
+        });
+        avisarImportar(dados.mensagem || "Enviado ao caixa.");
+        $("previa-importar").hidden = true;
+        previaImportacao = null;
+        await carregarImportacao();
+      } catch (e) {
+        avisarImportar(e.message, true);
+        botao.disabled = false;
+      }
+    });
+    $("botao-busca-produto").addEventListener("click", async () => {
+      try { pintarBusca(await chamarApi("/importacao/produtos?q=" + encodeURIComponent($("busca-produto").value.trim()))); }
+      catch (e) { avisarImportar(e.message, true); }
+    });
+    $("busca-produto").addEventListener("keydown", (evento) => {
+      if (evento.key === "Enter") { evento.preventDefault(); $("botao-busca-produto").click(); }
+    });
+    $("exportar-csv").addEventListener("click", () => {
+      baixarComSessao("/importacao/produtos?formato=csv", "produtos.csv").catch((e) => avisarImportar(e.message, true));
+    });
+    $("exportar-xlsx").addEventListener("click", () => {
+      baixarComSessao("/importacao/produtos?formato=xlsx", "produtos.xlsx").catch((e) => avisarImportar(e.message, true));
+    });
+    $("desfazer-importacao").addEventListener("click", async () => {
+      if (!window.confirm("Desfazer a última importação? O caixa aplica na próxima sincronização.")) return;
+      try {
+        const dados = await chamarApi("/importacao/desfazer", { metodo: "POST", corpo: {} });
+        avisarImportar(dados.mensagem || "Desfazer enviado ao caixa.");
+        await carregarImportacao();
+      } catch (e) { avisarImportar(e.message, true); }
+    });
+    $("criar-token").addEventListener("click", async () => {
+      try {
+        const dados = await chamarApi("/importacao/tokens", { metodo: "POST", corpo: { nome: $("nome-token").value } });
+        $("token-novo").hidden = false;
+        $("token-novo").textContent = dados.token || "";
+        $("copiar-token").hidden = !dados.token;
+        avisarImportar(dados.aviso || "Token gerado. Copie agora; ele não aparece de novo.");
+        await carregarImportacao();
+      } catch (e) { avisarImportar(e.message, true); }
+    });
+    $("copiar-token").addEventListener("click", async () => {
+      const texto = $("token-novo").textContent || "";
+      try {
+        await navigator.clipboard.writeText(texto);
+        avisarImportar("Token copiado.");
+      } catch (_) { avisarImportar("Não consegui copiar. Selecione o token e copie.", true); }
+    });
+    const abrirRede = $("importar-rede-abrir");
+    if (abrirRede) abrirRede.addEventListener("click", async () => {
+      const chave = $("importar-rede-loja").value;
+      if (!chave) return;
+      abrirRede.disabled = true;
+      try {
+        await abrirLojaDaRede(chave);
+        trocarAba("produtos");
+        const bloco = $("bloco-importar-produtos");
+        if (bloco) bloco.scrollIntoView({ block: "start" });
+      } catch (e) {
+        abrirRede.disabled = false;
+        if (e.status !== 401 && $("erro-rede")) {
+          $("erro-rede").textContent = e.message || "Não consegui abrir a loja.";
+          $("erro-rede").hidden = false;
+        }
+      }
+    });
   }
 
   // ------------------------------------------------------------------
@@ -2549,6 +2837,7 @@
     }
     agendarAtualizacao();
 
+    configurarImportacao();
     configurarInstalacao();
     registrarServiceWorker();
 

@@ -47,10 +47,11 @@ GRUPOS = {
 SECOES_CONFIG_FORA = {"Nuvem", "E-mail", "Utilitários", "Integrações"}
 TIPOS_ESTOQUE = ("entrada", "saida", "contagem", "quebra", "descarte")
 LIMITE_LOTE_PRODUTOS = 200
-CAMPOS_LOTE = ("codigo", "nome", "preco", "custo", "grupo", "unidade", "quantidade", "estoque_minimo", "codigo_barras",
-               "controla_estoque", "preco_gelada", "atacado_qtd", "preco_atacado", "ncm")
+CAMPOS_LOTE = ("codigo", "nome", "preco", "custo", "comissao", "comissao_pct", "grupo", "unidade", "quantidade",
+               "estoque_minimo", "codigo_barras", "atalho", "controla_estoque", "preco_gelada", "atacado_qtd",
+               "preco_atacado", "ncm")
 TIPOS_COMANDO = ("cadastro.salvar", "cadastro.excluir", "estoque.movimento", "config.salvar", "produtos.importar",
-                 "conta.incluir", "conta.alterar", "conta.quitar", "conta.desfazer", "conta.excluir")
+                 "produtos.desfazer", "conta.incluir", "conta.alterar", "conta.quitar", "conta.desfazer", "conta.excluir")
 
 
 def _campo_publico(c) -> dict:
@@ -212,6 +213,8 @@ class RetaguardaController:
             return self._conta(tipo, dados)
         if tipo == "produtos.importar":
             return self._importar_produtos(dados)
+        if tipo == "produtos.desfazer":
+            return self._desfazer_produtos(dados)
         raise ErroNegocio("Este caixa não conhece este tipo de alteração. Atualize o programa da loja.")
 
     def _importar_produtos(self, dados: dict):
@@ -223,6 +226,9 @@ class RetaguardaController:
             raise ErroNegocio("Lote de produtos vazio.")
         if len(linhas) > LIMITE_LOTE_PRODUTOS:
             raise ErroNegocio(f"Lote grande demais (máximo {LIMITE_LOTE_PRODUTOS} produtos por envio).")
+        modo = str(dados.get("modo_quantidade") or "substituir")
+        if modo not in ("substituir", "somar"):
+            raise ErroNegocio("Modo de quantidade inválido: use substituir ou somar.")
         tabela = []
         for n, linha in enumerate(linhas, start=1):
             if not isinstance(linha, dict):
@@ -230,6 +236,8 @@ class RetaguardaController:
             item = {c: str(linha.get(c) if linha.get(c) is not None else "").strip() for c in CAMPOS_LOTE}
             item["_linha"] = n
             tabela.append(item)
+        if dados.get("casar_barras"):
+            self._casar_barras(tabela)
         imp = ImportacaoProdutos(self.banco, self._gerente())
         previa = imp.analisar(tabela, atualizar_existentes=bool(dados.get("atualizar_existentes", True)),
                               usar_codigo_da_planilha=True, maiusculas=True)
@@ -237,7 +245,7 @@ class RetaguardaController:
         if not previa.importaveis:
             raise ErroNegocio("Nenhum produto importado: " + "; ".join(f"{l.linha}: {l.motivo}" for l in recusadas[:5]))
         with self.banco.transacao():
-            resultado = imp.importar(previa)
+            resultado = imp.importar(previa, modo_quantidade=modo)
             for item in tabela:                         # NCM do catálogo: só preenche quem ainda não tem
                 ncm = re.sub(r"\D", "", item.get("ncm") or "")
                 if len(ncm) == 8 and item["nome"]:
@@ -249,6 +257,88 @@ class RetaguardaController:
                                   + "; ".join(f"{l.linha} {l.nome or ''}: {l.motivo}" for l in recusadas[:4])
                                   if recusadas else ""))
         return None
+
+    def _casar_barras(self, tabela: list[dict]) -> None:
+        """Sem código na linha, o código de barras que já existe na loja atualiza aquele produto (não cria outro)."""
+        for item in tabela:
+            barras = re.sub(r"\D", "", str(item.get("codigo_barras") or ""))
+            if not barras or str(item.get("codigo") or "").strip():
+                continue
+            dono = self.banco.um(
+                "SELECT codigo, nome, ativo FROM produtos WHERE cbarra = ? ORDER BY ativo DESC, id LIMIT 1", (barras,))
+            if dono is None:
+                continue
+            if not dono["ativo"] and str(dono["nome"] or "").casefold() != str(item.get("nome") or "").strip().casefold():
+                continue
+            codigo = str(dono["codigo"] or "")
+            item["codigo"] = str(int(codigo)) if codigo.isdigit() else codigo
+
+    def _desfazer_produtos(self, dados: dict):
+        """Desfaz um lote da importação do painel: restaura quem foi atualizado e desativa quem foi criado,
+        se esse produto novo ainda não foi vendido."""
+        itens = dados.get("itens")
+        if not isinstance(itens, list) or not itens:
+            raise ErroNegocio("Nada para desfazer.")
+        if len(itens) > LIMITE_LOTE_PRODUTOS:
+            raise ErroNegocio(f"Lote grande demais (máximo {LIMITE_LOTE_PRODUTOS} itens por envio).")
+        with self.banco.transacao():
+            desativados, pulados, restaurar = 0, [], []
+            for n, item in enumerate(itens, start=1):
+                if not isinstance(item, dict):
+                    raise ErroNegocio("Desfazer inválido.")
+                if item.get("acao") == "atualizar" and isinstance(item.get("anterior"), dict):
+                    restaurar.append(self._linha_anterior(item["anterior"], n))
+                    continue
+                if item.get("acao") != "criar":
+                    pulados.append(f"{n}: ação desconhecida")
+                    continue
+                achado = self._produto_da_importacao(item)
+                if achado is None:
+                    pulados.append(f"{n}: não achei '{item.get('nome') or item.get('codigo_barras') or ''}'")
+                    continue
+                if not self._pode_desativar(achado["id"]):
+                    pulados.append(f"{n}: '{item.get('nome') or ''}' já foi vendido; ficou como está")
+                    continue
+                CadastroController(self.banco).salvar("produtos", {"ativo": "N"}, achado["id"])
+                desativados += 1
+            if restaurar:
+                self._importar_produtos({"linhas": restaurar, "casar_barras": True, "modo_quantidade": "substituir",
+                                         "atualizar_existentes": True})
+            if not desativados and not restaurar:
+                raise ErroNegocio("; ".join(pulados[:5]) or "Nada para desfazer.")
+        resto = self.ultimo_detalhe if restaurar else ""
+        self.ultimo_detalhe = (f"{desativados} desativado(s). {resto}"
+                               + (f" Não desfiz: {'; '.join(pulados[:4])}" if pulados else "")).strip()
+        return None
+
+    def _linha_anterior(self, ant: dict, n: int) -> dict:
+        linha = {"_linha": n, "codigo": str(ant.get("codigo") or ""), "nome": str(ant.get("nome") or ""),
+                 "preco": _reais(int(ant.get("preco_cent") or 0)), "grupo": str(ant.get("grupo") or ""),
+                 "unidade": str(ant.get("unidade") or "UN"),
+                 "codigo_barras": re.sub(r"\D", "", str(ant.get("codigo_barras") or ""))}
+        if ant.get("custo_cent") is not None:
+            linha["custo"] = _reais(int(ant["custo_cent"]))
+        if ant.get("qt_atual") is not None:
+            linha["quantidade"] = fmt.fmt_qtd(ant["qt_atual"], 4).rstrip("0").rstrip(",") or "0"
+        return linha
+
+    def _produto_da_importacao(self, item: dict):
+        barras = re.sub(r"\D", "", str(item.get("codigo_barras") or ""))
+        if barras:
+            return self.banco.um(
+                "SELECT id FROM produtos WHERE cbarra = ? ORDER BY ativo DESC, id DESC LIMIT 1", (barras,))
+        nome = str(item.get("nome") or "").strip()
+        if nome:
+            return self.banco.um(
+                "SELECT id FROM produtos WHERE nome = ? COLLATE NOCASE ORDER BY id DESC LIMIT 1", (nome,))
+        return None
+
+    def _pode_desativar(self, produto_id: int) -> bool:
+        if self.banco.valor("SELECT 1 FROM itens_venda WHERE produto_id = ? LIMIT 1", (produto_id,)):
+            return False
+        tipos = {r[0] for r in self.banco.todos(
+            "SELECT DISTINCT tipo FROM movimentos_estoque WHERE produto_id = ?", (produto_id,))}
+        return tipos <= {"inicial", "entrada"}
 
     def _entidade(self, dados: dict):
         chave = str(dados.get("entidade") or "")

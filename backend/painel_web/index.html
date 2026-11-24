@@ -92,6 +92,13 @@
         <p class="legenda">Toque numa loja para abrir o painel dela. Para voltar, use <strong>Todas as lojas</strong> no topo.</p>
         <ul id="lista-rede-lojas" class="lista-rede"></ul>
       </section>
+      <section class="bloco" id="bloco-importar-rede">
+        <h2>Importar produtos</h2>
+        <p class="legenda">Escolha a loja. A planilha entra no cadastro dela e o caixa aplica na próxima sincronização.</p>
+        <label for="importar-rede-loja">Loja de destino</label>
+        <select id="importar-rede-loja"></select>
+        <button type="button" id="importar-rede-abrir" class="botao-arquivo">Abrir importação desta loja</button>
+      </section>
       <section class="bloco" id="bloco-rede-formas" hidden>
         <h2>Lucro por forma de pagamento</h2>
         <ul id="lista-rede-formas" class="lista"></ul>
@@ -500,6 +507,68 @@
           <p class="legenda">Altere de longe produtos e preços, estoque, operadores, contas a pagar e as configurações da loja.
             O caixa aplica na próxima sincronização. Precisa estar ligada no caixa (Configurações &gt; Nuvem).</p>
           <a class="botao-arquivo" href="/retaguarda/">Abrir a retaguarda</a>
+        </section>
+        <section class="bloco" id="bloco-importar-produtos">
+          <h2>Importar planilha</h2>
+          <p id="importar-loja-atual" class="legenda" data-chave=""></p>
+          <p class="legenda">A mesma planilha do caixa (CSV com ";" ou Excel). Produto e preço são obrigatórios.
+            Se o código de barras já existe na loja, o produto é atualizado e não duplicado.
+            Nada é gravado até você confirmar. O caixa aplica na próxima sincronização.</p>
+          <div class="acoes-importar">
+            <button type="button" id="baixar-modelo-produtos" class="botao-secundario">Baixar modelo</button>
+            <label class="botao-arquivo" for="arquivo-planilha" id="rotulo-arquivo-planilha">Escolher planilha</label>
+            <input id="arquivo-planilha" class="arquivo-oculto" type="file"
+              accept=".csv,.txt,.xlsx,.xlsm,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+          </div>
+          <label for="texto-planilha">Ou cole o texto da planilha</label>
+          <textarea id="texto-planilha" rows="5" placeholder="Produto;Preço de venda;Código de barras;Quantidade"></textarea>
+          <button type="button" id="previa-texto-planilha" class="botao-secundario">Ver prévia do texto</button>
+          <fieldset class="escolha-quantidade">
+            <legend>Quantidade do estoque</legend>
+            <label for="modo-substituir"><input type="radio" name="modo-quantidade" id="modo-substituir" value="substituir" checked> Substituir o estoque (padrão)</label>
+            <label for="modo-somar"><input type="radio" name="modo-quantidade" id="modo-somar" value="somar"> Somar ao estoque atual</label>
+          </fieldset>
+          <p id="aviso-importar" class="aviso" role="status" hidden></p>
+          <div id="previa-importar" hidden>
+            <p id="resumo-importar"></p>
+            <p id="nota-quantidade" class="legenda"></p>
+            <div id="tabela-previa-importar">
+              <p class="legenda">Prévia da importação</p>
+              <ul id="corpo-previa-importar" class="lista-previa"></ul>
+            </div>
+            <div class="acoes-importar">
+              <button type="button" id="confirmar-importar" class="botao-arquivo">Confirmar importação</button>
+              <button type="button" id="cancelar-previa" class="botao-secundario">Cancelar</button>
+            </div>
+          </div>
+
+          <h3>Buscar produto</h3>
+          <div class="busca-produto">
+            <label for="busca-produto" class="legenda">Nome ou código de barras</label>
+            <input id="busca-produto" type="search" autocomplete="off" enterkeyhint="search">
+            <button type="button" id="botao-busca-produto" class="botao-secundario">Buscar</button>
+          </div>
+          <ul id="lista-busca-produto" class="lista"></ul>
+          <p id="vazio-busca-produto" class="vazio" hidden>Nenhum produto com esse nome ou código.</p>
+          <div class="acoes-importar">
+            <button type="button" id="exportar-csv" class="botao-secundario">Exportar CSV</button>
+            <button type="button" id="exportar-xlsx" class="botao-secundario">Exportar Excel</button>
+          </div>
+
+          <h3>Importações</h3>
+          <ul id="lista-importacoes" class="lista"></ul>
+          <p id="vazio-importacoes" class="vazio">Nenhuma importação ainda.</p>
+          <button type="button" id="desfazer-importacao" class="botao-secundario">Desfazer a última</button>
+
+          <h3>Token do assistente</h3>
+          <p class="legenda">O token entra no lugar da senha para importar e consultar esta loja pela API.
+            Ele aparece uma vez só. Quem tiver o token mexe no cadastro desta loja.</p>
+          <label for="nome-token">Nome do token</label>
+          <input id="nome-token" type="text" value="assistente" maxlength="40" autocomplete="off">
+          <button type="button" id="criar-token" class="botao-secundario">Gerar token</button>
+          <p id="token-novo" hidden></p>
+          <button type="button" id="copiar-token" class="botao-secundario" hidden>Copiar token</button>
+          <ul id="lista-tokens" class="lista"></ul>
         </section>
         <section class="bloco" id="bloco-xmls" hidden>
           <h2>Notas fiscais emitidas (XML para o contador)</h2>

@@ -38,13 +38,14 @@ PAGINA = 100
 DIAS_HISTORICO = 90
 SECAO_VALIDA = re.compile(r"^(esquema|financeiro|cadastro:[a-z_]{1,40})$")
 TIPOS_COMANDO = ("cadastro.salvar", "cadastro.excluir", "estoque.movimento", "config.salvar", "produtos.importar",
-                 "conta.incluir", "conta.alterar", "conta.quitar", "conta.desfazer", "conta.excluir")
+                 "produtos.desfazer", "conta.incluir", "conta.alterar", "conta.quitar", "conta.desfazer", "conta.excluir")
 SITUACOES_FINAIS = ("aplicado", "recusado")
-SO_FORNECEDOR = ("produtos.importar",)      # cadastro em massa é serviço do fornecedor (cobrado à parte)
+SO_FORNECEDOR = ("produtos.importar",)      # pela rota genérica, o lote continua serviço do fornecedor
 LIMITE_PLANILHA_BYTES = 3 * 1024 * 1024
 LIMITE_LOTE = 200                           # produtos por comando (o caixa aplica numa transação só)
-CAMPOS_LOTE = ("codigo", "nome", "preco", "custo", "grupo", "unidade", "quantidade", "estoque_minimo", "codigo_barras",
-               "controla_estoque", "preco_gelada", "atacado_qtd", "preco_atacado", "ncm")
+CAMPOS_LOTE = ("codigo", "nome", "preco", "custo", "comissao", "comissao_pct", "grupo", "unidade", "quantidade",
+               "estoque_minimo", "codigo_barras", "atalho", "controla_estoque", "preco_gelada", "atacado_qtd",
+               "preco_atacado", "ncm")
 
 
 class RetaguardaEspelho(Base):
@@ -221,17 +222,26 @@ def historico(db: Session, chave_loja: str) -> dict:
 
 
 # ------------------------------------------------------------------ escrita (vira comando para o caixa)
-def criar(db: Session, chave_loja: str, corpo: dict, autor: str) -> RetaguardaComando:
+def criar(db: Session, chave_loja: str, corpo: dict, autor: str, *, liberar_importacao: bool = False) -> RetaguardaComando:
     tipo = corpo.get("tipo")
     dados = corpo.get("dados")
     if tipo not in TIPOS_COMANDO or not isinstance(dados, dict):
         raise HTTPException(status_code=422, detail="Alteração inválida.")
-    if tipo in SO_FORNECEDOR and autor != "fornecedor":
+    # O dono importa pela rota do painel (`liberar_importacao`), que grava a prévia e o histórico.
+    # A rota genérica de comandos continua restrita ao fornecedor.
+    if tipo in SO_FORNECEDOR and autor != "fornecedor" and not (liberar_importacao and tipo == "produtos.importar"):
         raise HTTPException(status_code=403, detail="O cadastro em massa é feito pelo suporte.")
     if tipo == "produtos.importar":
         linhas = dados.get("linhas")
         if not isinstance(linhas, list) or not 0 < len(linhas) <= LIMITE_LOTE or not all(isinstance(l, dict) for l in linhas):
             raise HTTPException(status_code=422, detail=f"Envie de 1 a {LIMITE_LOTE} produtos por vez.")
+        modo = dados.get("modo_quantidade", "substituir")
+        if modo not in ("substituir", "somar"):
+            raise HTTPException(status_code=422, detail="Modo de quantidade inválido: use substituir ou somar.")
+    if tipo == "produtos.desfazer":
+        itens = dados.get("itens")
+        if not isinstance(itens, list) or not 0 < len(itens) <= LIMITE_LOTE or not all(isinstance(i, dict) for i in itens):
+            raise HTTPException(status_code=422, detail=f"Envie de 1 a {LIMITE_LOTE} itens para desfazer.")
     texto = json.dumps(dados, ensure_ascii=False, separators=(",", ":"))
     if len(texto.encode("utf-8")) > LIMITE_COMANDO_BYTES:
         raise HTTPException(status_code=413, detail="Alteração grande demais.")
