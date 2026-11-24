@@ -256,7 +256,37 @@ def criar(db: Session, chave_loja: str, corpo: dict, autor: str, *, liberar_impo
                                 criado_em=agora, situacao="pendente", situacao_em=agora, detalhe="")
     db.add(comando)
     db.commit()
+    # O caixa já pergunta, a cada poucos segundos, se o celular pediu envio. Esse pedido fica só na memória
+    # do Render (não acorda o banco). Assim o lote não espera o ciclo de 15 minutos.
+    try:
+        from backend.memoria_nuvem import memoria
+        memoria.pedir(chave_loja)
+    except Exception:
+        pass
     return comando
+
+
+TIPOS_REENVIAR = ("produtos.importar", "produtos.desfazer")
+
+
+def reenviar(db: Session, chave_loja: str, comando_id: int, autor: str) -> RetaguardaComando:
+    """Copia uma importação que o caixa recusou e coloca de novo na fila. O custo continua no comando."""
+    comando = db.query(RetaguardaComando).filter_by(id=comando_id, chave_loja=chave_loja).first()
+    if comando is None:
+        raise HTTPException(status_code=404, detail="Alteração não encontrada.")
+    if comando.situacao != "recusado":
+        raise HTTPException(status_code=409, detail="Só dá para reenviar uma alteração que o caixa recusou.")
+    if comando.tipo not in TIPOS_REENVIAR:
+        raise HTTPException(status_code=422, detail="Esta alteração não se reenvia por aqui.")
+    try:
+        dados = json.loads(comando.dados)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Não consegui ler a alteração recusada.") from None
+    if not isinstance(dados, dict):
+        raise HTTPException(status_code=422, detail="Não consegui ler a alteração recusada.")
+    resumo = ("Reenvio: " + (comando.resumo or comando.tipo)).strip()
+    return criar(db, chave_loja, {"tipo": comando.tipo, "dados": dados, "resumo": resumo[:200]}, autor,
+                 liberar_importacao=comando.tipo == "produtos.importar")
 
 
 def cancelar(db: Session, chave_loja: str, comando_id: int) -> None:
@@ -300,6 +330,13 @@ def _rotas_de_leitura_e_escrita(router: APIRouter, prefixo: str, loja_da_sessao,
     def desistir(comando_id: int, chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):
         cancelar(db, chave_loja, comando_id)
         return {"cancelado": True}
+
+    @router.post(prefixo + "/comandos/{comando_id}/reenviar")
+    def reenviar_comando(comando_id: int, chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):
+        comando = reenviar(db, chave_loja, comando_id, autor)
+        if ao_criar is not None:
+            ao_criar(db, chave_loja, comando)
+        return {"comando": publico(comando)}
 
 
 def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:

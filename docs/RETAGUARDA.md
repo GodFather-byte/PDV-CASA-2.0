@@ -15,9 +15,10 @@ Will Adega e o Will Restaurante. Quem usa:
    O que a tela recusaria é recusado, com a mesma mensagem.
 4. O caixa responde *Aplicada* ou *Recusada pelo caixa* (com o motivo) e sobe o espelho atualizado.
 
-Nada muda na loja na hora: o prazo é o da sincronização (em geral até 15 minutos com a loja aberta e a
-sincronização automática ligada). Com o caixa desligado, a alteração espera na fila; dá para cancelar
-enquanto o caixa não buscou. Vale a alteração que chega por último, na retaguarda ou no caixa.
+A alteração não grava na loja na hora: o caixa, com a loja aberta e o envio para a nuvem ligado, busca em
+seguida (em geral em menos de meio minuto; com o programa atualizado, em poucos segundos). Com o caixa
+desligado, a alteração espera na fila; dá para cancelar enquanto ele não buscou. Importação recusada tem
+**Enviar de novo** em Alterações enviadas. Vale a alteração que chega por último, na retaguarda ou no caixa.
 
 ## Ligar (uma vez, no caixa)
 

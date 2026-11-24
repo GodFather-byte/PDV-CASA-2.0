@@ -15,6 +15,7 @@ Vale a alteração que chega por último, na retaguarda ou no caixa.
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
 
 import hashlib
 import json
@@ -86,6 +87,22 @@ class RetaguardaController:
         if self.operador_id:
             return self.operador_id
         return self.banco.valor("SELECT id FROM operadores WHERE ativo = 1 AND nivel >= 4 ORDER BY id LIMIT 1")
+
+    @contextmanager
+    def _como_gerente(self):
+        """A alteração veio do dono ou do fornecedor: vale com autoridade de gerente, mesmo que no caixa
+        esteja logado um operador. A identidade da sessão volta ao que era, para a tela continuar escondendo
+        custo e lucro de quem não é gerente."""
+        gerente = self._gerente()
+        anterior = getattr(self.banco, "_operador_auditoria", None)
+        trocou = type(gerente) is int and gerente != anterior
+        if trocou:
+            self.banco.definir_operador_auditoria(gerente)
+        try:
+            yield
+        finally:
+            if trocou:
+                self.banco.definir_operador_auditoria(anterior)
 
     # ------------------------------------------------------------ ligada?
     def ligada(self) -> bool:
@@ -184,7 +201,8 @@ class RetaguardaController:
         try:
             if not self.ligada():
                 raise ErroNegocio("A retaguarda na nuvem está desligada neste caixa (Configurações > Nuvem).")
-            novo_id = self._executar(tipo, dados)
+            with self._como_gerente():
+                novo_id = self._executar(tipo, dados)
             detalhe = self.ultimo_detalhe[:300]
         except ErroNegocio as erro:                 # ErroValidacao e ErroPermissao são ErroNegocio
             situacao, detalhe = "recusado", str(erro)[:300]
