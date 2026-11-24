@@ -154,3 +154,9 @@ tbody tr:last-child td { border-bottom: 0; }
 th .ordenar { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: inherit; }
 th .ordenar:hover, th .ordenar:focus-visible { text-decoration: underline; }
 .barra select { padding: .5rem; border-radius: .5rem; border: 1px solid #c9d3d0; background: #fff; font: inherit; max-width: 100%; }
+
+/* Foto do produto na ficha */
+.foto-produto { display: flex; gap: .9rem; align-items: flex-start; flex-wrap: wrap; margin-bottom: .5rem; }
+.foto-produto img { width: 120px; height: 120px; object-fit: contain; border: 1px solid #c9d3d0; border-radius: .5rem; background: #fff; }
+.foto-lado { flex: 1 1 220px; min-width: 0; }
+.botoes-foto { display: flex; gap: .5rem; flex-wrap: wrap; }

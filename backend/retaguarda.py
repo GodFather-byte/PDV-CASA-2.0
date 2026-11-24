@@ -38,7 +38,7 @@ PAGINA = 100
 DIAS_HISTORICO = 90
 SECAO_VALIDA = re.compile(r"^(esquema|financeiro|cadastro:[a-z_]{1,40})$")
 TIPOS_COMANDO = ("cadastro.salvar", "cadastro.excluir", "estoque.movimento", "config.salvar", "produtos.importar",
-                 "produtos.desfazer", "conta.incluir", "conta.alterar", "conta.quitar", "conta.desfazer", "conta.excluir")
+                 "produtos.desfazer", "produto.foto", "conta.incluir", "conta.alterar", "conta.quitar", "conta.desfazer", "conta.excluir")
 SITUACOES_FINAIS = ("aplicado", "recusado")
 SO_FORNECEDOR = ("produtos.importar",)      # pela rota genérica, o lote continua serviço do fornecedor
 LIMITE_PLANILHA_BYTES = 3 * 1024 * 1024
@@ -198,6 +198,7 @@ FILTROS_PRODUTO = {
     "abaixo_custo": lambda l: _num(l.get("custo_medio_cent")) > 0 and _num(l.get("preco_cent")) < _num(l.get("custo_medio_cent")),
     "sem_ncm": lambda l: not str(l.get("ncm") or "").strip(),
     "sem_codigo_barras": lambda l: not str(l.get("cbarra") or "").strip(),
+    "sem_foto": lambda l: "tem_foto" in l and not l.get("tem_foto"),
 }
 LIMITE_EXPORTACAO = 20000
 
@@ -359,6 +360,67 @@ def cancelar(db: Session, chave_loja: str, comando_id: int) -> None:
     db.commit()
 
 
+# ------------------------------------------------------------------ código de barras (base pública Open Food Facts)
+URL_GTIN = ("https://world.openfoodfacts.org/api/v2/product/{gtin}.json"
+            "?fields=product_name_pt,product_name,brands,quantity,image_front_small_url,image_front_url")
+GTIN_RE = re.compile(r"\d{8,14}")
+LIMITE_MINIATURA = 300 * 1024
+_cache_gtin: dict[str, tuple[datetime, dict]] = {}
+
+
+def _baixar_url(url: str, limite: int) -> bytes:
+    from urllib.request import Request as Pedido, urlopen
+    pedido = Pedido(url, headers={"User-Agent": "WillPDV-retaguarda (cadastro de produto pelo código de barras)"})
+    with urlopen(pedido, timeout=8) as resposta:                     # noqa: S310 - só https da base pública
+        if resposta.status != 200:
+            return b""
+        dados = resposta.read(limite + 1)
+    if len(dados) > limite:
+        raise ValueError("grande demais")
+    return dados
+
+
+def consultar_gtin(gtin: str, baixar=None) -> dict:
+    """Nome sugerido e a miniatura (data URL, para a página mostrar sem sair do próprio site) pelo código de barras.
+    Não grava nada: a foto de verdade o caixa baixa sozinho quando o dono confirma (comando `produto.foto`)."""
+    from src.controllers.foto_produto_controller import _host_permitido, _nome_do_produto
+    gtin = re.sub(r"\D", "", gtin or "")
+    if not GTIN_RE.fullmatch(gtin):
+        raise HTTPException(status_code=422, detail="Use um código de barras de 8 a 14 números.")
+    agora = datetime.now()
+    guardado = _cache_gtin.get(gtin)
+    if guardado and guardado[0] > agora:
+        return guardado[1]
+    baixar = baixar or _baixar_url
+    try:
+        bruto = baixar(URL_GTIN.format(gtin=gtin), 512 * 1024)
+        produto = (json.loads(bruto.decode("utf-8")) if bruto else {}).get("product") or {}
+    except Exception:                                                   # noqa: BLE001 - rede ou resposta estranha
+        raise HTTPException(status_code=502, detail="A base de produtos não respondeu agora. Tente de novo.") from None
+    if not isinstance(produto, dict):
+        produto = {}
+    nome = _nome_do_produto(produto)
+    url = next((u for u in (produto.get("image_front_small_url"), produto.get("image_front_url"))
+                if isinstance(u, str) and u.strip()), "").strip()
+    miniatura = ""
+    if url and _host_permitido(url):
+        try:
+            imagem = baixar(url, LIMITE_MINIATURA)
+        except Exception:                                               # noqa: BLE001 - sem miniatura, segue o nome
+            imagem = b""
+        if imagem[:3] == b"\xff\xd8\xff":
+            miniatura = "data:image/jpeg;base64," + base64.b64encode(imagem).decode("ascii")
+        elif imagem[:8] == b"\x89PNG\r\n\x1a\n":
+            miniatura = "data:image/png;base64," + base64.b64encode(imagem).decode("ascii")
+    if not nome and not miniatura:
+        raise HTTPException(status_code=404, detail="Este código não está na base pública. Cadastre digitando o nome.")
+    resposta = {"gtin": gtin, "nome": nome, "miniatura": miniatura, "tem_foto": bool(url)}
+    if len(_cache_gtin) > 500:
+        _cache_gtin.clear()
+    _cache_gtin[gtin] = (agora + timedelta(hours=12), resposta)
+    return resposta
+
+
 def _rotas_de_leitura_e_escrita(router: APIRouter, prefixo: str, loja_da_sessao, autor: str, ao_criar=None) -> None:
     """As mesmas rotas para o dono (`/v1/painel/retaguarda`) e o fornecedor (`/v1/fornecedor/lojas/{chave}/retaguarda`)."""
 
@@ -372,6 +434,10 @@ def _rotas_de_leitura_e_escrita(router: APIRouter, prefixo: str, loja_da_sessao,
                chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):
         return cadastro(db, chave_loja, entidade, busca[:80], pagina, bool(inativos), filtro[:30], ordem[:40],
                         bool(desc), bool(todas))
+
+    @router.get(prefixo + "/codigo-barras/{gtin}")
+    def codigo_barras(gtin: str, chave_loja: str = Depends(loja_da_sessao)):
+        return consultar_gtin(gtin[:20])
 
     @router.get(prefixo + "/financeiro")
     def contas(chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):
