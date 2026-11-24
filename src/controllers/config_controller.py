@@ -472,6 +472,12 @@ class ConfigController:
                     raise ErroValidacao("A porta do porteiro deve ficar entre 1024 e 65535.", {chave: "inválido"})
                 if chave == "sync_intervalo_seg" and not 5 <= int(v) <= 3600:
                     raise ErroValidacao("O intervalo da nuvem deve ficar entre 5 e 3600 segundos.", {chave: "inválido"})
+                if chave == "api_url" and v:
+                    from src.core.endereco_nuvem import aceita_credencial
+                    if not aceita_credencial(v):
+                        raise ErroValidacao(
+                            "O endereço da nuvem precisa ser HTTPS. HTTP só vale em localhost ou num IP da rede local.",
+                            {chave: "inválido"})
                 if chave == "sync_lote_seg" and not 60 <= int(v) <= 3600:
                     raise ErroValidacao("O lote da nuvem deve ficar entre 60 e 3600 segundos (900 = 15 minutos).",
                                         {chave: "inválido"})

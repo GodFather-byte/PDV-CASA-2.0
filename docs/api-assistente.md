@@ -10,7 +10,7 @@ Endereço da nuvem desta instalação: `https://willpdv-nuvem-6sp0.onrender.com`
 
 | Jeito | Cabeçalho |
 |---|---|
-| Sessão do painel | `Authorization: Bearer` com o token que o `POST /v1/painel/login` devolve |
+| Sessão do painel | `Authorization: Bearer` com o token que o `POST /v1/painel/login` devolve. O navegador do `/painel/` não usa esse token: manda `X-PDV-Painel: 1` e a sessão fica num cookie `HttpOnly` (`willpdv_painel`). Sem esse cabeçalho, o login continua devolvendo o token para o assistente. |
 | Token da loja | `Authorization: Bearer wpdv_...` gerado em Produtos → Token do assistente |
 
 O token é de uma loja só. Na rede, a sessão pede `loja` (a chave, por exemplo `EA-SUPERACOES`) em toda chamada que mexe numa loja. O comparativo entre lojas usa a sessão da rede (`/painel/?grupo=EA-REDE`), sem token de uma loja só.

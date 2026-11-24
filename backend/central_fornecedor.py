@@ -27,6 +27,8 @@ COOKIE = "will_central"
 DURACAO_HORAS = 8
 _tentativas = defaultdict(deque)
 _trava = threading.Lock()
+JANELA_LOGIN_SEG = 120          # trava curta, por IP, só depois da senha errada
+MAX_LOGIN = 8
 
 
 class SessaoFornecedor(Base):
@@ -258,23 +260,31 @@ def instalar(app, Loja):
         if request.url.scheme != "https" and not local:
             raise HTTPException(400, "A central exige HTTPS.")
         ip = request.client.host if request.client else "desconhecido"
+        # Com --proxy-headers o host já é o IP de quem chamou, não o do proxy do Render.
+        chave_trava = f"{ip}|fornecedor"
+        segredo = os.environ.get("PDV_API_TOKEN", "")
+        recebido = dados.get("credencial")
+        acertou = False
+        if segredo and isinstance(recebido, str) and len(recebido) <= 1024 and len(recebido) == len(segredo):
+            acertou = hmac.compare_digest(recebido.encode(), segredo.encode())
         with _trava:
             instante = time.monotonic()
             for chave in list(_tentativas):
-                if not _tentativas[chave] or _tentativas[chave][-1] < instante - 900:
+                fila = _tentativas[chave]
+                while fila and fila[0] < instante - JANELA_LOGIN_SEG:
+                    fila.popleft()
+                if not fila:
                     del _tentativas[chave]
             while len(_tentativas) >= 2000:          # memória limitada sem bloquear quem não errou
                 del _tentativas[min(_tentativas, key=lambda k: _tentativas[k][-1])]
-            fila = _tentativas[ip]
-            while fila and fila[0] < instante - 900:
-                fila.popleft()
-            if len(fila) >= 8:
-                raise HTTPException(429, "Muitas tentativas. Aguarde 15 minutos.")
-            fila.append(instante)
-        segredo = os.environ.get("PDV_API_TOKEN", "")
-        recebido = dados.get("credencial")
-        if not segredo or not isinstance(recebido, str) or len(recebido) > 1024 or not hmac.compare_digest(recebido.encode(), segredo.encode()):
-            raise HTTPException(401, "Credencial administrativa inválida.")
+            if acertou:
+                _tentativas.pop(chave_trava, None)
+            else:
+                fila = _tentativas[chave_trava]
+                if len(fila) >= MAX_LOGIN:
+                    raise HTTPException(429, "Muitas tentativas deste acesso. Aguarde 2 minutos.")
+                fila.append(instante)
+                raise HTTPException(401, "Credencial administrativa inválida.")
         token = secrets.token_urlsafe(48)
         db.query(SessaoFornecedor).filter(SessaoFornecedor.expira_em <= agora()).delete()
         anterior = request.cookies.get(COOKIE, "")

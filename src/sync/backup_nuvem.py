@@ -59,9 +59,15 @@ def ha_pendente(banco) -> bool:
     return horas >= INTERVALO_HORAS
 
 
-def _base(banco) -> tuple[str, dict]:
+def _base(banco) -> tuple[str, dict] | None:
+    """Endereço e cabeçalho, ou None se o endereço não pode receber o token (HTTP público)."""
+    from src.core.endereco_nuvem import autorizar
     from src.sync.painel_envio import _base_nuvem
-    return _base_nuvem(banco.cfg("api_url")), {"Authorization": f"Bearer {banco.cfg('api_token').strip()}"}
+    base = _base_nuvem(banco.cfg("api_url"))
+    cabecalho = autorizar(base, banco.cfg("api_token"))
+    if cabecalho is None:
+        return None
+    return base, cabecalho
 
 
 def _esquema(caminho: Path) -> int:
@@ -79,17 +85,25 @@ def enviar(banco, http=None) -> bool:
     arquivo = _mais_novo(banco)
     if http is None:
         import requests as http
-    base, cabecalho = _base(banco)
+    acesso = _base(banco)
+    if acesso is None:
+        banco.cfg_set(CHAVE_ERRO, f"{fmt.agora()} o endereço da nuvem precisa ser HTTPS")
+        return False
+    base, cabecalho = acesso
     try:
         with tempfile.TemporaryDirectory(prefix="willpdv_backup_nuvem_") as pasta:
             gz = Path(pasta) / "backup.db.gz"
             with open(arquivo, "rb") as origem, gzip.open(gz, "wb", compresslevel=6) as destino:
                 shutil.copyfileobj(origem, destino, 1024 * 1024)
-            dados = gz.read_bytes()
+            claro = gz.read_bytes()
+        from src.core import backup_seguro
+        dados = backup_seguro.criptografar_bytes(claro, banco.cfg("api_token").strip())
         feito_em = datetime.fromtimestamp(arquivo.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
         r = http.post(f"{base}/v1/backup", data=dados, timeout=(5, 180), headers={
-            **cabecalho, "Content-Type": "application/gzip", "X-Backup-Feito-Em": feito_em,
-            "X-Backup-Esquema": str(_esquema(arquivo)), "X-Backup-Sha256": hashlib.sha256(dados).hexdigest()})
+            **cabecalho, "Content-Type": "application/octet-stream", "X-Backup-Feito-Em": feito_em,
+            "X-Backup-Esquema": str(_esquema(arquivo)), "X-Backup-Cifrado": "1",
+            "X-Backup-Bytes-Claros": str(len(claro)),
+            "X-Backup-Sha256": hashlib.sha256(dados).hexdigest()})
     except OSError as e:
         banco.cfg_set(CHAVE_ERRO, f"{fmt.agora()} sem conexão com a nuvem")
         log.warning("Backup na nuvem: %s", e)
@@ -124,7 +138,10 @@ def listar(banco, http=None) -> list[dict]:
         raise ErroNegocio("Ligue este caixa à nuvem (código de instalação) para ver os backups da loja.")
     if http is None:
         import requests as http
-    base, cabecalho = _base(banco)
+    acesso = _base(banco)
+    if acesso is None:
+        raise ErroNegocio("O endereço da nuvem precisa ser HTTPS para ver os backups.")
+    base, cabecalho = acesso
     try:
         r = http.get(f"{base}/v1/backup/lista", headers=cabecalho, timeout=(5, 30))
     except OSError as e:
@@ -156,7 +173,10 @@ def restaurar(banco, backup_id: int, operador_id: int | None = None, http=None) 
         raise ErroNegocio("Ligue este caixa à nuvem (código de instalação) antes de recuperar o backup.")
     if http is None:
         import requests as http
-    base, cabecalho = _base(banco)
+    acesso = _base(banco)
+    if acesso is None:
+        raise ErroNegocio("O endereço da nuvem precisa ser HTTPS para recuperar o backup.")
+    base, cabecalho = acesso
     try:
         r = http.get(f"{base}/v1/backup/{int(backup_id)}", headers=cabecalho, timeout=(5, 300))
     except OSError as e:
@@ -166,6 +186,13 @@ def restaurar(banco, backup_id: int, operador_id: int | None = None, http=None) 
     dados = r.content
     if hashlib.sha256(dados).hexdigest() != (r.headers.get("X-Backup-Sha256") or "").lower():
         raise ErroNegocio("O backup chegou incompleto. Tente de novo.")
+    from src.core import backup_seguro
+    if dados.startswith(backup_seguro.CABECALHO):
+        try:
+            dados = backup_seguro.descriptografar_bytes(dados, banco.cfg("api_token").strip())
+        except ValueError as e:
+            raise ErroNegocio("Não consegui abrir o backup cifrado desta loja. O token da nuvem mudou "
+                              "desde este envio.") from e
     util = UtilitarioController(banco, operador_id)
     try:
         with tempfile.TemporaryDirectory(prefix="willpdv_recuperar_nuvem_") as pasta:

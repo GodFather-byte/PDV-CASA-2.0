@@ -42,6 +42,10 @@ def consultar_resultado(api_url: str, token: str, http=None, timeout=(3, 10)) ->
     """Só rede, distinguindo resposta válida (inclusive sem assinatura) de falha transitória."""
     if not (api_url or "").strip() or not (token or "").strip():
         return ResultadoConsulta(False, erro="Endereço ou token da nuvem não configurado.")
+    from src.core.endereco_nuvem import autorizar
+    cabecalho = autorizar(api_url, token)
+    if cabecalho is None:
+        return ResultadoConsulta(False, erro="O endereço da nuvem precisa ser HTTPS.")
     if http is None:
         try:
             import requests as http
@@ -49,7 +53,7 @@ def consultar_resultado(api_url: str, token: str, http=None, timeout=(3, 10)) ->
             log.warning("Consulta de licença indisponível: requests não instalado.")
             return ResultadoConsulta(False, erro="Biblioteca requests não instalada.")
     try:
-        r = http.get(url_licenca(api_url), headers={"Authorization": f"Bearer {token.strip()}"}, timeout=timeout)
+        r = http.get(url_licenca(api_url), headers=cabecalho, timeout=timeout)
         if r.status_code != 200:
             log.info("A nuvem não emitiu licença (HTTP %s).", r.status_code)
             sucesso = r.status_code in (404, 409)

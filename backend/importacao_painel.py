@@ -17,7 +17,7 @@ import re
 import secrets
 from dataclasses import dataclass
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import Response
 from sqlalchemy import Column, Integer, String, Text
 from sqlalchemy.orm import Session
@@ -104,9 +104,10 @@ def _norm(texto: str) -> str:
 def instalar(router: APIRouter, Loja) -> None:
     garantir_tabelas()
 
-    def acesso(authorization: str | None = Header(None), db: Session = Depends(get_db)) -> AcessoImportacao:
+    def acesso(request: Request, authorization: str | None = Header(None),
+               db: Session = Depends(get_db)) -> AcessoImportacao:
         painel = _painel()
-        token = authorization[7:].strip() if authorization and authorization.startswith("Bearer ") else ""
+        token = painel.token_apresentado(request, authorization)
         if not token:
             raise HTTPException(status_code=401, detail="Sessão inválida ou vencida. Entre de novo.")
         if token.startswith("wpdv_"):

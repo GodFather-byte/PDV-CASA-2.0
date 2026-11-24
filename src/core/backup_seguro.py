@@ -93,6 +93,35 @@ def descriptografar(origem: str | Path, destino: str | Path, senha: str) -> None
         temporario.unlink(missing_ok=True)
 
 
+def criptografar_bytes(dados: bytes, senha: str) -> bytes:
+    """O mesmo arquivo do backup em pasta, em memória: a nuvem guarda só o cifrado."""
+    sal, nonce = os.urandom(TAMANHO_SAL), os.urandom(TAMANHO_NONCE)
+    cabecalho = CABECALHO + sal + nonce
+    cifrador = Cipher(algorithms.AES(_chave(senha, sal)), modes.GCM(nonce)).encryptor()
+    cifrador.authenticate_additional_data(cabecalho)
+    return cabecalho + cifrador.update(dados) + cifrador.finalize() + cifrador.tag
+
+
+def descriptografar_bytes(dados: bytes, senha: str) -> bytes:
+    """Abre um backup cifrado. Senha errada ou arquivo alterado levanta ValueError."""
+    tamanho_cabecalho = len(CABECALHO) + TAMANHO_SAL + TAMANHO_NONCE
+    if not isinstance(dados, (bytes, bytearray)) or len(dados) < tamanho_cabecalho + TAMANHO_TAG:
+        raise ValueError("Backup criptografado incompleto.")
+    cabecalho = bytes(dados[:tamanho_cabecalho])
+    if not cabecalho.startswith(CABECALHO):
+        raise ValueError("Formato ou versão de backup criptografado não suportado.")
+    sal = cabecalho[len(CABECALHO):len(CABECALHO) + TAMANHO_SAL]
+    nonce = cabecalho[-TAMANHO_NONCE:]
+    tag = bytes(dados[-TAMANHO_TAG:])
+    corpo = bytes(dados[tamanho_cabecalho:-TAMANHO_TAG])
+    decifrador = Cipher(algorithms.AES(_chave(senha, sal)), modes.GCM(nonce, tag)).decryptor()
+    decifrador.authenticate_additional_data(cabecalho)
+    try:
+        return decifrador.update(corpo) + decifrador.finalize()
+    except InvalidTag:
+        raise ValueError("Senha incorreta ou backup criptografado alterado/danificado.") from None
+
+
 def _dpapi(dados: bytes, proteger: bool) -> bytes:
     if os.name != "nt":
         raise ValueError("O armazenamento automático da senha usa a proteção do usuário do Windows.")

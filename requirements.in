@@ -2,7 +2,8 @@
 # Instale com `pip install -r requirements.txt` (o instalador Windows já os inclui).
 requests>=2.31                              # sincronização com a nuvem (python -m src.app --sync)
 pyserial>=3.5                               # balança e impressora térmica serial
-Pillow>=12.3,<13                            # importação e normalização do logotipo (Qt)
+Pillow>=13,<14; python_version >= "3.11"   # foto e logotipo. O 13 exige Python 3.11; o caixa no Windows é 3.12
+Pillow>=12.3,<13; python_version < "3.11"   # testes no Python 3.10, até o Pillow 13 existir para ele
 cryptography>=43,<47                        # backup externo com criptografia autenticada
 PySide6-Essentials>=6.7,<7                  # Qt Widgets em migração (python -m src.app --qt)
 segno>=1.6,<2                               # QR do endereço do porteiro na rede local (sem internet)

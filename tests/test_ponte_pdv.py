@@ -126,11 +126,12 @@ class TesteDesligada(BaseTeste):
 
 
 class TesteUrlEConfig(BasePonte):
-    def test_https_obrigatorio_exceto_loopback(self):
+    def test_https_obrigatorio_exceto_rede_local(self):
         self.assertTrue(ponte.url_segura("https://central.exemplo.invalid"))
-        for url in ("http://127.0.0.1:8000", "http://localhost/v1", "http://[::1]:9000"):
+        for url in ("http://127.0.0.1:8000", "http://localhost/v1", "http://[::1]:9000",
+                    "http://10.0.0.5:8000", "http://192.168.1.20", "http://172.16.0.2"):
             self.assertTrue(ponte.url_segura(url), url)
-        for url in ("http://central.exemplo.invalid", "ftp://x", "", "https://", "http://10.0.0.5"):
+        for url in ("http://central.exemplo.invalid", "ftp://x", "", "https://", "http://8.8.8.8"):
             self.assertFalse(ponte.url_segura(url), url)
 
     def test_rotas_derivadas_do_endereco_da_nuvem(self):

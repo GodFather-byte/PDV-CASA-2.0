@@ -33,6 +33,13 @@ class _Http:
         return self.http.get(url, headers=headers)
 
 
+@unittest.skipIf(nuvem_backup is None, "Dependências da nuvem ausentes")
+class TesteCabecalhoDoBackup(unittest.TestCase):
+    def test_o_prefixo_conferido_na_nuvem_e_o_do_caixa(self):
+        from src.core.backup_seguro import CABECALHO
+        self.assertEqual(nuvem_backup.CABECALHO_CIFRADO, CABECALHO)
+
+
 @unittest.skipIf(TestClient is None or nuvem_backup is None, "Dependências da nuvem ausentes")
 class BaseBackup(unittest.TestCase):
     def setUp(self):
@@ -119,11 +126,15 @@ class TesteBackupNuvem(BaseBackup):
         self.assertEqual(r.status_code, 422)
 
     def test_retencao_por_dia_mes_e_limite(self):
+        from src.core.backup_seguro import criptografar_bytes
         cab = {"Authorization": f"Bearer {TOKENS[self.loja]}"}
         def mandar(quando, extra=b""):
-            dados = gzip.compress(b"SQLite format 3\x00" + quando.encode() + extra)
+            claro = gzip.compress(b"SQLite format 3\x00" + quando.encode() + extra)
+            dados = criptografar_bytes(claro, TOKENS[self.loja])
             r = self.client.post("/v1/backup", content=dados, headers={
-                **cab, "X-Backup-Feito-Em": quando, "X-Backup-Sha256": hashlib.sha256(dados).hexdigest()})
+                **cab, "X-Backup-Feito-Em": quando, "X-Backup-Cifrado": "1",
+                "X-Backup-Bytes-Claros": str(len(claro)),
+                "X-Backup-Sha256": hashlib.sha256(dados).hexdigest()})
             self.assertEqual(r.status_code, 200, r.text)
         for dia in range(1, 21):                                       # 20 dias de novembro, 2 por dia
             mandar(f"2026-11-{dia:02d} 10:00:00")
@@ -140,6 +151,39 @@ class TesteBackupNuvem(BaseBackup):
             mandar("2026-11-21 10:00:00")
         dias = [b["feito_em"] for b in self.client.get("/v1/backup/lista", headers=cab).json()["backups"]]
         self.assertEqual(dias, ["2026-11-21 10:00:00"])
+
+    def test_http_publico_nao_envia_o_token(self):
+        self.util.backup()
+        self.banco.cfg_set("api_url", "http://nuvem.exemplo")
+        self.assertFalse(backup_nuvem.enviar(self.banco, self.http))
+        self.assertEqual(self.http.chamadas, [])
+        self.assertIn("HTTPS", self.banco.cfg(backup_nuvem.CHAVE_ERRO))
+
+    def test_backup_antigo_em_claro_ainda_restaura(self):
+        self.banco.cfg_set("marcador", "arquivo-antigo")
+        self.util.backup()
+        arquivo = backup_nuvem._mais_novo(self.banco)
+        claro = gzip.compress(arquivo.read_bytes())
+        with nuvem.SessionLocal() as db:
+            db.add(nuvem_backup.BackupNuvem(
+                chave_loja=self.loja, feito_em="2026-11-01 10:00:00", recebido_em="2026-11-01 10:00:01",
+                esquema=1, tamanho=len(claro), tamanho_banco=arquivo.stat().st_size, sha256="ab" * 32,
+                conteudo=claro, cifrado=0))
+            db.commit()
+            bid = db.query(nuvem_backup.BackupNuvem.id).filter_by(cifrado=0).one().id
+        # O SHA da linha não bate com o arquivo de propósito? A rota confere o SHA do download.
+        # Ajusta o hash para o cliente aceitar o arquivo antigo.
+        with nuvem.SessionLocal() as db:
+            linha = db.get(nuvem_backup.BackupNuvem, bid)
+            linha.sha256 = hashlib.sha256(claro).hexdigest()
+            db.commit()
+        novo = BancoDados(str(self.raiz / "antigo.db"))
+        self.addCleanup(novo.fechar)
+        novo.cfg_set("pasta_backup", str(self.raiz / "backups-antigo"))
+        novo.cfg_set("api_url", "http://testserver/v1/sincronizar")
+        novo.cfg_set("api_token", TOKENS[self.loja])
+        backup_nuvem.restaurar(novo, bid, None, self.http)
+        self.assertTrue(Path(str(novo.caminho) + "." + protecao.PENDENTE).exists())
 
     def test_caixa_adicional_nao_envia(self):
         self.util.backup()
@@ -162,9 +206,24 @@ class TesteCentralBackup(BaseBackup):
         self.assertEqual(len(lista), 1)
         r = c.get(f"/v1/fornecedor/lojas/{self.loja}/backups/{lista[0]['id']}")
         self.assertEqual(r.status_code, 200)
-        self.assertTrue(gzip.decompress(r.content).startswith(b"SQLite format 3"))
+        self.assertTrue(r.content.startswith(b"WILLPDV-BKP"))
+        self.assertNotIn(b"SQLite format 3", r.content)
+        self.assertNotIn(b"pix_mp_token", r.content)
         with nuvem.SessionLocal() as db:
             self.assertTrue(db.query(central.AuditoriaFornecedor).filter_by(acao="baixar_backup_nuvem").count())
+            db.add(nuvem_backup.BackupNuvem(
+                chave_loja=self.loja, feito_em="2026-10-01 10:00:00", recebido_em="2026-10-01 10:00:01",
+                esquema=1, tamanho=4, tamanho_banco=4, sha256="cd" * 32, conteudo=b"velho", cifrado=0))
+            db.commit()
+        cedo = c.post(f"/v1/fornecedor/lojas/LOJA-QUE-NAO-EXISTE/backups/apagar-abertos",
+                      headers={"X-Central-CSRF": c.get("/v1/fornecedor/sessao").json()["csrf"]})
+        self.assertEqual(cedo.status_code, 404)
+        csrf = {"X-Central-CSRF": c.get("/v1/fornecedor/sessao").json()["csrf"]}
+        ok = c.post(f"/v1/fornecedor/lojas/{self.loja}/backups/apagar-abertos", headers=csrf)
+        self.assertEqual(ok.status_code, 200, ok.text)
+        self.assertEqual(ok.json()["apagados"], 1)
+        lista = c.get(f"/v1/fornecedor/lojas/{self.loja}/backups").json()["backups"]
+        self.assertTrue(all(item["cifrado"] == 1 for item in lista))
 
 
 class TesteTelaBackupNuvem(BaseBackup):

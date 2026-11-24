@@ -16,10 +16,14 @@ import re
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
-from sqlalchemy import Column, Integer, LargeBinary, String
+from sqlalchemy import Column, Integer, LargeBinary, String, inspect, text
 from sqlalchemy.orm import Session, defer
 
 from backend.database import Base, engine, get_db
+
+# Mesmo prefixo de src/core/backup_seguro.CABECALHO. A API só confere o começo do arquivo;
+# não abre a cifra, então não puxa a biblioteca cryptography (ela não está na nuvem).
+CABECALHO_CIFRADO = b"WILLPDV-BKP\x01"
 
 LIMITE_ARQUIVO = 40 * 1024 * 1024          # gzip de um envio
 LIMITE_LOJA_BYTES = 80 * 1024 * 1024       # soma guardada por loja
@@ -40,10 +44,38 @@ class BackupNuvem(Base):
     tamanho_banco = Column(Integer, nullable=False)    # bytes do banco descompactado
     sha256 = Column(String, nullable=False)
     conteudo = Column(LargeBinary, nullable=False)
+    cifrado = Column(Integer, nullable=False, default=0)   # 1 = AES-GCM; 0 = gzip antigo, em claro
 
 
 def _agora() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _coluna_cifrado() -> None:
+    if not inspect(engine).has_table("backups_nuvem"):
+        return
+    nomes = {c["name"] for c in inspect(engine).get_columns("backups_nuvem")}
+    if "cifrado" not in nomes:
+        with engine.begin() as con:
+            con.execute(text("ALTER TABLE backups_nuvem ADD COLUMN cifrado INTEGER NOT NULL DEFAULT 0"))
+
+
+def conferir_cifrado(dados: bytes) -> None:
+    """O servidor não abre o arquivo: só confere o cabeçalho e o tamanho."""
+    minimo = len(CABECALHO_CIFRADO) + 16 + 12 + 16
+    if not dados.startswith(CABECALHO_CIFRADO) or len(dados) < minimo or len(dados) > LIMITE_ARQUIVO:
+        raise HTTPException(status_code=422, detail="Backup cifrado vazio, grande demais ou incompleto.")
+
+
+def apagar_nao_cifrados(db: Session, chave_loja: str) -> int:
+    """Apaga os gzip antigos desta loja. Recusa se ainda não existe um backup cifrado."""
+    tem = db.query(BackupNuvem.id).filter_by(chave_loja=chave_loja, cifrado=1).first()
+    if tem is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Ainda não há um backup cifrado desta loja. Os antigos continuam guardados.")
+    return db.query(BackupNuvem).filter(
+        BackupNuvem.chave_loja == chave_loja, BackupNuvem.cifrado == 0).delete(synchronize_session=False)
 
 
 def conferir(dados: bytes, sha: str) -> int:
@@ -98,7 +130,8 @@ def lista(db: Session, chave_loja: str) -> list[dict]:
     linhas = (db.query(BackupNuvem).options(defer(BackupNuvem.conteudo)).filter_by(chave_loja=chave_loja)
               .order_by(BackupNuvem.feito_em.desc(), BackupNuvem.id.desc()).all())
     return [{"id": b.id, "feito_em": b.feito_em, "recebido_em": b.recebido_em, "esquema": b.esquema,
-             "tamanho": b.tamanho, "tamanho_banco": b.tamanho_banco} for b in linhas]
+             "tamanho": b.tamanho, "tamanho_banco": b.tamanho_banco, "cifrado": int(b.cifrado or 0)}
+            for b in linhas]
 
 
 def _arquivo(db: Session, chave_loja: str, backup_id: int) -> Response:
@@ -111,8 +144,19 @@ def _arquivo(db: Session, chave_loja: str, backup_id: int) -> Response:
         "X-Backup-Sha256": b.sha256, "X-Backup-Esquema": str(b.esquema), "X-Backup-Feito-Em": b.feito_em})
 
 
+def _bytes_claros(valor: str) -> int:
+    try:
+        n = int(valor or "0")
+    except ValueError:
+        return 0
+    if n < 0 or n > LIMITE_ARQUIVO * 8:
+        return 0
+    return n
+
+
 def instalar(app: FastAPI, autenticar) -> APIRouter:
     Base.metadata.create_all(bind=engine)
+    _coluna_cifrado()
     router = APIRouter()
 
     def loja_do_caixa(acesso=Depends(autenticar)) -> str:
@@ -134,11 +178,17 @@ def instalar(app: FastAPI, autenticar) -> APIRouter:
         except ValueError:
             esquema = 0
         sha = request.headers.get("x-backup-sha256", "")
-        tamanho_banco = conferir(dados, sha)
+        if hashlib.sha256(dados).hexdigest() != (sha or "").lower():
+            raise HTTPException(status_code=422, detail="O backup chegou incompleto (SHA-256 não confere). Tente de novo.")
+        if not dados.startswith(CABECALHO_CIFRADO):
+            raise HTTPException(status_code=422, detail="O backup tem que vir cifrado pelo caixa. Atualize o programa.")
+        conferir_cifrado(dados)
+        tamanho_banco = _bytes_claros(request.headers.get("x-backup-bytes-claros", "0"))
         repetido = db.query(BackupNuvem.id).filter_by(chave_loja=chave_loja, sha256=sha.lower()).first()
         if repetido is None:
             db.add(BackupNuvem(chave_loja=chave_loja, feito_em=feito_em, recebido_em=_agora(), esquema=esquema,
-                               tamanho=len(dados), tamanho_banco=tamanho_banco, sha256=sha.lower(), conteudo=dados))
+                               tamanho=len(dados), tamanho_banco=tamanho_banco, sha256=sha.lower(), conteudo=dados,
+                               cifrado=1))
             db.flush()
             podar(db, chave_loja)
         db.commit()
@@ -170,6 +220,19 @@ def instalar_fornecedor(app: FastAPI, sessao, obter, auditar) -> APIRouter:
         auditar(db, "baixar_backup_nuvem", loja, str(backup_id))
         db.commit()
         return resposta
+
+    @router.post("/v1/fornecedor/lojas/{chave}/backups/apagar-abertos")
+    def apagar_abertos(chave: str, _=Depends(sessao), db: Session = Depends(get_db)):
+        """Tira os backups antigos, em claro, depois que já existe um cifrado. Não roda sozinho."""
+        loja = obter(db, chave).chave_loja
+        try:
+            apagados = apagar_nao_cifrados(db, loja)
+        except HTTPException:
+            db.rollback()
+            raise
+        auditar(db, "apagar_backups_abertos", loja, str(apagados))
+        db.commit()
+        return {"apagados": apagados}
 
     app.include_router(router)
     return router

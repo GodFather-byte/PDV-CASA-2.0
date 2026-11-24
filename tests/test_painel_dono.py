@@ -432,6 +432,23 @@ class TesteNuvemPainel(BaseNuvem):
         self.assertEqual((r.status_code, r.json()["senha"]), (200, None))      # senha informada não é devolvida
         self.assertEqual(self.http.post("/v1/painel/login", json={"loja": "ADEGA-1", "senha": "minha-senha-nova"}).status_code, 200)
 
+    def test_navegador_recebe_cookie_e_o_assistente_continua_com_o_token(self):
+        self.http.post("/v1/painel/senha", json={"senha": "senha-do-navegador"}, headers=cabecalho())
+        api = self.http.post("/v1/painel/login", json={"loja": "ADEGA-1", "senha": "senha-do-navegador"})
+        self.assertEqual(api.status_code, 200)
+        self.assertTrue(api.json().get("token"))
+        self.assertNotIn("set-cookie", api.headers)
+        nav = self.http.post("/v1/painel/login", json={"loja": "ADEGA-1", "senha": "senha-do-navegador"},
+                             headers={"X-PDV-Painel": "1"})
+        self.assertEqual(nav.status_code, 200, nav.text)
+        self.assertNotIn("token", nav.json())
+        self.assertIn("willpdv_painel", nav.headers["set-cookie"])
+        self.assertIn("HttpOnly", nav.headers["set-cookie"])
+        eu = self.http.get("/v1/painel/eu")
+        self.assertEqual(eu.status_code, 200, eu.text)
+        self.assertEqual(eu.json()["loja"]["chave"], "ADEGA-1")
+        self.assertNotIn("token", eu.json())
+
     def test_trocar_a_senha_derruba_as_sessoes_e_sair_invalida_o_token(self):
         sessao = self.entrar()
         self.assertEqual(self.http.get("/v1/painel/resumo", headers=sessao).status_code, 200)

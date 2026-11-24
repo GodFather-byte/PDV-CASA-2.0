@@ -217,9 +217,14 @@ def enviar_insta(banco, http=None) -> dict | None:
     if digesto == banco.cfg(insta.CHAVE_HASH):
         return {"produtos": len(corpo["produtos"]), "enviado": False}
     base, token = insta.acesso(banco)
+    from src.core.endereco_nuvem import autorizar
+    destino = f"{base}/v1/cardapio/envio"
+    cabecalho = autorizar(destino, token)
+    if cabecalho is None:
+        raise RuntimeError("Insta-BDelivery: o endereço precisa ser HTTPS.")
     try:
-        resposta = http.post(f"{base}/v1/cardapio/envio", json={**corpo, "enviado_em": fmt.agora()},
-                             headers={"Authorization": f"Bearer {token}"}, timeout=(5, 30))
+        resposta = http.post(destino, json={**corpo, "enviado_em": fmt.agora()},
+                             headers=cabecalho, timeout=(5, 30))
     except OSError as e:
         raise RuntimeError(f"Insta-BDelivery: sem conexão ({e}).") from e
     if resposta.status_code != 200:
@@ -273,9 +278,13 @@ def _enviar_nuvem(banco, http=None) -> dict | None:
         if digesto == banco.cfg(CHAVE_HASH) and banco.cfg(CHAVE_PUBLICADO) == "S":
             return {"produtos": len(corpo["produtos"]), "enviado": False}
         corpo = {**corpo, "enviado_em": fmt.agora()}
+    from src.core.endereco_nuvem import autorizar
+    destino = url_envio(url_api)
+    cabecalho = autorizar(destino, token)
+    if cabecalho is None:
+        raise RuntimeError("Cardápio digital: o endereço da nuvem precisa ser HTTPS.")
     try:
-        resposta = http.post(url_envio(url_api), json=corpo,
-                             headers={"Authorization": f"Bearer {token}"}, timeout=(5, 30))
+        resposta = http.post(destino, json=corpo, headers=cabecalho, timeout=(5, 30))
     except OSError as e:
         raise RuntimeError(f"Cardápio digital: sem conexão ({e}).") from e
     if resposta.status_code != 200:

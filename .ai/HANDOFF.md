@@ -1,55 +1,28 @@
-# Handoff de 24/11/2026: "Atualizar o caixa agora" na central (branch `atualizar-caixa-agora`)
+# Handoff de 24/11/2026: correções da auditoria (branch `cursor/correcoes-seguranca-e8a2`)
 
-- **Intervalo:** o caixa consulta versão nova de hora em hora (`src/atualizacao/cliente.py` `INTERVALO_HORAS = 1`).
-  Para isso não acordar o Neon, `/v1/atualizacao/ultima` usa `ultima_em_cache` (30 min) e `publicar` limpa o cache.
-- **Botão na central** (Suporte e caixas): `POST /v1/fornecedor/lojas/{chave}/atualizar-agora` grava o pedido em
-  `memoria_nuvem.pedir_atualizacao` (6 h, número = segundos do relógio, para não se repetir depois de reiniciar).
-  O pedido sai em `GET /v1/sync/pedido` no campo `atualizar`.
-- **Caixa:** `Sincronizador._anotar_pedido_atualizacao` guarda o pedido pendente e `_atualizar_se_pedido` chama
-  `rodada(..., imediata=True)`. Assim instala com o turno aberto e passa por cima do "adiar", mas venda aberta ainda
-  segura. O PDV aberto também ouve o pedido (`ServicoAtualizacao` chama `atender_central`) quando a sincronização
-  completa não roda nele.
-- Testes em `tests/test_atualizar_caixa_agora.py`. Documentação em `docs/ATUALIZACAO.md`.
+O dono aprovou os achados. Este trabalho só corrige; não publica nem faz merge.
 
-## Antes: site público no domínio willpdv.com.br
+- Backup da nuvem passa a ir cifrado (o mesmo AES-GCM do backup em pasta). A chave é o
+  token da loja: a nuvem guarda só o cifrado. Backup antigo, em claro, ainda restaura.
+  `POST /v1/fornecedor/lojas/{chave}/backups/apagar-abertos` apaga os antigos só se já
+  existe um cifrado. Não roda sozinho.
+- `/docs`, `/redoc` e `/openapi.json` só abrem com `PDV_ABRIR_DOCS=1`.
+- O caixa não manda o token para HTTP público. HTTP fica em localhost, IP de rede local,
+  nome `.local` e `testserver`.
+- Central: a senha certa não conta tentativa e não fica presa. Trava de 2 minutos por IP.
+  O `render.yaml` sobe o uvicorn com `--proxy-headers --forwarded-allow-ips=*`.
+- Webhook do site sem `MP_WEBHOOK_SECRET` responde 503.
+- Cabeçalhos de segurança em toda resposta. `X-Forwarded-Proto: http` em host público
+  manda GET/HEAD para HTTPS (308) e recusa o resto (400).
+- Porteiro: CORS sem `*`. PIN continua com limite por IP e ganhou limite por loja.
+- Pillow 13 no Python 3.11+ (o caixa Windows é 3.12). O 3.10 fica no 12.3 porque o 13
+  não instala nele.
+- O navegador do painel usa cookie `HttpOnly` (`X-PDV-Painel: 1`). O assistente segue
+  com o Bearer do login.
 
-O código passa a publicar o site em https://willpdv.com.br. Não houve merge nem deploy.
-O serviço no Render continua em https://willpdv-nuvem-6sp0.onrender.com para os caixas,
-o painel, o cardápio, o porteiro, a central, a retaguarda e o health check.
+Precisa de versão nova do caixa para o backup cifrado e para recusar HTTP público.
+Sem essa versão, a nuvem recusa backup em claro.
 
-## O que este PR muda
-
-- Canonical, og:url, og:image, JSON-LD, sitemap.xml e robots.txt usam https://willpdv.com.br.
-- O checkout (`POST /v1/pagamentos/checkout`) manda `back_urls` e `notification_url` para
-  esse domínio. `RENDER_EXTERNAL_URL` não entra mais nessa escolha.
-- GET e HEAD de página pública no host `*.onrender.com` respondem 301 para o domínio,
-  preservando a query. `/v1`, webhooks, painel e `/health` não redirecionam.
-
-## O que o dono faz
-
-No Render, no serviço da nuvem, defina:
-
-`PUBLIC_BASE_URL` = `https://willpdv.com.br`
-
-Sem barra no fim. Se essa variável já estiver com o endereço `*.onrender.com`, troque:
-valor preenchido ganha do padrão do código. Não altere `RENDER_EXTERNAL_URL`.
-
-Depois do deploy (este PR não publica):
-
-- Google Search Console: propriedade https://willpdv.com.br e o sitemap
-  https://willpdv.com.br/sitemap.xml.
-- Mercado Pago: pedido novo já avisa `https://willpdv.com.br/v1/pagamentos/webhook`.
-  O webhook das mensalidades (`/v1/webhooks/mercadopago`) continua no host onrender.
-  Não troque esse.
-
-A loja EA-SUPERACOES2 não foi mexida. Se o caixa ainda não recebeu a correção de custo,
-instale a versão e, em Alterações enviadas, use Enviar de novo nos comandos recusados.
-
-## Testes
-
-`tests/test_site.py`, `tests/test_site_checkout.py` e `tests/test_site_teste.py`,
-mais a fumaça do caixa.
-
-## Fora
-
-Sem mudança de preço, texto de venda, dado de produção, merge ou deploy.
+A API confere só o prefixo `WILLPDV-BKP`. Não importa a cifra: o job do PostgreSQL
+não instala `cryptography`, e puxar esse módulo derrubava a subida da API nesse job.
+`src.core.endereco_nuvem` está em `src/autoteste.py` (`MODULOS`).

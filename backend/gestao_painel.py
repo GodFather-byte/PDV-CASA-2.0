@@ -19,7 +19,7 @@ import re
 from datetime import date, timedelta
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -817,9 +817,10 @@ def _resposta_lote(alteracoes: list[dict], inicio: int, aplicar: bool, db, chave
 def instalar(router: APIRouter, Loja) -> None:
     from backend.importacao_painel import AcessoImportacao, PainelTokenApi
 
-    def acesso(authorization: str | None = Header(None), db: Session = Depends(get_db)) -> AcessoImportacao:
+    def acesso(request: Request, authorization: str | None = Header(None),
+               db: Session = Depends(get_db)) -> AcessoImportacao:
         painel = _painel()
-        token = authorization[7:].strip() if authorization and authorization.startswith("Bearer ") else ""
+        token = painel.token_apresentado(request, authorization)
         if not token:
             raise HTTPException(status_code=401, detail="Sessão inválida ou vencida. Entre de novo.")
         if token.startswith("wpdv_"):

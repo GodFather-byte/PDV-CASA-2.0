@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import secrets
 
-from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request, Response
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import Session
 
@@ -138,7 +138,8 @@ def instalar(app: FastAPI, Loja) -> APIRouter:
         return _lista(db, sessao.chave_loja)
 
     @router.post("/v1/painel/lojas/trocar")
-    def trocar(dados: dict = Body(...), sessao=Depends(sessao_ativa), db: Session = Depends(get_db)):
+    def trocar(request: Request, response: Response, dados: dict = Body(...), sessao=Depends(sessao_ativa),
+               db: Session = Depends(get_db)):
         """Passa a ver outra loja do grupo: sessão nova para ela, a atual é encerrada."""
         chave = str(dados.get("loja") or "").strip()
         if chave == sessao.chave_loja or chave not in lojas_do_grupo(db, sessao.chave_loja):
@@ -150,7 +151,9 @@ def instalar(app: FastAPI, Loja) -> APIRouter:
         token, expira = painel.abrir_sessao(db, loja.chave_loja)        # grava a sessão nova e a saída da antiga
         from backend.memoria_nuvem import memoria
         memoria.lembrar_sessao(token, loja.chave_loja)
-        return {"token": token, "loja": {"chave": loja.chave_loja, "nome": loja.nome}, "expira_em": expira}
+        return painel.entregar_sessao(response, request,
+                                      {"loja": {"chave": loja.chave_loja, "nome": loja.nome}, "expira_em": expira},
+                                      token)
 
     @router.delete("/v1/painel/lojas/{chave}")
     def remover(chave: str, sessao=Depends(sessao_ativa), db: Session = Depends(get_db)):

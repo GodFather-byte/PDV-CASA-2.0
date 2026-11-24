@@ -15,7 +15,6 @@ Rede sempre fora da thread da tela (`ServicoPonte` em thread própria, ou a sinc
 """
 from __future__ import annotations
 
-import ipaddress
 import json as _json
 import logging
 import re
@@ -25,8 +24,6 @@ import urllib.request
 import uuid
 from dataclasses import dataclass
 from datetime import date
-from urllib.parse import urlsplit
-
 from src.core import formatacao as fmt
 from src.core import licenca
 from src.core.erros import ErroNegocio, ErroValidacao
@@ -57,7 +54,6 @@ INTERVALO_MINUTOS = 60                       # contato normal (inclusive quando 
 RETENTATIVAS_MINUTOS = (1, 2, 5, 10, 15, 30, 60)
 TIMEOUT = (3, 10)
 OK_ESCRITA = (200, 201, 202, 204)
-LOOPBACK = {"localhost"}
 
 
 class ErroPonte(ErroNegocio):
@@ -115,24 +111,9 @@ def novo_caixa(banco) -> str:
 
 
 def url_segura(url: str) -> bool:
-    """HTTPS obrigatório; HTTP só no próprio computador (testes e homologação local)."""
-    try:
-        partes = urlsplit((url or "").strip())
-        host = partes.hostname or ""
-    except ValueError:
-        return False
-    if not host:
-        return False
-    if partes.scheme == "https":
-        return True
-    if partes.scheme != "http":
-        return False
-    if host.lower() in LOOPBACK:
-        return True
-    try:
-        return ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        return False
+    """HTTPS, ou HTTP só em localhost, IP de rede local ou no host de teste."""
+    from src.core.endereco_nuvem import aceita_credencial
+    return aceita_credencial(url)
 
 
 def url_ponte(api_url: str, rota: str) -> str:
@@ -146,7 +127,7 @@ def validar_configuracao(banco) -> None:
     if not url:
         raise ErroValidacao("Para ligar a central do fornecedor, preencha o endereço da nuvem.", {"api_url": "obrigatório"})
     if not url_segura(url):
-        raise ErroValidacao("A central do fornecedor exige endereço HTTPS (HTTP só para teste no próprio computador).",
+        raise ErroValidacao("A central do fornecedor exige endereço HTTPS (HTTP só em localhost ou na rede local).",
                             {"api_url": "inválido"})
     if uuid_valido(banco.cfg(CHAVE_CAIXA_ID)) is None:
         raise ErroValidacao("O ID do caixa na central precisa ser um UUID válido.", {CHAVE_CAIXA_ID: "inválido"})

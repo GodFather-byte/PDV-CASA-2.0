@@ -123,7 +123,19 @@ async def _ciclo_de_vida(_aplicacao):
         cobranca.parar_varredura()
 
 
-app = FastAPI(title="WillPDV - API de nuvem", lifespan=_ciclo_de_vida)
+def _docs_ligados() -> bool:
+    """A documentação interativa só abre com PDV_ABRIR_DOCS=1 (máquina de desenvolvimento)."""
+    return os.environ.get("PDV_ABRIR_DOCS", "").strip() == "1"
+
+
+_docs = _docs_ligados()
+app = FastAPI(
+    title="WillPDV - API de nuvem",
+    lifespan=_ciclo_de_vida,
+    docs_url="/docs" if _docs else None,
+    redoc_url="/redoc" if _docs else None,
+    openapi_url="/openapi.json" if _docs else None,
+)
 
 
 @app.middleware("http")
@@ -363,18 +375,24 @@ def saude():
     return {"status": "ok"}
 
 
-def _sync_sem_banco(authorization: Optional[str]):
+def _sync_sem_banco(request: Request, authorization: Optional[str]):
     from backend.memoria_nuvem import memoria, token_do_cabecalho
-    return memoria, token_do_cabecalho(authorization)
+    from backend.painel import COOKIE_PAINEL, navegador_do_painel
+    token = token_do_cabecalho(authorization)
+    if not token:
+        cookie = request.cookies.get(COOKIE_PAINEL, "")
+        if cookie and (request.method in ("GET", "HEAD") or navegador_do_painel(request)):
+            token = cookie
+    return memoria, token
 
 
 @app.get("/v1/sync/pedido")
-def sync_pedido(authorization: Optional[str] = Header(None)):
+def sync_pedido(request: Request, authorization: Optional[str] = Header(None)):
     """O caixa pergunta se o celular pediu envio. A memória basta quando o token já é conhecido.
 
     Depois de um deploy a memória zera. Aí a primeira pergunta de cada token olha a loja no banco
     uma vez e guarda o resultado: as seguintes não acordam o Neon, e o aviso da retaguarda volta a valer."""
-    memoria, token = _sync_sem_banco(authorization)
+    memoria, token = _sync_sem_banco(request, authorization)
     visto = memoria.consultar_loja(token)
     if visto.get("conhecido") or not token or memoria.token_ja_descartado(token):
         return visto
@@ -393,9 +411,9 @@ def sync_pedido(authorization: Optional[str] = Header(None)):
 
 
 @app.post("/v1/sync/pedido")
-def sync_pedir(authorization: Optional[str] = Header(None)):
+def sync_pedir(request: Request, authorization: Optional[str] = Header(None)):
     """O painel ou o porteiro pede um envio agora. A sessão precisa já estar na memória."""
-    memoria, token = _sync_sem_banco(authorization)
+    memoria, token = _sync_sem_banco(request, authorization)
     chave = memoria.chave_da_sessao(token)
     if not chave:
         try:
@@ -410,9 +428,9 @@ def sync_pedir(authorization: Optional[str] = Header(None)):
 
 
 @app.post("/v1/sync/concluido")
-def sync_concluido(dados: Optional[dict] = Body(None), authorization: Optional[str] = Header(None)):
+def sync_concluido(request: Request, dados: Optional[dict] = Body(None), authorization: Optional[str] = Header(None)):
     """O caixa avisa que o lote subiu. O celular lê isso sem tocar no banco."""
-    memoria, token = _sync_sem_banco(authorization)
+    memoria, token = _sync_sem_banco(request, authorization)
     ident = dados.get("id") if isinstance(dados, dict) else None
     try:
         ident = int(ident) if ident is not None else None
@@ -423,8 +441,8 @@ def sync_concluido(dados: Optional[dict] = Body(None), authorization: Optional[s
 
 
 @app.get("/v1/sync/estado")
-def sync_estado(authorization: Optional[str] = Header(None)):
-    memoria, token = _sync_sem_banco(authorization)
+def sync_estado(request: Request, authorization: Optional[str] = Header(None)):
+    memoria, token = _sync_sem_banco(request, authorization)
     return memoria.estado(token)
 
 
@@ -597,3 +615,7 @@ _recuperacao_senha.instalar(app, autenticar)
 from backend import site as _site  # noqa: E402
 
 _site.instalar(app)
+
+from backend.seguranca_http import instalar as _instalar_seguranca_http  # noqa: E402
+
+_instalar_seguranca_http(app)

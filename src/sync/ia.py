@@ -26,7 +26,10 @@ def _chamar(banco, metodo: str, rota: str, corpo: dict | None = None, http=None,
     if http is None:
         import requests as http
     url = f"{_base_nuvem(banco.cfg('api_url'))}{rota}"
-    cabecalho = {"Authorization": f"Bearer {banco.cfg('api_token').strip()}"}
+    from src.core.endereco_nuvem import autorizar
+    cabecalho = autorizar(url, banco.cfg("api_token"))
+    if cabecalho is None:
+        raise ErroNegocio("O endereço da nuvem precisa ser HTTPS para usar a IA.")
     try:
         if metodo == "GET":
             r = http.get(url, headers=cabecalho, timeout=timeout)
