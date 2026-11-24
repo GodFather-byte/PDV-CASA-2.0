@@ -46,7 +46,7 @@ class TesteCheckoutSite(unittest.TestCase):
     def setUp(self):
         self.ambiente = mock.patch.dict(os.environ, {
             "MP_ACCESS_TOKEN": "TEST-token-ficticio",
-            "MP_WEBHOOK_SECRET": "",
+            "MP_WEBHOOK_SECRET": "segredo-do-webhook",
             "PUBLIC_BASE_URL": "",
             "RENDER_EXTERNAL_URL": "",
             "MP_VARREDURA": "0",
@@ -112,7 +112,10 @@ class TesteCheckoutSite(unittest.TestCase):
     def notificar(self, data_id="555", tipo="payment", headers=None, corpo=None, **params):
         consulta = {"data.id": data_id, "type": tipo}
         consulta.update(params)
-        return self.http.post("/v1/pagamentos/webhook", params=consulta, headers=headers or {},
+        if headers is None:
+            segredo = os.environ.get("MP_WEBHOOK_SECRET", "")
+            headers = assinar(data_id, segredo=segredo) if segredo else {}
+        return self.http.post("/v1/pagamentos/webhook", params=consulta, headers=headers,
                               json=corpo if corpo is not None else {
                                   "status": "approved", "transaction_amount": 1, "data": {"id": "1"}})
 
@@ -184,12 +187,14 @@ class TesteCheckoutSite(unittest.TestCase):
         no_dominio = TestClient(nuvem.app, base_url="https://willpdv.com.br")
         aviso = no_dominio.post(
             "/v1/pagamentos/webhook", params={"data.id": "555", "type": "payment"},
+            headers=assinar("555"),
             json={"status": "approved", "transaction_amount": 1}, follow_redirects=False)
         self.assertEqual(aviso.status_code, 200, aviso.text)
         self.assertEqual(aviso.json()["situacao"], "processado")
         no_onrender = TestClient(nuvem.app, base_url="https://willpdv-nuvem-6sp0.onrender.com")
         de_novo = no_onrender.post(
             "/v1/pagamentos/webhook", params={"data.id": "555", "type": "payment"},
+            headers=assinar("555"),
             json={"status": "approved"}, follow_redirects=False)
         self.assertEqual(de_novo.status_code, 200, de_novo.text)
         self.assertNotIn("location", de_novo.headers)
@@ -283,7 +288,10 @@ class TesteCheckoutSite(unittest.TestCase):
         self.assertEqual(self.pedido(pedido_id).atualizado_em, "1999-01-01 00:00:00")
         with nuvem.SessionLocal() as db:
             self.assertEqual(db.query(checkout.PagamentoSite).count(), 1)
-        aviso = self.http.get("/v1/pagamentos/webhook", params={"id": "555", "topic": "payment"})
+        sem_assinatura = self.http.get("/v1/pagamentos/webhook", params={"data.id": "555", "type": "payment"})
+        self.assertEqual(sem_assinatura.status_code, 401)
+        aviso = self.http.get("/v1/pagamentos/webhook", params={"data.id": "555", "type": "payment"},
+                              headers=assinar("555"))
         self.assertEqual(aviso.json()["situacao"], "idempotente")
         self.pagamento.update(status="approved", transaction_amount=Decimal("1.00"))
         outro = self.notificar(data_id="777")
@@ -305,19 +313,20 @@ class TesteCheckoutSite(unittest.TestCase):
         self.assertEqual(self.notificar(data_id="556").json()["situacao"], "processado")
         self.assertEqual(self.pedido(pedido_id).status, "divergente")
 
-    def test_assinatura_so_quando_o_segredo_existe(self):
+    def test_webhook_exige_assinatura(self):
         pedido_id = self.comprar().json()["pedido"]
         self.pagamento["external_reference"] = pedido_id
-        with mock.patch.dict(os.environ, {"MP_WEBHOOK_SECRET": "segredo-do-webhook"}):
-            self.assertEqual(self.notificar().status_code, 401)
-            self.assertEqual(self.notificar(headers=assinar("555", segredo="outro")).status_code, 401)
-            self.assertEqual(self.pedido(pedido_id).status, "aguardando")
-            ok = self.notificar(headers=assinar("555"))
+        self.assertEqual(self.notificar(headers={}).status_code, 401)
+        self.assertEqual(self.notificar(headers=assinar("555", segredo="outro")).status_code, 401)
+        self.assertEqual(self.pedido(pedido_id).status, "aguardando")
+        ok = self.notificar()
         self.assertEqual(ok.status_code, 200, ok.text)
         self.assertEqual(self.pedido(pedido_id).status, "aprovado")
         self.pagamento["external_reference"] = "f" * 32
         self.assertEqual(self.notificar(data_id="557").json()["situacao"], "ignorado")
         self.assertEqual(self.pedido(pedido_id).payment_id, "555")
+        with mock.patch.dict(os.environ, {"MP_WEBHOOK_SECRET": ""}):
+            self.assertEqual(self.notificar(data_id="558").status_code, 503)
 
     def test_ordem_do_mercado_pago_busca_cada_pagamento(self):
         pedido_id = self.comprar().json()["pedido"]

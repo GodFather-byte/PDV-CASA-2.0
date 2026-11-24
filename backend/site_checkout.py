@@ -4,9 +4,9 @@ O navegador manda o id do plano e os dados de quem compra. O valor em centavos
 é o de `site_precos` — o que vier no corpo (valor, preço, parcelas) é ignorado.
 Sem `MP_ACCESS_TOKEN` a rota responde 503 e os botões do site abrem o WhatsApp.
 
-O webhook `/v1/pagamentos/webhook` não acredita no corpo: busca o pagamento na
-API e só então grava. Se `MP_WEBHOOK_SECRET` estiver definido, exige o
-`x-signature`. A mesma notificação, reenviada, não duplica o registro.
+O webhook `/v1/pagamentos/webhook` não acredita no corpo: exige o `x-signature`
+(`MP_WEBHOOK_SECRET`, o mesmo da mensalidade) e só então busca o pagamento na
+API. A mesma notificação, reenviada, não duplica o registro.
 
 Isto não emite licença nem mexe na cobrança das lojas já existentes. O pedido
 fica nas tabelas `site_pedidos` e `site_pagamentos` para o acompanhamento.
@@ -32,7 +32,6 @@ from backend.database import Base, SessionLocal, engine
 log = logging.getLogger("pdv.site_checkout")
 
 VAR_TOKEN = "MP_ACCESS_TOKEN"
-VAR_SEGREDO = "MP_WEBHOOK_SECRET"
 VAR_BASE = "PUBLIC_BASE_URL"
 PARCELAS_ANUAL = 10
 ROTA_CHECKOUT = "/v1/pagamentos/checkout"
@@ -386,27 +385,16 @@ def _ids_na_ordem(dados: dict) -> list[str]:
     return ids[:20]
 
 
-def _id_da_url(request: Request) -> str:
-    bruto = request.query_params.get("data.id")
-    if bruto is None or bruto == "":
-        bruto = request.query_params.get("id")
-    return str(bruto or "").strip()
-
-
 def processar_webhook(db: Session, request: Request) -> dict:
-    segredo = os.environ.get(VAR_SEGREDO, "").strip()
-    if segredo:
-        try:
-            pagamento_id, _evento = cobranca.validar_assinatura(
-                request.headers.get("x-signature"),
-                request.headers.get("x-request-id"),
-                request.query_params.get("data.id"))
-        except cobranca.WebhookNaoConfigurado:
-            raise HTTPException(status_code=503, detail="Webhook Mercado Pago não configurado.") from None
-        except cobranca.AssinaturaInvalida:
-            raise HTTPException(status_code=401, detail="Assinatura do webhook inválida.") from None
-    else:
-        pagamento_id = _id_da_url(request)
+    try:
+        pagamento_id, _evento = cobranca.validar_assinatura(
+            request.headers.get("x-signature"),
+            request.headers.get("x-request-id"),
+            request.query_params.get("data.id"))
+    except cobranca.WebhookNaoConfigurado:
+        raise HTTPException(status_code=503, detail="Webhook Mercado Pago não configurado.") from None
+    except cobranca.AssinaturaInvalida:
+        raise HTTPException(status_code=401, detail="Assinatura do webhook inválida.") from None
     if not checkout_disponivel():
         raise HTTPException(status_code=503, detail=MSG_INDISPONIVEL)
     if not cobranca.ID_PAGAMENTO.fullmatch(pagamento_id or ""):

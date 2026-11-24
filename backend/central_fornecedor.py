@@ -202,13 +202,21 @@ def texto(dados, campo, limite, obrigatorio=True):
     return valor.strip()
 
 
+def segredo_da_central() -> str:
+    """Senha da página /central/. Com PDV_CENTRAL_SENHA, ela deixa de ser o token da API."""
+    propria = os.environ.get("PDV_CENTRAL_SENHA", "").strip()
+    if propria:
+        return propria
+    return os.environ.get("PDV_API_TOKEN", "")
+
+
 def instalar(app, Loja):
     # Apenas tabelas novas na nuvem; não altera bancos dos caixas nem tabelas existentes.
     Base.metadata.create_all(bind=engine)
 
     def sessao(request: Request, db=Depends(get_db)):
         token = request.cookies.get(COOKIE, "")
-        segredo = os.environ.get("PDV_API_TOKEN", "")
+        segredo = segredo_da_central()
         linha = db.get(SessaoFornecedor, digest(token)) if token and len(token) < 200 else None
         if not segredo or linha is None or linha.expira_em <= agora() or not hmac.compare_digest(linha.credencial_hash, digest(segredo)):
             raise HTTPException(401, "Entre na central do fornecedor.")
@@ -271,7 +279,7 @@ def instalar(app, Loja):
             if len(fila) >= 8:
                 raise HTTPException(429, "Muitas tentativas. Aguarde 15 minutos.")
             fila.append(instante)
-        segredo = os.environ.get("PDV_API_TOKEN", "")
+        segredo = segredo_da_central()
         recebido = dados.get("credencial")
         if not segredo or not isinstance(recebido, str) or len(recebido) > 1024 or not hmac.compare_digest(recebido.encode(), segredo.encode()):
             raise HTTPException(401, "Credencial administrativa inválida.")

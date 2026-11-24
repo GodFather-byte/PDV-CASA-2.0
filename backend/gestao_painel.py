@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from src.core import custo_lucro, formatacao as fmt
 from src.core.erros import ErroNegocio
+from src.core.formatacao import texto_planilha
 
 PREFIXO = "/v1/painel/gestao"
 TIPOS = ("resumo", "vendas", "produtos", "categorias", "abc", "formas", "operadores", "estoque", "caixa", "rede")
@@ -561,6 +562,7 @@ def exportar(relatorio: dict, formato: str) -> Response:
     nome = f"relatorio-{relatorio.get('tipo') or 'painel'}"
     if formato == "csv":
         buf = io.StringIO()
+        grade = [[texto_planilha(celula) for celula in linha] for linha in grade]
         csv.writer(buf, delimiter=";", lineterminator="\n").writerows(grade)
         return Response(("\ufeff" + buf.getvalue()).encode("utf-8"), media_type="text/csv; charset=utf-8", headers={
             "Content-Disposition": f'attachment; filename="{nome}.csv"'})

@@ -191,19 +191,48 @@ def _ler_csv(dados: bytes) -> list[list[str]]:
     return [[c.strip() for c in linha] for linha in csv.reader(io.StringIO(texto), delimiter=delimitador)]
 
 
+LIMITE_XLSX_ENTRADAS = 40
+LIMITE_XLSX_BYTES = 8 * 1024 * 1024
+
+
+def _xml_planilha(conteudo: bytes) -> ET.Element:
+    """Lê o XML da planilha sem aceitar DTD. O arquivo já passou pelo limite de tamanho."""
+    if b"<!DOCTYPE" in conteudo.upper() or b"<!ENTITY" in conteudo.upper():
+        raise ErroNegocio("A planilha Excel tem um conteúdo que este leitor não aceita.")
+    return ET.fromstring(conteudo)
+
+
+def _ler_membro_zip(arquivo: zipfile.ZipFile, nome: str, lido: list[int]) -> bytes:
+    with arquivo.open(nome) as bruto:
+        pedacos = []
+        while True:
+            bloco = bruto.read(64 * 1024)
+            if not bloco:
+                break
+            lido[0] += len(bloco)
+            if lido[0] > LIMITE_XLSX_BYTES:
+                raise ErroNegocio("A planilha é grande demais. Divida em arquivos menores.")
+            pedacos.append(bloco)
+    return b"".join(pedacos)
+
+
 def _ler_xlsx(dados: bytes) -> list[list[str]]:
     """Primeira planilha de um .xlsx, só com a biblioteca padrão (sem precisar instalar o openpyxl)."""
     ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
     try:
         with zipfile.ZipFile(io.BytesIO(dados)) as z:
+            infos = z.infolist()
+            if len(infos) > LIMITE_XLSX_ENTRADAS or sum(i.file_size for i in infos) > LIMITE_XLSX_BYTES:
+                raise ErroNegocio("A planilha é grande demais. Divida em arquivos menores.")
+            lido = [0]
             compartilhadas: list[str] = []
             if "xl/sharedStrings.xml" in z.namelist():
-                raiz = ET.fromstring(z.read("xl/sharedStrings.xml"))
+                raiz = _xml_planilha(_ler_membro_zip(z, "xl/sharedStrings.xml", lido))
                 compartilhadas = ["".join(t.text or "" for t in si.iter(f"{{{ns['m']}}}t")) for si in raiz.findall("m:si", ns)]
             planilhas = sorted(n for n in z.namelist() if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", n))
             if not planilhas:
                 raise ErroNegocio("O arquivo Excel não tem nenhuma planilha.")
-            raiz = ET.fromstring(z.read(planilhas[0]))
+            raiz = _xml_planilha(_ler_membro_zip(z, planilhas[0], lido))
     except (zipfile.BadZipFile, ET.ParseError, KeyError) as e:
         raise ErroNegocio("Não consegui abrir esse arquivo Excel. Salve-o de novo como .xlsx ou como CSV.") from e
     linhas: list[list[str]] = []

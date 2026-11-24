@@ -7,6 +7,7 @@ Convenções do sistema inteiro:
 """
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
@@ -68,6 +69,25 @@ def para_centavos(texto) -> int:
         return arredondar(Decimal(s) * 100)
     except InvalidOperation:
         raise ValueError(f"valor monetário inválido: {texto!r}") from None
+
+
+_NUMERO_PLANILHA = re.compile(r"-?(?:\d{1,3}(?:\.\d{3})*|\d+)(?:,\d+)?")
+
+
+def texto_planilha(valor) -> str:
+    """Texto de CSV para o Excel: número brasileiro continua número; o resto que parece fórmula vira texto.
+
+    Nome de produto, hóspede ou telefone pode começar com =, +, - ou @. O Excel executaria isso ao abrir o arquivo.
+    Um valor como -1.234,56 (dinheiro ou quantidade) não é fórmula e segue numérico, para a soma da planilha funcionar.
+    """
+    if valor is None:
+        return ""
+    texto = str(valor)
+    if not texto or _NUMERO_PLANILHA.fullmatch(texto):
+        return texto
+    if texto[0] in "=+-@\t\r":
+        return "'" + texto
+    return texto
 
 
 def fmt_num(cent: int | None) -> str:
