@@ -1,4 +1,21 @@
-# Handoff de 24/11/2026: correções da auditoria (branch `cursor/correcoes-seguranca-e8a2`)
+# Handoff de 24/11/2026: hotel só hotel, papéis das garotas, mostrar senha e retaguarda (PRs #160, #161, #162)
+
+- **#160 Will Hotel** (`hotel-so-hotel`): `Edicao.inicio = "hotel"` faz a recepção abrir sozinha depois da entrada
+  (também para o operador só de caixa). `Edicao.rotulos` troca os textos do menu, e `menu_oculto` esconde o que é de
+  boate e adega. O caixa continua para turno, sangria e receber a conta. Teste: `tests/test_qt_hotel_inicio.py`.
+- **#161 Garotas** (`garotas-reimprimir`): `ComissaoController.acertos`, `lancamentos_periodo` e `recibo_do_acerto`
+  remontam o pagamento a partir do banco. `ImpressaoController.reimpressao_recibo_garota` e `reimpressao_via_comissao`
+  geram a segunda via com a marca. No caixa: `DialogoReimpressao`, aberto pelo botão "Reimprimir papéis" em Comissões.
+  O retrato do painel leva `comissoes.acertos` e `consumo_pendente_cent`, e o painel ganhou a aba **Garotas**
+  (`aba-garotas`; o bloco de comissões saiu do Salão). Testes: `test_qt_reimpressao_garota.py` e
+  `test_painel_garotas.py`.
+- **#162 Painel e retaguarda** (`painel-senha-retaguarda`): `configurarMostrarSenha()` no painel. Na retaguarda,
+  `cadastro()` aceita `filtro` (`FILTROS_PRODUTO`), `ordem`/`desc` e `todas` (exportação). A tela ganhou filtro,
+  ordenação no título da coluna, "Exportar planilha" (CSV) e "Duplicar". Teste: `tests/test_retaguarda_filtros.py`.
+- Os três precisam de nova versão do caixa (1.14.24). O painel e a retaguarda entram com o deploy da nuvem. Os
+  pagamentos das garotas só aparecem no painel depois que o caixa da casa atualizar.
+
+## Antes: correções da auditoria (branch `cursor/correcoes-seguranca-e8a2`)
 
 O dono aprovou os achados. Este trabalho só corrige; não publica nem faz merge.
 

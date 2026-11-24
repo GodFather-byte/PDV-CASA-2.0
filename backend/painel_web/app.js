@@ -2873,7 +2873,41 @@
   // Inicialização
   // ------------------------------------------------------------------
 
+  /** Botão "Mostrar" ao lado de cada campo de senha: o dono confere o que digitou. Ao enviar o formulário, volta a esconder. */
+  function configurarMostrarSenha() {
+    document.querySelectorAll('input[type="password"]').forEach((campo) => {
+      if (campo.dataset.olho) return;
+      campo.dataset.olho = "1";
+      const caixa = el("span", { class: "campo-senha" });
+      campo.parentNode.insertBefore(caixa, campo);
+      caixa.append(campo);
+      const botao = el("button", { type: "button", class: "botao-olho", text: "Mostrar" });
+      botao.setAttribute("aria-label", "Mostrar a senha");
+      botao.setAttribute("aria-pressed", "false");
+      const esconder = () => {
+        campo.type = "password";
+        botao.textContent = "Mostrar";
+        botao.setAttribute("aria-label", "Mostrar a senha");
+        botao.setAttribute("aria-pressed", "false");
+      };
+      botao.addEventListener("click", () => {
+        if (campo.type === "password") {
+          campo.type = "text";
+          botao.textContent = "Ocultar";
+          botao.setAttribute("aria-label", "Ocultar a senha");
+          botao.setAttribute("aria-pressed", "true");
+        } else {
+          esconder();
+        }
+        campo.focus();
+      });
+      if (campo.form) campo.form.addEventListener("submit", esconder);
+      caixa.append(botao);
+    });
+  }
+
   function iniciar() {
+    configurarMostrarSenha();
     try { localStorage.removeItem(CHAVE_TOKEN); localStorage.removeItem(REDE_TOKEN); } catch (_) { /* token antigo sai do aparelho */ }
     estado.token = null;
     try { estado.loja = JSON.parse(lerArmazenamento(CHAVE_LOJA) || "null"); } catch (_) { estado.loja = null; }

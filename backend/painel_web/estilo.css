@@ -1079,3 +1079,20 @@ a.botao-arquivo { text-decoration: none; }
 .rede-barra > span { display: block; height: 100%; border-radius: 999px; background: var(--barra); min-width: 2px; }
 .rede-abrir { font-weight: 700; color: var(--verde-medio, var(--barra)); white-space: nowrap; }
 .rede-alerta { color: var(--ambar, #b26a00); font-weight: 600; }
+
+/* Campo de senha com o botão Mostrar/Ocultar ao lado */
+.campo-senha { display: flex; gap: .4rem; align-items: stretch; width: 100%; }
+.campo-senha input { flex: 1 1 auto; min-width: 0; }
+.botao-olho {
+  flex: 0 0 auto;
+  padding: 0 .8rem;
+  border: 1px solid var(--borda);
+  border-radius: .55rem;
+  background: var(--superficie);
+  color: var(--texto, inherit);
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.botao-olho[aria-pressed="true"] { background: var(--verde-medio); color: #fff; border-color: var(--verde-medio); }
+.botao-olho:focus-visible { outline: 2px solid var(--verde-medio); outline-offset: 1px; }

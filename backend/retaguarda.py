@@ -182,8 +182,40 @@ def visao(db: Session, chave_loja: str) -> dict:
             "secoes": {nome: em for nome, em in linhas}, "pendentes": pendentes(db, chave_loja)}
 
 
+def _num(valor) -> float:
+    try:
+        return float(valor)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+# Filtros prontos da lista de produtos: o que o dono mais procura de longe. Cada um olha só campos que o espelho tem.
+FILTROS_PRODUTO = {
+    "estoque_baixo": lambda l: bool(l.get("controla_estoque", 1)) and _num(l.get("estoque_minimo")) > 0
+                               and _num(l.get("qt_atual")) <= _num(l.get("estoque_minimo")),
+    "sem_estoque": lambda l: bool(l.get("controla_estoque", 1)) and _num(l.get("qt_atual")) <= 0,
+    "sem_preco": lambda l: _num(l.get("preco_cent")) <= 0,
+    "abaixo_custo": lambda l: _num(l.get("custo_medio_cent")) > 0 and _num(l.get("preco_cent")) < _num(l.get("custo_medio_cent")),
+    "sem_ncm": lambda l: not str(l.get("ncm") or "").strip(),
+    "sem_codigo_barras": lambda l: not str(l.get("cbarra") or "").strip(),
+}
+LIMITE_EXPORTACAO = 20000
+
+
+def _ordenar(campos: list, linhas: list, ordem: str, desc: bool) -> list:
+    if ordem not in campos:
+        return linhas
+    i = campos.index(ordem)
+    numericos = all(isinstance(l[i], (int, float)) or l[i] is None for l in linhas)
+    vazios = [l for l in linhas if l[i] in (None, "")]
+    cheios = [l for l in linhas if l[i] not in (None, "")]
+    chave = (lambda l: l[i]) if numericos else (lambda l: _norm(str(l[i])))
+    return sorted(cheios, key=chave, reverse=desc) + vazios               # vazio sempre no fim
+
+
 def cadastro(db: Session, chave_loja: str, entidade: str, busca: str = "", pagina: int = 1,
-             inativos: bool = True) -> dict:
+             inativos: bool = True, filtro: str = "", ordem: str = "", desc: bool = False,
+             todas: bool = False) -> dict:
     if not re.fullmatch(r"[a-z_]{1,40}", entidade or ""):
         raise HTTPException(status_code=404, detail="Cadastro não encontrado.")
     dados, quando = secao(db, chave_loja, f"cadastro:{entidade}")
@@ -196,6 +228,15 @@ def cadastro(db: Session, chave_loja: str, entidade: str, busca: str = "", pagin
     if not inativos and "ativo" in campos:
         posicao = campos.index("ativo")
         linhas = [l for l in linhas if l[posicao]]
+    if filtro:
+        if entidade != "produtos" or filtro not in FILTROS_PRODUTO:
+            raise HTTPException(status_code=422, detail="Filtro inválido.")
+        teste = FILTROS_PRODUTO[filtro]
+        linhas = [l for l in linhas if teste(dict(zip(campos, l)))]
+    linhas = _ordenar(campos, linhas, ordem, desc)
+    if todas:                                            # exportar: a lista filtrada inteira, sem página
+        return {"campos": campos, "linhas": linhas[:LIMITE_EXPORTACAO], "encontradas": len(linhas),
+                "total": dados.get("total", len(dados.get("linhas") or [])), "atualizado_em": quando}
     pagina = max(int(pagina or 1), 1)
     fila = (db.query(RetaguardaComando).filter_by(chave_loja=chave_loja, situacao="pendente")
             .filter(RetaguardaComando.tipo.in_(("cadastro.salvar", "cadastro.excluir", "estoque.movimento")))
@@ -326,9 +367,11 @@ def _rotas_de_leitura_e_escrita(router: APIRouter, prefixo: str, loja_da_sessao,
         return visao(db, chave_loja)
 
     @router.get(prefixo + "/cadastro/{entidade}")
-    def listar(entidade: str, busca: str = "", pagina: int = 1, inativos: int = 1,
+    def listar(entidade: str, busca: str = "", pagina: int = 1, inativos: int = 1, filtro: str = "", ordem: str = "",
+               desc: int = 0, todas: int = 0,
                chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):
-        return cadastro(db, chave_loja, entidade, busca[:80], pagina, bool(inativos))
+        return cadastro(db, chave_loja, entidade, busca[:80], pagina, bool(inativos), filtro[:30], ordem[:40],
+                        bool(desc), bool(todas))
 
     @router.get(prefixo + "/financeiro")
     def contas(chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):
