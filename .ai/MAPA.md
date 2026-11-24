@@ -147,6 +147,7 @@ implantação da adega), `WILL_HOTEL.md` (edição hotel), `IMPORTAR_PRODUTOS.md
 `COBRANCA_LICENCAS_MERCADOPAGO.md` (cobrança e renovação mensal), `PAINEL_DONO.md` (painel do dono no celular), `CARDAPIO.md` (QR do cardápio, só consulta), `PORTEIRO.md` (porteiro no celular, Wi-Fi e 4G),
 `COORDENACAO.md` (histórico de pedidos entre agentes).
 `BACKUP_EXTERNO.md` (pasta sincronizada, senha e recuperação), `AUDITORIA.md`,
+`auditoria-seguranca-2026-11.md` (auditoria de segurança de 24/11/2026; só leitura, sem correção aplicada),
 `CENTRAL_TELEGRAM.md` (configuração dos dois painéis Telegram e central local com API como ponte; sem cobrança),
 `RETAGUARDA.md` (retaguarda na nuvem), `INTERFACE_QT.md` (prévia e homologação), `QUARTOS.md` (controle de quartos e campainha), `TERCEIROS_QT.md` (licenças das dependências).
 
