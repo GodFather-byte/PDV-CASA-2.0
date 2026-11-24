@@ -90,7 +90,8 @@
           <span id="rede-resumo-lojas" class="legenda"></span>
         </div>
         <p class="legenda">Toque numa loja para abrir o painel dela. Para voltar, use <strong>Todas as lojas</strong> no topo.</p>
-        <ul id="lista-rede-lojas" class="lista-rede"></ul>
+        <button type="button" id="exportar-rede-csv" data-seletor="exportar-rede-csv" class="botao-secundario">Baixar comparativo (CSV)</button>
+        <ul id="lista-rede-lojas" class="lista-rede" data-seletor="rede-lojas"></ul>
       </section>
       <section class="bloco" id="bloco-importar-rede">
         <h2>Importar produtos</h2>
@@ -240,6 +241,12 @@
           <span>Itens: <strong id="v-itens">0</strong></span>
           <span>Descontos: <strong id="v-desconto">R$ 0,00</strong></span>
         </p>
+
+        <section class="bloco" id="bloco-top-dia" data-seletor="top-dia">
+          <h2>Mais vendidos do dia</h2>
+          <ol id="lista-top-dia" class="lista lista-produtos"></ol>
+          <p id="vazio-top-dia" class="vazio" hidden>Nenhuma venda neste dia.</p>
+        </section>
 
         <section class="bloco" id="bloco-servico">
           <h2>Taxa de serviço</h2>
@@ -561,8 +568,8 @@
           <button type="button" id="desfazer-importacao" class="botao-secundario">Desfazer a última</button>
 
           <h3>Token do assistente</h3>
-          <p class="legenda">O token entra no lugar da senha para importar e consultar esta loja pela API.
-            Ele aparece uma vez só. Quem tiver o token mexe no cadastro desta loja.</p>
+          <p class="legenda">O token entra no lugar da senha para importar, ler relatórios e ajustar preço e estoque desta loja.
+            Ele aparece uma vez só. Quem tiver o token mexe no cadastro desta loja, inclusive custo e lucro.</p>
           <label for="nome-token">Nome do token</label>
           <input id="nome-token" type="text" value="assistente" maxlength="40" autocomplete="off">
           <button type="button" id="criar-token" class="botao-secundario">Gerar token</button>
@@ -758,6 +765,62 @@
           <h2>Por forma de pagamento</h2>
           <ul id="lista-lucro-formas" class="lista"></ul>
           <p id="vazio-lucro-formas" class="vazio" hidden>Sem pagamento neste período.</p>
+        </section>
+
+        <section class="bloco" id="bloco-relatorios-gestao" data-seletor="relatorios-gestao">
+          <h2>Curva ABC, categorias, operadores e estoque</h2>
+          <p class="legenda">Mesmo período dos cartões acima. Custo e lucro só aparecem neste painel do dono.</p>
+          <div class="acoes-resumo">
+            <label for="exportar-relatorio-tipo">Exportar</label>
+            <select id="exportar-relatorio-tipo" data-seletor="exportar-relatorio-tipo" aria-label="Qual relatório exportar">
+              <option value="abc">Curva ABC</option>
+              <option value="produtos">Por produto</option>
+              <option value="categorias">Por categoria</option>
+              <option value="operadores">Por operador</option>
+              <option value="formas">Por forma de pagamento</option>
+              <option value="vendas">Por dia</option>
+              <option value="estoque">Sugestão de compra</option>
+              <option value="caixa">Fechamentos e sangrias</option>
+            </select>
+            <button type="button" id="exportar-relatorio-csv" data-seletor="exportar-csv" class="botao-secundario">Baixar CSV</button>
+            <button type="button" id="exportar-relatorio-xlsx" data-seletor="exportar-xlsx" class="botao-secundario">Baixar planilha</button>
+          </div>
+          <p id="nota-gestao" class="legenda" hidden></p>
+
+          <h3>Curva ABC</h3>
+          <p id="nota-abc" class="legenda"></p>
+          <ul id="lista-gestao-abc" class="lista" data-seletor="relatorio-abc"></ul>
+          <p id="vazio-gestao-abc" class="vazio" hidden>Sem vendas neste período.</p>
+
+          <h3>Por categoria</h3>
+          <ul id="lista-gestao-categorias" class="lista" data-seletor="relatorio-categorias"></ul>
+          <p id="vazio-gestao-categorias" class="vazio" hidden>Sem vendas neste período.</p>
+
+          <h3>Por operador</h3>
+          <ul id="lista-gestao-operadores" class="lista" data-seletor="relatorio-operadores"></ul>
+          <p id="vazio-gestao-operadores" class="vazio" hidden>Nenhuma venda neste período.</p>
+
+          <h3>Por dia</h3>
+          <ul id="lista-gestao-dias" class="lista" data-seletor="relatorio-dias"></ul>
+          <p id="vazio-gestao-dias" class="vazio" hidden>Nenhuma venda neste período.</p>
+
+          <h3>Estoque baixo</h3>
+          <ul id="lista-gestao-baixo" class="lista" data-seletor="estoque-baixo"></ul>
+          <p id="vazio-gestao-baixo" class="vazio" hidden>Nenhum produto no mínimo ou abaixo.</p>
+
+          <h3>Produtos parados</h3>
+          <ul id="lista-gestao-parados" class="lista" data-seletor="produtos-parados"></ul>
+          <p id="vazio-gestao-parados" class="vazio" hidden>Nenhum produto parado neste período.</p>
+
+          <h3>Sugestão de compra</h3>
+          <p class="legenda">Quantidade para cobrir 7 dias no ritmo do período, somada ao que falta para o mínimo.</p>
+          <ul id="lista-gestao-sugestao" class="lista" data-seletor="sugestao-compra"></ul>
+          <p id="vazio-gestao-sugestao" class="vazio" hidden>Nada a repor para 7 dias de cobertura.</p>
+          <p id="nota-estoque-gestao" class="legenda"></p>
+
+          <h3>Alterações pedidas ao caixa</h3>
+          <ul id="lista-gestao-auditoria" class="lista" data-seletor="auditoria"></ul>
+          <p id="vazio-gestao-auditoria" class="vazio" hidden>Nenhuma alteração pela retaguarda ainda.</p>
         </section>
       </section>
 

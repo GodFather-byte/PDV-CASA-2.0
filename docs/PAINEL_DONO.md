@@ -35,6 +35,9 @@ Regras completas: [ENTREGA_1_10.md](ENTREGA_1_10.md).
 | **Salão** | Mesas e comandas abertas (valor, hora, garçom, itens). Ranking de garçons (consumo, serviço, comissão). Comissão de garota só se a casa usa garotas (`usar_garotas`); a aba some na adega (`usar_mesas` desligado) |
 | **Produtos** | Mais vendidos (quantidade e faturamento) em hoje, 7 ou 30 dias; por grupo e por setor; CMV e margem quando o custo sobe; estoque abaixo do mínimo |
 | **Vendas** | Cada venda do dia (mais recente primeiro) com itens (gelada marcada, cancelados riscados), pagamentos, canceladas em vermelho com o motivo; com mais de um caixa, de qual saiu |
+| **Relatórios** | Lucro do período (só neste painel do dono) e, no mesmo recorte: curva ABC, categoria, operador, por dia, estoque baixo, produtos parados, sugestão de compra para 7 dias e o histórico do que foi pedido ao caixa. Dá para baixar CSV ou planilha. Na visão da rede, cada loja mostra o ticket médio e o comparativo baixa em CSV |
+
+Na aba **Hoje**, **Mais vendidos do dia** fica logo abaixo dos cartões do faturamento.
 
 O mês e o período usam as vendas fechadas que já estão na nuvem (cerca de 120 dias). Não dependem do tipo da casa.
 Mesas com itens e garçom, grupo, setor, custo (CMV) e a comissão do garçom só ficam completos depois que o PDV da loja

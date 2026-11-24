@@ -30,7 +30,7 @@ Desligar no caixa é também o jeito de cortar o acesso remoto.
 
 | Área | O quê |
 |---|---|
-| Produtos e estoque | Cadastrar, alterar (preço, custo, promoções, campos da adega, fiscal), desativar e excluir produtos; grupos, subgrupos, unidades, alíquotas, observações e setores de impressão. Na ficha do produto, **Movimentar estoque**: entrada, saída, contagem, quebra e descarte. |
+| Produtos e estoque | Cadastrar, alterar (preço, custo, promoções, campos da adega, fiscal), desativar e excluir produtos; grupos, subgrupos, unidades, alíquotas, observações e setores de impressão. Na lista de produtos, **Reajuste %** por categoria e **Editar marcados** (preço, categoria, estoque mínimo, inativar), sempre com prévia. Na ficha do produto, **Movimentar estoque**: entrada, saída, contagem, quebra e descarte, com motivo. |
 | Pessoas | Operadores (com nível e senha), cargos, clientes, fornecedores, garotas e bairros de entrega. |
 | Financeiro | Formas de pagamento, plano de contas e sub planos; **Contas a pagar** (lançar, quitar, desfazer a quitação e excluir); **Caderneta** (quem deve, só consulta). |
 | Loja | Configurações de aparência, caixa, estoque, impressão, mesas e módulos. |
