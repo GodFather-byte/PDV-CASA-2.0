@@ -2062,25 +2062,16 @@ class JanelaCaixa(QMainWindow):
         return p
 
     def _cadastro_rapido(self, cbarra: str) -> dict | None:
-        """Produto desconhecido no leitor: procura na base de produtos que vai com o programa (sem internet) e depois
-        na internet; numa tela só, o operador confere o nome e põe preço, custo e quantidade. Exige a permissão de
-        cadastro ou a autorização de um supervisor."""
-        from src.controllers import base_codigos
-        da_base = base_codigos.procurar(cbarra)
-        pergunta = (f"O código {cbarra} não está cadastrado nesta loja, mas está na base de produtos:\n"
-                    f"{da_base['nome']}\n\nAtivar o produto agora?" if da_base else
-                    f"O código {cbarra} não está cadastrado.\nCadastrar o produto agora?")
-        if not self.dialogos.confirmar("Produto novo", pergunta):
+        """Produto desconhecido no leitor: procura o nome (e a foto) na internet e, numa tela só, o operador confere o
+        nome e põe preço, custo e quantidade. Exige a permissão de cadastro ou a autorização de um supervisor."""
+        if not self.dialogos.confirmar("Produto novo",
+                                       f"O código {cbarra} não está cadastrado.\nCadastrar o produto agora?"):
             return None
         if not self.ctx.acesso.pode(self.ctx.operador, "cad_produtos") and not self._pedir_supervisor(
                 "cad_produtos", "Cadastrar produto exige autorização:"):
             return None
-        if da_base:
-            achado = {"nome": da_base["nome"], "foto": None, "categoria": da_base["categoria"], "ncm": da_base["ncm"],
-                      "fonte": "base"}
-        else:
-            achado = self._buscar_produto_na_internet(cbarra)
-            achado.update({"categoria": "", "ncm": "", "fonte": "internet" if achado.get("nome") else ""})
+        achado = self._buscar_produto_na_internet(cbarra)
+        achado.update({"categoria": "", "ncm": "", "fonte": "internet" if achado.get("nome") else ""})
         categorias = [(r["id"], f"{r['nome']} - {r['grupo']}", r["nome"]) for r in self.ctx.banco.todos(
             "SELECT s.id, s.nome, g.nome AS grupo FROM subgrupos s "
             "JOIN grupos g ON g.id = s.grupo_id ORDER BY g.nome, s.nome")]

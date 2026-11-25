@@ -42,7 +42,7 @@ MODULOS = [
     'src.sync.painel_ritmo',
     'src.sync.painel_status',
     'src.ui_qt.cardapio_qr',
-    'src.controllers.base_codigos', 'src.ui_qt.produto_novo',
+    'src.ui_qt.produto_novo',
     'src.ui_qt.estado_nuvem',
     "src.autoteste", "src.autoteste_qt", "src.atualizacao.cliente", "src.atualizacao.adicional", "src.atualizacao.manifesto", "src.atualizacao.tarefa",
     "src.fiscal.nfce", "src.fiscal.ncm", "src.fiscal.focus", "src.fiscal.danfe", "src.fiscal.servico",

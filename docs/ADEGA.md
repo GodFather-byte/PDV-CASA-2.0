@@ -184,19 +184,9 @@ tela, que não recebe clique e não cobre os números. Para tirar, desligue **Lo
 papel de parede do caixa** em Configurações > Parâmetros e módulos > Aparência. Vale no WillPDV e
 no Will Adega.
 
-## Produto novo no leitor e a base de produtos
+## Produto novo no leitor
 
-Quando o leitor passa um código que a loja não tem, o caixa abre **uma tela só** de "Produto novo" com nome,
-categoria, preço de venda, preço gelada, **preço de custo** e quantidade em estoque. O custo só aparece para gerente e
-dono, como no cadastro completo. Se o custo ficar igual ou maior que o preço de venda, o caixa avisa uma vez antes de
-cadastrar.
-
-O nome vem, nesta ordem:
-1. da **base de produtos** que vai junto com o programa (`src/dados/base_codigos.csv`). Funciona sem internet, e a
-   pergunta já diz "está na base de produtos: NOME. Ativar?", com categoria e NCM preenchidos;
-2. da internet (Open Food Facts), com a foto;
-3. digitado pelo operador.
-
-Para aumentar a base: `python -m tools.base_codigos juntar lista.csv`, com as colunas
-`codigo_barras;nome;categoria;ncm`. A ferramenta descarta código com dígito verificador errado e não duplica. A lista
-nova entra no próximo instalador.
+Quando o leitor passa um código que a loja não tem, o caixa abre **uma tela só** de "Produto novo" com nome (já
+preenchido quando achado na internet), categoria, preço de venda, preço gelada, **preço de custo** e quantidade em
+estoque. O Enter passa de um campo a outro. O custo só aparece para gerente e dono, como no cadastro completo. Se o
+custo ficar igual ou maior que o preço de venda, o caixa avisa uma vez antes de cadastrar.

@@ -387,7 +387,7 @@ class ProdutoController:
         """Produto novo direto do caixa, pelo código de barras que o leitor passou: só nome, preço e categoria e, se
         informada, a quantidade em estoque (aí ele já passa a controlar estoque). `preco_gelada_cent` > 0 cadastra também o
         preço gelada (o caixa passa a perguntar a temperatura). `custo_cent` > 0 grava o preço de custo (só vale para
-        gerente; para os outros o cadastro descarta, como no cadastro completo). `ncm` vem da base de produtos.
+        gerente; para os outros o cadastro descarta, como no cadastro completo). `ncm` é opcional.
         O código interno é o próximo livre."""
         from src.controllers.cadastro_controller import CadastroController     # import tardio: evita ciclo de importação
         from src.controllers.estoque_controller import EstoqueController

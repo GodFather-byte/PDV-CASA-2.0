@@ -1,5 +1,5 @@
 """Produto novo no leitor: uma tela só com o nome, a categoria, o preço de venda, o gelado, o preço de custo e a
-quantidade em estoque. O nome (e a categoria) já vêm da base de produtos do WillPDV ou da internet, quando achados."""
+quantidade em estoque. O nome já vem da internet, quando achado."""
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
@@ -7,9 +7,8 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFormLayout
 
 from src.core import formatacao as fmt
 
-FONTES = {"base": "Achado na base de produtos do WillPDV. Confira o nome.",
-          "internet": "Nome achado na internet. Confira.",
-          "": "Produto fora da base: digite o nome."}
+FONTES = {"internet": "Nome achado na internet. Confira.",
+          "": "Nome não achado na internet: digite o nome."}
 
 
 class DialogoProdutoNovo(QDialog):
