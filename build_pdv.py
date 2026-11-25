@@ -69,6 +69,8 @@ def gerar_executavel(ed) -> None:
     comando += ["--add-data", f"{web_porteiro}{os.pathsep}porteiro_web"]                 # página do porteiro no celular
     web_cozinha = RAIZ / "src" / "cozinha" / "web"
     comando += ["--add-data", f"{web_cozinha}{os.pathsep}cozinha_web"]
+    base_codigos = RAIZ / "src" / "dados" / "base_codigos.csv"
+    comando += ["--add-data", f"{base_codigos}{os.pathsep}dados"]                        # base de produtos por código
     comando.append(str(RAIZ / "src" / "app.py"))
     subprocess.run(comando, check=True, cwd=RAIZ)
     destino = RAIZ / "dist" / nome
