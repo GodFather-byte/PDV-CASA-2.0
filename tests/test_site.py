@@ -1,4 +1,4 @@
-"""Site de vendas na mesma API: preços num arquivo só, WhatsApp e instaladores no R2."""
+"""Site de vendas na mesma API: preços num arquivo só, WhatsApp e instaladores no GitHub."""
 from __future__ import annotations
 
 import json
@@ -78,17 +78,26 @@ class TesteSite(unittest.TestCase):
                 self.assertIn("(11) 91516-8336", texto)
                 self.assertIn('class="zap fixo"', texto)
                 self.assertIn(
-                    f"{site_precos.R2_BASE}/willpdv/{VERSAO}/WillPDV-Setup-{VERSAO}.exe", texto)
+                    "https://github.com/GodFather-byte/willpdv-downloads/releases/download/"
+                    "ultima-versao/WillPDV-Instalador.exe", texto)
                 self.assertIn(
-                    f"{site_precos.R2_BASE}/willadega/{VERSAO}/WillAdega-Setup-{VERSAO}.exe", texto)
+                    "https://github.com/GodFather-byte/willpdv-downloads/releases/download/"
+                    "ultima-versao-adega/WillAdega-Instalador.exe", texto)
+                self.assertNotIn("r2.dev", texto)
                 self.assertIn("Assinar", texto)
                 self.assertIn("Will Restaurante", texto)
                 self.assertIn("Will Variedades", texto)
                 self.assertIn("Will Hotel", texto)
                 self.assertIn("Feito para hotéis e pousadas", texto)
-                self.assertIn("WillRestaurante-Instalador.exe", texto)
-                self.assertIn("WillVariedades-Instalador.exe", texto)
-                self.assertIn("WillHotel-Instalador.exe", texto)
+                self.assertIn(
+                    "https://github.com/GodFather-byte/willpdv-downloads/releases/download/"
+                    "ultima-versao-restaurante/WillRestaurante-Instalador.exe", texto)
+                self.assertIn(
+                    "https://github.com/GodFather-byte/willpdv-downloads/releases/download/"
+                    "ultima-versao-variedades/WillVariedades-Instalador.exe", texto)
+                self.assertIn(
+                    "https://github.com/GodFather-byte/willpdv-downloads/releases/download/"
+                    "ultima-versao-hotel/WillHotel-Instalador.exe", texto)
                 self.assertIn('value="willrestaurante"', texto)
                 self.assertIn('value="willvariedades"', texto)
                 self.assertIn('value="willhotel"', texto)

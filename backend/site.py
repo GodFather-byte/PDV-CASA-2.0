@@ -184,10 +184,6 @@ def botao_compra(chave: str, nome: str, zap: str) -> str:
     )
 
 
-def url_instalador(edicao: str, arquivo: str) -> str:
-    return f"{precos.R2_BASE.rstrip('/')}/{edicao}/{VERSAO}/{arquivo}"
-
-
 def _trocas() -> dict[str, str]:
     adega = fmt_brl(precos.ADEGA_MENSAL_CENT)
     boate = fmt_brl(precos.BOATE_MENSAL_CENT)
@@ -242,8 +238,8 @@ def _trocas() -> dict[str, str]:
         "{{meses_cobrados}}": str(precos.meses_cobrados()),
         "{{versao}}": VERSAO,
         "{{telefone}}": telefone_visivel(),
-        "{{download_willpdv}}": url_instalador("willpdv", f"WillPDV-Setup-{VERSAO}.exe"),
-        "{{download_willadega}}": url_instalador("willadega", f"WillAdega-Setup-{VERSAO}.exe"),
+        "{{download_willpdv}}": link_instalador("willpdv"),
+        "{{download_willadega}}": link_instalador("willadega"),
         "{{zap_contato}}": link_whatsapp(MENSAGEM_CONTATO),
         "{{zap_adega}}": zap_adega,
         "{{zap_boate}}": zap_boate,
