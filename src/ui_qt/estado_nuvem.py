@@ -3,6 +3,7 @@ import sqlite3
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QLabel
+from src.database import rede
 from src.sync.painel_status import situacao
 
 
@@ -14,7 +15,7 @@ class EstadoNuvem(QLabel):
         self.setAccessibleName("Estado do envio à nuvem")
         self.timer = QTimer(self)
         self.timer.setInterval(5000)
-        self.timer.timeout.connect(self.atualizar)
+        self.timer.timeout.connect(rede.tolerar_queda(self.atualizar, "estado da nuvem"))
         self.atualizar()
 
     def atualizar(self):

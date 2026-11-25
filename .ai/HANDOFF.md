@@ -7,6 +7,13 @@
 - `backend/ia.py`: `ler_foto` e `padronizar_nomes` viraram funções usadas pelo caixa e pela retaguarda;
   `linhas_para_importar` converte para o formato da importação. Mesma cota e liga/desliga da central.
 - Só a nuvem muda. Teste: `tests/test_retaguarda_ia.py`.
+# Handoff de 25/11/2026: caixa adicional tolera queda nas atualizações automáticas (branch `adicional-queda-timer`)
+
+- Diagnóstico da EA-SUPERACOES2: os relógios da tela (quartos a cada 1 s, menu a cada 15 s) davam `ErroLigacao` quando
+  a ligação com o principal piscava, e isso subia como erro. `rede.tolerar_queda(funcao, onde)` pula a rodada
+  (aviso no log) e a próxima religa sozinha; `ErroVersaoDiferente` continua subindo. Ligado em quartos, menu
+  (app.py), bandeira2 do caixa, cozinha, estado da nuvem e hotel. Teste: `tests/test_rede_tolerar_queda.py`.
+- Precisa de versão nova do caixa.
 
 # Handoff de 25/11/2026: combos na retaguarda e relatório diário por e-mail (branch `retaguarda-combos-relatorio`)
 

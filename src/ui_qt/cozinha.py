@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
 
+from src.database import rede
 from src.controllers.config_controller import modulos_desligados
 from src.core.erros import ErroNegocio, ErroPermissao
 from src.core.formatacao import fmt_qtd
@@ -83,7 +84,7 @@ class JanelaCozinha(QDialog):
             "Marcar pronto altera o preparo, sem imprimir ou confirmar a saída física.", "suave"))
         self.timer = QTimer(self)
         self.timer.setInterval(2000)
-        self.timer.timeout.connect(self.atualizar)
+        self.timer.timeout.connect(rede.tolerar_queda(self.atualizar, "cozinha"))
         self.setor.currentIndexChanged.connect(self.atualizar)
         QShortcut(QKeySequence("F5"), self, activated=self.atualizar)
         self.atualizar()

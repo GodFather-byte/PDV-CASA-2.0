@@ -60,6 +60,21 @@ class ErroLigacao(sqlite3.OperationalError):
     """Sem conversa com o caixa principal. É um erro do SQLite para as telas tratarem como falha de banco."""
 
 
+def tolerar_queda(funcao, onde: str = ""):
+    """Para atualizações automáticas da tela (relógios de 1 s, 15 s...) no caixa adicional: se a ligação com o
+    principal piscar, pula esta rodada em vez de virar erro; a próxima chamada religa sozinha. Versão diferente
+    continua subindo, porque pede ação (o caixa adicional se atualiza)."""
+    def rodada(*args, **kwargs):
+        try:
+            return funcao(*args, **kwargs)
+        except ErroVersaoDiferente:
+            raise
+        except ErroLigacao as erro:
+            logging.getLogger("pdv.rede").warning("Atualização automática pulada (%s): %s", onde or "tela", erro)
+            return None
+    return rodada
+
+
 class ErroVersaoDiferente(ErroLigacao):
     """O principal recusou por versão diferente e disse qual é a dele e onde está a nuvem: com isso o caixa adicional
     baixa e instala a mesma versão sozinho (src/atualizacao/adicional.py)."""

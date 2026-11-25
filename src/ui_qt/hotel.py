@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QPushButton, QSpinBox, QTabWidget, QTableWidget, QTableWidgetItem, QTimeEdit, QVBoxLayout, QWidget,
 )
 
+from src.database import rede
 from src.controllers.config_controller import modulos_desligados
 from src.controllers.hotel_controller import (
     DOCUMENTOS, GENEROS, LIMPEZA, MEIOS_TRANSPORTE, MOTIVOS_VIAGEM, ORIGENS, SITUACOES, UFS, fmt_cpf, fmt_duracao,
@@ -653,7 +654,7 @@ class JanelaHotel(QDialog):
         self.abas.currentChanged.connect(lambda _: self.atualizar())
         self.relogio = QTimer(self)
         self.relogio.setInterval(15000)
-        self.relogio.timeout.connect(self._tique)
+        self.relogio.timeout.connect(rede.tolerar_queda(self._tique, "hotel"))
         self.relogio.start()
         self.atualizar()
 
