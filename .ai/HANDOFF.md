@@ -1,3 +1,13 @@
+# Handoff de 25/11/2026: IA na retaguarda (branch `retaguarda-ia`)
+
+- Menu "Cadastro com IA" (grupo Produtos) para o dono e para a central. Foto da nota, lista de preços ou prateleira
+  (reduzida no navegador para 1600 px JPEG) -> `POST .../retaguarda/ia/foto` -> linhas no formato da planilha para
+  conferir; "Arrumar nomes com IA" (`/ia/nomes`); "Enviar para o caixa" (`/ia/enviar`) cria `produtos.importar`
+  (nota de compra já sugere somar ao estoque). `GET .../ia` mostra se está ligada e os usos.
+- `backend/ia.py`: `ler_foto` e `padronizar_nomes` viraram funções usadas pelo caixa e pela retaguarda;
+  `linhas_para_importar` converte para o formato da importação. Mesma cota e liga/desliga da central.
+- Só a nuvem muda. Teste: `tests/test_retaguarda_ia.py`.
+
 # Handoff de 25/11/2026: combos na retaguarda e relatório diário por e-mail (branch `retaguarda-combos-relatorio`)
 
 - Combos: a retaguarda ganhou o menu "Combos" (lista, economia contra os avulsos, "Novo combo"). O comando
