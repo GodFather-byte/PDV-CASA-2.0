@@ -444,7 +444,7 @@ class JanelaPrincipal(QMainWindow):
         QShortcut(QKeySequence("Ctrl+K"), self, activated=self.focar_busca)
         self._timer = QTimer(self)
         self._timer.setInterval(15000)
-        self._timer.timeout.connect(self.atualizar)
+        self._timer.timeout.connect(rede.tolerar_queda(self.atualizar, "menu"))
         self._timer.start()
         self._primeiro_uso_timer = QTimer(self)
         self._primeiro_uso_timer.setSingleShot(True)

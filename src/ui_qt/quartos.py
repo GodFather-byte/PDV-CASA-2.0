@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.controllers.config_controller import modulos_desligados
+from src.database import rede
 from src.controllers.quartos_controller import MAX_BLOCOS, QuartosController, fmt_duracao, fmt_relogio
 from src.core import formatacao as fmt
 from src.core.erros import ErroNegocio, ErroPermissao
@@ -650,10 +651,10 @@ class JanelaQuartos(QDialog):
         layout.addLayout(barra)
         self.timer = QTimer(self)
         self.timer.setInterval(1000)
-        self.timer.timeout.connect(self.atualizar)
+        self.timer.timeout.connect(rede.tolerar_queda(self.atualizar, "quartos"))
         self.timer_campainhas = QTimer(self)
         self.timer_campainhas.setInterval(VERIFICAR_CAMPAINHAS_SEG * 1000)
-        self.timer_campainhas.timeout.connect(self.verificar_campainhas)
+        self.timer_campainhas.timeout.connect(rede.tolerar_queda(self.verificar_campainhas, "campainhas"))
         QShortcut(QKeySequence("F5"), self, activated=self.atualizar)
         self.atualizar()
         self.verificar_campainhas()
@@ -963,10 +964,11 @@ class PainelQuartosCaixa(QFrame):
         self._estilizar()
         self.timer = QTimer(self)
         self.timer.setInterval(1000)
-        self.timer.timeout.connect(self.atualizar)
+        self.timer.timeout.connect(rede.tolerar_queda(self.atualizar, "quartos"))
         self.timer_campainhas = QTimer(self)
         self.timer_campainhas.setInterval(VERIFICAR_CAMPAINHAS_SEG * 1000)
-        self.timer_campainhas.timeout.connect(lambda: self.avisos.verificar(self.ctx.quartos, list(self.itens)))
+        self.timer_campainhas.timeout.connect(rede.tolerar_queda(
+            lambda: self.avisos.verificar(self.ctx.quartos, list(self.itens)), "campainhas"))
         self.atualizar()
         self.timer.start()
         self.timer_campainhas.start()

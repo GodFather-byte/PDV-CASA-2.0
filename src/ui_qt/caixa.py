@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QDial
                                QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
+from src.database import rede
 from src.core import formatacao as fmt
 from src.controllers.produto_controller import ProdutoController
 from src.controllers import ficha_sangria
@@ -370,7 +371,7 @@ class JanelaCaixa(QMainWindow):
         cabecalho.addSpacing(6)
         self._timer_bandeira2 = QTimer(self)             # o dono liga pelo painel: o aviso aparece sem reabrir o caixa
         self._timer_bandeira2.setInterval(5000)
-        self._timer_bandeira2.timeout.connect(self.atualizar_bandeira2)
+        self._timer_bandeira2.timeout.connect(rede.tolerar_queda(self.atualizar_bandeira2, "bandeira2"))
         self._timer_bandeira2.start()
         self.atualizar_bandeira2()
         self.relogio = RelogioCaixa()                   # em tela cheia a barra do Windows some: a hora fica aqui
