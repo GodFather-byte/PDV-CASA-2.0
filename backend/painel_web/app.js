@@ -17,6 +17,8 @@
   const SESSAO_COOKIE = "cookie";
   const REDE_GRUPO = "willpdv.rede.grupo";
   const REDE_EXPIRA = "willpdv.rede.expira_em";
+  const REDE_ULTIMA = "willpdv.rede.ultima";            // loja (ou o resumo) que o dono da rede viu por último
+  const RESUMO_DA_REDE = "";                            // valor do seletor para "Todas as lojas"
   const INTERVALO_AUTO_MS = 60000;
   const ESPERA_FLUSH_MS = 35000;
   const LIMITE_ATRASO_MIN = 10;
@@ -1451,7 +1453,54 @@
       $("tela-rede").hidden = true;
       return;
     }
-    mostrarRede();
+    abrirInicioDaRede();
+  }
+
+  /** Painel único do dono de rede: entra direto na última loja vista (ou na primeira ativa). Só cai no resumo da rede
+   *  se foi lá que ele parou, se nenhuma loja estiver ativa ou se a loja não abrir. */
+  async function abrirInicioDaRede() {
+    const ativas = lojasDaRede();
+    const ultima = lerArmazenamento(REDE_ULTIMA);
+    if (ultima === "resumo" || !ativas.length) { mostrarRede(); return; }
+    const alvo = ativas.some((l) => l.chave === ultima) ? ultima : ativas[0].chave;
+    try { await abrirLojaDaRede(alvo); }
+    catch (e) { if (e.status !== 401) mostrarRede(); }
+  }
+
+  function lojasDaRede() {
+    const grupo = estado.grupo || (redeGuardada() || {}).grupo;
+    return ((grupo && grupo.lojas) || []).filter((l) => l.ativa !== false);
+  }
+
+  /** Preenche os seletores de loja (no topo da loja e no resumo) com as lojas da rede. */
+  function montarSeletoresDaRede(atual) {
+    const lojas = lojasDaRede();
+    [["seletor-loja-rede", true], ["seletor-loja-resumo", false]].forEach(([id, comResumo]) => {
+      const seletor = $(id);
+      if (!seletor) return;
+      limpar(seletor);
+      if (comResumo) seletor.append(el("option", { value: RESUMO_DA_REDE, text: "Todas as lojas (resumo da rede)" }));
+      else seletor.append(el("option", { value: RESUMO_DA_REDE, text: "Escolha a loja…" }));
+      lojas.forEach((l) => seletor.append(el("option", { value: l.chave, text: l.nome || l.chave })));
+      seletor.value = comResumo ? (atual || RESUMO_DA_REDE) : RESUMO_DA_REDE;
+      const pai = seletor.closest(".seletor-no-resumo");
+      if (pai) pai.hidden = !lojas.length;
+    });
+  }
+
+  async function trocarDeLojaNaRede(chave) {
+    if (chave === RESUMO_DA_REDE) { await voltarParaRede(); return; }
+    if (estado.modo === "loja" && estado.loja && estado.loja.chave === chave) return;
+    try {
+      // De uma loja para outra: a nuvem só abre loja pela sessão da rede, então ela volta a valer primeiro.
+      if (estado.modo === "loja") await chamarApi("/grupo/voltar", { metodo: "POST", corpo: {} });
+      await abrirLojaDaRede(chave);
+    }
+    catch (e) {
+      if (e.status === 401) return;
+      if (estado.modo === "rede") { $("erro-rede").textContent = e.message || "Não consegui abrir a loja."; $("erro-rede").hidden = false; }
+      else mostrarFaixaDaRede();                        // volta o seletor para a loja que continua aberta
+    }
   }
 
   // ---- sessão da rede guardada no aparelho
@@ -1474,13 +1523,16 @@
   }
 
   function esquecerRede() {
-    try { [REDE_TOKEN, REDE_FLAG, REDE_GRUPO, REDE_EXPIRA].forEach((k) => localStorage.removeItem(k)); } catch (_) { /* navegador privado */ }
+    try { [REDE_TOKEN, REDE_FLAG, REDE_GRUPO, REDE_EXPIRA, REDE_ULTIMA].forEach((k) => localStorage.removeItem(k)); } catch (_) { /* navegador privado */ }
   }
 
   function mostrarFaixaDaRede() {
     const rede = estado.modo === "loja" ? redeGuardada() : null;
     $("faixa-rede").hidden = !rede;
-    if (rede) $("faixa-rede-nome").textContent = rede.grupo.nome || "Rede";
+    if (!rede) return;
+    if (!estado.grupo) estado.grupo = rede.grupo;
+    $("faixa-rede-nome").textContent = rede.grupo.nome || "Rede";
+    montarSeletoresDaRede(estado.loja && estado.loja.chave);
   }
 
   function mostrarRede() {
@@ -1492,6 +1544,8 @@
     $("tela-rede").hidden = false;
     $("nome-rede").textContent = (estado.grupo && estado.grupo.nome) || "Rede";
     if (estado.grupo) aplicarAppDaRede(estado.grupo.chave, estado.grupo.nome);
+    gravarArmazenamento(REDE_ULTIMA, "resumo");
+    montarSeletoresDaRede(RESUMO_DA_REDE);
     window.scrollTo(0, 0);
     atualizarRede();
   }
@@ -1612,6 +1666,7 @@
     estado.modo = "loja";
     $("tela-rede").hidden = true;
     guardarSessao(dados, chave);
+    gravarArmazenamento(REDE_ULTIMA, chave);
     mostrarApp();
     trocarAba("hoje");
     window.scrollTo(0, 0);
@@ -3063,7 +3118,7 @@
       try {
         await chamarApi("/grupo/senha", { metodo: "POST", corpo: {
           senha_atual: $("senha-atual").value, senha_nova: $("senha-nova").value } });
-        mostrarRede();
+        abrirInicioDaRede();
       } catch (e) {
         erro.textContent = e.message;
         erro.hidden = false;
@@ -3084,7 +3139,8 @@
     }));
     const sairRede = $("sair-rede");
     if (sairRede) sairRede.addEventListener("click", () => encerrarSessao(true));
-    $("botao-voltar-rede").addEventListener("click", voltarParaRede);
+    $("seletor-loja-rede").addEventListener("change", (e) => trocarDeLojaNaRede(e.target.value));
+    $("seletor-loja-resumo").addEventListener("change", (e) => { if (e.target.value) trocarDeLojaNaRede(e.target.value); });
     $("botao-atualizar-rede").addEventListener("click", atualizarRede);
     retomarPeloCookie();
   }
@@ -3112,7 +3168,7 @@
         $("tela-rede").hidden = true;
         return;
       }
-      mostrarRede();
+      abrirInicioDaRede();
       return;
     }
     estado.modo = "loja";

@@ -1058,6 +1058,15 @@ a.botao-arquivo { text-decoration: none; }
   color: #fff; position: sticky; top: 0; z-index: 11; height: 48px; box-sizing: border-box; }
 /* Com a faixa da rede à vista, o cabeçalho da loja gruda logo abaixo dela. */
 .faixa-rede:not([hidden]) + .cabecalho { top: 48px; }
+.seletor-loja-rede { display: flex; align-items: center; gap: .4rem; margin-left: auto; min-width: 0; }
+.seletor-loja-rede .rot-seletor { font-size: .8rem; opacity: .85; white-space: nowrap; }
+.seletor-loja-rede select { font: inherit; font-weight: 700; border-radius: 999px; padding: .35rem .7rem; min-height: 38px;
+  max-width: 60vw; border: 1px solid rgba(255, 255, 255, .35); background: rgba(255, 255, 255, .14); color: #fff; }
+.seletor-loja-rede select option { color: #111; }
+.seletor-no-resumo { display: grid; gap: .3rem; margin: 0 0 .8rem; }
+.seletor-no-resumo .rot-seletor { font-size: .85rem; color: var(--texto-suave); }
+.seletor-no-resumo select { font: inherit; font-weight: 700; min-height: 44px; border-radius: 12px; padding: .45rem .7rem;
+  border: 1px solid var(--borda, #c9d3d0); background: var(--superficie, #fff); color: var(--texto, #10231d); width: 100%; }
 .botao-voltar-rede { appearance: none; border: 1px solid rgba(255, 255, 255, .35); background: rgba(255, 255, 255, .14);
   color: #fff; font: inherit; font-weight: 700; border-radius: 999px; padding: .4rem .85rem; min-height: 38px; cursor: pointer; }
 .botao-voltar-rede:active { background: rgba(255, 255, 255, .28); }

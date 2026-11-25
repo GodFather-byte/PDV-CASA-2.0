@@ -1344,7 +1344,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         memoria.lembrar_sessao(token, grupo.chave)
         return entregar_sessao(
             response, request,
-            {"grupo": {"id": grupo.id, "chave": grupo.chave, "nome": grupo.nome},
+            {"grupo": _grupo_no_painel(db, grupo),
              "deve_trocar_senha": bool(grupo.deve_trocar_senha), "expira_em": expira,
              "link": f"/painel/?grupo={grupo.chave}"},
             token, rede=True)
@@ -1364,6 +1364,13 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         limpar()
         return {"ok": True}
 
+    def _grupo_no_painel(db: Session, grupo) -> dict:
+        """A rede como o painel único usa: nome e as lojas para o seletor do topo (sem plano nem licença)."""
+        from backend.grupos import lojas as lojas_do_grupo
+        return {"id": grupo.id, "chave": grupo.chave, "nome": grupo.nome,
+                "lojas": [{"chave": l.chave_loja, "nome": l.nome or l.chave_loja, "ativa": bool(l.ativa)}
+                          for l in lojas_do_grupo(db, grupo.id)]}
+
     @router.get("/v1/painel/eu")
     def eu(request: Request, sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
         """Quem está no cookie, sem devolver o token. O navegador usa isto ao reabrir o painel."""
@@ -1372,7 +1379,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         if sessao.grupo_id:
             grupo = db.get(Grupo, sessao.grupo_id)
             if grupo is not None:
-                corpo["grupo"] = {"id": grupo.id, "chave": grupo.chave, "nome": grupo.nome}
+                corpo["grupo"] = _grupo_no_painel(db, grupo)
                 corpo["deve_trocar_senha"] = bool(grupo.deve_trocar_senha)
                 corpo["tem_rede"] = True
         else:
@@ -1385,7 +1392,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
                     grupo = db.get(Grupo, linha.grupo_id)
                     if grupo is not None:
                         corpo["tem_rede"] = True
-                        corpo["rede"] = {"id": grupo.id, "chave": grupo.chave, "nome": grupo.nome}
+                        corpo["rede"] = _grupo_no_painel(db, grupo)
         return corpo
 
     def _rede(sessao: PainelSessao, db: Session):
@@ -1460,7 +1467,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
             db.commit()
         response.set_cookie(COOKIE_PAINEL, rede, httponly=True, secure=_https(request), samesite="strict",
                             max_age=DIAS_SESSAO * 86400, path="/v1")
-        return {"grupo": {"id": grupo.id, "chave": grupo.chave, "nome": grupo.nome},
+        return {"grupo": _grupo_no_painel(db, grupo),
                 "deve_trocar_senha": bool(grupo.deve_trocar_senha), "expira_em": linha.expira_em}
 
     # ---- consultas do dono

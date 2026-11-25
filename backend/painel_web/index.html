@@ -66,6 +66,10 @@
       </div>
     </header>
     <main class="conteudo">
+      <label class="seletor-no-resumo">
+        <span class="rot-seletor">Abrir o painel de uma loja</span>
+        <select id="seletor-loja-resumo" data-seletor="seletor-loja-resumo" aria-label="Abrir uma loja da rede"></select>
+      </label>
       <div class="filtros filtros-quebra" role="group" aria-label="Período da rede">
         <button type="button" class="filtro ativa" data-rede="hoje">Hoje</button>
         <button type="button" class="filtro" data-rede="semana">Semana</button>
@@ -116,10 +120,13 @@
 
   <!-- Aplicação -->
   <div id="tela-app" hidden>
-    <!-- Loja aberta pela rede: a volta para a lista de lojas fica sempre à vista, em qualquer aba. -->
+    <!-- Dono de rede: um painel só. O seletor troca de loja ou abre "Todas as lojas" (o resumo da rede), em qualquer aba. -->
     <div id="faixa-rede" class="faixa-rede" hidden>
-      <button type="button" id="botao-voltar-rede" class="botao-voltar-rede">‹ Todas as lojas</button>
       <span id="faixa-rede-nome" class="faixa-rede-nome"></span>
+      <label class="seletor-loja-rede">
+        <span class="rot-seletor">Loja</span>
+        <select id="seletor-loja-rede" data-seletor="seletor-loja-rede" aria-label="Trocar de loja"></select>
+      </label>
     </div>
     <header class="cabecalho">
       <div class="cabecalho-titulo">
