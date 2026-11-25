@@ -447,6 +447,45 @@ def _rotas_de_leitura_e_escrita(router: APIRouter, prefixo: str, loja_da_sessao,
         return {"linhas": linhas if isinstance(linhas, list) else [], "sincronizado": isinstance(linhas, list),
                 "atualizado_em": quando}
 
+    # ---- IA (mesma cota da loja que o caixa usa; o fornecedor liga e define a cota na central)
+    @router.get(prefixo + "/ia")
+    def ia_situacao(chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):
+        from backend import ia
+        dados = ia.situacao(db, chave_loja)
+        db.commit()
+        if autor != "fornecedor":
+            dados.pop("custo_mes_usd", None)        # custo é assunto do fornecedor
+        return dados
+
+    @router.post(prefixo + "/ia/foto")
+    def ia_foto(corpo: dict = Body(...), chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):
+        """Foto de nota de compra, lista de preços ou prateleira -> linhas para conferir e mandar ao caixa."""
+        from backend import ia
+        lido = ia.ler_foto(db, chave_loja, corpo)
+        return {"tipo_imagem": lido["tipo_imagem"], "linhas": ia.linhas_para_importar(lido["produtos"])}
+
+    @router.post(prefixo + "/ia/nomes")
+    def ia_nomes(corpo: dict = Body(...), chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):
+        from backend import ia
+        return ia.padronizar_nomes(db, chave_loja, corpo)
+
+    @router.post(prefixo + "/ia/enviar")
+    def ia_enviar(corpo: dict = Body(...), chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):
+        """Manda ao caixa os produtos lidos pela IA, já conferidos na tela (mesma importação da planilha)."""
+        linhas = corpo.get("linhas")
+        if not isinstance(linhas, list) or not all(isinstance(l, dict) for l in linhas):
+            raise HTTPException(status_code=422, detail="Nada para enviar.")
+        limpas = [{c: re.sub(r"\s+", " ", str(l.get(c) or "")).strip()[:150] for c in CAMPOS_LOTE} for l in linhas]
+        limpas = [l for l in limpas if l["nome"]]
+        modo = corpo.get("modo_quantidade") or "substituir"
+        comando = criar(db, chave_loja, {"tipo": "produtos.importar",
+                                         "dados": {"linhas": limpas, "modo_quantidade": modo},
+                                         "resumo": f"Cadastro com IA: {len(limpas)} produto(s)"},
+                        autor, liberar_importacao=True)
+        if ao_criar is not None:
+            ao_criar(db, chave_loja, comando)
+        return {"comando": publico(comando)}
+
     @router.get(prefixo + "/financeiro")
     def contas(chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):
         return financeiro(db, chave_loja)

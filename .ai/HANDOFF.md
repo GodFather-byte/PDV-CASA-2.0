@@ -1,3 +1,12 @@
+# Handoff de 25/11/2026: IA na retaguarda (branch `retaguarda-ia`)
+
+- Menu "Cadastro com IA" (grupo Produtos) para o dono e para a central. Foto da nota, lista de preços ou prateleira
+  (reduzida no navegador para 1600 px JPEG) -> `POST .../retaguarda/ia/foto` -> linhas no formato da planilha para
+  conferir; "Arrumar nomes com IA" (`/ia/nomes`); "Enviar para o caixa" (`/ia/enviar`) cria `produtos.importar`
+  (nota de compra já sugere somar ao estoque). `GET .../ia` mostra se está ligada e os usos.
+- `backend/ia.py`: `ler_foto` e `padronizar_nomes` viraram funções usadas pelo caixa e pela retaguarda;
+  `linhas_para_importar` converte para o formato da importação. Mesma cota e liga/desliga da central.
+- Só a nuvem muda. Teste: `tests/test_retaguarda_ia.py`.
 # Handoff de 25/11/2026: caixa adicional tolera queda nas atualizações automáticas (branch `adicional-queda-timer`)
 
 - Diagnóstico da EA-SUPERACOES2: os relógios da tela (quartos a cada 1 s, menu a cada 15 s) davam `ErroLigacao` quando

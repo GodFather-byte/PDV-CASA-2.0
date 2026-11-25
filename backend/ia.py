@@ -207,6 +207,66 @@ def limpar_produtos(dados: dict) -> list[dict]:
     return saida
 
 
+def ler_foto(db: Session, chave_loja: str, dados: dict) -> dict:
+    """Foto (nota de compra, lista de preços ou prateleira) -> produtos para cadastro. Usada pelo caixa e pela
+    retaguarda; conta na cota da loja."""
+    tipo = str(dados.get("tipo") or "")
+    if tipo not in TIPOS_IMAGEM:
+        raise HTTPException(status_code=422, detail="Envie uma foto JPG, PNG ou WEBP.")
+    try:
+        imagem = base64.b64decode(str(dados.get("imagem_b64") or ""), validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(status_code=422, detail="Foto inválida.") from None
+    if not imagem or len(imagem) > LIMITE_IMAGEM:
+        raise HTTPException(status_code=422, detail="A foto precisa ter até 5 MB.")
+    registro = _liberar(db, chave_loja)
+    conteudo = [{"type": "image", "source": {"type": "base64", "media_type": tipo,
+                                             "data": base64.b64encode(imagem).decode("ascii")}},
+                {"type": "text", "text": "Liste os produtos desta imagem para cadastro."}]
+    try:
+        resultado, uso = chamar_claude(conteudo, FERRAMENTA_PRODUTOS, SISTEMA_CADASTRO, 8192)
+    except HTTPException:
+        db.rollback()
+        raise
+    produtos = limpar_produtos(resultado)
+    _anotar(db, registro, "produtos_foto", uso, bool(produtos))
+    return {"tipo_imagem": str(resultado.get("tipo_imagem") or "outro"), "produtos": produtos}
+
+
+def padronizar_nomes(db: Session, chave_loja: str, dados: dict) -> dict:
+    """Nomes abreviados (da NF-e ou do cadastro) -> nomes claros e grupo, na mesma ordem. Conta na cota da loja."""
+    itens = dados.get("itens")
+    if not isinstance(itens, list) or not 0 < len(itens) <= LIMITE_NOMES:
+        raise HTTPException(status_code=422, detail=f"Envie de 1 a {LIMITE_NOMES} nomes.")
+    linhas = [f"{i}. {_texto(it.get('nome') if isinstance(it, dict) else it, 150)}"
+              for i, it in enumerate(itens)]
+    registro = _liberar(db, chave_loja)
+    try:
+        resultado, uso = chamar_claude([{"type": "text", "text": "\n".join(linhas)}], FERRAMENTA_NOMES,
+                                       SISTEMA_NOMES, 8192)
+    except HTTPException:
+        db.rollback()
+        raise
+    saida = [None] * len(itens)
+    for it in resultado.get("itens") or []:
+        if isinstance(it, dict) and isinstance(it.get("indice"), int) and 0 <= it["indice"] < len(itens) \
+                and _texto(it.get("nome")):
+            saida[it["indice"]] = {"nome": _texto(it.get("nome")), "grupo": _texto(it.get("grupo"), 40)}
+    _anotar(db, registro, "produtos_nomes", uso, any(saida))
+    return {"itens": saida}
+
+
+def _reais(cent: int) -> str:
+    return f"{cent / 100:.2f}".replace(".", ",") if cent else ""
+
+
+def linhas_para_importar(produtos: list[dict]) -> list[dict]:
+    """Produtos lidos pela IA -> linhas no formato da importação do caixa (as mesmas colunas da planilha)."""
+    return [{"nome": p["nome"], "preco": _reais(p["preco_cent"]), "custo": _reais(p["custo_cent"]),
+             "quantidade": (str(p["quantidade"]).rstrip("0").rstrip(".").replace(".", ",") if p["quantidade"] else ""),
+             "grupo": p["grupo"], "unidade": p["unidade"], "codigo_barras": p["codigo_barras"]} for p in produtos]
+
+
 def instalar(app: FastAPI, autenticar) -> APIRouter:
     Base.metadata.create_all(bind=engine)
     router = APIRouter()
@@ -225,49 +285,11 @@ def instalar(app: FastAPI, autenticar) -> APIRouter:
 
     @router.post("/v1/ia/produtos/foto")
     def foto(dados: dict = Body(...), chave_loja: str = Depends(loja_do_caixa), db: Session = Depends(get_db)):
-        tipo = str(dados.get("tipo") or "")
-        if tipo not in TIPOS_IMAGEM:
-            raise HTTPException(status_code=422, detail="Envie uma foto JPG, PNG ou WEBP.")
-        try:
-            imagem = base64.b64decode(str(dados.get("imagem_b64") or ""), validate=True)
-        except (binascii.Error, ValueError):
-            raise HTTPException(status_code=422, detail="Foto inválida.") from None
-        if not imagem or len(imagem) > LIMITE_IMAGEM:
-            raise HTTPException(status_code=422, detail="A foto precisa ter até 5 MB.")
-        registro = _liberar(db, chave_loja)
-        conteudo = [{"type": "image", "source": {"type": "base64", "media_type": tipo,
-                                                 "data": base64.b64encode(imagem).decode("ascii")}},
-                    {"type": "text", "text": "Liste os produtos desta imagem para cadastro."}]
-        try:
-            resultado, uso = chamar_claude(conteudo, FERRAMENTA_PRODUTOS, SISTEMA_CADASTRO, 8192)
-        except HTTPException:
-            db.rollback()
-            raise
-        produtos = limpar_produtos(resultado)
-        _anotar(db, registro, "produtos_foto", uso, bool(produtos))
-        return {"tipo_imagem": str(resultado.get("tipo_imagem") or "outro"), "produtos": produtos}
+        return ler_foto(db, chave_loja, dados)
 
     @router.post("/v1/ia/produtos/nomes")
     def nomes(dados: dict = Body(...), chave_loja: str = Depends(loja_do_caixa), db: Session = Depends(get_db)):
-        itens = dados.get("itens")
-        if not isinstance(itens, list) or not 0 < len(itens) <= LIMITE_NOMES:
-            raise HTTPException(status_code=422, detail=f"Envie de 1 a {LIMITE_NOMES} nomes.")
-        linhas = [f"{i}. {_texto(it.get('nome') if isinstance(it, dict) else it, 150)}"
-                  for i, it in enumerate(itens)]
-        registro = _liberar(db, chave_loja)
-        try:
-            resultado, uso = chamar_claude([{"type": "text", "text": "\n".join(linhas)}], FERRAMENTA_NOMES,
-                                           SISTEMA_NOMES, 8192)
-        except HTTPException:
-            db.rollback()
-            raise
-        saida = [None] * len(itens)
-        for it in resultado.get("itens") or []:
-            if isinstance(it, dict) and isinstance(it.get("indice"), int) and 0 <= it["indice"] < len(itens) \
-                    and _texto(it.get("nome")):
-                saida[it["indice"]] = {"nome": _texto(it.get("nome")), "grupo": _texto(it.get("grupo"), 40)}
-        _anotar(db, registro, "produtos_nomes", uso, any(saida))
-        return {"itens": saida}
+        return padronizar_nomes(db, chave_loja, dados)
 
     app.include_router(router)
     return router

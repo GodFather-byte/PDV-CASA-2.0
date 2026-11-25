@@ -201,7 +201,10 @@
       if (grupo === "financeiro" && estado.esquema.caderneta) botao("caderneta", "Caderneta (quem deve)");
       itens.sort((x, y) => (y.chave === "produtos") - (x.chave === "produtos"));       // Produtos primeiro no seu grupo
       itens.forEach((e) => botao("cadastro:" + e.chave, tituloCurto(e)));
-      if (grupo === "produtos" && itens.some((e) => e.chave === "produtos")) botao("combos", "Combos");
+      if (grupo === "produtos" && itens.some((e) => e.chave === "produtos")) {
+        botao("combos", "Combos");
+        botao("ia", "Cadastro com IA");
+      }
     });
     if (estado.modo === "fornecedor") {
       abrirGrupo("Suporte");
@@ -229,6 +232,7 @@
       else if (secao === "contas") no = await telaContas();
       else if (secao === "caderneta") no = await telaCaderneta();
       else if (secao === "combos") no = await telaCombos();
+      else if (secao === "ia") no = await telaIa();
       else if (secao === "config") no = telaConfig();
       else if (secao === "planilha") no = telaPlanilha();
       else if (secao === "servicos") no = await telaServicos();
@@ -1417,6 +1421,136 @@
     });
     return raiz;
   }
+  /** Foto do celular reduzida para até 1600 px em JPEG: cabe no limite de 5 MB e sobe rápido no 4G. */
+  function fotoReduzida(arquivo) {
+    return new Promise((ok, falha) => {
+      const url = URL.createObjectURL(arquivo);
+      const img = new Image();
+      img.onload = () => {
+        const escala = Math.min(1, 1600 / Math.max(img.width, img.height));
+        const tela = document.createElement("canvas");
+        tela.width = Math.round(img.width * escala);
+        tela.height = Math.round(img.height * escala);
+        tela.getContext("2d").drawImage(img, 0, 0, tela.width, tela.height);
+        URL.revokeObjectURL(url);
+        ok(tela.toDataURL("image/jpeg", 0.85).split(",")[1] || "");
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); falha(new Error("Não consegui abrir a foto.")); };
+      img.src = url;
+    });
+  }
+
+  /** Cadastro com IA: foto da nota, lista de preços ou prateleira -> produtos para conferir e mandar ao caixa;
+   *  e "Arrumar nomes" para deixar os nomes completos (tipo, marca, volume). Usa a cota de IA da loja. */
+  async function telaIa() {
+    const raiz = el("section");
+    raiz.append(el("h1", "Cadastro com IA"));
+    const sit = await api("/ia");
+    const usos = el("p", "", "suave");
+    const mostrarUsos = (s) => { usos.textContent = "Usos de IA neste mês: " + s.usos_mes + " de " + s.cota_usos + "."; };
+    if (!sit.configurada || !sit.ativa) {
+      raiz.append(el("p", !sit.configurada ? "A IA ainda não foi configurada no servidor. Fale com o suporte."
+        : "A IA não está ligada nesta loja. Peça ao suporte (WB Sistemas) para ligar.", "aviso"));
+      return raiz;
+    }
+    mostrarUsos(sit);
+    raiz.append(el("p", "Tire uma foto da nota de compra, da lista de preços ou da prateleira. A IA lê os produtos; " +
+      "você confere, corrige o preço de venda e manda para o caixa. Cada foto ou \"Arrumar nomes\" gasta 1 uso.", "suave"), usos);
+    const arquivo = el("input");
+    arquivo.type = "file";
+    arquivo.accept = "image/*";
+    arquivo.id = "ia-foto";
+    arquivo.setAttribute("aria-label", "Foto para a IA ler");
+    const area = el("div");
+    raiz.append(arquivo, area);
+    let linhas = [], modo = "substituir";
+    const comPreco = (l) => paraCentavos(l.preco) !== null && paraCentavos(l.preco) > 0 && String(l.nome || "").trim();
+    async function atualizarUsos() { try { mostrarUsos(await api("/ia")); } catch (e) { /* segue */ } }
+    function desenhar() {
+      limpar(area);
+      if (!linhas.length) return;
+      area.append(el("p", linhas.length + " produto(s) lidos; " + linhas.filter(comPreco).length +
+        " com preço de venda vão para o caixa. Coloque o preço nos que faltam.", "suave"));
+      const rolagem = el("div", null, "tabela-rolagem");
+      const tabela = el("table");
+      const cab = el("tr");
+      COLUNAS_LOTE.forEach(([, t]) => cab.append(el("th", t)));
+      cab.append(el("th", ""));
+      tabela.append(el("thead")).firstChild.append(cab);
+      const corpo = el("tbody");
+      linhas.forEach((l, i) => {
+        const tr = el("tr");
+        COLUNAS_LOTE.forEach(([c]) => {
+          const campo = el("input");
+          campo.value = l[c] || "";
+          campo.setAttribute("aria-label", c + " da linha " + (i + 1));
+          if (c === "preco" && !comPreco(l)) campo.style.outline = "2px solid var(--vermelho)";
+          campo.addEventListener("change", () => {
+            l[c] = campo.value.trim();
+            if (c === "preco") campo.style.outline = comPreco(l) ? "" : "2px solid var(--vermelho)";
+          });
+          tr.append(el("td")).lastChild.append(campo);
+        });
+        const tirar = el("button", "Tirar", "botao pequeno secundario");
+        tirar.type = "button";
+        tirar.addEventListener("click", () => { linhas.splice(i, 1); desenhar(); });
+        tr.append(el("td")).lastChild.append(tirar);
+        corpo.append(tr);
+      });
+      tabela.append(corpo);
+      rolagem.append(tabela);
+      const escolha = el("select");
+      escolha.id = "ia-modo";
+      escolha.setAttribute("aria-label", "O que fazer com a quantidade");
+      escolha.append(new Option("Quantidade substitui o estoque", "substituir"),
+        new Option("Quantidade soma ao estoque (nota de compra)", "somar"));
+      escolha.value = modo;
+      escolha.addEventListener("change", () => { modo = escolha.value; });
+      const nomes = botaoPequeno("Arrumar nomes com IA", async () => {
+        const r = await api("/ia/nomes", "POST", { itens: linhas.map((l) => ({ nome: l.nome })) });
+        (r.itens || []).forEach((n, i) => {
+          if (n && linhas[i]) { linhas[i].nome = n.nome; if (n.grupo && !linhas[i].grupo) linhas[i].grupo = n.grupo; }
+        });
+        desenhar();
+        atualizarUsos();
+      });
+      const enviar = el("button", "Enviar para o caixa", "botao");
+      enviar.type = "button";
+      enviar.id = "ia-enviar";
+      enviar.addEventListener("click", async () => {
+        const envio = linhas.filter(comPreco);
+        if (!envio.length) { recado("Coloque o preço de venda de pelo menos um produto."); return; }
+        enviar.disabled = true;
+        try {
+          for (let i = 0; i < envio.length; i += 200) {
+            await api("/ia/enviar", "POST", { linhas: envio.slice(i, i + 200), modo_quantidade: modo });
+          }
+          recado(envio.length + " produto(s) enviados. O caixa aplica na próxima sincronização; acompanhe em Alterações enviadas.");
+          linhas = [];
+          arquivo.value = "";
+          desenhar();
+          atualizarContador();
+        } catch (erro) { recado(erro.message); }
+        finally { enviar.disabled = false; }
+      });
+      area.append(rolagem, escolha, nomes, enviar);
+    }
+    arquivo.addEventListener("change", async () => {
+      const f = arquivo.files && arquivo.files[0];
+      if (!f) return;
+      limpar(area).append(el("p", "A IA está lendo a foto… (leva uns 20 segundos)", "suave"));
+      try {
+        const r = await api("/ia/foto", "POST", { tipo: "image/jpeg", imagem_b64: await fotoReduzida(f) });
+        linhas = r.linhas || [];
+        if (r.tipo_imagem === "nota_compra") modo = "somar";
+        if (!linhas.length) limpar(area).append(el("p", "A IA não achou produtos nesta foto. Tente uma foto mais de perto e com luz.", "aviso"));
+        else desenhar();
+        atualizarUsos();
+      } catch (erro) { limpar(area).append(el("p", erro.message, "aviso")); }
+    });
+    return raiz;
+  }
+
   async function apiCentral(caminho, metodo, corpo) {
     const base = estado.base;
     estado.base = "/v1/fornecedor/servicos";
