@@ -221,6 +221,90 @@ class TesteCentralFornecedor(unittest.TestCase):
             db.query(erros_caixa.ErroCaixa).delete()
             db.commit()
 
+    def test_lista_omite_loja_desativada_resumo_so_das_ativas_e_reativar(self):
+        from datetime import datetime
+        from pathlib import Path
+        from backend import erros_caixa
+        from backend.painel import PainelCaixa, PainelVenda
+        agora_dt = datetime.now()
+        marca = lambda **k: (agora_dt - timedelta(**k)).strftime("%Y-%m-%d %H:%M:%S")
+        hoje = date.today()
+        with nuvem.SessionLocal() as db:
+            db.query(PainelCaixa).delete()
+            db.query(PainelVenda).delete()
+            db.query(erros_caixa.ErroCaixa).delete()
+            db.query(nuvem.Loja).filter_by(chave_loja="LOJA-1").update({
+                "ativa": True, "nome": "Loja Ativa",
+                "criada_em": (hoje - timedelta(days=5)).isoformat() + " 10:00:00",
+                "licenca_ate": (hoje + timedelta(days=30)).isoformat()})
+            db.query(nuvem.Loja).filter_by(chave_loja="LOJA-2").update({
+                "ativa": False, "nome": "Loja Parada",
+                "criada_em": (hoje - timedelta(days=5)).isoformat() + " 10:00:00",
+                "licenca_ate": (hoje - timedelta(days=1)).isoformat()})
+            db.add(cobranca.Plano(id="p-ativa", chave_loja="LOJA-1", valor_cent=9900,
+                                  email_pagador="ativa@exemplo.com", criado_em=central.agora()))
+            db.add(cobranca.Plano(id="p-inativa", chave_loja="LOJA-2", valor_cent=5000,
+                                  email_pagador="inativa@exemplo.com", criado_em=central.agora()))
+            db.add(PainelCaixa(chave_loja="LOJA-1", terminal_id="a", terminal=1, recebido_em=marca(minutes=5),
+                               dados=json.dumps({"versao_programa": "1.12.0"})))
+            db.add(PainelCaixa(chave_loja="LOJA-2", terminal_id="a", terminal=1, recebido_em=marca(days=2),
+                               dados=json.dumps({"versao_programa": "1.11.0"})))
+            db.add(erros_caixa.ErroCaixa(chave_loja="LOJA-2", assinatura="a" * 64, nivel="error", modulo="caixa",
+                                         mensagem="falha", traceback="", contexto="", vezes=1,
+                                         criado_em=marca(days=1), atualizado_em=marca(days=1)))
+            db.add(central.ChamadoFornecedor(loja="LOJA-2", titulo="Cupom", descricao="cortado", estado="aberto",
+                                             resolucao="", criado_em=central.agora(), atualizado_em=central.agora()))
+            db.commit()
+        self.addCleanup(self._limpar_saude)
+        self.addCleanup(self._limpar_vendas)
+
+        def numeros(r):
+            s = r["resumo"]
+            return (s["total"], s["inativas"], s["vigentes"], s["vencidas"], s["com_erros"], s["desatualizadas"],
+                    s["chamados_abertos"], s["mensalidades_cent"], s["online"], s["paradas"], s["em_teste"],
+                    s["teste_parado"])
+
+        # total/inativas, vigentes, vencidas, erros, desatualizadas, chamados, mensalidade, online, paradas, teste
+        so_ativas = (1, 1, 1, 0, 0, 0, 0, 9900, 1, 0, 1, 1)
+        padrao = self.http.get("/v1/fornecedor/lojas").json()
+        self.assertEqual([l["chave"] for l in padrao["lojas"]], ["LOJA-1"])
+        self.assertTrue(padrao["lojas"][0]["ativa"])
+        self.assertEqual(numeros(padrao), so_ativas)
+        falso = self.http.get("/v1/fornecedor/lojas", params={"incluir_inativas": False}).json()
+        self.assertEqual([l["chave"] for l in falso["lojas"]], ["LOJA-1"])
+        self.assertEqual(numeros(falso), so_ativas)
+
+        completo = self.http.get("/v1/fornecedor/lojas", params={"incluir_inativas": True}).json()
+        por_chave = {l["chave"]: l for l in completo["lojas"]}
+        self.assertEqual(set(por_chave), {"LOJA-1", "LOJA-2"})
+        self.assertFalse(por_chave["LOJA-2"]["ativa"])
+        self.assertEqual(por_chave["LOJA-2"]["situacao"], "vencida")
+        self.assertEqual((por_chave["LOJA-2"]["saude"]["conexao"], por_chave["LOJA-2"]["saude"]["erros_7d"],
+                          por_chave["LOJA-2"]["saude"]["chamados_abertos"]), ("parada", 1, 1))
+        self.assertTrue(por_chave["LOJA-2"]["saude"]["desatualizada"])
+        self.assertEqual(numeros(completo), so_ativas)                    # o resumo não infla com a lista completa
+
+        detalhe = self.http.get("/v1/fornecedor/lojas/LOJA-2")
+        self.assertEqual(detalhe.status_code, 200, detalhe.text)          # ficha, cobrança e chamado seguem abertos
+        self.assertEqual(len(detalhe.json()["caixas"]), 1)
+        self.assertEqual(detalhe.json()["chamados"][0]["titulo"], "Cupom")
+        self.assertEqual(self.http.get("/v1/fornecedor/lojas/LOJA-2/cobrancas").status_code, 200)
+
+        r = self.post("/lojas/LOJA-2/alterar", {"motivo": "Cliente voltou", "nome": "Loja Parada", "ativa": True})
+        self.assertEqual(r.status_code, 200, r.text)
+        de_novo = self.http.get("/v1/fornecedor/lojas").json()
+        self.assertEqual(sorted(l["chave"] for l in de_novo["lojas"]), ["LOJA-1", "LOJA-2"])
+        self.assertTrue(all(l["ativa"] for l in de_novo["lojas"]))
+        self.assertEqual(numeros(de_novo), (2, 0, 1, 1, 1, 1, 1, 14900, 1, 1, 1, 1))
+
+        raiz = Path(__file__).resolve().parents[1] / "backend" / "central_web"
+        html = (raiz / "index.html").read_text(encoding="utf-8")
+        js = (raiz / "app.js").read_text(encoding="utf-8")
+        self.assertIn('<option value="desativadas">Lojas desativadas</option>', html)
+        self.assertIn("'/lojas?incluir_inativas=true'", js)
+        self.assertIn("f==='desativadas'", js)
+        self.assertIn("return !l.ativa", js)
+
     def test_loja_sem_envio_aparece_como_nunca_e_versao_compara_por_numero(self):
         r = self.http.get("/v1/fornecedor/lojas").json()
         self.assertTrue(all(l["saude"]["conexao"] == "nunca" and l["saude"]["minutos_sem_contato"] is None

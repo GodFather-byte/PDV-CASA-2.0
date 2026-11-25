@@ -362,7 +362,12 @@ def instalar(app, Loja):
         return resultado
 
     @app.get("/v1/fornecedor/lojas")
-    def listar(_=Depends(sessao), db=Depends(get_db)):
+    def listar(incluir_inativas: bool = Query(False), _=Depends(sessao), db=Depends(get_db)):
+        """Por padrão só as lojas ativas. `incluir_inativas` devolve também as desativadas (para reativar).
+
+        O resumo de carteira (total, vigentes, vencidas, erros, versão e chamados) conta só as ativas,
+        mesmo quando a lista traz as desativadas. Mensalidade, online, parada e teste seguem como antes.
+        """
         avisos.disparar_em_segundo_plano()
         planos = {p.chave_loja: p for p in db.query(cobranca.Plano).all()}
         modos = {p.chave_loja for p in db.query(ponte.PonteLoja).filter_by(modo_ponte=True).all()}
@@ -374,22 +379,24 @@ def instalar(app, Loja):
         pagantes = {c for (c,) in db.query(cobranca.Cobranca.chave_loja).filter_by(status="aprovada").distinct()}
         from backend import site_teste
         contatos = site_teste.contatos(db)
-        lojas = [marcar_teste(resumo_loja(db, l, planos.get(l.chave_loja), ultimas.get(l.chave_loja), l.chave_loja in modos,
+        todas = [marcar_teste(resumo_loja(db, l, planos.get(l.chave_loja), ultimas.get(l.chave_loja), l.chave_loja in modos,
                                           dict(saude[l.chave_loja]) if l.chave_loja in saude else None), l, pagantes, uso,
                               contatos)
                  for l in db.query(Loja).order_by(Loja.chave_loja)]
-        return {"lojas": lojas, "resumo": {"total": len(lojas),
-                "vigentes": sum(l["situacao"] in ("vigente", "a_vencer") for l in lojas),
-                "vencidas": sum(l["situacao"] == "vencida" for l in lojas),
-                "mensalidades_cent": sum(l["mensalidade_cent"] or 0 for l in lojas if l["ativa"]),
-                "central_local": sum(l["emissao"] == "central_local" for l in lojas),
-                "online": sum(l["saude"]["conexao"] == "online" for l in lojas if l["ativa"]),
-                "paradas": sum(l["saude"]["conexao"] == "parada" for l in lojas if l["ativa"]),
-                "com_erros": sum(l["saude"]["erros_7d"] > 0 for l in lojas),
-                "desatualizadas": sum(l["saude"]["desatualizada"] for l in lojas),
-                "chamados_abertos": sum(l["saude"]["chamados_abertos"] for l in lojas),
-                "em_teste": sum(l["em_teste"] for l in lojas),
-                "teste_parado": sum(l["teste_parado"] for l in lojas)},
+        ativas = [l for l in todas if l["ativa"]]
+        return {"lojas": todas if incluir_inativas else ativas, "resumo": {"total": len(ativas),
+                "inativas": len(todas) - len(ativas),
+                "vigentes": sum(l["situacao"] in ("vigente", "a_vencer") for l in ativas),
+                "vencidas": sum(l["situacao"] == "vencida" for l in ativas),
+                "mensalidades_cent": sum(l["mensalidade_cent"] or 0 for l in todas if l["ativa"]),
+                "central_local": sum(l["emissao"] == "central_local" for l in todas),
+                "online": sum(l["saude"]["conexao"] == "online" for l in todas if l["ativa"]),
+                "paradas": sum(l["saude"]["conexao"] == "parada" for l in todas if l["ativa"]),
+                "com_erros": sum(l["saude"]["erros_7d"] > 0 for l in ativas),
+                "desatualizadas": sum(l["saude"]["desatualizada"] for l in ativas),
+                "chamados_abertos": sum(l["saude"]["chamados_abertos"] for l in ativas),
+                "em_teste": sum(l["em_teste"] for l in todas),
+                "teste_parado": sum(l["teste_parado"] for l in todas)},
                 "chave_emissao_pronta": emissao.chave_pronta(),
                 "vencimentos": avisos.vencimentos(db),
                 "avisos_email": bool(avisos.destino()),
