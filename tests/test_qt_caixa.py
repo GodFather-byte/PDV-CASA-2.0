@@ -29,6 +29,7 @@ class DialogosFalsos:
         self.avisos, self.erros, self.perguntas = [], [], []
         self.maquininhas, self.paineis = [], []
         self.maquininha_ok = True
+        self.produtos_novos, self.custo_produto_novo = [], 0
 
     def aviso(self, titulo, texto):
         self.avisos.append(texto)
@@ -50,6 +51,32 @@ class DialogosFalsos:
 
     def escolher(self, titulo, rotulo, opcoes):
         return self.escolhas.pop(0) if self.escolhas else None
+
+    def produto_novo(self, cbarra, sugestao, categorias, com_gelada=True, com_custo=True, categoria_padrao=None):
+        """A tela única do produto novo, preenchida pelo roteiro na ordem em que se digita: nome, preço, gelada,
+        categoria (em `escolhas`) e quantidade. O custo vem de `custo_produto_novo`. Um None em qualquer passo = Cancelar."""
+        from src.core import formatacao as fmt
+        from src.ui_qt.caixa import ler_dinheiro
+        self.produtos_novos.append((cbarra, sugestao, com_custo))
+        nome = self.pedir_texto("Produto novo", "Nome do produto:", padrao=sugestao.get("nome") or "")
+        if nome is None or not nome.strip():
+            return None
+        preco = self.pedir_texto("Produto novo", "Preço de venda (R$):")
+        if preco is None:
+            return None
+        gelada = self.pedir_texto("Produto novo", "Preço gelada (R$):") if com_gelada else ""
+        if gelada is None:
+            return None
+        subgrupo = self.escolher("Produto novo", "Categoria:", categorias) if categorias else None
+        if categorias and subgrupo is None:
+            return None
+        qtd = self.pedir_texto("Produto novo", "Quantidade em estoque:")
+        if qtd is None:
+            return None
+        return {"nome": nome.strip(), "subgrupo_id": subgrupo, "preco_cent": ler_dinheiro(preco),
+                "preco_gelada_cent": ler_dinheiro(gelada, permitir_zero=True) if gelada.strip() else 0,
+                "custo_cent": self.custo_produto_novo if com_custo else 0,
+                "estoque": fmt.para_qtd(qtd) if qtd.strip() else None}
 
     def maquininha(self, maq, lancamentos=None):
         self.maquininhas.append((maq, lancamentos))

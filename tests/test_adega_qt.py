@@ -174,6 +174,22 @@ class TestAdegaQt(BaseCaixaQt):
         self.assertEqual(self.itens()[0]["produto_id"], p["id"])
         self.assertEqual(self.j._subgrupo_rapido, self.subgrupo)
 
+    def test_cadastro_do_gerente_grava_preco_de_custo(self):
+        self.ctx.banco.definir_operador_auditoria(self.ctx.operador_id)
+        self.j.dialogos.custo_produto_novo = 320
+        self.cadastro()
+        p = self.ctx.produtos.buscar_codigo("7891234567890")
+        self.assertEqual(self.banco.valor("SELECT custo_medio_cent FROM produtos WHERE id = ?", (p["id"],)), 320)
+        self.assertTrue(self.j.dialogos.produtos_novos[0][2])           # o gerente vê o campo de custo
+
+    def test_operador_comum_nao_ve_o_custo(self):
+        self.operador_bar()
+        self.j.dialogos.custo_produto_novo = 320
+        self.cadastro(textos=["ADM", "NOVA", "5,00", "", ""])
+        self.assertFalse(self.j.dialogos.produtos_novos[0][2])
+        p = self.ctx.produtos.buscar_codigo("7891234567890")
+        self.assertEqual(self.banco.valor("SELECT custo_medio_cent FROM produtos WHERE id = ?", (p["id"],)), 0)
+
     def test_cadastro_com_estoque_e_quantidade_antes_do_codigo(self):
         self.cadastro("6*7891234567890", ["NOVA", "5,50", "", "20"])
         p = self.ctx.produtos.buscar_codigo("7891234567890")

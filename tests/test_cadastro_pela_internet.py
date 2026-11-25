@@ -77,7 +77,8 @@ class TesteCadastroRapidoNoCaixa(BaseCaixaQt):
         j.dialogos.pedir_texto = lambda t, r, senha=False, padrao="": perguntas.append((r, padrao)) or original(t, r)
         self.roteiro(j, "CERVEJA SKOL 350 ML")
         self.lancar(j, GTIN)
-        self.assertEqual(perguntas[0], ("Nome do produto (achado na internet; confira):", "CERVEJA SKOL 350 ML"))
+        self.assertEqual(perguntas[0], ("Nome do produto:", "CERVEJA SKOL 350 ML"))     # a tela já vem com o nome
+        self.assertEqual(j.dialogos.produtos_novos[0][1]["fonte"], "internet")
         produto = self.banco.um("SELECT id, nome, preco_cent FROM produtos WHERE cbarra = ?", (GTIN,))
         self.assertEqual((produto["nome"], produto["preco_cent"]), ("CERVEJA SKOL 350 ML", 450))
         self.assertTrue(fotos.FotoProdutoController(self.banco).tem_foto(produto["id"]))
