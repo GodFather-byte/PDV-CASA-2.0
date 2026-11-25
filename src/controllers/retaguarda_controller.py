@@ -180,10 +180,29 @@ class RetaguardaController:
 
     def espelho(self) -> dict:
         """As seções que sobem: `esquema`, `financeiro` e uma `cadastro:<chave>` por cadastro."""
-        secoes = {"esquema": self.esquema(), "financeiro": self.financeiro()}
+        secoes = {"esquema": self.esquema(), "financeiro": self.financeiro(), "combos": {"linhas": self.combos()}}
         for ent in self.entidades():
             secoes[f"cadastro:{ent.chave}"] = self.linhas(ent.chave)
         return secoes
+
+    def combos(self) -> list[dict]:
+        """Combos e montagens (produto feito de outros, que baixa cada item na venda): itens, preço e quanto os itens
+        custariam separados, para a retaguarda mostrar a economia do cliente."""
+        from src.controllers.produto_controller import ProdutoController
+        produtos = ProdutoController(self.banco)
+        saida = []
+        for p in self.banco.todos(
+                """SELECT DISTINCT p.id, p.nome, p.preco_cent, p.ativo, p.cbarra FROM produtos p
+                   JOIN composicoes c ON c.produto_id = p.id ORDER BY p.nome LIMIT 500"""):
+            itens = [{"produto_id": i["insumo_id"], "nome": i["nome"], "quantidade": i["quantidade"]}
+                     for i in self.banco.todos(
+                         """SELECT c.insumo_id, c.quantidade, i.nome FROM composicoes c
+                            JOIN produtos i ON i.id = c.insumo_id WHERE c.produto_id = ? ORDER BY i.nome""", (p["id"],))]
+            saida.append({"id": p["id"], "nome": p["nome"], "preco_cent": p["preco_cent"], "ativo": bool(p["ativo"]),
+                          "cbarra": p["cbarra"] or "", "itens": itens,
+                          "fardo": produtos.embalagem(p["id"]) is not None,
+                          "avulso_cent": produtos.preco_avulso([(i["produto_id"], i["quantidade"]) for i in itens])})
+        return saida
 
     @staticmethod
     def resumo_secao(dados) -> str:
@@ -246,7 +265,33 @@ class RetaguardaController:
             return self._desfazer_produtos(dados)
         if tipo == "produto.foto":
             return self._foto_produto(dados)
+        if tipo == "produto.combo":
+            return self._criar_combo(dados)
         raise ErroNegocio("Este caixa não conhece este tipo de alteração. Atualize o programa da loja.")
+
+    def _criar_combo(self, dados: dict) -> int:
+        """Combo montado pela retaguarda: as mesmas regras do "Criar combo" do caixa (ProdutoController.criar_combo)."""
+        from src.controllers.produto_controller import ProdutoController
+        itens = dados.get("itens")
+        if not isinstance(itens, list) or not 1 <= len(itens) <= 30:
+            raise ErroNegocio("Inclua de 1 a 30 produtos no combo.")
+        pares = []
+        for item in itens:
+            if not isinstance(item, dict):
+                raise ErroNegocio("Item do combo inválido.")
+            try:
+                quantidade = float(item.get("quantidade"))
+            except (TypeError, ValueError):
+                raise ErroNegocio("Quantidade inválida no combo.") from None
+            pares.append((_inteiro(item.get("produto_id"), "Produto"), quantidade))
+        preco = dados.get("preco_cent")
+        if type(preco) is not int:
+            raise ErroNegocio("Informe o preço do combo.")
+        pid = ProdutoController(self.banco).criar_combo(str(dados.get("nome") or ""), preco, pares,
+                                                          cbarra=str(dados.get("cbarra") or "") or None,
+                                                          operador_id=self.operador_id)
+        self.ultimo_detalhe = "Combo criado."
+        return pid
 
     def _produto_do_comando(self, dados: dict) -> int:
         """O produto pelo id ou, para o cadastrado agora pela retaguarda (o id só existe depois), pelo código."""

@@ -36,9 +36,9 @@ LIMITE_PENDENTES = 300                      # comandos esperando o caixa, por lo
 LOTE_ENTREGA = 20
 PAGINA = 100
 DIAS_HISTORICO = 90
-SECAO_VALIDA = re.compile(r"^(esquema|financeiro|cadastro:[a-z_]{1,40})$")
+SECAO_VALIDA = re.compile(r"^(esquema|financeiro|combos|cadastro:[a-z_]{1,40})$")
 TIPOS_COMANDO = ("cadastro.salvar", "cadastro.excluir", "estoque.movimento", "config.salvar", "produtos.importar",
-                 "produtos.desfazer", "produto.foto", "conta.incluir", "conta.alterar", "conta.quitar", "conta.desfazer", "conta.excluir")
+                 "produtos.desfazer", "produto.foto", "produto.combo", "conta.incluir", "conta.alterar", "conta.quitar", "conta.desfazer", "conta.excluir")
 SITUACOES_FINAIS = ("aplicado", "recusado")
 SO_FORNECEDOR = ("produtos.importar",)      # pela rota genérica, o lote continua serviço do fornecedor
 LIMITE_PLANILHA_BYTES = 3 * 1024 * 1024
@@ -438,6 +438,14 @@ def _rotas_de_leitura_e_escrita(router: APIRouter, prefixo: str, loja_da_sessao,
     @router.get(prefixo + "/codigo-barras/{gtin}")
     def codigo_barras(gtin: str, chave_loja: str = Depends(loja_da_sessao)):
         return consultar_gtin(gtin[:20])
+
+    @router.get(prefixo + "/combos")
+    def combos(chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):
+        """Combos e montagens que o caixa mandou. Caixa antes da 1.14.27 não manda: lista vazia e `sincronizado` falso."""
+        dados, quando = secao(db, chave_loja, "combos")
+        linhas = (dados or {}).get("linhas") if isinstance(dados, dict) else None
+        return {"linhas": linhas if isinstance(linhas, list) else [], "sincronizado": isinstance(linhas, list),
+                "atualizado_em": quando}
 
     @router.get(prefixo + "/financeiro")
     def contas(chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):

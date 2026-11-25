@@ -201,6 +201,7 @@
       if (grupo === "financeiro" && estado.esquema.caderneta) botao("caderneta", "Caderneta (quem deve)");
       itens.sort((x, y) => (y.chave === "produtos") - (x.chave === "produtos"));       // Produtos primeiro no seu grupo
       itens.forEach((e) => botao("cadastro:" + e.chave, tituloCurto(e)));
+      if (grupo === "produtos" && itens.some((e) => e.chave === "produtos")) botao("combos", "Combos");
     });
     if (estado.modo === "fornecedor") {
       abrirGrupo("Suporte");
@@ -227,6 +228,7 @@
       if (secao.indexOf("cadastro:") === 0) no = await telaCadastro(entidade(secao.slice(9)));
       else if (secao === "contas") no = await telaContas();
       else if (secao === "caderneta") no = await telaCaderneta();
+      else if (secao === "combos") no = await telaCombos();
       else if (secao === "config") no = telaConfig();
       else if (secao === "planilha") no = telaPlanilha();
       else if (secao === "servicos") no = await telaServicos();
@@ -1161,6 +1163,142 @@
     });
     raiz.append(lista);
     return raiz;
+  }
+
+  // ---------------------------------------------------------------- combos
+  function textoItens(itens) {
+    return (itens || []).map((i) => numero(i.quantidade) + " x " + i.nome).join(" + ");
+  }
+
+  async function telaCombos() {
+    const dados = await api("/combos");
+    const raiz = el("section");
+    raiz.append(el("h1", "Combos"));
+    raiz.append(el("p", "Combo é um produto com preço próprio que baixa cada item do estoque quando é vendido (balde com "
+      + "6 cervejas, kit churrasco). Os itens dentro dele não ganham atacado nem promoção.", "suave"));
+    const barra = el("div", null, "barra");
+    const novo = el("button", "Novo combo", "botao");
+    novo.type = "button";
+    novo.dataset.seletor = "combo-novo";
+    novo.addEventListener("click", () => abrirNovoCombo());
+    barra.append(novo);
+    raiz.append(barra);
+    if (!dados.sincronizado) {
+      raiz.append(el("p", "O caixa desta loja ainda não mandou os combos: aparecem depois que ele for atualizado. "
+        + "Criar combo novo já funciona.", "aviso"));
+    }
+    const combos = (dados.linhas || []).filter((c) => !c.fardo);
+    if (!combos.length) { raiz.append(el("p", "Nenhum combo cadastrado ainda.", "vazio cartao")); return raiz; }
+    const lista = el("ul", null, "lista");
+    combos.forEach((c) => {
+      const li = el("li");
+      const principal = el("div", null, "principal");
+      principal.append(el("strong", c.nome + (c.ativo ? "" : " (inativo)")));
+      principal.append(el("span", textoItens(c.itens), "suave"));
+      if (c.avulso_cent > c.preco_cent) {
+        principal.append(el("span", "Separados: " + dinheiro(c.avulso_cent) + " · o cliente economiza "
+          + dinheiro(c.avulso_cent - c.preco_cent), "suave"));
+      }
+      li.append(principal, el("span", dinheiro(c.preco_cent), "valor"));
+      lista.append(li);
+    });
+    raiz.append(lista);
+    raiz.append(el("p", "Para mudar o preço, o nome ou desativar um combo, abra-o em Produtos.", "suave"));
+    return raiz;
+  }
+
+  async function abrirNovoCombo() {
+    const { corpo, rodape } = abrirDialogo("Novo combo");
+    corpo.append(el("p", "Carregando os produtos…", "suave"));
+    let produtos;
+    try {
+      const lista = await api("/cadastro/produtos?" + new URLSearchParams({ inativos: "0", todas: "1", ordem: "nome" }).toString());
+      produtos = lista.linhas.map((valores) => {
+        const linha = {};
+        lista.campos.forEach((nome, i) => { linha[nome] = valores[i]; });
+        return linha;
+      });
+    } catch (erro) { limpar(corpo).append(el("p", erro.message, "erro")); return; }
+    limpar(corpo);
+    const campo = (rotulo, entrada) => { const l = el("label", rotulo); l.append(entrada); corpo.append(l); return entrada; };
+    const nome = campo("Nome do combo", el("input"));
+    nome.maxLength = 80;
+    nome.dataset.seletor = "combo-nome";
+    const preco = campo("Preço do combo (R$)", el("input"));
+    preco.inputMode = "decimal";
+    preco.dataset.seletor = "combo-preco";
+    const barras = campo("Código de barras (opcional)", el("input"));
+    barras.inputMode = "numeric";
+    corpo.append(el("h3", "Produtos do combo"));
+    const lista = el("datalist");
+    lista.id = "combo-produtos";
+    produtos.forEach((p) => { const o = el("option"); o.value = p.nome; lista.append(o); });
+    const busca = el("input");
+    busca.setAttribute("list", "combo-produtos");
+    busca.placeholder = "Digite o nome e escolha";
+    busca.dataset.seletor = "combo-busca";
+    const qtd = el("input");
+    qtd.value = "1";
+    qtd.inputMode = "decimal";
+    qtd.className = "qtd-combo";
+    qtd.setAttribute("aria-label", "Quantidade");
+    const incluir = el("button", "Incluir", "botao secundario");
+    incluir.type = "button";
+    incluir.dataset.seletor = "combo-incluir";
+    const linhaBusca = el("div", null, "linha-combo");
+    linhaBusca.append(busca, qtd, incluir);
+    corpo.append(lista, linhaBusca);
+    const itensUl = el("ul", null, "lista");
+    const conta = el("p", "", "suave");
+    const erro = el("p", "", "erro");
+    corpo.append(itensUl, conta, erro);
+    const itens = [];
+    const pintar = () => {
+      limpar(itensUl);
+      itens.forEach((item, posicao) => {
+        const li = el("li");
+        li.append(el("span", numero(item.quantidade) + " x " + item.nome));
+        const tirar = el("button", "Tirar", "botao secundario");
+        tirar.type = "button";
+        tirar.addEventListener("click", () => { itens.splice(posicao, 1); pintar(); });
+        li.append(tirar);
+        itensUl.append(li);
+      });
+      const avulso = itens.reduce((t, i) => t + Math.round((i.preco_cent || 0) * i.quantidade), 0);
+      const valor = paraCentavos(preco.value);
+      conta.textContent = itens.length ? "Separados custam " + dinheiro(avulso)
+        + (valor ? " · o cliente economiza " + dinheiro(Math.max(0, avulso - valor)) : "") : "";
+    };
+    preco.addEventListener("input", pintar);
+    incluir.addEventListener("click", () => {
+      erro.textContent = "";
+      const escolhido = produtos.find((p) => p.nome === busca.value.trim());
+      const quantidade = paraNumero(qtd.value);
+      if (!escolhido) { erro.textContent = "Escolha um produto da lista."; return; }
+      if (!quantidade || quantidade <= 0) { erro.textContent = "Quantidade inválida."; return; }
+      if (itens.some((i) => i.produto_id === escolhido.id)) { erro.textContent = "Esse produto já está no combo: tire e inclua com a quantidade certa."; return; }
+      itens.push({ produto_id: escolhido.id, nome: escolhido.nome, quantidade: quantidade, preco_cent: escolhido.preco_cent });
+      busca.value = "";
+      qtd.value = "1";
+      busca.focus();
+      pintar();
+    });
+    const salvar = el("button", "Enviar ao caixa", "botao");
+    salvar.type = "button";
+    salvar.dataset.seletor = "combo-salvar";
+    salvar.addEventListener("click", () => enviarDoDialogo(salvar, async () => {
+      const valor = paraCentavos(preco.value);
+      if (!nome.value.trim()) throw new Error("Dê um nome ao combo.");
+      if (!valor || valor <= 0) throw new Error("Informe o preço do combo.");
+      if (!itens.length) throw new Error("Inclua os produtos do combo.");
+      if (itens.length === 1 && itens[0].quantidade < 2) throw new Error("Um combo precisa de pelo menos 2 unidades no total.");
+      await pedir("produto.combo", {
+        nome: nome.value.trim().toUpperCase(), preco_cent: valor, cbarra: barras.value.replace(/\D/g, ""),
+        itens: itens.map((i) => ({ produto_id: i.produto_id, quantidade: i.quantidade })),
+      }, "Combo: " + nome.value.trim().toUpperCase() + " (" + textoItens(itens) + ")");
+    }));
+    rodape.append(salvar);
+    nome.focus();
   }
 
   // ---------------------------------------------------------------- suporte (só pela central)

@@ -160,3 +160,8 @@ th .ordenar:hover, th .ordenar:focus-visible { text-decoration: underline; }
 .foto-produto img { width: 120px; height: 120px; object-fit: contain; border: 1px solid #c9d3d0; border-radius: .5rem; background: #fff; }
 .foto-lado { flex: 1 1 220px; min-width: 0; }
 .botoes-foto { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+/* Novo combo */
+.linha-combo { display: flex; gap: .5rem; align-items: stretch; flex-wrap: wrap; }
+.linha-combo input[list] { flex: 1 1 200px; min-width: 0; }
+.linha-combo .qtd-combo { width: 5rem; text-align: right; }
