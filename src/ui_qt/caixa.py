@@ -182,6 +182,12 @@ class Dialogos:
         caixa.exec()
         return caixa.clickedButton() is sim
 
+    def produto_novo(self, cbarra: str, sugestao: dict, categorias: list[tuple], **opcoes) -> dict | None:
+        """A tela do produto novo (nome, categoria, preços, custo, quantidade). None = desistiu."""
+        from src.ui_qt.produto_novo import DialogoProdutoNovo
+        dlg = DialogoProdutoNovo(self.pai, cbarra, sugestao, categorias, ler_dinheiro, **opcoes)
+        return dlg.resultado if dlg.exec() == QDialog.Accepted else None
+
     def maquininha(self, maq: dict, lancamentos: list[dict] | None = None) -> bool:
         """Conferência do que foi lançado em cartão e Pix (totais e cada lançamento), antes de contar a gaveta.
         False = o operador disse que não confere (ou desistiu) e o turno não fecha."""
@@ -2056,49 +2062,34 @@ class JanelaCaixa(QMainWindow):
         return p
 
     def _cadastro_rapido(self, cbarra: str) -> dict | None:
-        """Produto desconhecido no leitor: permissão de cadastro ou autorização de supervisor."""
-        if not self.dialogos.confirmar("Produto novo", f"O código {cbarra} não está cadastrado.\n"
-                                                       "Cadastrar o produto agora?"):
+        """Produto desconhecido no leitor: procura o nome (e a foto) na internet e, numa tela só, o operador confere o
+        nome e põe preço, custo e quantidade. Exige a permissão de cadastro ou a autorização de um supervisor."""
+        if not self.dialogos.confirmar("Produto novo",
+                                       f"O código {cbarra} não está cadastrado.\nCadastrar o produto agora?"):
             return None
         if not self.ctx.acesso.pode(self.ctx.operador, "cad_produtos") and not self._pedir_supervisor(
                 "cad_produtos", "Cadastrar produto exige autorização:"):
             return None
         achado = self._buscar_produto_na_internet(cbarra)
-        if achado["nome"]:
-            nome = self.dialogos.pedir_texto("Produto novo", "Nome do produto (achado na internet; confira):",
-                                             padrao=achado["nome"])
-        else:
-            nome = self.dialogos.pedir_texto("Produto novo", "Nome do produto:")
-        if nome is None or not nome.strip():
-            return None
-        preco = self._pedir_convertido("Produto novo", "Preço de venda (R$):",
-                                      lambda t: ler_dinheiro(t, permitir_zero=True))
-        if preco is None:
-            return None
-        from src.core import edicao
-        gelada = 0 if edicao.atual().sem_gelada else self._pedir_convertido(
-            "Produto novo", "Preço gelada (R$, opcional; vazio = só natural):",
-            lambda t: ler_dinheiro(t, permitir_zero=True) if t.strip() else 0)
-        if gelada is None:
-            return None
-        opcoes = [(r["id"], f"{r['nome']} - {r['grupo']}") for r in self.ctx.banco.todos(
+        achado.update({"categoria": "", "ncm": "", "fonte": "internet" if achado.get("nome") else ""})
+        categorias = [(r["id"], f"{r['nome']} - {r['grupo']}", r["nome"]) for r in self.ctx.banco.todos(
             "SELECT s.id, s.nome, g.nome AS grupo FROM subgrupos s "
             "JOIN grupos g ON g.id = s.grupo_id ORDER BY g.nome, s.nome")]
-        opcoes.sort(key=lambda o: o[0] != self._subgrupo_rapido)
-        subgrupo = self.dialogos.escolher("Produto novo", "Categoria:", opcoes) if opcoes else None
-        if opcoes and subgrupo is None:
+        from src.core import edicao
+        operador = self.ctx.operador
+        com_custo = bool(operador and operador.nivel >= 4)       # custo e lucro: só gerente e dono, como no cadastro
+        dados = self.dialogos.produto_novo(cbarra, achado, categorias, com_gelada=not edicao.atual().sem_gelada,
+                                           com_custo=com_custo, categoria_padrao=self._subgrupo_rapido)
+        if not dados:
             return None
-        def estoque(texto):
-            return fmt.para_qtd(texto) if texto.strip() else ""
-        qtd = self._pedir_convertido("Produto novo", "Quantidade em estoque (opcional; vazio não controla):", estoque)
-        if qtd is None:
-            return None
-        ok, p = self._executar(self.ctx.produtos.cadastrar_rapido, cbarra, nome.strip(), preco, subgrupo,
-                              None if qtd == "" else qtd, self.ctx.operador_id, preco_gelada_cent=gelada)
+        ok, p = self._executar(self.ctx.produtos.cadastrar_rapido, cbarra, dados["nome"], dados["preco_cent"],
+                              dados["subgrupo_id"], dados["estoque"], self.ctx.operador_id,
+                              preco_gelada_cent=dados["preco_gelada_cent"], custo_cent=dados["custo_cent"],
+                              ncm=achado.get("ncm") or "")
         if not ok:
             return None
         self._subgrupo_rapido = p["subgrupo_id"]
-        if achado["foto"] is not None:
+        if achado.get("foto") is not None:
             try:                                  # a foto não impede o cadastro: sem ela o produto segue sem foto
                 from src.controllers.foto_produto_controller import FotoProdutoController
                 FotoProdutoController(self.ctx.banco).gravar(p["id"], achado["foto"])

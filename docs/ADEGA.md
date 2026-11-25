@@ -183,3 +183,10 @@ no canto superior esquerdo e também como papel de parede: uma marca d'água bem
 tela, que não recebe clique e não cobre os números. Para tirar, desligue **Logotipo da casa como
 papel de parede do caixa** em Configurações > Parâmetros e módulos > Aparência. Vale no WillPDV e
 no Will Adega.
+
+## Produto novo no leitor
+
+Quando o leitor passa um código que a loja não tem, o caixa abre **uma tela só** de "Produto novo" com nome (já
+preenchido quando achado na internet), categoria, preço de venda, preço gelada, **preço de custo** e quantidade em
+estoque. O Enter passa de um campo a outro. O custo só aparece para gerente e dono, como no cadastro completo. Se o
+custo ficar igual ou maior que o preço de venda, o caixa avisa uma vez antes de cadastrar.

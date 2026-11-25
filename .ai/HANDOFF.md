@@ -1,3 +1,12 @@
+# Handoff de 25/11/2026: produto novo com preço de custo (branch `cadastro-rapido-custo`)
+
+- `src/ui_qt/produto_novo.py` (`DialogoProdutoNovo`) troca a sequência de perguntas do cadastro rápido por uma tela
+  só, com o preço de custo (só para nível 4 ou mais). Nos testes, o roteiro passa pelo `Dialogos.produto_novo` e
+  `DialogosFalsos.produto_novo` responde na mesma ordem de antes.
+- `ProdutoController.cadastrar_rapido` passou a aceitar `custo_cent` (e `ncm`).
+- A base de produtos por código de barras ficou de fora a pedido do dono. Ideia guardada: fazer só se ele pedir.
+- Teste: `tests/test_base_codigos.py` (tela, custo e fluxo no caixa).
+
 # Handoff de 24/11/2026: caixa adicional se atualiza junto (branch `adicional-atualiza`)
 
 - `rede.ErroVersaoDiferente`: o principal recusa por versão e manda `versao_principal`, `nuvem` (sem token) e `loja`
