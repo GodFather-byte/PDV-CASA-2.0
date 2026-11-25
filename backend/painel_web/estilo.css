@@ -1105,3 +1105,11 @@ a.botao-arquivo { text-decoration: none; }
 }
 .botao-olho[aria-pressed="true"] { background: var(--verde-medio); color: #fff; border-color: var(--verde-medio); }
 .botao-olho:focus-visible { outline: 2px solid var(--verde-medio); outline-offset: 1px; }
+
+/* Relatório diário por e-mail */
+.form-relatorio { display: grid; gap: .5rem; }
+.form-relatorio input[type="text"] { font: inherit; padding: .6rem .7rem; border-radius: 10px; border: 1px solid var(--borda, #c9d3d0);
+  background: var(--superficie); color: var(--texto); }
+.linha-check { display: flex; align-items: center; gap: .5rem; font-weight: 600; }
+.linha-check input { width: 1.2rem; height: 1.2rem; }
+.acoes-relatorio { display: flex; gap: .5rem; flex-wrap: wrap; }

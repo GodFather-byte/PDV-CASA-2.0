@@ -1,3 +1,15 @@
+# Handoff de 25/11/2026: combos na retaguarda e relatório diário por e-mail (branch `retaguarda-combos-relatorio`)
+
+- Combos: a retaguarda ganhou o menu "Combos" (lista, economia contra os avulsos, "Novo combo"). O comando
+  `produto.combo` chega ao caixa e usa `ProdutoController.criar_combo`; o espelho sobe a seção `combos`
+  (`SECAO_VALIDA` na nuvem). Precisa de versão nova do caixa (1.14.27). Teste: `tests/test_retaguarda_combos.py`.
+- Relatório diário: `backend/relatorio_diario.py` (tabela `relatorios_diarios`). O dono liga e põe até 3 e-mails no
+  painel, aba Relatórios. A partir das 08:00 (Brasília), qualquer requisição chama `disparar_em_segundo_plano()`
+  (middleware em `main.py`), que manda o relatório do dia anterior uma vez por loja; a linha é reservada no banco e
+  volta a ficar pendente se o e-mail falhar (nova tentativa em 30 min). O agendamento
+  `.github/workflows/relatorio-diario.yml` acorda o Render às 08:05 e 08:40. Botão "Enviar o de ontem agora"
+  (3 por hora). Usa `enviar_email` (Brevo/SMTP). Teste: `tests/test_relatorio_diario.py`.
+
 # Handoff de 25/11/2026: painel único para o dono de rede (branch `painel-unico`)
 
 - O login da rede entra direto no painel normal de uma loja: a última vista (`willpdv.rede.ultima`, fora do PREFIXO)
