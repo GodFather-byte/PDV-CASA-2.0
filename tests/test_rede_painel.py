@@ -52,6 +52,21 @@ class TesteVoltaDaRede(BaseNuvem):
         self.assertEqual(outra.status_code, 200, outra.text)
         self.assertEqual(outra.json()["loja"]["chave"], "ADEGA-2")
 
+    def test_login_e_eu_da_rede_trazem_as_lojas_para_o_seletor(self):
+        """Painel único: o seletor do topo precisa das lojas da rede já na entrada (e ao reabrir o painel)."""
+        entrada = self.http.post("/v1/painel/login", json={"loja": "REDE-VOLTA", "senha": "senha-da-rede-1"}).json()
+        self.assertEqual(sorted(l["chave"] for l in entrada["grupo"]["lojas"]), ["ADEGA-1", "ADEGA-2"])
+        self.assertTrue(all(set(l) == {"chave", "nome", "ativa"} for l in entrada["grupo"]["lojas"]))
+        eu = self.http.get("/v1/painel/eu", headers=self.rede).json()
+        self.assertEqual(sorted(l["chave"] for l in eu["grupo"]["lojas"]), ["ADEGA-1", "ADEGA-2"])
+
+    def test_login_proprio_da_loja_continua_vendo_so_a_loja(self):
+        """O gerente que entra com a senha da loja vê só a loja dele, mesmo ela estando numa rede."""
+        dentro = self.http.post("/v1/painel/grupo/entrar", json={"loja": "ADEGA-1"}, headers=self.rede).json()
+        loja = {"Authorization": "Bearer " + dentro["token"]}
+        self.assertEqual(self.http.post("/v1/painel/grupo/entrar", json={"loja": "ADEGA-2"}, headers=loja).status_code,
+                         404)
+
     def test_cada_loja_da_rede_traz_vendas_e_situacao_do_envio(self):
         venda = {"status": "fechada", "dia": "2026-10-03", "desconto_cent": 0, "modalidade": "balcao"}
         for uuid, total, status in (("volta-1", 2400, "fechada"), ("volta-2", 600, "fechada"), ("volta-3", 900, "cancelada")):
@@ -81,13 +96,22 @@ class TestePaginaDaRede(unittest.TestCase):
         self.js = (WEB / "app.js").read_text(encoding="utf-8")
         self.html = (WEB / "index.html").read_text(encoding="utf-8")
 
-    def test_volta_para_as_lojas_fica_no_topo_da_loja_em_qualquer_aba(self):
+    def test_seletor_de_loja_fica_no_topo_da_loja_em_qualquer_aba(self):
         faixa, cabecalho, abas = (self.html.index(t) for t in ('id="faixa-rede"', '<header class="cabecalho">\n      <div class="cabecalho-titulo">', 'data-aba='))
         self.assertLess(self.html.index('id="tela-app"'), faixa)
         self.assertLess(faixa, cabecalho)
         self.assertLess(cabecalho, abas)
-        self.assertIn('id="botao-voltar-rede"', self.html)
-        self.assertIn("Todas as lojas", self.html)
+        self.assertIn('id="seletor-loja-rede"', self.html[faixa:cabecalho])
+        self.assertIn('id="seletor-loja-resumo"', self.html)                 # no resumo da rede, para abrir uma loja
+        self.assertIn("Todas as lojas (resumo da rede)", self.js)
+
+    def test_dono_da_rede_entra_direto_numa_loja(self):
+        """Painel único: depois do login (e ao reabrir) vai para a última loja vista, não para a tela da rede."""
+        corpo = self.js[self.js.index("function entrarNaRede("):self.js.index("// ---- sessão da rede guardada")]
+        self.assertIn("abrirInicioDaRede();", corpo)
+        self.assertNotIn("mostrarRede();\n  }", corpo)
+        self.assertIn('const REDE_ULTIMA = "willpdv.rede.ultima"', self.js)
+        self.assertFalse("willpdv.rede.ultima".startswith(re.search(r'const PREFIXO = "([^"]+)"', self.js).group(1)))
 
     def test_sessao_da_rede_nao_fica_no_prefixo_que_a_troca_de_loja_apaga(self):
         prefixo = re.search(r'const PREFIXO = "([^"]+)"', self.js).group(1)
