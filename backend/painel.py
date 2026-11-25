@@ -1371,6 +1371,41 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
                 "lojas": [{"chave": l.chave_loja, "nome": l.nome or l.chave_loja, "ativa": bool(l.ativa)}
                           for l in lojas_do_grupo(db, grupo.id)]}
 
+    # ---- relatório diário por e-mail
+    @router.get("/v1/painel/relatorio-diario")
+    def relatorio_diario_ver(sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
+        from backend import relatorio_diario
+        _loja(db, sessao.chave_loja)
+        return relatorio_diario.config(db, sessao.chave_loja)
+
+    @router.post("/v1/painel/relatorio-diario")
+    def relatorio_diario_salvar(dados: dict = Body(...), sessao: PainelSessao = Depends(sessao_ativa),
+                                db: Session = Depends(get_db)):
+        from backend import relatorio_diario
+        _loja(db, sessao.chave_loja)
+        try:
+            return relatorio_diario.salvar(db, sessao.chave_loja, str((dados or {}).get("emails") or "")[:400],
+                                           bool((dados or {}).get("ativo")))
+        except ValueError as erro:
+            raise HTTPException(status_code=422, detail=str(erro)) from None
+
+    @router.post("/v1/painel/relatorio-diario/enviar-agora")
+    def relatorio_diario_agora(sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
+        """Manda já o relatório de ontem para os e-mails salvos (para conferir). No máximo 3 por hora por loja."""
+        from backend import relatorio_diario
+        _loja(db, sessao.chave_loja)
+        conf = relatorio_diario.config(db, sessao.chave_loja)
+        if not conf["emails"]:
+            raise HTTPException(status_code=422, detail="Salve pelo menos um e-mail antes.")
+        if not relatorio_diario.pode_enviar_agora(sessao.chave_loja):
+            raise HTTPException(status_code=429, detail="Já foram 3 envios nesta hora. Tente mais tarde.")
+        ontem = (relatorio_diario.agora_brasilia().date() - timedelta(days=1)).isoformat()
+        try:
+            status = relatorio_diario.enviar_para(db, sessao.chave_loja, ontem, conf["emails"])
+        except Exception as erro:                          # noqa: BLE001 - mostra o motivo ao dono
+            raise HTTPException(status_code=502, detail=f"E-mail não enviado: {str(erro)[:160]}") from None
+        return {"mensagem": status, "dia": ontem}
+
     @router.get("/v1/painel/eu")
     def eu(request: Request, sessao: PainelSessao = Depends(sessao_ativa), db: Session = Depends(get_db)):
         """Quem está no cookie, sem devolver o token. O navegador usa isto ao reabrir o painel."""

@@ -1168,6 +1168,55 @@
     return formatarCentavos(valor);
   }
 
+  /** Relatório diário por e-mail (aba Relatórios): mostra o que está salvo e o último envio. */
+  async function carregarRelatorioDiario() {
+    const status = $("relatorio-status");
+    try {
+      const c = await chamarApi("/relatorio-diario");
+      $("relatorio-emails").value = (c.emails || []).join(", ");
+      $("relatorio-ativo").checked = !!c.ativo;
+      const partes = [];
+      if (!c.email_configurado) partes.push("O envio de e-mail ainda não está configurado no servidor: fale com o suporte.");
+      if (c.ultimo_status) partes.push("Último envio: " + c.ultimo_status);
+      else if (c.ativo) partes.push("Ligado. O primeiro chega amanhã às " + (c.hora || "08:00") + ".");
+      status.textContent = partes.join(" ");
+    } catch (e) {
+      if (e.status !== 401) status.textContent = e.message || "Não consegui carregar o relatório diário.";
+    }
+  }
+
+  async function salvarRelatorioDiario(evento) {
+    evento.preventDefault();
+    const status = $("relatorio-status");
+    const botao = $("relatorio-salvar");
+    botao.disabled = true;
+    try {
+      const c = await chamarApi("/relatorio-diario", { metodo: "POST", corpo: {
+        emails: $("relatorio-emails").value, ativo: $("relatorio-ativo").checked } });
+      status.textContent = c.ativo ? "Salvo. O relatório chega todo dia às " + (c.hora || "08:00") + "."
+        : "Salvo. O relatório está desligado.";
+    } catch (e) {
+      if (e.status !== 401) status.textContent = e.message || "Não consegui salvar.";
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+  async function enviarRelatorioAgora() {
+    const status = $("relatorio-status");
+    const botao = $("relatorio-agora");
+    botao.disabled = true;
+    status.textContent = "Enviando…";
+    try {
+      const r = await chamarApi("/relatorio-diario/enviar-agora", { metodo: "POST", corpo: {} });
+      status.textContent = r.mensagem || "Enviado.";
+    } catch (e) {
+      if (e.status !== 401) status.textContent = e.message || "Não consegui enviar.";
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
   async function carregarLucro() {
     sincronizarDatasDoLucro();
     if (!estado.lucroDe || !estado.lucroAte) return;
@@ -1713,7 +1762,7 @@
       if (estado.lojas === null || estado.lojas.length > 1) tarefas.push(carregarLojas());
       if (estado.aba === "vendas") tarefas.push(carregarVendas());
       if (estado.aba === "periodo") tarefas.push(carregarPeriodo());
-      if (estado.aba === "lucro") tarefas.push(carregarLucro());
+      if (estado.aba === "lucro") tarefas.push(carregarLucro(), carregarRelatorioDiario());
       await Promise.all(tarefas);
       estado.ultimaAtualizacao = Date.now();
     } finally {
@@ -2584,7 +2633,7 @@
     window.scrollTo({ top: 0 });
     if (nome === "vendas" && estado.token) carregarVendas();
     if (nome === "periodo" && estado.token) carregarPeriodo();
-    if (nome === "lucro" && estado.token) carregarLucro();
+    if (nome === "lucro" && estado.token) { carregarLucro(); carregarRelatorioDiario(); }
     if (nome === "produtos" && estado.token) { carregarNotas(); carregarXmls(); carregarVendasTeste(); carregarImportacao(); }
   }
 
@@ -3140,6 +3189,8 @@
     const sairRede = $("sair-rede");
     if (sairRede) sairRede.addEventListener("click", () => encerrarSessao(true));
     $("seletor-loja-rede").addEventListener("change", (e) => trocarDeLojaNaRede(e.target.value));
+    $("form-relatorio-diario").addEventListener("submit", salvarRelatorioDiario);
+    $("relatorio-agora").addEventListener("click", enviarRelatorioAgora);
     $("seletor-loja-resumo").addEventListener("change", (e) => { if (e.target.value) trocarDeLojaNaRede(e.target.value); });
     $("botao-atualizar-rede").addEventListener("click", atualizarRede);
     retomarPeloCookie();

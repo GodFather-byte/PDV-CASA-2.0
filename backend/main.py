@@ -82,6 +82,7 @@ def hash_token(token: str) -> str:
 
 
 import backend.erros_caixa as _erros_caixa  # noqa: E402  (registra a tabela antes do create_all)
+import backend.relatorio_diario as _relatorio_diario  # noqa: E402  (idem: tabela relatorios_diarios)
 
 Base.metadata.create_all(bind=engine)
 
@@ -141,6 +142,10 @@ app = FastAPI(
 @app.middleware("http")
 async def _cache_de_leitura(request, call_next):
     from backend.cache_leitura import tratar
+    try:
+        _relatorio_diario.disparar_em_segundo_plano()     # só memória; depois das 08:00 manda os relatórios do dia
+    except Exception:                                     # noqa: BLE001 - nunca atrapalha a requisição
+        log.error("Disparo do relatório diário falhou.")
     return await tratar(request, call_next)
 
 

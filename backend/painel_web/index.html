@@ -870,6 +870,24 @@
           <ul id="lista-gestao-auditoria" class="lista" data-seletor="auditoria"></ul>
           <p id="vazio-gestao-auditoria" class="vazio" hidden>Nenhuma alteração pela retaguarda ainda.</p>
         </section>
+
+        <section class="bloco" id="bloco-relatorio-diario">
+          <h2>Relatório diário por e-mail</h2>
+          <p class="legenda">Todo dia, às 08:00, chega no e-mail o relatório do dia anterior: faturamento, comparação
+            com a semana passada, formas de pagamento, produtos mais vendidos, fechamentos de caixa, sangrias,
+            comissões e estoque para repor, tudo explicado.</p>
+          <form id="form-relatorio-diario" class="form-relatorio" novalidate>
+            <label for="relatorio-emails">E-mails (até 3, separados por vírgula)</label>
+            <input id="relatorio-emails" type="text" inputmode="email" autocomplete="email" maxlength="300"
+                   placeholder="dono@exemplo.com, gerente@exemplo.com">
+            <label class="linha-check"><input id="relatorio-ativo" type="checkbox"> Mandar todo dia às 08:00</label>
+            <div class="acoes-relatorio">
+              <button type="submit" class="botao-principal" id="relatorio-salvar">Salvar</button>
+              <button type="button" class="botao-secundario" id="relatorio-agora">Enviar o de ontem agora</button>
+            </div>
+            <p id="relatorio-status" class="legenda" aria-live="polite"></p>
+          </form>
+        </section>
       </section>
 
     </main>

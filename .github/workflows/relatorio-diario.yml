@@ -1,0 +1,29 @@
+name: "Nuvem: acordar para o relatório diário"
+
+# O Render grátis dorme sem uso. Às 08:05 (Brasília) esta chamada acorda a nuvem; qualquer requisição depois das 08:00
+# dispara o envio dos relatórios diários (backend/relatorio_diario.py). Repete às 08:40 caso a primeira pegue o
+# servidor ainda subindo.
+on:
+  schedule:
+    - cron: "5 11 * * *"
+    - cron: "40 11 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  acordar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Chamar a nuvem
+        env:
+          NUVEM_URL: ${{ vars.PDV_NUVEM_URL || 'https://willpdv-nuvem-6sp0.onrender.com' }}
+        run: |
+          for tentativa in 1 2 3; do
+            if curl -fsS --max-time 90 "$NUVEM_URL/v1/versao" -o /dev/null; then
+              echo "Nuvem acordada."; sleep 60; curl -fsS --max-time 30 "$NUVEM_URL/v1/versao" -o /dev/null || true; exit 0
+            fi
+            sleep 20
+          done
+          echo "Nuvem não respondeu."; exit 1
