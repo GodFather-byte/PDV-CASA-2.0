@@ -1,3 +1,13 @@
+# Handoff de 25/11/2026: apps de computador (branch `apps-desktop`)
+
+- `apps/mac-painel/`: Will Painel para Mac (painel do dono, rede inclusa). Swift + WKWebView, universal, assinatura
+  ad hoc (sem Apple Developer: na 1ª vez, botão direito > Abrir). `montar.sh` gera o .app e o .dmg.
+- `apps/windows-central/`: Central WB (central do fornecedor). C# WinForms + WebView2 no .NET Framework 4.8,
+  instalador Inno Setup só para o usuário. Uma instância, janela lembrada, F5/F11/Alt+Home, downloads.
+- Os dois têm `--autoteste` (abre a nuvem de verdade e sai 0). `.github/workflows/apps-desktop.yml` monta e testa
+  no PR; na main, Run workflow publica `app-mac-painel/WillPainel.dmg` e `app-windows-central/CentralWB-Instalador.exe`.
+- O painel da rede ganhou o link do app de Mac ("Ter o app da rede no celular e no Mac"). Teste: `tests/test_apps_desktop.py`.
+
 # Handoff de 25/11/2026: IA na retaguarda (branch `retaguarda-ia`)
 
 - Menu "Cadastro com IA" (grupo Produtos) para o dono e para a central. Foto da nota, lista de preços ou prateleira

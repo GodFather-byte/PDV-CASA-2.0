@@ -1,0 +1,112 @@
+# Aplicativos de computador: Will Painel para Mac (painel do dono, .dmg) e Central WB para Windows (central do
+# fornecedor, instalador). Os dois abrem a nuvem numa janela própria, então não seguem a versão do caixa.
+# No PR: monta e testa nos dois sistemas. Na main (Actions > Run workflow): publica nas Releases do willpdv-downloads.
+name: Apps de computador
+on:
+  pull_request:
+    paths:
+      - "apps/**"
+      - ".github/workflows/apps-desktop.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: apps-desktop-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  APP_VERSAO: "1.0.0"
+
+jobs:
+  mac:
+    name: Will Painel / macOS
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Montar o app e o .dmg
+        run: bash apps/mac-painel/montar.sh "$APP_VERSAO" dist-mac
+      - name: Autoteste (abre o painel de verdade)
+        run: |
+          "dist-mac/Will Painel.app/Contents/MacOS/WillPainel" --autoteste &
+          pid=$!
+          for i in $(seq 1 60); do kill -0 $pid 2>/dev/null || break; sleep 1; done
+          if kill -0 $pid 2>/dev/null; then kill $pid; echo "Autoteste não terminou em 60 s."; exit 1; fi
+          wait $pid
+      - name: Conferir o .dmg
+        run: |
+          hdiutil verify dist-mac/WillPainel-*.dmg
+          ls -l dist-mac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WillPainel-mac
+          path: dist-mac/WillPainel-*.dmg
+          retention-days: 7
+
+  windows:
+    name: Central WB / Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilar
+        run: dotnet build apps/windows-central/CentralWB.csproj -c Release -p:Version=$env:APP_VERSAO -o build-central
+      - name: Autoteste (abre a central de verdade)
+        run: |
+          $p = Start-Process -FilePath "build-central\CentralWB.exe" -ArgumentList "--autoteste" -PassThru
+          if (-not $p.WaitForExit(90000)) { $p.Kill(); throw "Autoteste não terminou em 90 s." }
+          if ($p.ExitCode -ne 0) { throw "Autoteste falhou (código $($p.ExitCode))." }
+          "Autoteste ok."
+      - name: Inno Setup
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc "/DVersao=$env:APP_VERSAO" "/DOrigem=$PWD\build-central" "/DSaida=$PWD\dist-central" apps\windows-central\central.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup falhou." }
+      - name: Instalação silenciosa de teste
+        run: |
+          $instalador = Get-ChildItem dist-central\CentralWB-Setup-*.exe | Select-Object -First 1
+          $p = Start-Process -FilePath $instalador.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -PassThru -Wait
+          if ($p.ExitCode -ne 0) { throw "Instalação falhou (código $($p.ExitCode))." }
+          $exe = Join-Path $env:LOCALAPPDATA "Programs\Central WB\CentralWB.exe"
+          if (-not (Test-Path $exe)) { throw "CentralWB.exe não foi instalado." }
+          "Instalado em $exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CentralWB-windows
+          path: dist-central/CentralWB-Setup-*.exe
+          retention-days: 7
+
+  publicar:
+    name: Publicar nas Releases
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefatos
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          GH_REPO: ${{ vars.DOWNLOADS_REPO || github.repository }}
+        run: |
+          cp artefatos/WillPainel-mac/WillPainel-*.dmg WillPainel.dmg
+          cp artefatos/CentralWB-windows/CentralWB-Setup-*.exe CentralWB-Instalador.exe
+          publicar() {   # etiqueta, título, notas, arquivo
+            if gh release view "$1" > /dev/null 2>&1; then
+              gh release edit "$1" --title "$2" --notes "$3" --latest=false
+            else
+              gh release create "$1" --title "$2" --notes "$3" --latest=false
+            fi
+            gh release upload "$1" "$4" --clobber
+          }
+          publicar app-mac-painel "Will Painel para Mac $APP_VERSAO" \
+            "Painel do dono para Mac (Apple Silicon e Intel, macOS 11 ou mais novo). Abra o .dmg e arraste para Aplicativos. Na primeira vez: botão direito no app > Abrir (no macOS 15: Ajustes > Privacidade e Segurança > Abrir mesmo assim)." \
+            WillPainel.dmg
+          publicar app-windows-central "Central WB para Windows $APP_VERSAO" \
+            "Central do fornecedor para Windows 10/11 (64 bits). Instala só para o usuário, sem pedir administrador." \
+            CentralWB-Instalador.exe
+          echo "Mac: https://github.com/$GH_REPO/releases/download/app-mac-painel/WillPainel.dmg"
+          echo "Windows: https://github.com/$GH_REPO/releases/download/app-windows-central/CentralWB-Instalador.exe"
