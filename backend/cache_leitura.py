@@ -6,6 +6,7 @@ vê o que acabou de subir.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 import time
@@ -64,6 +65,26 @@ def _leitura_repetida(request) -> bool:
     return request.headers.get("x-pdv-leitura") == "1"
 
 
+# Cookies de sessão que identificam quem lê (painel do dono e da rede). Sem eles, a leitura do painel não usa o cache.
+COOKIES_DE_SESSAO = ("willpdv_painel", "willpdv_rede")
+
+
+def _quem_le(request) -> str:
+    """Quem está lendo: o Bearer ou os cookies de sessão, em resumo (o token não fica guardado na memória).
+    Vazio = ninguém se identificou. O painel passou a usar cookie: sem isto, todas as sessões dividiam a mesma chave
+    e um dono via (por 45 s) o resumo de outra loja, até sem login."""
+    partes = [request.headers.get("authorization", "")]
+    partes += [request.cookies.get(nome, "") for nome in COOKIES_DE_SESSAO]
+    if not any(partes):
+        return ""
+    return hashlib.sha256("\x1f".join(partes).encode("utf-8")).hexdigest()
+
+
+def _publico(caminho: str) -> bool:
+    """O cardápio é público (a loja vai na URL). O resto precisa de alguém identificado para usar o cache."""
+    return caminho == "/v1/cardapio"
+
+
 def _chave(request) -> tuple:
     # O preço do cardápio depende do relógio (happy hour). A hora entra na chave para não
     # servir o preço da tarde à noite; dentro do mesmo minuto as consultas repetidas não acordam o banco.
@@ -71,12 +92,13 @@ def _chave(request) -> tuple:
     if request.url.path == "/v1/cardapio":
         from backend import cardapio as cardapio_mod
         hora = cardapio_mod.agora_local().strftime("%Y%m%d%H%M")
-    return (request.url.path, request.headers.get("authorization", ""), request.url.query, hora)
+    return (request.url.path, _quem_le(request), request.url.query, hora)
 
 
 async def tratar(request, call_next):
     caminho = request.url.path
-    if request.method == "GET" and caminho in CAMINHOS and _leitura_repetida(request):
+    if (request.method == "GET" and caminho in CAMINHOS and _leitura_repetida(request)
+            and (_publico(caminho) or _quem_le(request))):
         chave = _chave(request)
         hit = obter(chave)
         if hit is not None:
