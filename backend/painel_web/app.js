@@ -368,6 +368,7 @@
   function mostrarLogin() {
     $("tela-app").hidden = true;
     $("tela-login").hidden = false;
+    mostrarCartaoLogin("form-login");
     const loja = estado.loja && estado.loja.chave ? estado.loja.chave : lerArmazenamento(CHAVE_LOJA + ".chave");
     if (loja && !$("campo-loja").value) $("campo-loja").value = loja;
     $("campo-senha").value = "";
@@ -431,15 +432,41 @@
     mostrarLogin();
   }
 
+  /** Depois de qualquer login (loja, rede, e-mail, código ou senha nova): abre a rede ou a loja. */
+  function aposLogin(dados, chaveDigitada) {
+    if (dados.grupo) {
+      entrarNaRede(dados);
+      return;
+    }
+    estado.modo = "loja";
+    esquecerRede();                                     // entrou direto numa loja: não há rede para voltar
+    guardarSessao(dados, (dados.loja && dados.loja.chave) || chaveDigitada);
+    estado.lojas = null;
+    estado.dia = null;
+    estado.paginaVendas = 1;
+    mostrarApp();
+    atualizarTudo();
+  }
+
+  /** Mostra só um dos cartões da tela de entrada. */
+  function mostrarCartaoLogin(id) {
+    ["form-login", "form-codigo", "form-esqueci", "form-definir", "form-senha-rede"].forEach((f) => {
+      const el = $(f);
+      if (el) el.hidden = f !== id;
+    });
+  }
+
   async function entrar(evento) {
     evento.preventDefault();
-    const loja = $("campo-loja").value.trim().toUpperCase();
+    const digitado = $("campo-loja").value.trim();
+    const porEmail = digitado.includes("@");
+    const loja = porEmail ? digitado.toLowerCase() : digitado.toUpperCase();
     const senha = $("campo-senha").value;
     const erro = $("erro-login");
     erro.hidden = true;
 
     if (!loja || !senha) {
-      erro.textContent = "Informe a loja e a senha.";
+      erro.textContent = "Informe o e-mail (ou o código da loja) e a senha.";
       erro.hidden = false;
       return;
     }
@@ -448,19 +475,23 @@
     botao.disabled = true;
     botao.textContent = "Entrando…";
     try {
-      const dados = await chamarApi("/login", { metodo: "POST", corpo: { loja, senha }, semToken: true });
-      if (dados.grupo) {
-        entrarNaRede(dados);
+      if (porEmail) {
+        const dados = await chamarApi("/login-email", { metodo: "POST", corpo: { email: loja, senha }, semToken: true });
+        if (dados.precisa_codigo) {
+          estado.desafio = dados.desafio;
+          $("codigo-destino").textContent = "Mandamos um código de 6 dígitos para " + (dados.email || "o seu e-mail") +
+            ". Confira também a caixa de spam.";
+          $("campo-codigo").value = "";
+          $("erro-codigo").hidden = true;
+          mostrarCartaoLogin("form-codigo");
+          setTimeout(() => $("campo-codigo").focus(), 50);
+          return;
+        }
+        aposLogin(dados, "");
         return;
       }
-      estado.modo = "loja";
-      esquecerRede();                                     // entrou direto numa loja: não há rede para voltar
-      guardarSessao(dados, loja);
-      estado.lojas = null;
-      estado.dia = null;
-      estado.paginaVendas = 1;
-      mostrarApp();
-      atualizarTudo();
+      const dados = await chamarApi("/login", { metodo: "POST", corpo: { loja, senha }, semToken: true });
+      aposLogin(dados, loja);
     } catch (e) {
       erro.textContent = e instanceof ErroRede ? "Sem conexão com o servidor. Verifique a internet." : e.message;
       erro.hidden = false;
@@ -468,6 +499,74 @@
       botao.disabled = false;
       botao.textContent = "Entrar";
     }
+  }
+
+  async function confirmarCodigo(evento) {
+    evento.preventDefault();
+    const erro = $("erro-codigo");
+    erro.hidden = true;
+    try {
+      const dados = await chamarApi("/login-email/codigo", { metodo: "POST", semToken: true,
+        corpo: { desafio: estado.desafio || "", codigo: $("campo-codigo").value } });
+      estado.desafio = null;
+      mostrarCartaoLogin("form-login");
+      aposLogin(dados, "");
+    } catch (e) {
+      erro.textContent = e instanceof ErroRede ? "Sem conexão com o servidor." : e.message;
+      erro.hidden = false;
+    }
+  }
+
+  async function pedirNovaSenha(evento) {
+    evento.preventDefault();
+    const msg = $("msg-esqueci");
+    const email = $("campo-esqueci").value.trim();
+    if (!email.includes("@")) {
+      msg.textContent = "Informe o e-mail do seu acesso.";
+      msg.hidden = false;
+      return;
+    }
+    try {
+      const r = await chamarApi("/senha/esqueci", { metodo: "POST", corpo: { email }, semToken: true });
+      msg.textContent = r.mensagem;
+    } catch (e) {
+      msg.textContent = e instanceof ErroRede ? "Sem conexão com o servidor." : e.message;
+    }
+    msg.hidden = false;
+  }
+
+  /** Link do e-mail (convite ou nova senha): /painel/?senha=TOKEN. */
+  async function abrirLinkDeSenha(token) {
+    $("tela-app").hidden = true;
+    $("tela-login").hidden = false;
+    mostrarCartaoLogin("form-definir");
+    const erro = $("erro-definir");
+    try {
+      const info = await chamarApi("/senha/link?token=" + encodeURIComponent(token), { semToken: true });
+      $("definir-email").textContent = (info.tipo === "convite" ? "Bem-vindo! " : "") + "Acesso: " + info.email;
+    } catch (e) {
+      erro.textContent = e instanceof ErroRede ? "Sem conexão com o servidor." : e.message;
+      erro.hidden = false;
+    }
+    $("form-definir").addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+      erro.hidden = true;
+      const nova = $("campo-nova").value;
+      if (nova !== $("campo-repetir").value) {
+        erro.textContent = "As duas senhas não são iguais.";
+        erro.hidden = false;
+        return;
+      }
+      try {
+        const dados = await chamarApi("/senha/definir", { metodo: "POST", corpo: { token, senha: nova }, semToken: true });
+        try { history.replaceState(null, "", location.pathname); } catch (_) { /* segue */ }
+        mostrarCartaoLogin("form-login");
+        aposLogin(dados, "");
+      } catch (e) {
+        erro.textContent = e instanceof ErroRede ? "Sem conexão com o servidor." : e.message;
+        erro.hidden = false;
+      }
+    });
   }
 
   // ------------------------------------------------------------------
@@ -3017,6 +3116,16 @@
     try { estado.loja = JSON.parse(lerArmazenamento(CHAVE_LOJA) || "null"); } catch (_) { estado.loja = null; }
 
     $("form-login").addEventListener("submit", entrar);
+    $("form-codigo").addEventListener("submit", confirmarCodigo);
+    $("form-esqueci").addEventListener("submit", pedirNovaSenha);
+    $("botao-esqueci").addEventListener("click", () => {
+      const digitado = $("campo-loja").value.trim();
+      $("campo-esqueci").value = digitado.includes("@") ? digitado : "";
+      $("msg-esqueci").hidden = true;
+      mostrarCartaoLogin("form-esqueci");
+    });
+    $("botao-esqueci-voltar").addEventListener("click", () => mostrarCartaoLogin("form-login"));
+    $("botao-codigo-voltar").addEventListener("click", () => mostrarCartaoLogin("form-login"));
     $("botao-sair").addEventListener("click", () => encerrarSessao(true));
     $("botao-atualizar").addEventListener("click", () => atualizarAgora());
     configurarMeta();
@@ -3193,7 +3302,9 @@
     $("relatorio-agora").addEventListener("click", enviarRelatorioAgora);
     $("seletor-loja-resumo").addEventListener("change", (e) => { if (e.target.value) trocarDeLojaNaRede(e.target.value); });
     $("botao-atualizar-rede").addEventListener("click", atualizarRede);
-    retomarPeloCookie();
+    const linkSenha = new URLSearchParams(location.search).get("senha");
+    if (linkSenha) abrirLinkDeSenha(linkSenha);         // link do e-mail: criar senha antes de qualquer coisa
+    else retomarPeloCookie();
   }
 
   async function retomarPeloCookie() {

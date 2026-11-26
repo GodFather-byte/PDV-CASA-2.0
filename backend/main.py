@@ -83,6 +83,7 @@ def hash_token(token: str) -> str:
 
 import backend.erros_caixa as _erros_caixa  # noqa: E402  (registra a tabela antes do create_all)
 import backend.relatorio_diario as _relatorio_diario  # noqa: E402  (idem: tabela relatorios_diarios)
+import backend.painel_usuarios as _painel_usuarios  # noqa: E402  (idem: login do dono por e-mail)
 
 Base.metadata.create_all(bind=engine)
 
@@ -562,6 +563,7 @@ _notas_dono.instalar(app, Loja, autenticar)
 from backend import painel_lojas as _painel_lojas  # noqa: E402
 
 _painel_lojas.instalar(app, Loja)
+_painel_usuarios.instalar(app, Loja)
 
 # Retaguarda na nuvem: espelho dos cadastros e fila de alterações que o caixa aplica (backend/retaguarda.py).
 from backend import retaguarda as _retaguarda  # noqa: E402
