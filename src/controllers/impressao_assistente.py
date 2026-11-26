@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from src.controllers.config_controller import ConfigController
 from src.core import edicao, formatacao as fmt
-from src.hardware import impressoras_so
+from src.hardware import impressoras_so, perfis_impressora
 from src.hardware.impressora_termica import ErroImpressao
 from src.hardware.impressoras_so import ImpressoraWindows
 
@@ -45,18 +45,74 @@ def sugerir(impressoras: list[ImpressoraWindows]) -> ImpressoraWindows | None:
     return None
 
 
-def configurar(banco, nome: str, colunas: int | None = None) -> None:
-    """Põe o caixa para imprimir cupom na impressora `nome` do Windows (modo térmica, conexão Windows/RAW, CP850, 48 colunas, corte).
+def configurar(banco, nome: str, colunas: int | None = None, papel_mm: int | None = None, letra: str | None = None,
+               driver: str = "") -> dict:
+    """Põe o caixa para imprimir cupom na impressora `nome` do Windows (modo térmica, conexão Windows/RAW, CP850, corte).
 
-    Vale na hora (as próximas impressões já usam), sem precisar sair do programa. Mantém o que já estava configurado de gaveta e logotipo."""
+    O tamanho do cupom segue o papel e a letra: o papel vem de `papel_mm`, senão do nome/driver da impressora (POS-58,
+    XP-80, Elgin i9...), senão do que já estava escolhido, senão 80 mm. Vale na hora (as próximas impressões já usam).
+    Mantém o que já estava configurado de gaveta e logotipo. Devolve o papel, a letra e as colunas gravados."""
     nome = (nome or "").strip()
     if not nome:
         raise ErroImpressao("Escolha uma impressora da lista.")
-    dados = dict(PERFIL, impressora_termica_endereco=nome)
-    if colunas:
-        dados["colunas_fita"] = colunas
+    atual = ConfigController(banco).maquina()
+    papel = (papel_mm or perfis_impressora.papel_pelo_nome(nome, driver) or atual.get("impressora_papel_mm")
+             or (perfis_impressora.papel_das_colunas(atual.get("colunas_fita")) if atual.get("modo_impressao") == "termica" else 80))
+    letra = letra or atual.get("impressora_letra") or "normal"
+    dados = dict(PERFIL, impressora_termica_endereco=nome, impressora_papel_mm=str(papel), impressora_letra=letra)
+    dados.pop("colunas_fita")
     ConfigController(banco).salvar_maquina(dados)
-    banco.log("impressora_configurada", nome)
+    if colunas:                                         # pedido explícito (ex.: impressora fora do padrão)
+        ConfigController(banco).salvar_maquina({"colunas_fita": colunas})
+    banco.log("impressora_configurada", f"{nome} · {perfis_impressora.descrever(papel, letra)}")
+    m = ConfigController(banco).maquina()
+    return {"papel_mm": int(m["impressora_papel_mm"]), "letra": m["impressora_letra"], "colunas": int(m["colunas_fita"])}
+
+
+def ajustar_tamanho(banco, papel_mm: int, letra: str = "normal", cortar: bool | None = None) -> dict:
+    """Só o tamanho do cupom (papel e letra), sem trocar a impressora. Usado pelo assistente e pela retaguarda."""
+    if int(papel_mm or 0) not in perfis_impressora.PAPEIS:
+        raise ErroImpressao("Escolha o papel: 58 mm ou 80 mm.")
+    if letra not in perfis_impressora.LETRAS:
+        raise ErroImpressao("Escolha a letra: normal ou pequena.")
+    dados = {"impressora_papel_mm": str(int(papel_mm)), "impressora_letra": letra}
+    if cortar is not None:
+        dados["impressora_termica_cortar"] = "S" if cortar else "N"
+    ConfigController(banco).salvar_maquina(dados)
+    banco.log("impressora_tamanho", perfis_impressora.descrever(int(papel_mm), letra))
+    m = ConfigController(banco).maquina()
+    return {"papel_mm": int(m["impressora_papel_mm"]), "letra": m["impressora_letra"], "colunas": int(m["colunas_fita"])}
+
+
+def ajustar_e_ligar(banco, papel_mm: int, letra: str = "normal", cortar: bool | None = None,
+                    impressoras: list[ImpressoraWindows] | None = None) -> dict:
+    """Ajuste completo (retaguarda e botão do assistente): se o caixa ainda não imprime pela térmica (modo 'tela' ou
+    'documento do Windows', que faz o cupom sair grande), escolhe a impressora de cupom instalada e liga; depois aplica
+    papel e letra. Sem impressora de cupom no Windows, só grava o tamanho e avisa."""
+    m = ConfigController(banco).maquina()
+    ligada = ""
+    if m["modo_impressao"] != "termica" or not (m["impressora_termica_endereco"] or "").strip():
+        if impressoras is None:
+            impressoras = impressoras_so.listar_impressoras()
+        escolhida = sugerir(impressoras)
+        if escolhida is not None and not escolhida.virtual and (escolhida.termica_provavel or _ELGIN.search(
+                f"{escolhida.nome} {escolhida.driver}")):
+            configurar(banco, escolhida.nome, papel_mm=papel_mm, letra=letra, driver=escolhida.driver)
+            ligada = escolhida.nome
+    feito = ajustar_tamanho(banco, papel_mm, letra, cortar)
+    feito["impressora_ligada"] = ligada
+    feito["modo"] = ConfigController(banco).maquina()["modo_impressao"]
+    return feito
+
+
+def situacao_tamanho(banco) -> dict:
+    """O que a retaguarda e o assistente mostram: impressora, papel, letra, colunas e se o cupom cabe no papel."""
+    m = ConfigController(banco).maquina()
+    papel = int(m.get("impressora_papel_mm") or 0)
+    return {"modo": m["modo_impressao"], "impressora": (m["impressora_termica_endereco"] or "").strip(),
+            "conexao": m["impressora_termica_conexao"], "papel_mm": papel, "letra": m.get("impressora_letra") or "normal",
+            "colunas": int(m["colunas_fita"] or 0), "cortar": bool(m["impressora_termica_cortar"]),
+            "papel_sugerido": perfis_impressora.papel_pelo_nome(m["impressora_termica_endereco"] or "")}
 
 
 def diagnosticar(banco, impressoras: list[ImpressoraWindows] | None = None, spooler: bool | None = None,
@@ -82,9 +138,27 @@ def diagnosticar(banco, impressoras: list[ImpressoraWindows] | None = None, spoo
     modo, conexao = m["modo_impressao"], m["impressora_termica_conexao"]
     endereco = (m["impressora_termica_endereco"] or "").strip()
 
-    if modo != "termica":
+    if modo == "windows":
+        # Imprimir "pela impressora padrão do Windows" manda o cupom como documento comum (folha A4, letra de
+        # documento): na térmica sai enorme e comprido. É o caso mais comum de "o papel sai grande".
+        achados.append(Achado("erro", "O caixa imprime como documento comum do Windows: na impressora de cupom a letra sai "
+                                      "grande e o papel sai comprido.",
+                              "Escolha a impressora na lista, confira o papel (58 ou 80 mm) e toque em 'Configurar e "
+                              "enviar teste': o cupom passa a sair no tamanho certo da bobina."))
+    elif modo != "termica":
         achados.append(Achado("erro", f"O caixa está em modo '{modo}': os cupons NÃO vão para a impressora.",
                               "Toque em 'Configurar e imprimir teste' para ligar a impressão pela impressora térmica."))
+    papel = int(m.get("impressora_papel_mm") or 0)
+    colunas = int(m["colunas_fita"] or 0)
+    if modo == "termica" and papel in perfis_impressora.PAPEIS:
+        certo = perfis_impressora.colunas(papel, m.get("impressora_letra") or "normal")
+        if colunas > certo:
+            achados.append(Achado("erro", f"O cupom está com {colunas} caracteres por linha, mas o papel de {papel} mm só "
+                                          f"comporta {certo}: as linhas quebram e o cupom sai comprido.",
+                                  "Em 'Tamanho do cupom', escolha o papel e a letra e toque em Aplicar."))
+    elif modo == "termica" and not papel:
+        achados.append(Achado("aviso", f"O papel da impressora ainda não foi escolhido (usando {colunas} caracteres por linha).",
+                              "Em 'Tamanho do cupom', escolha 58 mm (bobina pequena) ou 80 mm (bobina grande) e toque em Aplicar."))
     if conexao == "nenhuma" or (modo == "termica" and not endereco and conexao != "arquivo"):
         achados.append(Achado("erro", "Nenhuma impressora escolhida no caixa.", "Escolha a Elgin i9 na lista e use 'Configurar e imprimir teste'."))
     if spooler is False:
@@ -133,7 +207,8 @@ def relatorio(banco, impressoras: list[ImpressoraWindows] | None = None, spooler
     linhas = [f"DIAGNÓSTICO DE IMPRESSÃO — {edicao.atual().nome} {versao}".strip(), f"{fmt.fmt_datahora(fmt.agora())}  ·  sistema: {sys.platform}", "",
               "Configuração desta máquina:",
               f"  modo: {m['modo_impressao']}   conexão: {m['impressora_termica_conexao']}   endereço: {m['impressora_termica_endereco'] or '-'}",
-              f"  colunas: {m['colunas_fita']}   página de código: {m['impressora_termica_codepage']}   cortar: {'sim' if m['impressora_termica_cortar'] else 'não'}"
+              f"  papel: {m.get('impressora_papel_mm') or '-'} mm   letra: {m.get('impressora_letra') or 'normal'}"
+              f"   colunas: {m['colunas_fita']}   página de código: {m['impressora_termica_codepage']}   cortar: {'sim' if m['impressora_termica_cortar'] else 'não'}"
               f"   gaveta: {'sim' if m['impressora_termica_gaveta'] else 'não'}", "",
               f"Spooler de Impressão do Windows: {'rodando' if spooler else 'PARADO' if spooler is False else 'não verificado'}",
               f"Portas USB de impressora detectadas: {', '.join(portas_usb) if portas_usb else 'nenhuma'}",

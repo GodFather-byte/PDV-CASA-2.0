@@ -180,10 +180,19 @@ class RetaguardaController:
 
     def espelho(self) -> dict:
         """As seções que sobem: `esquema`, `financeiro` e uma `cadastro:<chave>` por cadastro."""
-        secoes = {"esquema": self.esquema(), "financeiro": self.financeiro(), "combos": {"linhas": self.combos()}}
+        secoes = {"esquema": self.esquema(), "financeiro": self.financeiro(), "combos": {"linhas": self.combos()},
+                  "impressora": self.impressora()}
         for ent in self.entidades():
             secoes[f"cadastro:{ent.chave}"] = self.linhas(ent.chave)
         return secoes
+
+    def impressora(self) -> dict:
+        """Impressora de cupom do caixa principal (onde a retaguarda chega): papel, letra e colunas."""
+        from src.controllers import impressao_assistente
+        try:
+            return impressao_assistente.situacao_tamanho(self.banco)
+        except Exception:                                  # noqa: BLE001 - sem máquina configurada: seção vazia
+            return {}
 
     def combos(self) -> list[dict]:
         """Combos e montagens (produto feito de outros, que baixa cada item na venda): itens, preço e quanto os itens
@@ -267,7 +276,34 @@ class RetaguardaController:
             return self._foto_produto(dados)
         if tipo == "produto.combo":
             return self._criar_combo(dados)
+        if tipo == "impressora.ajustar":
+            return self._ajustar_impressora(dados)
         raise ErroNegocio("Este caixa não conhece este tipo de alteração. Atualize o programa da loja.")
+
+    def _ajustar_impressora(self, dados: dict) -> int:
+        """Tamanho do cupom pela retaguarda (papel e letra) no caixa principal; com `testar`, imprime a página de teste."""
+        from src.controllers import impressao_assistente
+        try:
+            papel = int(dados.get("papel_mm") or 0)
+        except (TypeError, ValueError):
+            papel = 0
+        cortar = dados.get("cortar")
+        feito = impressao_assistente.ajustar_e_ligar(self.banco, papel, str(dados.get("letra") or "normal"),
+                                                    None if cortar is None else bool(cortar))
+        from src.hardware import perfis_impressora
+        self.ultimo_detalhe = "Impressora: " + perfis_impressora.descrever(feito["papel_mm"], feito["letra"]) + "."
+        if feito["impressora_ligada"]:
+            self.ultimo_detalhe += f" Cupom ligado na térmica '{feito['impressora_ligada']}'."
+        elif feito["modo"] != "termica":
+            self.ultimo_detalhe += " Atenção: o caixa não achou impressora de cupom no Windows; use o assistente no caixa."
+        if dados.get("testar"):
+            from src.controllers.impressao_controller import ImpressaoController
+            try:
+                ImpressaoController(self.banco).imprimir_teste()
+                self.ultimo_detalhe += " Página de teste enviada."
+            except Exception as erro:                      # noqa: BLE001 - o tamanho já ficou gravado
+                self.ultimo_detalhe += f" O teste não saiu: {erro}"[:200]
+        return 0
 
     def _criar_combo(self, dados: dict) -> int:
         """Combo montado pela retaguarda: as mesmas regras do "Criar combo" do caixa (ProdutoController.criar_combo)."""

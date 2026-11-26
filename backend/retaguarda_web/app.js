@@ -213,6 +213,7 @@
     }
     abrirGrupo("Loja");
     botao("config", "Configurações");
+    botao("impressora", "Impressora do cupom");
     botao("alteracoes", "Alterações enviadas", estado.visao.pendentes || null);
     if (estado.secao) compacto.value = estado.secao;
   }
@@ -233,6 +234,7 @@
       else if (secao === "caderneta") no = await telaCaderneta();
       else if (secao === "combos") no = await telaCombos();
       else if (secao === "ia") no = await telaIa();
+      else if (secao === "impressora") no = await telaImpressora();
       else if (secao === "config") no = telaConfig();
       else if (secao === "planilha") no = telaPlanilha();
       else if (secao === "servicos") no = await telaServicos();
@@ -1421,6 +1423,70 @@
     });
     return raiz;
   }
+  /** Tamanho do cupom da impressora do caixa principal: papel (58/80 mm) e letra (normal/pequena). O caixa aplica
+   *  na próxima sincronização e, se pedido, imprime a página de teste com a régua. */
+  async function telaImpressora() {
+    const raiz = el("section");
+    raiz.append(el("h1", "Impressora do cupom"));
+    const r = await api("/impressora");
+    const imp = r.impressora || {};
+    if (!r.sincronizado) {
+      raiz.append(el("p", "O caixa ainda não mandou os dados da impressora. Atualize o programa do caixa (1.14.29 ou mais novo) e espere a próxima sincronização.", "aviso"));
+      return raiz;
+    }
+    const COLUNAS = { "58-normal": 32, "58-pequena": 42, "80-normal": 48, "80-pequena": 64 };
+    const atual = el("p", "", "suave");
+    atual.textContent = (imp.impressora ? "Impressora: " + imp.impressora + ". " : "Nenhuma impressora escolhida no caixa. ") +
+      (imp.papel_mm ? "Papel de " + imp.papel_mm + " mm, letra " + imp.letra + " (" + imp.colunas + " por linha)."
+        : "Papel ainda não escolhido (" + imp.colunas + " por linha).");
+    raiz.append(atual);
+    if (imp.modo === "windows") {
+      raiz.append(el("p", "O caixa está imprimindo como documento comum do Windows: por isso o cupom sai grande. Peça ao caixa para abrir Configurações > Assistente de impressora e tocar em \"Configurar e enviar teste\".", "aviso"));
+    }
+    raiz.append(el("p", "Se o cupom sai grande, comprido ou com linhas quebradas, escolha a largura da bobina e a letra. Letra pequena deixa o cupom mais curto e cabe mais em cada linha.", "suave"));
+    const papel = el("select");
+    papel.id = "impressora-papel";
+    papel.setAttribute("aria-label", "Largura do papel");
+    papel.append(new Option("Papel de 58 mm (bobina pequena)", "58"), new Option("Papel de 80 mm (bobina grande)", "80"));
+    papel.value = String(imp.papel_mm || imp.papel_sugerido || (imp.colunas && imp.colunas <= 42 ? 58 : 80));
+    const letra = el("select");
+    letra.id = "impressora-letra";
+    letra.setAttribute("aria-label", "Tamanho da letra");
+    letra.append(new Option("Letra normal", "normal"), new Option("Letra pequena (cupom mais curto)", "pequena"));
+    letra.value = imp.letra || "normal";
+    const cortar = el("label");
+    const caixaCortar = el("input");
+    caixaCortar.type = "checkbox";
+    caixaCortar.id = "impressora-cortar";
+    caixaCortar.checked = imp.cortar !== false;
+    cortar.append(caixaCortar, document.createTextNode(" Cortar o papel no fim (desmarque se a impressora não tem guilhotina)"));
+    const testar = el("label");
+    const caixaTestar = el("input");
+    caixaTestar.type = "checkbox";
+    caixaTestar.id = "impressora-testar";
+    caixaTestar.checked = true;
+    testar.append(caixaTestar, document.createTextNode(" Imprimir uma página de teste no caixa"));
+    const resumo = el("p", "", "suave");
+    const mostrar = () => { resumo.textContent = COLUNAS[papel.value + "-" + letra.value] + " caracteres por linha."; };
+    papel.addEventListener("change", mostrar);
+    letra.addEventListener("change", mostrar);
+    mostrar();
+    const salvar = el("button", "Enviar para o caixa", "botao");
+    salvar.type = "button";
+    salvar.id = "impressora-salvar";
+    salvar.addEventListener("click", async () => {
+      salvar.disabled = true;
+      try {
+        await pedir("impressora.ajustar", { papel_mm: Number(papel.value), letra: letra.value, cortar: caixaCortar.checked,
+          testar: caixaTestar.checked }, "Impressora: papel " + papel.value + " mm, letra " + letra.value);
+        recado("Enviado. O caixa aplica na próxima sincronização" + (caixaTestar.checked ? " e imprime a página de teste." : "."));
+      } catch (erro) { recado(erro.message); }
+      finally { salvar.disabled = false; }
+    });
+    raiz.append(papel, letra, resumo, cortar, testar, salvar);
+    return raiz;
+  }
+
   /** Foto do celular reduzida para até 1600 px em JPEG: cabe no limite de 5 MB e sobe rápido no 4G. */
   function fotoReduzida(arquivo) {
     return new Promise((ok, falha) => {

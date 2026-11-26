@@ -37,13 +37,14 @@ ALINHAR_DIR = ESC + b"a\x02"
 TAMANHO_NORMAL = GS + b"!\x00"          # GS ! 0
 TAMANHO_ALTO = GS + b"!\x01"            # dobro da altura (mantém a largura/colunas)
 TAMANHO_GRANDE = GS + b"!\x11"          # dobro de largura e altura
+FONTE_PEQUENA = ESC + b"M\x01"          # ESC M 1 — fonte B: letra menor, cabe mais por linha
 ESPACO_PADRAO = ESC + b"2"              # ESC 2  — volta ao espaço entre linhas de fábrica
 ESPACO_ECONOMICO = 26                   # pontos entre linhas (a letra tem 24): cerca de 13% menos papel
 
 
-def espaco_entre_linhas(pontos: int) -> bytes:
-    """ESC 3 n: espaço entre linhas em pontos. Abaixo da altura da letra a impressora usa a altura da letra."""
-    return ESC + b"3" + bytes([max(24, min(int(pontos), 255))])
+def espaco_entre_linhas(pontos: int, minimo: int = 24) -> bytes:
+    """ESC 3 n: espaço entre linhas em pontos, nunca abaixo da altura da letra (24 na normal, 17 na pequena)."""
+    return ESC + b"3" + bytes([max(minimo, min(int(pontos), 255))])
 
 # Página de código: nome do codec Python -> número da tabela ESC/POS (ESC t n).
 CODEPAGES = {"cp850": 2, "cp860": 3, "cp1252": 16, "cp437": 0, "ascii": 0, "utf-8": None}
@@ -82,9 +83,11 @@ def _estilo_prefixo(linha: str, prefixos) -> bool:
 def texto_para_escpos(texto: str, *, codepage: str = "cp850", cortar: bool = True,
                       abrir_gaveta: bool = False, pino_gaveta: int = 0,
                       negrito_linhas: int = 0, negrito_prefixos=(), grande_prefixos=(),
-                      logotipo: bytes | None = None, espacamento: int | None = None) -> bytes:
+                      logotipo: bytes | None = None, espacamento: int | None = None,
+                      letra_pequena: bool = False) -> bytes:
     """Converte um texto já formatado (colunas fixas) em bytes ESC/POS.
 
+    `letra_pequena` usa a fonte B da térmica (o texto já vem montado com as colunas dela).
     `espacamento` (pontos) aproxima as linhas para gastar menos papel; antes do avanço e do corte volta ao
     padrão, para a última linha não ficar presa na guilhotina.
 
@@ -96,10 +99,14 @@ def texto_para_escpos(texto: str, *, codepage: str = "cp850", cortar: bool = Tru
     out = bytearray()
     out += INICIALIZAR
     out += _selecionar_codepage(codepage)
+    if letra_pequena:
+        out += FONTE_PEQUENA
+        if espacamento:
+            espacamento = max(18, espacamento - 8)    # a letra pequena tem 17 pontos: linhas juntas na mesma proporção
     if logotipo:
         out += logotipo            # já vem centralizado e termina com o alinhamento à esquerda
     if espacamento:
-        out += espaco_entre_linhas(espacamento)
+        out += espaco_entre_linhas(espacamento, 18 if letra_pequena else 24)
     destacadas = 0
     for linha in texto.split("\n"):
         tem_texto = bool(linha.strip())
@@ -273,6 +280,7 @@ class ImpressoraTermica:
     cortar: bool = True
     tem_gaveta: bool = False
     pino_gaveta: int = 0
+    letra_pequena: bool = False
 
     @classmethod
     def da_maquina(cls, m: dict) -> "ImpressoraTermica":
@@ -284,6 +292,7 @@ class ImpressoraTermica:
             cortar=bool(m.get("impressora_termica_cortar", 1)),
             tem_gaveta=bool(m.get("impressora_termica_gaveta", 0)),
             pino_gaveta=int(m.get("impressora_termica_pino") or 0),
+            letra_pequena=(m.get("impressora_letra") or "normal") == "pequena",
         )
 
     @property
@@ -308,7 +317,8 @@ class ImpressoraTermica:
 
         `copias` repete o cupom inteiro, com corte entre as vias; a gaveta só abre na primeira."""
         corte = self.cortar if cortar is None else cortar
-        base = dict(codepage=self.codepage, cortar=corte, pino_gaveta=self.pino_gaveta, logotipo=logotipo, **estilo)
+        base = dict(codepage=self.codepage, cortar=corte, pino_gaveta=self.pino_gaveta, logotipo=logotipo,
+                    letra_pequena=self.letra_pequena, **estilo)
         primeira = texto_para_escpos(texto, abrir_gaveta=abrir_gaveta and self.tem_gaveta, **base)
         copias = max(1, min(int(copias or 1), 5))
         if copias == 1:
@@ -326,17 +336,18 @@ class ImpressoraTermica:
         self.enviar_bytes(INICIALIZAR + pulso_gaveta(self.pino_gaveta))
 
     def ticket_teste(self, nome_loja: str = "PDV") -> str:
+        """Página de teste que cabe em qualquer papel. A régua tem exatamente as colunas configuradas: se ela sair em
+        uma linha só, de ponta a ponta, o tamanho está certo; se quebrar, está largo demais para o papel."""
+        w = self.colunas
+        regua = ("1234567890" * (w // 10 + 1))[:w]
         return "\n".join([
-            nome_loja.upper().center(self.colunas), "=" * self.colunas,
-            "PAGINA DE TESTE".center(self.colunas),
-            "Impressora termica ESC/POS".center(self.colunas), "-" * self.colunas,
-            "Acentuacao: acao, pao, cafe, R$ 1.234,56",
-            f"Colunas configuradas: {self.colunas}",
-            f"Conexao: {self.conexao}  {self.endereco}",
-            f"Pagina de codigo: {self.codepage}",
-            "0123456789 ABCDEFGHIJ abcdefghij",
-            "-" * self.colunas, "TOTAL: R$ 0,00", "=" * self.colunas,
-            "Se este texto saiu alinhado e com", "acentos corretos, esta tudo certo.",
+            nome_loja.upper()[:w].center(w), "=" * w,
+            "PAGINA DE TESTE".center(w), "-" * w,
+            "Acentos: acao, pao, cafe", "Valor: R$ 1.234,56",
+            f"Letra {'pequena' if self.letra_pequena else 'normal'}: {w} por linha",
+            f"Conexao: {self.conexao}"[:w], f"{self.endereco}"[:w],
+            "A regua abaixo deve caber", "em UMA linha, de ponta a ponta:",
+            regua, "-" * w, "TOTAL: R$ 0,00", "=" * w,
         ])
 
     def teste(self, nome_loja: str = "PDV") -> None:

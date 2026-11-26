@@ -43,7 +43,8 @@ _TERMICA = re.compile(
     r"epson\s*tm|tm-?[tmhul]\d|bematech|mp-?(4200|2500|100|20)|elgin|\bi[79]\b|daruma|dr-?\d{3}|tanca|tp-?\d{3}|"
     r"diebold|procomp|sweda|control\s*id|pos-?\s?(58|80)|pos\s*printer|thermal|t[eé]rmica|receipt|cupom|"
     r"n[aã]o\s*fiscal|esc\s*/?\s*pos|star\s*tsp|\btsp\d|citizen|gertec|jetway|knup|datecs|rongta|xprinter|"
-    r"goojprt|generic\s*/?\s*text|somente\s*texto|text\s*only", re.I)
+    r"goojprt|generic\s*/?\s*text|somente\s*texto|text\s*only|\bka[-\s]?\d{3,4}\b|\bxp-?\d|\bgp-?\d|\b(58|80)\s*mm\b|"
+    r"\bmtp\b|zjiang|bixolon|sunmi|sat\s*\d|\bpos\b", re.I)
 # Impressoras de mentira (PDF, fax, OneNote...): aparecem, mas por último, e não servem para cupom.
 _VIRTUAL = re.compile(r"pdf|xps|onenote|fax|document\s*writer|print\s*to|imprimir\s*em|snagit|anydesk|teamviewer|virtual", re.I)
 _PORTAS_VIRTUAIS = {"PORTPROMPT:", "FILE:", "NUL:", "XPSPORT:", "SHRFAX:", "NULL:"}

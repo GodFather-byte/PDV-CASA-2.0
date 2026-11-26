@@ -131,14 +131,23 @@ def texto(banco, nota: dict, largura: int | None = None) -> tuple[str, str]:
     return "\n".join(a), "\n".join(depois)
 
 
+def _letra_pequena(banco) -> bool:
+    try:
+        from src.controllers.config_controller import ConfigController
+        return (ConfigController(banco).maquina().get("impressora_letra") or "normal") == "pequena"
+    except Exception:                                    # noqa: BLE001 - sem máquina (testes): letra normal
+        return False
+
+
 def _em_contingencia(nota: dict) -> bool:
     return bool(nota.get("contingencia_em")) and not nota.get("autorizada_em")
 
 
 def escpos(banco, nota: dict) -> bytes:
     antes, depois = texto(banco, nota)
-    corpo = term.texto_para_escpos(antes, cortar=False, negrito_linhas=1)
+    pequena = _letra_pequena(banco)              # o texto sai com as colunas da letra escolhida na máquina
+    corpo = term.texto_para_escpos(antes, cortar=False, negrito_linhas=1, letra_pequena=pequena)
     if nota.get("qrcode_url"):
         corpo += qrcode(nota["qrcode_url"])
-    corpo += term.texto_para_escpos(depois, cortar=True)
+    corpo += term.texto_para_escpos(depois, cortar=True, letra_pequena=pequena)
     return corpo

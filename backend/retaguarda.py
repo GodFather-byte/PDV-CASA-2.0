@@ -36,9 +36,10 @@ LIMITE_PENDENTES = 300                      # comandos esperando o caixa, por lo
 LOTE_ENTREGA = 20
 PAGINA = 100
 DIAS_HISTORICO = 90
-SECAO_VALIDA = re.compile(r"^(esquema|financeiro|combos|cadastro:[a-z_]{1,40})$")
+SECAO_VALIDA = re.compile(r"^(esquema|financeiro|combos|impressora|cadastro:[a-z_]{1,40})$")
 TIPOS_COMANDO = ("cadastro.salvar", "cadastro.excluir", "estoque.movimento", "config.salvar", "produtos.importar",
-                 "produtos.desfazer", "produto.foto", "produto.combo", "conta.incluir", "conta.alterar", "conta.quitar", "conta.desfazer", "conta.excluir")
+                 "produtos.desfazer", "produto.foto", "produto.combo", "impressora.ajustar", "conta.incluir",
+                 "conta.alterar", "conta.quitar", "conta.desfazer", "conta.excluir")
 SITUACOES_FINAIS = ("aplicado", "recusado")
 SO_FORNECEDOR = ("produtos.importar",)      # pela rota genérica, o lote continua serviço do fornecedor
 LIMITE_PLANILHA_BYTES = 3 * 1024 * 1024
@@ -438,6 +439,11 @@ def _rotas_de_leitura_e_escrita(router: APIRouter, prefixo: str, loja_da_sessao,
     @router.get(prefixo + "/codigo-barras/{gtin}")
     def codigo_barras(gtin: str, chave_loja: str = Depends(loja_da_sessao)):
         return consultar_gtin(gtin[:20])
+
+    @router.get(prefixo + "/impressora")
+    def impressora(chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):
+        dados, quando = secao(db, chave_loja, "impressora")
+        return {"impressora": dados or {}, "sincronizado": dados is not None, "atualizado_em": quando}
 
     @router.get(prefixo + "/combos")
     def combos(chave_loja: str = Depends(loja_da_sessao), db: Session = Depends(get_db)):

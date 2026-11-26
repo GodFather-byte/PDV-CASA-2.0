@@ -5,7 +5,7 @@ datas em texto ISO local. Booleanos sao INTEGER 0/1.
 """
 
 
-VERSAO_ESQUEMA = 59
+VERSAO_ESQUEMA = 60
 
 PAGAMENTOS_ITENS_DDL = [
     """CREATE TABLE IF NOT EXISTS pagamentos_itens (
@@ -261,7 +261,9 @@ MAQUINAS_DDL = """CREATE TABLE IF NOT EXISTS maquinas (
     impressora_termica_pino INTEGER NOT NULL DEFAULT 0,
     impressora_remota_conexao TEXT NOT NULL DEFAULT 'pasta',
     impressora_remota_endereco TEXT,
-    impressora_termica_logotipo INTEGER NOT NULL DEFAULT 0
+    impressora_termica_logotipo INTEGER NOT NULL DEFAULT 0,
+    impressora_papel_mm INTEGER NOT NULL DEFAULT 0,
+    impressora_letra TEXT NOT NULL DEFAULT 'normal'
 )"""
 
 TABELAS = [
@@ -1318,6 +1320,9 @@ AUDITORIA = [
 # comando SQL ou ("coluna", tabela, nome, definição), que só adiciona a coluna se ela ainda não existir.
 # ("copiar_colunas", origem, destino) copia pelos nomes reais, preservando os defaults de campos novos.
 MIGRACOES = {
+    # v60: tamanho do cupom na térmica: largura do papel (58/80 mm; 0 = ainda não escolhido) e letra normal ou pequena.
+    60: [("coluna", "maquinas", "impressora_papel_mm", "INTEGER NOT NULL DEFAULT 0"),
+         ("coluna", "maquinas", "impressora_letra", "TEXT NOT NULL DEFAULT 'normal'")],
     # v59: bandeira 2 (preço da noite que o dono liga pelo painel): o produto entra ou não e pode ter preço próprio.
     59: [("coluna", "produtos", "bandeira2", "INTEGER NOT NULL DEFAULT 1"),
          ("coluna", "produtos", "preco_bandeira2_cent", "INTEGER NOT NULL DEFAULT 0"),
