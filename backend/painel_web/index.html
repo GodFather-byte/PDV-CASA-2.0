@@ -905,6 +905,24 @@
           <p id="vazio-gestao-auditoria" class="vazio" hidden>Nenhuma alteração pela retaguarda ainda.</p>
         </section>
 
+        <section class="bloco" id="bloco-contador">
+          <h2>Contador: envio automático do mês</h2>
+          <p class="legenda">Todo dia 1º o contador recebe por e-mail o resumo do mês anterior e um link (válido por 7 dias)
+            para baixar os XMLs das NFC-e e a planilha das notas. Assim ele não precisa pedir.</p>
+          <form id="form-contador" class="form-relatorio" novalidate>
+            <label for="contador-email">E-mail do contador</label>
+            <input id="contador-email" type="text" inputmode="email" autocomplete="email" maxlength="254"
+                   placeholder="contabilidade@exemplo.com">
+            <label class="linha-check"><input id="contador-ativo" type="checkbox"> Mandar todo dia 1º</label>
+            <div class="acoes-relatorio">
+              <button type="submit" class="botao-principal" id="contador-salvar">Salvar</button>
+              <select id="contador-mes" aria-label="Mês para enviar agora"></select>
+              <button type="button" class="botao-secundario" id="contador-agora">Enviar este mês agora</button>
+            </div>
+            <p id="contador-status" class="legenda" aria-live="polite"></p>
+          </form>
+        </section>
+
         <section class="bloco" id="bloco-relatorio-diario">
           <h2>Relatório diário por e-mail</h2>
           <p class="legenda">Todo dia, às 08:00, chega no e-mail o relatório do dia anterior: faturamento, comparação

@@ -1316,6 +1316,56 @@
     }
   }
 
+  /** Envio ao contador (aba Relatórios): e-mail, liga/desliga e "enviar este mês agora". */
+  async function carregarContador() {
+    const status = $("contador-status");
+    try {
+      const c = await chamarApi("/contador");
+      $("contador-email").value = c.email || "";
+      $("contador-ativo").checked = !!c.ativo;
+      const escolha = $("contador-mes");
+      if (!escolha.options.length) {
+        const hoje = new Date();
+        for (let i = 1; i <= 12; i++) {
+          const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+          const valor = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+          escolha.append(new Option(d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }), valor));
+        }
+      }
+      status.textContent = c.ultimo_status ? "Último envio: " + c.ultimo_status
+        : (c.ativo ? "Ligado. O próximo sai no dia 1º." : "");
+    } catch (e) {
+      if (e.status !== 401) status.textContent = e.message || "Não consegui carregar o envio ao contador.";
+    }
+  }
+
+  async function salvarContador(evento) {
+    evento.preventDefault();
+    const status = $("contador-status");
+    try {
+      const c = await chamarApi("/contador", { metodo: "POST", corpo: {
+        email: $("contador-email").value, ativo: $("contador-ativo").checked } });
+      status.textContent = c.ativo ? "Salvo. O contador recebe todo dia 1º." : "Salvo. O envio automático está desligado.";
+    } catch (e) {
+      if (e.status !== 401) status.textContent = e.message || "Não consegui salvar.";
+    }
+  }
+
+  async function enviarContadorAgora() {
+    const status = $("contador-status");
+    const botao = $("contador-agora");
+    botao.disabled = true;
+    status.textContent = "Enviando…";
+    try {
+      const r = await chamarApi("/contador/enviar", { metodo: "POST", corpo: { mes: $("contador-mes").value } });
+      status.textContent = r.mensagem || "Enviado.";
+    } catch (e) {
+      if (e.status !== 401) status.textContent = e.message || "Não consegui enviar.";
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
   async function carregarLucro() {
     sincronizarDatasDoLucro();
     if (!estado.lucroDe || !estado.lucroAte) return;
@@ -1861,7 +1911,7 @@
       if (estado.lojas === null || estado.lojas.length > 1) tarefas.push(carregarLojas());
       if (estado.aba === "vendas") tarefas.push(carregarVendas());
       if (estado.aba === "periodo") tarefas.push(carregarPeriodo());
-      if (estado.aba === "lucro") tarefas.push(carregarLucro(), carregarRelatorioDiario());
+      if (estado.aba === "lucro") tarefas.push(carregarLucro(), carregarRelatorioDiario(), carregarContador());
       await Promise.all(tarefas);
       estado.ultimaAtualizacao = Date.now();
     } finally {
@@ -2732,7 +2782,7 @@
     window.scrollTo({ top: 0 });
     if (nome === "vendas" && estado.token) carregarVendas();
     if (nome === "periodo" && estado.token) carregarPeriodo();
-    if (nome === "lucro" && estado.token) { carregarLucro(); carregarRelatorioDiario(); }
+    if (nome === "lucro" && estado.token) { carregarLucro(); carregarRelatorioDiario(); carregarContador(); }
     if (nome === "produtos" && estado.token) { carregarNotas(); carregarXmls(); carregarVendasTeste(); carregarImportacao(); }
   }
 
@@ -3300,6 +3350,8 @@
     $("seletor-loja-rede").addEventListener("change", (e) => trocarDeLojaNaRede(e.target.value));
     $("form-relatorio-diario").addEventListener("submit", salvarRelatorioDiario);
     $("relatorio-agora").addEventListener("click", enviarRelatorioAgora);
+    $("form-contador").addEventListener("submit", salvarContador);
+    $("contador-agora").addEventListener("click", enviarContadorAgora);
     $("seletor-loja-resumo").addEventListener("change", (e) => { if (e.target.value) trocarDeLojaNaRede(e.target.value); });
     $("botao-atualizar-rede").addEventListener("click", atualizarRede);
     const linkSenha = new URLSearchParams(location.search).get("senha");

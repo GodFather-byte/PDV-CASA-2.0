@@ -84,6 +84,7 @@ def hash_token(token: str) -> str:
 import backend.erros_caixa as _erros_caixa  # noqa: E402  (registra a tabela antes do create_all)
 import backend.relatorio_diario as _relatorio_diario  # noqa: E402  (idem: tabela relatorios_diarios)
 import backend.painel_usuarios as _painel_usuarios  # noqa: E402  (idem: login do dono por e-mail)
+import backend.contador as _contador  # noqa: E402  (idem: envio mensal ao contador)
 
 Base.metadata.create_all(bind=engine)
 
@@ -145,6 +146,7 @@ async def _cache_de_leitura(request, call_next):
     from backend.cache_leitura import tratar
     try:
         _relatorio_diario.disparar_em_segundo_plano()     # só memória; depois das 08:00 manda os relatórios do dia
+        _contador.disparar_em_segundo_plano()             # só memória; no dia 1º manda o mês anterior ao contador
     except Exception:                                     # noqa: BLE001 - nunca atrapalha a requisição
         log.error("Disparo do relatório diário falhou.")
     return await tratar(request, call_next)
@@ -564,6 +566,7 @@ from backend import painel_lojas as _painel_lojas  # noqa: E402
 
 _painel_lojas.instalar(app, Loja)
 _painel_usuarios.instalar(app, Loja)
+_contador.instalar(app, Loja)
 
 # Retaguarda na nuvem: espelho dos cadastros e fila de alterações que o caixa aplica (backend/retaguarda.py).
 from backend import retaguarda as _retaguarda  # noqa: E402
