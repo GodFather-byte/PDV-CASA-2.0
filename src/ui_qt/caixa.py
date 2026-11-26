@@ -388,6 +388,8 @@ class JanelaCaixa(QMainWindow):
         self.btn_adm.setFocusPolicy(Qt.NoFocus)
         self.btn_adm.setToolTip("Senha do ADM: abre o menu de administração sem fechar o caixa (Ctrl+Shift+A)")
         self.btn_adm.clicked.connect(self.entrar_como_adm)
+        operador = self.ctx.operador
+        self.btn_adm.setVisible(not (operador is not None and operador.nivel >= 4))   # quem já é ADM não precisa
         cabecalho.addWidget(self.btn_adm)
         self.btn_voltar_menu = QPushButton("Fechar caixa")
         self.btn_voltar_menu.setToolTip("Fecha a janela do caixa e volta ao menu (o turno continua aberto)")

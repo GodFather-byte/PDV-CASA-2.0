@@ -5,9 +5,10 @@ ligação e acompanha quem está ligado. No computador adicional, o código é c
 """
 from __future__ import annotations
 
+import threading
 from datetime import datetime
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QDialog, QHBoxLayout, QInputDialog, QLineEdit, QMessageBox, QPlainTextEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
@@ -55,6 +56,14 @@ class JanelaCaixasDaLoja(QDialog):
         barra_codigo.addWidget(self.btn_trocar)
         barra_codigo.addStretch()
         layout.addLayout(barra_codigo)
+        self.wifi = QCheckBox("Wi-Fi próprio dos caixas: este computador cria uma rede só para os caixas "
+                              "(se o Wi-Fi da loja cair, eles continuam se falando)")
+        self.wifi.clicked.connect(self._alternar_wifi)
+        layout.addWidget(self.wifi)
+        self.estado_wifi = texto("", "suave")
+        self.estado_wifi.setWordWrap(True)
+        self.estado_wifi.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(self.estado_wifi)
         layout.addWidget(texto("Caixas adicionais"))
         self.tabela = QTableWidget(0, 4)
         self.tabela.setHorizontalHeaderLabels(["Caixa", "Computador", "Situação", "Ligado desde"])
@@ -92,9 +101,12 @@ class JanelaCaixasDaLoja(QDialog):
                 f"Este computador é o caixa {banco.cfg_int('terminal', 1)}, ligado ao caixa principal. O banco da loja "
                 "fica lá: o código de ligação e a lista de caixas são vistos no caixa principal. Para este "
                 "computador voltar a ter o banco próprio, use o botão da tela de entrada.")
-            for campo in (self.atender, self.codigo, self.btn_copiar, self.btn_trocar, self.tabela, self.btn_liberar):
+            for campo in (self.atender, self.codigo, self.btn_copiar, self.btn_trocar, self.tabela, self.btn_liberar,
+                          self.wifi):
                 campo.setEnabled(False)
             self.estado.setText("")
+            self.estado_wifi.setText("O Wi-Fi próprio dos caixas é ligado no caixa principal. Aqui, conecte este "
+                                     "computador na rede que aparece lá e marque \"Conectar automaticamente\".")
             return
         self.explicacao.setText(
             "Com dois ou mais computadores vendendo, este guarda o banco da loja e os outros usam o mesmo estoque, "
@@ -115,7 +127,35 @@ class JanelaCaixasDaLoja(QDialog):
         self.codigo.setPlainText(rede.codigo_da_loja(banco) if ligado else "")
         for campo in (self.codigo, self.btn_copiar, self.btn_trocar):
             campo.setEnabled(ligado)
+        self._mostrar_wifi()
         self._preencher_tabela()
+
+    # ---------------------------------------------------------------- Wi-Fi próprio
+    def _mostrar_wifi(self):
+        from src.hardware import hotspot_windows
+        banco = self.ctx.banco
+        ligado = banco.cfg_bool(hotspot_windows.CHAVE_LIGADO, False)
+        self.wifi.setChecked(ligado)
+        if not hotspot_windows.suportado():
+            self.wifi.setEnabled(False)
+            self.estado_wifi.setText("Só no Windows.")
+            return
+        self.estado_wifi.setText(hotspot_windows.descrever(hotspot_windows.estado_guardado(banco)) if ligado else
+                                 "Desligado: os caixas usam o Wi-Fi ou o cabo da loja.")
+
+    def _alternar_wifi(self):
+        from src.hardware import hotspot_windows
+        ligar = self.wifi.isChecked()
+        self.ctx.banco.cfg_set(hotspot_windows.CHAVE_LIGADO, "S" if ligar else "N")
+        self.ctx.banco.log("hotspot_caixas", "ligado" if ligar else "desligado", self.ctx.operador_id)
+        if ligar:
+            self.estado_wifi.setText("Ligando o Wi-Fi próprio… (pode levar até meio minuto)")
+            caminho = self.ctx.banco.caminho
+            threading.Thread(target=lambda: hotspot_windows.ServicoHotspot(caminho).rodada(),
+                             name="hotspot-agora", daemon=True).start()
+        else:
+            self.estado_wifi.setText("Desligado na configuração. O hotspot do Windows continua até você desligar "
+                                     "em Configurações > Rede e Internet > Hotspot móvel.")
 
     def _preencher_tabela(self):
         banco = self.ctx.banco

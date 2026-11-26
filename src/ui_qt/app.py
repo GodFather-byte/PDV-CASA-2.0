@@ -26,6 +26,7 @@ from src.porteiro.servico import ServicoPorteiro, descrever as descrever_porteir
 from src.cozinha.servico import ServicoCozinha
 from src.atualizacao.servico import ServicoAtualizacao
 from src.fiscal.servico import ServicoFiscal
+from src.hardware.hotspot_windows import ServicoHotspot
 from src.sync.ponte import ServicoPonte
 from src.sync.sincronizador import ServicoSincronizacao
 from src.controllers.contexto import Contexto
@@ -1306,7 +1307,8 @@ class App:
                            (ServicoAtualizacao, "Atualização do programa"),
                            (ServicoFiscal, "NFC-e (cupom fiscal)"),
                            (ServicoSincronizacao, "Sincronização da nuvem"),
-                           (rede.ServicoRedeCaixas, "Caixas da loja"))
+                           (rede.ServicoRedeCaixas, "Caixas da loja"),
+                           (ServicoHotspot, "Wi-Fi próprio dos caixas"))
             for classe, nome in classes:
                 servico = None
                 try:

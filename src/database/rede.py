@@ -172,8 +172,14 @@ def nova_chave() -> str:
     return secrets.token_hex(32)
 
 
+REDE_HOTSPOT = "192.168.137."     # rede do "Hotspot móvel" do Windows (o principal fica no .1)
+
+
 def enderecos_locais() -> list[str]:
-    """Endereço deste computador na rede da loja e o nome dele (o nome ainda vale se o roteador trocar o IP)."""
+    """Todos os endereços deste computador na loja (Wi-Fi, cabo e o Wi-Fi próprio dos caixas) e o nome dele.
+
+    O do Wi-Fi próprio (hotspot do Windows) vem primeiro: ele não depende do roteador. Depois o que leva à internet,
+    os outros (um cabo direto, por exemplo) e, por último, o nome do computador (vale se o roteador trocar o IP)."""
     achados: list[str] = []
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
@@ -182,14 +188,44 @@ def enderecos_locais() -> list[str]:
     except OSError:
         pass
     nome = socket.gethostname()
-    if not achados:
-        try:
-            achados.append(socket.gethostbyname(nome))
-        except OSError:
-            pass
+    try:
+        for info in socket.getaddrinfo(nome, None, socket.AF_INET):
+            endereco = info[4][0]
+            if endereco not in achados:
+                achados.append(endereco)
+    except OSError:
+        pass
+    achados = [h for h in achados if h and not h.startswith(("127.", "169.254."))]
+    achados.sort(key=lambda h: 0 if h.startswith(REDE_HOTSPOT) else 1)    # estável: o resto mantém a ordem
     if nome and nome not in achados:
         achados.append(nome)
-    return [h for h in achados if h and not h.startswith("127.")] or ["127.0.0.1"]
+    return achados or ["127.0.0.1"]
+
+
+def juntar_enderecos(atuais: list[str], novos) -> list[str]:
+    """Endereços que o principal anunciou somados aos que o adicional já conhecia (sem repetir, no máximo 8)."""
+    saida = [str(h) for h in atuais if str(h).strip()]
+    for h in novos if isinstance(novos, list) else []:
+        h = str(h).strip()[:100]
+        if h and h not in saida and not h.startswith(("127.", "169.254.")):
+            saida.append(h)
+    return saida[:8]
+
+
+def atualizar_enderecos_salvos(novos) -> bool:
+    """O principal ganhou um endereço (ligou o Wi-Fi próprio, um cabo): o adicional guarda para a próxima ligação."""
+    ligacao = ligacao_salva()
+    if ligacao is None:
+        return False
+    juntos = juntar_enderecos(ligacao["hosts"], novos)
+    if juntos == ligacao["hosts"]:
+        return False
+    ligacao["hosts"] = juntos
+    arquivo = arquivo_ligacao()
+    provisorio = arquivo.with_suffix(".tmp")
+    provisorio.write_text(json.dumps(ligacao, ensure_ascii=False), encoding="utf-8")
+    os.replace(provisorio, arquivo)
+    return True
 
 
 def gerar_codigo(hosts: list[str], porta: int, chave: str) -> str:
@@ -454,6 +490,16 @@ class ConexaoRemota:
                 raise ErroLigacao(resposta["e"][1])
             self._canal = canal
             self.principal = resposta
+            if self.hosts and self.hosts[0] != host:
+                self.hosts.remove(host)
+                self.hosts.insert(0, host)                # da próxima vez tenta primeiro o caminho que funcionou
+            anunciados = resposta.get("enderecos")
+            if isinstance(anunciados, list):
+                self.hosts[:] = juntar_enderecos(self.hosts, anunciados)
+                try:
+                    atualizar_enderecos_salvos(anunciados)
+                except OSError:
+                    pass
             return
         if isinstance(ultimo, ConnectionError) and not isinstance(ultimo, ConnectionRefusedError):
             raise ErroLigacao("O caixa principal recusou a ligação. Confira se o código de ligação é o atual "
@@ -750,7 +796,7 @@ class ServidorBanco:
                 self._ligacoes[numero].update(terminal=ola["terminal"], nome=str(ola.get("nome") or "")[:60])
             from src.versao import VERSAO
             canal.enviar({"ok": 1, "versao": VERSAO, "nome": socket.gethostname(),
-                          "terminal": banco.cfg_int("terminal", 1)})
+                          "terminal": banco.cfg_int("terminal", 1), "enderecos": enderecos_locais()})
             self._conversar(canal, banco)
         except (OSError, ConnectionError):
             pass                                   # caixa adicional desligou, rede caiu ou código errado

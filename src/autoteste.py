@@ -66,7 +66,7 @@ MODULOS = [
     "src.database.conexao", "src.database.esquema", "src.database.protecao", "src.database.sementes",
     "src.database.rede", "src.ui_qt.rede_caixas",
     "src.hardware.campainha", "src.hardware.dispositivos", "src.hardware.imagem_escpos", "src.hardware.impressora_termica",
-    "src.hardware.impressoras_so", "src.hardware.perfis_impressora",
+    "src.hardware.impressoras_so", "src.hardware.perfis_impressora", "src.hardware.hotspot_windows",
     "src.sync.atualizacoes", "src.sync.licenca_nuvem", "src.sync.painel_envio", "src.sync.sincronizador",
     "src.sync.ponte",
     "src.controllers.integracoes_controller",
