@@ -84,7 +84,8 @@ def _daqui(**delta) -> str:
 
 
 def endereco_publico() -> str:
-    return (os.environ.get("PAINEL_URL_PUBLICA") or "https://willpdv.com.br").rstrip("/")
+    return (os.environ.get("PAINEL_URL_PUBLICA") or os.environ.get("PUBLIC_BASE_URL")
+            or "https://willpdv.com.br").rstrip("/")
 
 
 def normalizar_email(texto: str) -> str:
