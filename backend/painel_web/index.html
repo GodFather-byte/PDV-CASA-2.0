@@ -203,6 +203,31 @@
           <p id="aviso-lojas" class="aviso" role="status" hidden></p>
         </section>
 
+        <section class="bloco bloco-bandeira2" id="bloco-bandeira2" hidden>
+          <div class="topo-bandeira2">
+            <div>
+              <h2>Bandeira 2 <span id="bandeira2-estado" class="etiqueta-bandeira2">desligada</span></h2>
+              <p id="bandeira2-detalhe" class="legenda">Preço da noite: aumenta os produtos que entram na bandeira 2.</p>
+            </div>
+            <button type="button" id="bandeira2-botao" class="botao-principal botao-bandeira2">Ligar</button>
+          </div>
+          <div class="valor-bandeira2">
+            <label for="bandeira2-modo">Aumento</label>
+            <select id="bandeira2-modo">
+              <option value="pct">% em tudo</option>
+              <option value="reais">R$ por item</option>
+            </select>
+            <input id="bandeira2-valor" type="text" inputmode="decimal" maxlength="8" aria-label="Valor do aumento"
+                   placeholder="15">
+            <button type="button" id="bandeira2-salvar" class="botao-secundario">Salvar valor</button>
+          </div>
+          <p id="bandeira2-status" class="legenda" aria-live="polite"></p>
+          <details>
+            <summary>Histórico</summary>
+            <ul id="bandeira2-historico" class="lista"></ul>
+          </details>
+        </section>
+
         <article class="cartao destaque cartao-mes" id="cartao-mes">
           <div class="saldo-mes">
             <span class="rotulo">Faturamento do mês até agora</span>

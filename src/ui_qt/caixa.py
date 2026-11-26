@@ -2797,9 +2797,14 @@ class JanelaCaixa(QMainWindow):
     def atualizar_bandeira2(self) -> None:
         """Mostra o aviso BANDEIRA 2 no cabeçalho enquanto ela estiver ligada (pelo dono, no painel, ou no caixa)."""
         try:
-            ligada = self.ctx.banco.cfg_bool("bandeira2_ativa", False)
+            bandeira = self.ctx.produtos.bandeira2()
         except Exception:  # noqa: BLE001 - banco fechado no fim do expediente não derruba a janela
             return
+        ligada = bandeira is not None
+        if ligada:
+            texto = f"BANDEIRA 2  {self.ctx.produtos.descrever_bandeira2(bandeira)}".strip()
+            if self.lbl_bandeira2.text() != texto:
+                self.lbl_bandeira2.setText(texto)
         if self.lbl_bandeira2.isHidden() == ligada:
             self.lbl_bandeira2.setVisible(ligada)
 

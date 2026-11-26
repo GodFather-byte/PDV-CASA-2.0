@@ -1285,6 +1285,8 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
         comandos = retaguarda.pendentes(db, acesso.loja)  # alteração da retaguarda esperando: o caixa busca em /v1/retaguarda/comandos
         if comandos:
             resposta["retaguarda_pendentes"] = comandos
+        from backend import bandeira2
+        resposta.update(bandeira2.para_resposta(db, acesso.loja, dados))   # o dono mexeu na bandeira 2 pelo painel
         return resposta
 
     # ---- senha do painel (administrador ou o próprio PDV da loja)

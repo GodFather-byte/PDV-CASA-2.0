@@ -1316,6 +1316,74 @@
     }
   }
 
+  /** Bandeira 2 (aba Hoje): o dono liga/desliga e decide o aumento. O caixa aplica em segundos. */
+  function valorBandeiraTexto(modo, valor) {
+    return modo === "reais" ? (valor / 100).toFixed(2).replace(".", ",") : String(valor);
+  }
+
+  function lerValorBandeira(modo) {
+    const texto = $("bandeira2-valor").value.trim().replace(/[^\d,.]/g, "");
+    if (!texto) return null;
+    if (modo === "reais") {
+      const numero = Number(texto.replace(/\./g, "").replace(",", "."));
+      return Number.isFinite(numero) ? Math.round(numero * 100) : null;
+    }
+    const pct = Number(texto.replace(",", "."));
+    return Number.isFinite(pct) ? Math.round(pct) : null;
+  }
+
+  function mostrarBandeira(b) {
+    estado.bandeira2 = b;
+    $("bloco-bandeira2").hidden = false;
+    const ligada = !!b.ativa;
+    const estadoEl = $("bandeira2-estado");
+    estadoEl.textContent = ligada ? "LIGADA " + b.texto : "desligada";
+    estadoEl.classList.toggle("ligada", ligada);
+    $("bloco-bandeira2").classList.toggle("ligada", ligada);
+    $("bandeira2-botao").textContent = ligada ? "Desligar" : "Ligar";
+    $("bandeira2-modo").value = b.modo || "pct";
+    if (document.activeElement !== $("bandeira2-valor")) {
+      $("bandeira2-valor").value = b.valor ? valorBandeiraTexto(b.modo, b.valor) : "";
+    }
+    $("bandeira2-status").textContent = b.historico && b.historico.length
+      ? (b.aplicada_no_caixa ? "O caixa já está com esta configuração." : "Esperando o caixa aplicar (alguns segundos)…")
+      : "";
+    const lista = $("bandeira2-historico");
+    limpar(lista);
+    (b.historico || []).forEach((h) => {
+      const li = document.createElement("li");
+      li.textContent = h.quando.slice(8, 10) + "/" + h.quando.slice(5, 7) + " " + h.quando.slice(11, 16) + " · " +
+        (h.ativa ? "ligou " + h.texto : "desligou");
+      lista.append(li);
+    });
+  }
+
+  async function carregarBandeira() {
+    if (estado.modo !== "loja") { $("bloco-bandeira2").hidden = true; return; }
+    try { mostrarBandeira(await chamarApi("/bandeira2")); }
+    catch (e) { $("bloco-bandeira2").hidden = true; }
+  }
+
+  async function gravarBandeira(ativa) {
+    const modo = $("bandeira2-modo").value;
+    const valor = lerValorBandeira(modo);
+    const status = $("bandeira2-status");
+    if (valor === null && ativa) {
+      status.textContent = modo === "reais" ? "Informe quantos reais a mais por item (ex.: 2,00)." : "Informe a porcentagem (ex.: 15).";
+      return;
+    }
+    const botoes = [$("bandeira2-botao"), $("bandeira2-salvar")];
+    botoes.forEach((b) => { b.disabled = true; });
+    try {
+      mostrarBandeira(await chamarApi("/bandeira2", { metodo: "POST", corpo: { ativa, modo, valor: valor || 0 } }));
+      setTimeout(carregarBandeira, 8000);                  // confere se o caixa já aplicou
+    } catch (e) {
+      if (e.status !== 401) status.textContent = e.message || "Não consegui salvar.";
+    } finally {
+      botoes.forEach((b) => { b.disabled = false; });
+    }
+  }
+
   /** Envio ao contador (aba Relatórios): e-mail, liga/desliga e "enviar este mês agora". */
   async function carregarContador() {
     const status = $("contador-status");
@@ -1906,7 +1974,7 @@
     try {
       await carregarResumo();
       sincronizarDatasDoAtalho();
-      const tarefas = [carregarHistorico(), carregarRanking()];
+      const tarefas = [carregarHistorico(), carregarRanking(), carregarBandeira()];
       // Dono de uma loja só consulta "Minhas lojas" uma vez; com duas ou mais, os números acompanham cada atualização.
       if (estado.lojas === null || estado.lojas.length > 1) tarefas.push(carregarLojas());
       if (estado.aba === "vendas") tarefas.push(carregarVendas());
@@ -3351,6 +3419,12 @@
     $("form-relatorio-diario").addEventListener("submit", salvarRelatorioDiario);
     $("relatorio-agora").addEventListener("click", enviarRelatorioAgora);
     $("form-contador").addEventListener("submit", salvarContador);
+    $("bandeira2-botao").addEventListener("click", () => {
+      const ligada = !!(estado.bandeira2 && estado.bandeira2.ativa);
+      if (!ligada && !confirm("Ligar a bandeira 2? Os produtos que entram nela passam a sair pelo preço da noite no caixa.")) return;
+      gravarBandeira(!ligada);
+    });
+    $("bandeira2-salvar").addEventListener("click", () => gravarBandeira(!!(estado.bandeira2 && estado.bandeira2.ativa)));
     $("contador-agora").addEventListener("click", enviarContadorAgora);
     $("seletor-loja-resumo").addEventListener("change", (e) => { if (e.target.value) trocarDeLojaNaRede(e.target.value); });
     $("botao-atualizar-rede").addEventListener("click", atualizarRede);

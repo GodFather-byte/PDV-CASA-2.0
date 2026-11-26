@@ -85,6 +85,7 @@ import backend.erros_caixa as _erros_caixa  # noqa: E402  (registra a tabela ant
 import backend.relatorio_diario as _relatorio_diario  # noqa: E402  (idem: tabela relatorios_diarios)
 import backend.painel_usuarios as _painel_usuarios  # noqa: E402  (idem: login do dono por e-mail)
 import backend.contador as _contador  # noqa: E402  (idem: envio mensal ao contador)
+import backend.bandeira2 as _bandeira2  # noqa: E402  (idem: bandeira 2 pelo painel do dono)
 
 Base.metadata.create_all(bind=engine)
 
@@ -567,6 +568,7 @@ from backend import painel_lojas as _painel_lojas  # noqa: E402
 _painel_lojas.instalar(app, Loja)
 _painel_usuarios.instalar(app, Loja)
 _contador.instalar(app, Loja)
+_bandeira2.instalar(app, Loja)
 
 # Retaguarda na nuvem: espelho dos cadastros e fila de alterações que o caixa aplica (backend/retaguarda.py).
 from backend import retaguarda as _retaguarda  # noqa: E402

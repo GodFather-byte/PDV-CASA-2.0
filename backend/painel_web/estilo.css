@@ -1113,3 +1113,15 @@ a.botao-arquivo { text-decoration: none; }
 .linha-check { display: flex; align-items: center; gap: .5rem; font-weight: 600; }
 .linha-check input { width: 1.2rem; height: 1.2rem; }
 .acoes-relatorio { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+/* Bandeira 2 */
+.bloco-bandeira2.ligada { border: 2px solid #e0a100; }
+.topo-bandeira2 { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+.topo-bandeira2 h2 { margin: 0; }
+.etiqueta-bandeira2 { font-size: .8rem; padding: .15rem .5rem; border-radius: 999px; background: var(--borda, #c9d3d0);
+  vertical-align: middle; }
+.etiqueta-bandeira2.ligada { background: #e0a100; color: #1b1300; font-weight: 700; }
+.botao-bandeira2 { min-width: 7rem; }
+.valor-bandeira2 { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+.valor-bandeira2 input { width: 6rem; font: inherit; padding: .5rem .6rem; border-radius: 10px;
+  border: 1px solid var(--borda, #c9d3d0); background: var(--superficie); color: var(--texto); }
