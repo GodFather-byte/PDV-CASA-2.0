@@ -102,7 +102,8 @@ class JanelaMaquinas(QDialog):
         if isinstance(editor, QCheckBox):
             editor.setChecked(str(valor).upper() in ("S", "1", "SIM", "TRUE"))
         elif isinstance(editor, QComboBox):
-            editor.setCurrentIndex(editor.findData(valor))
+            indice = editor.findData(valor)
+            editor.setCurrentIndex(indice if indice >= 0 else editor.findData(str(valor)))  # papel vem do banco como número
         else:
             editor.setText("" if valor is None else str(valor))
 

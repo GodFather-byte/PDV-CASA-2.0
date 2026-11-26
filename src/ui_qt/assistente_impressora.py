@@ -6,13 +6,13 @@ import sys
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QDialog, QHBoxLayout, QMessageBox, QPushButton,
+    QAbstractItemView, QComboBox, QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton,
     QPlainTextEdit, QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
 
 from src.controllers import impressao_assistente as assistente
 from src.core.erros import ErroPermissao
-from src.hardware import impressoras_so
+from src.hardware import impressoras_so, perfis_impressora
 from src.ui_qt import tema
 from src.ui_qt.tema import texto
 
@@ -47,6 +47,30 @@ class JanelaAssistenteImpressora(QDialog):
         self.grade.horizontalHeader().setStretchLastSection(True)
         self.grade.doubleClicked.connect(self.configurar_e_testar)
         layout.addWidget(self.grade, 2)
+
+        # Tamanho do cupom: papel e letra. É o que resolve "o papel sai grande" sem mexer em número de colunas.
+        layout.addWidget(texto("Tamanho do cupom", "subtitulo"))
+        linha_tamanho = QHBoxLayout()
+        self.papel = QComboBox()
+        self.papel.setObjectName("papel")
+        self.papel.addItem("Papel de 58 mm (bobina pequena)", 58)
+        self.papel.addItem("Papel de 80 mm (bobina grande)", 80)
+        self.letra = QComboBox()
+        self.letra.setObjectName("letra")
+        self.letra.addItem("Letra normal", "normal")
+        self.letra.addItem("Letra pequena (cupom mais curto)", "pequena")
+        self.resumo_tamanho = QLabel("")
+        self.resumo_tamanho.setObjectName("resumo_tamanho")
+        self.btn_tamanho = QPushButton("Aplicar tamanho e imprimir teste")
+        for w in (self.papel, self.letra, self.btn_tamanho):
+            linha_tamanho.addWidget(w)
+        linha_tamanho.addWidget(self.resumo_tamanho, 1)
+        layout.addLayout(linha_tamanho)
+        self.papel.currentIndexChanged.connect(self._mostrar_resumo_tamanho)
+        self.letra.currentIndexChanged.connect(self._mostrar_resumo_tamanho)
+        self.btn_tamanho.clicked.connect(self.aplicar_tamanho)
+        self.grade.itemSelectionChanged.connect(self._sugerir_papel)
+        self._carregar_tamanho()
 
         layout.addWidget(texto("O que foi encontrado", "subtitulo"))
         self.achados = QPlainTextEdit()
@@ -108,6 +132,47 @@ class JanelaAssistenteImpressora(QDialog):
             self.impressoras = []
             self.grade.setRowCount(0)
             self.achados.setPlainText(f"Não foi possível atualizar a lista de impressoras: {erro}")
+
+    def _carregar_tamanho(self):
+        sit = assistente.situacao_tamanho(self.ctx.banco)
+        papel = sit["papel_mm"] or sit["papel_sugerido"] or perfis_impressora.papel_das_colunas(sit["colunas"])
+        self.papel.setCurrentIndex(max(0, self.papel.findData(papel)))
+        self.letra.setCurrentIndex(max(0, self.letra.findData(sit["letra"])))
+        self._mostrar_resumo_tamanho()
+
+    def _sugerir_papel(self):
+        """Ao escolher uma impressora, o papel acompanha o nome dela (POS-58, XP-80, Elgin i9...) quando dá para saber."""
+        linhas = self.grade.selectionModel().selectedRows() if self.grade.selectionModel() else []
+        if not linhas or linhas[0].row() >= len(self.impressoras):
+            return
+        imp = self.impressoras[linhas[0].row()]
+        papel = perfis_impressora.papel_pelo_nome(imp.nome, imp.driver)
+        if papel:
+            self.papel.setCurrentIndex(self.papel.findData(papel))
+
+    def _mostrar_resumo_tamanho(self):
+        papel, letra = self.papel.currentData() or 80, self.letra.currentData() or "normal"
+        self.resumo_tamanho.setText(f"{perfis_impressora.colunas(papel, letra)} caracteres por linha")
+
+    def aplicar_tamanho(self):
+        """Só o tamanho (papel e letra) na impressora já configurada, e um teste para conferir."""
+        if not self._autorizar_acao():
+            return
+        try:
+            feito = assistente.ajustar_e_ligar(self.ctx.banco, self.papel.currentData(), self.letra.currentData(),
+                                               impressoras=self.impressoras)
+            if self.ao_configurar:
+                self.ao_configurar()
+            self.ctx.impressao.imprimir_teste()
+        except Exception as erro:
+            QMessageBox.warning(self, "Tamanho do cupom", f"Tamanho gravado, mas o teste não saiu: {erro}"
+                                if "feito" in locals() else f"Não foi possível ajustar: {erro}")
+            self.atualizar()
+            return
+        QMessageBox.information(self, "Tamanho do cupom",
+                                f"Pronto: {perfis_impressora.descrever(feito['papel_mm'], feito['letra'])}.\n"
+                                "Confira o teste: o cupom deve ocupar a largura do papel sem quebrar linha.")
+        self.atualizar()
 
     def _nome_selecionado(self):
         linhas = self.grade.selectionModel().selectedRows()
@@ -177,7 +242,8 @@ class JanelaAssistenteImpressora(QDialog):
         if not self._autorizar_acao():
             return
         try:
-            assistente.configurar(self.ctx.banco, imp.nome)
+            assistente.configurar(self.ctx.banco, imp.nome, papel_mm=self.papel.currentData(),
+                                  letra=self.letra.currentData(), driver=imp.driver)
         except Exception as erro:
             QMessageBox.warning(self, "Configuração da impressora", f"Não foi possível configurar: {erro}")
             return

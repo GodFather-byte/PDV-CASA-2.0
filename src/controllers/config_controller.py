@@ -25,7 +25,11 @@ CAMPOS_MAQUINA = [
     ("modo_impressao", "Impressão de cupons e relatórios", "escolha",
      [("tela", "Mostrar na tela"), ("termica", "Impressora térmica (ESC/POS)"),
       ("windows", "Impressora padrão do Windows"), ("arquivo", "Salvar em arquivo")]),
-    ("colunas_fita", "Colunas da fita (58mm = 32, 80mm = 48)", "int"),
+    ("impressora_papel_mm", "Largura do papel da térmica", "escolha",
+     [("0", "Não escolhida (usa as colunas abaixo)"), ("58", "58 mm (bobina pequena)"), ("80", "80 mm (bobina grande)")]),
+    ("impressora_letra", "Tamanho da letra no cupom", "escolha",
+     [("normal", "Normal"), ("pequena", "Pequena (cabe mais por linha, cupom mais curto)")]),
+    ("colunas_fita", "Colunas da fita (58mm = 32, 80mm = 48; com papel escolhido é ajustado sozinho)", "int"),
     ("impressora_termica_conexao", "Impressora térmica: conexão", "escolha",
      [("rede", "Rede (TCP/IP, porta 9100)"), ("serial", "Serial (COM)"),
       ("spooler", "Impressora do Windows (USB ou instalada)"), ("arquivo", "Arquivo/dispositivo"), ("nenhuma", "Nenhuma")]),
@@ -350,7 +354,24 @@ class ConfigController:
                     raise ErroValidacao("O pino da gaveta deve ser 0 ou 1.", {k: "inválido"})
             else:
                 v = (str(v).strip() or None) if v is not None else None
+            if k == "impressora_papel_mm":
+                try:
+                    v = int(v or 0)
+                except ValueError:
+                    v = -1
+                if v not in (0, 58, 80):
+                    raise ErroValidacao("O papel deve ser de 58 ou 80 mm.", {k: "inválido"})
+            if k == "impressora_letra":
+                v = v or "normal"
+                if v not in ("normal", "pequena"):
+                    raise ErroValidacao("A letra deve ser normal ou pequena.", {k: "inválido"})
             limpos[k] = v
+        # Com o papel escolhido, as colunas seguem papel e letra (a pessoa não precisa saber o número).
+        papel = limpos.get("impressora_papel_mm", atual.get("impressora_papel_mm") or 0)
+        if papel and ("impressora_papel_mm" in limpos or "impressora_letra" in limpos):
+            from src.hardware import perfis_impressora
+            limpos["colunas_fita"] = perfis_impressora.colunas(
+                papel, limpos.get("impressora_letra", atual.get("impressora_letra") or "normal"))
         self.banco.atualizar("maquinas", atual["id"], limpos)
 
     # --------------------------------------------------------------- config

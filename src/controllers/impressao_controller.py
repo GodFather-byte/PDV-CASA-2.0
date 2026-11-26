@@ -592,7 +592,9 @@ class ImpressaoController:
         if not m["impressora_termica_logotipo"] or not caminho:
             return None
         try:
-            return logotipo_escpos(caminho, int(m["colunas_fita"] or 48))
+            from src.hardware.perfis_impressora import colunas_letra_normal
+            return logotipo_escpos(caminho, colunas_letra_normal(m.get("impressora_papel_mm") or 0,
+                                                                 int(m["colunas_fita"] or 48)))
         except ErroImpressao as e:
             self.banco.log("logotipo_invalido", str(e)[:300])
             return None
@@ -650,7 +652,8 @@ class ImpressaoController:
                 raise ErroImpressao("Informe o endereço (rede) ou o nome (Windows) da impressora remota "
                                     "(Configurações > Máquinas, ou do setor em Cadastros > Setores de Impressão).")
             dados = term.texto_para_escpos(texto, codepage=m["impressora_termica_codepage"] or "cp850",
-                                           cortar=True, negrito_linhas=1)
+                                           cortar=True, negrito_linhas=1,
+                                           letra_pequena=(m.get("impressora_letra") or "normal") == "pequena")
             self.fila.enfileirar("remota", nome, dados, "pedido", setor_id=(setor or {}).get("id"))
         elif conexao == "pasta":
             pasta = (pasta or "").strip()
