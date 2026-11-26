@@ -515,6 +515,8 @@ def _postar(banco, corpo: dict, http=None) -> dict:
         _anotar_exclusoes(banco, dados, corpo.get("seguranca_hash"))
         from src.sync import insta_bdelivery
         insta_bdelivery.anotar_resposta(banco, dados)
+        from src.sync import bandeira2_nuvem
+        bandeira2_nuvem.anotar_resposta(banco, dados)      # o dono ligou/desligou a bandeira 2 pelo painel
         return dados
     except Exception:
         # Mensagem persistida sem URL, token ou conteúdo da exceção de rede.
@@ -557,6 +559,8 @@ def enviar(banco, http=None, *, foto=_FOTO_PADRAO) -> dict | None:
         from src.core import erros_caixa
         erros = erros_caixa.pendentes(banco) if lotes == 0 else []
         corpo = {"vendas": vendas, "devolucoes": retornos, "enviado_em": fmt.agora()}
+        from src.sync import bandeira2_nuvem
+        corpo.update(bandeira2_nuvem.para_envio(banco))     # o dono vê no painel o que o caixa está aplicando
         if lotes == 0:
             from src.controllers import vendas_teste_controller as vendas_teste
             apagadas = vendas_teste.pendentes_envio(banco)

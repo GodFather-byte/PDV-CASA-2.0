@@ -368,6 +368,7 @@
   function mostrarLogin() {
     $("tela-app").hidden = true;
     $("tela-login").hidden = false;
+    mostrarCartaoLogin("form-login");
     const loja = estado.loja && estado.loja.chave ? estado.loja.chave : lerArmazenamento(CHAVE_LOJA + ".chave");
     if (loja && !$("campo-loja").value) $("campo-loja").value = loja;
     $("campo-senha").value = "";
@@ -431,15 +432,41 @@
     mostrarLogin();
   }
 
+  /** Depois de qualquer login (loja, rede, e-mail, código ou senha nova): abre a rede ou a loja. */
+  function aposLogin(dados, chaveDigitada) {
+    if (dados.grupo) {
+      entrarNaRede(dados);
+      return;
+    }
+    estado.modo = "loja";
+    esquecerRede();                                     // entrou direto numa loja: não há rede para voltar
+    guardarSessao(dados, (dados.loja && dados.loja.chave) || chaveDigitada);
+    estado.lojas = null;
+    estado.dia = null;
+    estado.paginaVendas = 1;
+    mostrarApp();
+    atualizarTudo();
+  }
+
+  /** Mostra só um dos cartões da tela de entrada. */
+  function mostrarCartaoLogin(id) {
+    ["form-login", "form-codigo", "form-esqueci", "form-definir", "form-senha-rede"].forEach((f) => {
+      const el = $(f);
+      if (el) el.hidden = f !== id;
+    });
+  }
+
   async function entrar(evento) {
     evento.preventDefault();
-    const loja = $("campo-loja").value.trim().toUpperCase();
+    const digitado = $("campo-loja").value.trim();
+    const porEmail = digitado.includes("@");
+    const loja = porEmail ? digitado.toLowerCase() : digitado.toUpperCase();
     const senha = $("campo-senha").value;
     const erro = $("erro-login");
     erro.hidden = true;
 
     if (!loja || !senha) {
-      erro.textContent = "Informe a loja e a senha.";
+      erro.textContent = "Informe o e-mail (ou o código da loja) e a senha.";
       erro.hidden = false;
       return;
     }
@@ -448,19 +475,23 @@
     botao.disabled = true;
     botao.textContent = "Entrando…";
     try {
-      const dados = await chamarApi("/login", { metodo: "POST", corpo: { loja, senha }, semToken: true });
-      if (dados.grupo) {
-        entrarNaRede(dados);
+      if (porEmail) {
+        const dados = await chamarApi("/login-email", { metodo: "POST", corpo: { email: loja, senha }, semToken: true });
+        if (dados.precisa_codigo) {
+          estado.desafio = dados.desafio;
+          $("codigo-destino").textContent = "Mandamos um código de 6 dígitos para " + (dados.email || "o seu e-mail") +
+            ". Confira também a caixa de spam.";
+          $("campo-codigo").value = "";
+          $("erro-codigo").hidden = true;
+          mostrarCartaoLogin("form-codigo");
+          setTimeout(() => $("campo-codigo").focus(), 50);
+          return;
+        }
+        aposLogin(dados, "");
         return;
       }
-      estado.modo = "loja";
-      esquecerRede();                                     // entrou direto numa loja: não há rede para voltar
-      guardarSessao(dados, loja);
-      estado.lojas = null;
-      estado.dia = null;
-      estado.paginaVendas = 1;
-      mostrarApp();
-      atualizarTudo();
+      const dados = await chamarApi("/login", { metodo: "POST", corpo: { loja, senha }, semToken: true });
+      aposLogin(dados, loja);
     } catch (e) {
       erro.textContent = e instanceof ErroRede ? "Sem conexão com o servidor. Verifique a internet." : e.message;
       erro.hidden = false;
@@ -468,6 +499,74 @@
       botao.disabled = false;
       botao.textContent = "Entrar";
     }
+  }
+
+  async function confirmarCodigo(evento) {
+    evento.preventDefault();
+    const erro = $("erro-codigo");
+    erro.hidden = true;
+    try {
+      const dados = await chamarApi("/login-email/codigo", { metodo: "POST", semToken: true,
+        corpo: { desafio: estado.desafio || "", codigo: $("campo-codigo").value } });
+      estado.desafio = null;
+      mostrarCartaoLogin("form-login");
+      aposLogin(dados, "");
+    } catch (e) {
+      erro.textContent = e instanceof ErroRede ? "Sem conexão com o servidor." : e.message;
+      erro.hidden = false;
+    }
+  }
+
+  async function pedirNovaSenha(evento) {
+    evento.preventDefault();
+    const msg = $("msg-esqueci");
+    const email = $("campo-esqueci").value.trim();
+    if (!email.includes("@")) {
+      msg.textContent = "Informe o e-mail do seu acesso.";
+      msg.hidden = false;
+      return;
+    }
+    try {
+      const r = await chamarApi("/senha/esqueci", { metodo: "POST", corpo: { email }, semToken: true });
+      msg.textContent = r.mensagem;
+    } catch (e) {
+      msg.textContent = e instanceof ErroRede ? "Sem conexão com o servidor." : e.message;
+    }
+    msg.hidden = false;
+  }
+
+  /** Link do e-mail (convite ou nova senha): /painel/?senha=TOKEN. */
+  async function abrirLinkDeSenha(token) {
+    $("tela-app").hidden = true;
+    $("tela-login").hidden = false;
+    mostrarCartaoLogin("form-definir");
+    const erro = $("erro-definir");
+    try {
+      const info = await chamarApi("/senha/link?token=" + encodeURIComponent(token), { semToken: true });
+      $("definir-email").textContent = (info.tipo === "convite" ? "Bem-vindo! " : "") + "Acesso: " + info.email;
+    } catch (e) {
+      erro.textContent = e instanceof ErroRede ? "Sem conexão com o servidor." : e.message;
+      erro.hidden = false;
+    }
+    $("form-definir").addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+      erro.hidden = true;
+      const nova = $("campo-nova").value;
+      if (nova !== $("campo-repetir").value) {
+        erro.textContent = "As duas senhas não são iguais.";
+        erro.hidden = false;
+        return;
+      }
+      try {
+        const dados = await chamarApi("/senha/definir", { metodo: "POST", corpo: { token, senha: nova }, semToken: true });
+        try { history.replaceState(null, "", location.pathname); } catch (_) { /* segue */ }
+        mostrarCartaoLogin("form-login");
+        aposLogin(dados, "");
+      } catch (e) {
+        erro.textContent = e instanceof ErroRede ? "Sem conexão com o servidor." : e.message;
+        erro.hidden = false;
+      }
+    });
   }
 
   // ------------------------------------------------------------------
@@ -1217,6 +1316,124 @@
     }
   }
 
+  /** Bandeira 2 (aba Hoje): o dono liga/desliga e decide o aumento. O caixa aplica em segundos. */
+  function valorBandeiraTexto(modo, valor) {
+    return modo === "reais" ? (valor / 100).toFixed(2).replace(".", ",") : String(valor);
+  }
+
+  function lerValorBandeira(modo) {
+    const texto = $("bandeira2-valor").value.trim().replace(/[^\d,.]/g, "");
+    if (!texto) return null;
+    if (modo === "reais") {
+      const numero = Number(texto.replace(/\./g, "").replace(",", "."));
+      return Number.isFinite(numero) ? Math.round(numero * 100) : null;
+    }
+    const pct = Number(texto.replace(",", "."));
+    return Number.isFinite(pct) ? Math.round(pct) : null;
+  }
+
+  function mostrarBandeira(b) {
+    estado.bandeira2 = b;
+    $("bloco-bandeira2").hidden = false;
+    const ligada = !!b.ativa;
+    const estadoEl = $("bandeira2-estado");
+    estadoEl.textContent = ligada ? "LIGADA " + b.texto : "desligada";
+    estadoEl.classList.toggle("ligada", ligada);
+    $("bloco-bandeira2").classList.toggle("ligada", ligada);
+    $("bandeira2-botao").textContent = ligada ? "Desligar" : "Ligar";
+    $("bandeira2-modo").value = b.modo || "pct";
+    if (document.activeElement !== $("bandeira2-valor")) {
+      $("bandeira2-valor").value = b.valor ? valorBandeiraTexto(b.modo, b.valor) : "";
+    }
+    $("bandeira2-status").textContent = b.historico && b.historico.length
+      ? (b.aplicada_no_caixa ? "O caixa já está com esta configuração." : "Esperando o caixa aplicar (alguns segundos)…")
+      : "";
+    const lista = $("bandeira2-historico");
+    limpar(lista);
+    (b.historico || []).forEach((h) => {
+      const li = document.createElement("li");
+      li.textContent = h.quando.slice(8, 10) + "/" + h.quando.slice(5, 7) + " " + h.quando.slice(11, 16) + " · " +
+        (h.ativa ? "ligou " + h.texto : "desligou");
+      lista.append(li);
+    });
+  }
+
+  async function carregarBandeira() {
+    if (estado.modo !== "loja") { $("bloco-bandeira2").hidden = true; return; }
+    try { mostrarBandeira(await chamarApi("/bandeira2")); }
+    catch (e) { $("bloco-bandeira2").hidden = true; }
+  }
+
+  async function gravarBandeira(ativa) {
+    const modo = $("bandeira2-modo").value;
+    const valor = lerValorBandeira(modo);
+    const status = $("bandeira2-status");
+    if (valor === null && ativa) {
+      status.textContent = modo === "reais" ? "Informe quantos reais a mais por item (ex.: 2,00)." : "Informe a porcentagem (ex.: 15).";
+      return;
+    }
+    const botoes = [$("bandeira2-botao"), $("bandeira2-salvar")];
+    botoes.forEach((b) => { b.disabled = true; });
+    try {
+      mostrarBandeira(await chamarApi("/bandeira2", { metodo: "POST", corpo: { ativa, modo, valor: valor || 0 } }));
+      setTimeout(carregarBandeira, 8000);                  // confere se o caixa já aplicou
+    } catch (e) {
+      if (e.status !== 401) status.textContent = e.message || "Não consegui salvar.";
+    } finally {
+      botoes.forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  /** Envio ao contador (aba Relatórios): e-mail, liga/desliga e "enviar este mês agora". */
+  async function carregarContador() {
+    const status = $("contador-status");
+    try {
+      const c = await chamarApi("/contador");
+      $("contador-email").value = c.email || "";
+      $("contador-ativo").checked = !!c.ativo;
+      const escolha = $("contador-mes");
+      if (!escolha.options.length) {
+        const hoje = new Date();
+        for (let i = 1; i <= 12; i++) {
+          const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+          const valor = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+          escolha.append(new Option(d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }), valor));
+        }
+      }
+      status.textContent = c.ultimo_status ? "Último envio: " + c.ultimo_status
+        : (c.ativo ? "Ligado. O próximo sai no dia 1º." : "");
+    } catch (e) {
+      if (e.status !== 401) status.textContent = e.message || "Não consegui carregar o envio ao contador.";
+    }
+  }
+
+  async function salvarContador(evento) {
+    evento.preventDefault();
+    const status = $("contador-status");
+    try {
+      const c = await chamarApi("/contador", { metodo: "POST", corpo: {
+        email: $("contador-email").value, ativo: $("contador-ativo").checked } });
+      status.textContent = c.ativo ? "Salvo. O contador recebe todo dia 1º." : "Salvo. O envio automático está desligado.";
+    } catch (e) {
+      if (e.status !== 401) status.textContent = e.message || "Não consegui salvar.";
+    }
+  }
+
+  async function enviarContadorAgora() {
+    const status = $("contador-status");
+    const botao = $("contador-agora");
+    botao.disabled = true;
+    status.textContent = "Enviando…";
+    try {
+      const r = await chamarApi("/contador/enviar", { metodo: "POST", corpo: { mes: $("contador-mes").value } });
+      status.textContent = r.mensagem || "Enviado.";
+    } catch (e) {
+      if (e.status !== 401) status.textContent = e.message || "Não consegui enviar.";
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
   async function carregarLucro() {
     sincronizarDatasDoLucro();
     if (!estado.lucroDe || !estado.lucroAte) return;
@@ -1757,12 +1974,12 @@
     try {
       await carregarResumo();
       sincronizarDatasDoAtalho();
-      const tarefas = [carregarHistorico(), carregarRanking()];
+      const tarefas = [carregarHistorico(), carregarRanking(), carregarBandeira()];
       // Dono de uma loja só consulta "Minhas lojas" uma vez; com duas ou mais, os números acompanham cada atualização.
       if (estado.lojas === null || estado.lojas.length > 1) tarefas.push(carregarLojas());
       if (estado.aba === "vendas") tarefas.push(carregarVendas());
       if (estado.aba === "periodo") tarefas.push(carregarPeriodo());
-      if (estado.aba === "lucro") tarefas.push(carregarLucro(), carregarRelatorioDiario());
+      if (estado.aba === "lucro") tarefas.push(carregarLucro(), carregarRelatorioDiario(), carregarContador());
       await Promise.all(tarefas);
       estado.ultimaAtualizacao = Date.now();
     } finally {
@@ -2633,7 +2850,7 @@
     window.scrollTo({ top: 0 });
     if (nome === "vendas" && estado.token) carregarVendas();
     if (nome === "periodo" && estado.token) carregarPeriodo();
-    if (nome === "lucro" && estado.token) { carregarLucro(); carregarRelatorioDiario(); }
+    if (nome === "lucro" && estado.token) { carregarLucro(); carregarRelatorioDiario(); carregarContador(); }
     if (nome === "produtos" && estado.token) { carregarNotas(); carregarXmls(); carregarVendasTeste(); carregarImportacao(); }
   }
 
@@ -3017,6 +3234,16 @@
     try { estado.loja = JSON.parse(lerArmazenamento(CHAVE_LOJA) || "null"); } catch (_) { estado.loja = null; }
 
     $("form-login").addEventListener("submit", entrar);
+    $("form-codigo").addEventListener("submit", confirmarCodigo);
+    $("form-esqueci").addEventListener("submit", pedirNovaSenha);
+    $("botao-esqueci").addEventListener("click", () => {
+      const digitado = $("campo-loja").value.trim();
+      $("campo-esqueci").value = digitado.includes("@") ? digitado : "";
+      $("msg-esqueci").hidden = true;
+      mostrarCartaoLogin("form-esqueci");
+    });
+    $("botao-esqueci-voltar").addEventListener("click", () => mostrarCartaoLogin("form-login"));
+    $("botao-codigo-voltar").addEventListener("click", () => mostrarCartaoLogin("form-login"));
     $("botao-sair").addEventListener("click", () => encerrarSessao(true));
     $("botao-atualizar").addEventListener("click", () => atualizarAgora());
     configurarMeta();
@@ -3191,9 +3418,19 @@
     $("seletor-loja-rede").addEventListener("change", (e) => trocarDeLojaNaRede(e.target.value));
     $("form-relatorio-diario").addEventListener("submit", salvarRelatorioDiario);
     $("relatorio-agora").addEventListener("click", enviarRelatorioAgora);
+    $("form-contador").addEventListener("submit", salvarContador);
+    $("bandeira2-botao").addEventListener("click", () => {
+      const ligada = !!(estado.bandeira2 && estado.bandeira2.ativa);
+      if (!ligada && !confirm("Ligar a bandeira 2? Os produtos que entram nela passam a sair pelo preço da noite no caixa.")) return;
+      gravarBandeira(!ligada);
+    });
+    $("bandeira2-salvar").addEventListener("click", () => gravarBandeira(!!(estado.bandeira2 && estado.bandeira2.ativa)));
+    $("contador-agora").addEventListener("click", enviarContadorAgora);
     $("seletor-loja-resumo").addEventListener("change", (e) => { if (e.target.value) trocarDeLojaNaRede(e.target.value); });
     $("botao-atualizar-rede").addEventListener("click", atualizarRede);
-    retomarPeloCookie();
+    const linkSenha = new URLSearchParams(location.search).get("senha");
+    if (linkSenha) abrirLinkDeSenha(linkSenha);         // link do e-mail: criar senha antes de qualquer coisa
+    else retomarPeloCookie();
   }
 
   async function retomarPeloCookie() {

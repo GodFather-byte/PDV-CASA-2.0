@@ -184,27 +184,45 @@ class ProdutoController:
         return {"rotulo": " · ".join(etiquetas), "detalhe": detalhe, "economia_cent": economia}
 
     def bandeira2(self) -> dict | None:
-        """A bandeira 2 (preço da noite) quando ligada: o acréscimo padrão em %. Desligada: None."""
+        """A bandeira 2 (preço da noite) quando ligada: o acréscimo padrão, em % (`modo` 'pct') ou em reais por item
+        (`modo` 'reais', `reais_cent`). Desligada: None. O dono liga pelo painel; as Configurações do caixa também."""
         if not self.banco.cfg_bool("bandeira2_ativa", False):
             return None
         try:
             pct = fmt._dec(self.banco.cfg("bandeira2_pct", "0") or "0")
         except Exception:  # noqa: BLE001 - configuração estragada não pode travar a venda
             pct = fmt._dec(0)
-        return {"pct": pct}
+        modo = "reais" if (self.banco.cfg("bandeira2_modo", "pct") or "pct") == "reais" else "pct"
+        reais = max(0, self.banco.cfg_int("bandeira2_reais_cent", 0)) if modo == "reais" else 0
+        return {"pct": pct, "modo": modo, "reais_cent": reais}
 
     @staticmethod
     def preco_bandeira2(produto: dict, bandeira: dict | None, gelada: bool = False) -> int | None:
         """Preço do produto na bandeira 2, ou None quando ela não muda nada nele (desligada, produto fora dela, sem
-        preço próprio e sem acréscimo). O preço próprio vale mais que o acréscimo padrão."""
+        preço próprio e sem acréscimo). O preço próprio vale mais que o acréscimo padrão (% ou reais por item)."""
         if not bandeira or not produto.get("bandeira2", 1):
             return None
         base = (produto.get("preco_gelada_cent") if gelada else produto.get("preco_cent")) or 0
         if base <= 0:
             return None
         proprio = produto.get("preco_gelada_bandeira2_cent" if gelada else "preco_bandeira2_cent") or 0
-        valor = proprio if proprio > 0 else fmt.arredondar(fmt._dec(base) * (1 + bandeira["pct"] / 100))
+        if proprio > 0:
+            valor = proprio
+        elif bandeira.get("modo") == "reais":
+            valor = base + int(bandeira.get("reais_cent") or 0)
+        else:
+            valor = fmt.arredondar(fmt._dec(base) * (1 + bandeira["pct"] / 100))
         return valor if valor != base else None
+
+    @staticmethod
+    def descrever_bandeira2(bandeira: dict | None) -> str:
+        """'+15%' ou '+R$ 2,00' para o aviso do caixa."""
+        if not bandeira:
+            return ""
+        if bandeira.get("modo") == "reais":
+            return "+" + fmt.fmt_brl(int(bandeira.get("reais_cent") or 0))
+        pct = bandeira["pct"]
+        return f"+{int(pct) if pct == int(pct) else pct}%"
 
     def preco_vigente(self, produto: dict, quando: datetime | None = None) -> int:
         """Preço de venda em centavos considerando promoções ativas e a bandeira 2.

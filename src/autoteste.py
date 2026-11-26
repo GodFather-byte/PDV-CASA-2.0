@@ -66,7 +66,7 @@ MODULOS = [
     "src.database.conexao", "src.database.esquema", "src.database.protecao", "src.database.sementes",
     "src.database.rede", "src.ui_qt.rede_caixas",
     "src.hardware.campainha", "src.hardware.dispositivos", "src.hardware.imagem_escpos", "src.hardware.impressora_termica",
-    "src.hardware.impressoras_so", "src.hardware.perfis_impressora",
+    "src.hardware.impressoras_so", "src.hardware.perfis_impressora", "src.hardware.hotspot_windows",
     "src.sync.atualizacoes", "src.sync.licenca_nuvem", "src.sync.painel_envio", "src.sync.sincronizador",
     "src.sync.ponte",
     "src.controllers.integracoes_controller",
@@ -88,7 +88,7 @@ MODULOS = [
     "src.ui_qt.devolucoes", "src.ui_qt.fechamento", "src.ui_qt.painel_mesas", "src.ui_qt.relogio", "src.core.edicao", "src.controllers.mesas_modelo", "src.ui_qt.fechamento_turno",
     "src.controllers.primeiros_passos", "src.ui_qt.primeiros_passos", "src.core.fita", "src.ui_qt.marca_dagua",
     "src.controllers.notas_dono_controller", "src.sync.notas_dono", "src.ui_qt.notas_dono",
-    "src.controllers.retaguarda_controller", "src.sync.retaguarda",
+    "src.controllers.retaguarda_controller", "src.sync.retaguarda", "src.sync.bandeira2_nuvem",
     "src.core.recuperacao_senha", "src.sync.recuperacao_senha", "src.ui_qt.esqueci_senha",
     "src.porteiro.consulta", "src.porteiro.servidor", "src.porteiro.servico", "src.porteiro.nuvem_envio", "src.ui_qt.porteiro",
 ]

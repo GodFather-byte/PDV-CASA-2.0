@@ -383,6 +383,14 @@ class JanelaCaixa(QMainWindow):
         self.btn_tela_cheia.setFocusPolicy(Qt.NoFocus)
         self.btn_tela_cheia.clicked.connect(self.alternar_tela_cheia)
         cabecalho.addWidget(self.btn_tela_cheia)
+        self.btn_adm = QPushButton("Entrar como ADM")
+        self.btn_adm.setObjectName("btn_adm")
+        self.btn_adm.setFocusPolicy(Qt.NoFocus)
+        self.btn_adm.setToolTip("Senha do ADM: abre o menu de administração sem fechar o caixa (Ctrl+Shift+A)")
+        self.btn_adm.clicked.connect(self.entrar_como_adm)
+        operador = self.ctx.operador
+        self.btn_adm.setVisible(not (operador is not None and operador.nivel >= 4))   # quem já é ADM não precisa
+        cabecalho.addWidget(self.btn_adm)
         self.btn_voltar_menu = QPushButton("Fechar caixa")
         self.btn_voltar_menu.setToolTip("Fecha a janela do caixa e volta ao menu (o turno continua aberto)")
         self.btn_voltar_menu.setFocusPolicy(Qt.NoFocus)
@@ -412,7 +420,8 @@ class JanelaCaixa(QMainWindow):
                             ("F8", self.pre_conta), ("F9", self.repique),
                             ("F10", self.transferir_mesa), ("F2", self.balanca), ("F11", self.gaveta),
                             ("Ctrl+R", self.rodizio), ("Ctrl+Shift+P", self.recarga),
-                            ("F3", self.alternar_leitor), ("F7", self.sangria)):
+                            ("F3", self.alternar_leitor), ("F7", self.sangria),
+                            ("Ctrl+Shift+A", self.entrar_como_adm)):
             atalho = QShortcut(QKeySequence(tecla), self)
             atalho.activated.connect(acao)
 
@@ -2797,9 +2806,14 @@ class JanelaCaixa(QMainWindow):
     def atualizar_bandeira2(self) -> None:
         """Mostra o aviso BANDEIRA 2 no cabeçalho enquanto ela estiver ligada (pelo dono, no painel, ou no caixa)."""
         try:
-            ligada = self.ctx.banco.cfg_bool("bandeira2_ativa", False)
+            bandeira = self.ctx.produtos.bandeira2()
         except Exception:  # noqa: BLE001 - banco fechado no fim do expediente não derruba a janela
             return
+        ligada = bandeira is not None
+        if ligada:
+            texto = f"BANDEIRA 2  {self.ctx.produtos.descrever_bandeira2(bandeira)}".strip()
+            if self.lbl_bandeira2.text() != texto:
+                self.lbl_bandeira2.setText(texto)
         if self.lbl_bandeira2.isHidden() == ligada:
             self.lbl_bandeira2.setVisible(ligada)
 
@@ -3704,6 +3718,40 @@ class JanelaCaixa(QMainWindow):
         self._documento_fechamento(res)
         self.recarregar_tudo()
         self.avisar(f"Turno {turno['numero']} encerrado.", AMBAR)
+        if self.ctx.banco.cfg_bool("voltar_login_apos_fechar", True):
+            QTimer.singleShot(0, self._voltar_ao_login)   # o próximo operador escolhe quem é e abre o turno dele
+
+    def _principal(self):
+        pai = self.parent()
+        return pai if pai is not None and hasattr(pai, "app") else None
+
+    def _voltar_ao_login(self) -> None:
+        """Depois de fechar o caixa: sai da sessão e mostra a tela de selecionar operador (mesas continuam abertas)."""
+        principal = self._principal()
+        if principal is not None:
+            principal.app.encerrar_sessao()
+
+    def entrar_como_adm(self) -> None:
+        """F12 / botão ADM: senha de um ADM abre o menu de administração por cima do caixa, sem fechar turno nem venda.
+        Volta sozinho ao operador ao fechar o modo ADM ou depois de 5 minutos sem mexer."""
+        principal = self._principal()
+        if principal is None:
+            return
+        if getattr(principal, "operador_do_caixa", None) is not None:
+            principal.mostrar_modo_adm()
+            return
+        senha = self.dialogos.pedir_texto("Entrar como ADM", "Senha do administrador (ADM):", senha=True)
+        if senha is None:
+            return
+        try:
+            adm = self.ctx.acesso.validar_adm(senha)
+        except ErroNegocio as e:
+            self.dialogos.erro("Entrar como ADM", str(e))
+            return
+        if adm is None:
+            self.dialogos.erro("Entrar como ADM", "Senha inválida ou o operador não é ADM.")
+            return
+        principal.entrar_modo_adm(adm, self)
 
     def _declaracao_do_fechamento(self, turno_id: int, valor_gaveta: int) -> dict[int, int] | None:
         """O operador só digita a gaveta. Cartão e Pix já foram conferidos na tela da maquininha (ele confirmou que bate), então

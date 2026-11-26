@@ -112,7 +112,8 @@ CONFIG_PADRAO = {
     "quartos_codigo_show": "33", "quartos_pela_comanda": "N", "quartos_tolerancia_min": "5",
     # Hotel (edição Will Hotel): diárias e períodos curtos, conta da estadia numa comanda a partir de `hotel_conta_inicio`.
     # Bandeira 2: preço da noite que o dono liga pelo painel (acréscimo padrão em %, ou o preço próprio do produto).
-    "bandeira2_ativa": "N", "bandeira2_pct": "0",
+    "bandeira2_ativa": "N", "bandeira2_pct": "0", "bandeira2_modo": "pct", "bandeira2_reais_cent": "0",
+    "bandeira2_versao": "0", "voltar_login_apos_fechar": "S", "hotspot_caixas": "N",
     "usar_hotel": "N", "hotel_checkin_hora": "14:00", "hotel_checkout_hora": "12:00", "hotel_conta_inicio": "500",
     "hotel_tolerancia_min": "15", "hotel_alerta_min": "15", "hotel_produto_cafe": "", "hotel_produto_hora_extra": "",
     # Recursos da casa noturna: nascem ligados porque o sistema nasceu boate; o perfil do estabelecimento os desliga nos

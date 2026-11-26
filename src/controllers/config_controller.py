@@ -81,6 +81,8 @@ CAMPOS_CONFIG = [
     ("painel_mostra_garotas", "Mostrar no rodapé do caixa as garotas com comissão a pagar", "sn", "Mesas e serviço"),
     ("num_turnos", "Número de turnos por dia", "int", "Caixa"),
     ("usar_desconto", "Permitir desconto no fechamento da conta", "sn", "Caixa"),
+    ("voltar_login_apos_fechar", "Depois de fechar o caixa (troca de turno), voltar para a tela de selecionar operador",
+     "sn", "Caixa"),
     ("agrupar_itens_balcao", "Agrupar produtos iguais e da mesma temperatura no balcão", "sn", "Caixa"),
     ("virada_dia_hora", "O dia do painel e dos relatórios de vendas vira às (hora, 0 a 23; 6 = a madrugada conta na noite anterior)", "int", "Caixa"),
     ("margem_minima_pct", "Margem mínima para alertar após atualizar custo (0 = desligado)", "decimal", "Estoque"),

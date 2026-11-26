@@ -900,6 +900,8 @@ def instalar(app, Loja):
     nfce_xmls.instalar_fornecedor(app, sessao, obter, auditar)
     from backend import ia
     ia.instalar_fornecedor(app, sessao, obter, auditar)
+    from backend import painel_usuarios
+    painel_usuarios.instalar_fornecedor(app, sessao, obter, auditar)
     from backend import insta
     insta.instalar_fornecedor(app, sessao, obter, auditar)
     from backend import backup_nuvem

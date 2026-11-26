@@ -28,9 +28,9 @@
       <form id="form-login" class="cartao-login" novalidate>
         <h2>Acessar painel</h2>
 
-        <label for="campo-loja">Loja</label>
-        <input id="campo-loja" name="loja" type="text" autocomplete="username"
-               autocapitalize="characters" spellcheck="false" required placeholder="ADEGA-1">
+        <label for="campo-loja">E-mail ou código da loja</label>
+        <input id="campo-loja" name="loja" type="text" autocomplete="username" inputmode="email"
+               autocapitalize="off" spellcheck="false" required placeholder="voce@email.com ou ADEGA-1">
 
         <label for="campo-senha">Senha</label>
         <input id="campo-senha" name="senha" type="password" autocomplete="current-password" required>
@@ -38,6 +38,39 @@
         <p id="erro-login" class="erro" role="alert" hidden></p>
 
         <button type="submit" id="botao-entrar" class="botao-principal">Entrar</button>
+        <button type="button" id="botao-esqueci" class="botao-link">Esqueci a senha</button>
+      </form>
+      <form id="form-codigo" class="cartao-login" hidden novalidate>
+        <h2>Confirme que é você</h2>
+        <p class="sub" id="codigo-destino">Mandamos um código de 6 dígitos para o seu e-mail.</p>
+        <label for="campo-codigo">Código</label>
+        <input id="campo-codigo" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7"
+               pattern="[0-9 ]*" required placeholder="000000">
+        <p class="sub">Este aparelho fica lembrado por 30 dias.</p>
+        <p id="erro-codigo" class="erro" role="alert" hidden></p>
+        <button type="submit" class="botao-principal">Confirmar</button>
+        <button type="button" id="botao-codigo-voltar" class="botao-link">Voltar</button>
+      </form>
+      <form id="form-esqueci" class="cartao-login" hidden novalidate>
+        <h2>Esqueci a senha</h2>
+        <p class="sub">Informe o e-mail do seu acesso. Chega um link para criar uma senha nova.</p>
+        <label for="campo-esqueci">E-mail</label>
+        <input id="campo-esqueci" type="email" autocomplete="email" required>
+        <p id="msg-esqueci" class="sub" role="status" hidden></p>
+        <button type="submit" class="botao-principal">Enviar link</button>
+        <button type="button" id="botao-esqueci-voltar" class="botao-link">Voltar</button>
+        <p class="sub">Entra com o código da loja? Peça a senha nova ao suporte.</p>
+      </form>
+      <form id="form-definir" class="cartao-login" hidden novalidate>
+        <h2>Criar sua senha</h2>
+        <p class="sub" id="definir-email"></p>
+        <label for="campo-nova">Nova senha (mínimo 8 caracteres)</label>
+        <input id="campo-nova" type="password" autocomplete="new-password" minlength="8" required>
+        <label for="campo-repetir">Repita a senha</label>
+        <input id="campo-repetir" type="password" autocomplete="new-password" minlength="8" required>
+        <p id="erro-definir" class="erro" role="alert" hidden></p>
+        <button type="submit" class="botao-principal">Salvar e entrar</button>
+        <a href="/painel/" class="botao-link">Voltar para entrar</a>
       </form>
       <form id="form-senha-rede" class="cartao-login" hidden>
         <h2>Troque a senha temporária</h2>
@@ -169,6 +202,31 @@
           <p id="lojas-total" class="legenda"></p>
           <ul id="lista-lojas" class="lista lista-lojas"></ul>
           <p id="aviso-lojas" class="aviso" role="status" hidden></p>
+        </section>
+
+        <section class="bloco bloco-bandeira2" id="bloco-bandeira2" hidden>
+          <div class="topo-bandeira2">
+            <div>
+              <h2>Bandeira 2 <span id="bandeira2-estado" class="etiqueta-bandeira2">desligada</span></h2>
+              <p id="bandeira2-detalhe" class="legenda">Preço da noite: aumenta os produtos que entram na bandeira 2.</p>
+            </div>
+            <button type="button" id="bandeira2-botao" class="botao-principal botao-bandeira2">Ligar</button>
+          </div>
+          <div class="valor-bandeira2">
+            <label for="bandeira2-modo">Aumento</label>
+            <select id="bandeira2-modo">
+              <option value="pct">% em tudo</option>
+              <option value="reais">R$ por item</option>
+            </select>
+            <input id="bandeira2-valor" type="text" inputmode="decimal" maxlength="8" aria-label="Valor do aumento"
+                   placeholder="15">
+            <button type="button" id="bandeira2-salvar" class="botao-secundario">Salvar valor</button>
+          </div>
+          <p id="bandeira2-status" class="legenda" aria-live="polite"></p>
+          <details>
+            <summary>Histórico</summary>
+            <ul id="bandeira2-historico" class="lista"></ul>
+          </details>
         </section>
 
         <article class="cartao destaque cartao-mes" id="cartao-mes">
@@ -871,6 +929,24 @@
           <h3>Alterações pedidas ao caixa</h3>
           <ul id="lista-gestao-auditoria" class="lista" data-seletor="auditoria"></ul>
           <p id="vazio-gestao-auditoria" class="vazio" hidden>Nenhuma alteração pela retaguarda ainda.</p>
+        </section>
+
+        <section class="bloco" id="bloco-contador">
+          <h2>Contador: envio automático do mês</h2>
+          <p class="legenda">Todo dia 1º o contador recebe por e-mail o resumo do mês anterior e um link (válido por 7 dias)
+            para baixar os XMLs das NFC-e e a planilha das notas. Assim ele não precisa pedir.</p>
+          <form id="form-contador" class="form-relatorio" novalidate>
+            <label for="contador-email">E-mail do contador</label>
+            <input id="contador-email" type="text" inputmode="email" autocomplete="email" maxlength="254"
+                   placeholder="contabilidade@exemplo.com">
+            <label class="linha-check"><input id="contador-ativo" type="checkbox"> Mandar todo dia 1º</label>
+            <div class="acoes-relatorio">
+              <button type="submit" class="botao-principal" id="contador-salvar">Salvar</button>
+              <select id="contador-mes" aria-label="Mês para enviar agora"></select>
+              <button type="button" class="botao-secundario" id="contador-agora">Enviar este mês agora</button>
+            </div>
+            <p id="contador-status" class="legenda" aria-live="polite"></p>
+          </form>
         </section>
 
         <section class="bloco" id="bloco-relatorio-diario">
