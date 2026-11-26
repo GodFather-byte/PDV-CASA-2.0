@@ -6,7 +6,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QLocale, Qt, QTimer
+from PySide6.QtCore import QDate, QEvent, QLocale, QObject, Qt, QTimer
 from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
@@ -33,6 +33,8 @@ from src.ui_qt import sinais, tema
 from src.ui_qt.login import JanelaLogin
 from src.versao import VERSAO
 
+
+MINUTOS_MODO_ADM = 5                                  # ADM no caixa sem mexer: volta sozinho ao operador
 
 class JanelaBackupExterno(QDialog):
     """A interface só coleta dados; criptografia e restauração pertencem ao controlador."""
@@ -193,6 +195,13 @@ class JanelaPrincipal(QMainWindow):
         super().__init__()
         self.app, self.ctx = app, app.ctx
         self.janelas = {}
+        self.operador_do_caixa = None                     # modo ADM: o operador dono do caixa, para voltar
+        self._caixa_em_espera = None
+        self._timer_adm = QTimer(self)
+        self._timer_adm.setSingleShot(True)
+        self._timer_adm.setInterval(MINUTOS_MODO_ADM * 60_000)
+        self._timer_adm.timeout.connect(lambda: self.sair_modo_adm(motivo="5 minutos sem uso"))
+        self._vigia_adm = None
         self._atualizacoes = None
         self._fechamento_autorizado = False
         self.edicao = edicao.atual()
@@ -319,6 +328,11 @@ class JanelaPrincipal(QMainWindow):
         self.marcar_tutoriais()
         self.busca_modulos.textChanged.connect(self.filtrar_modulos)
         lateral.addWidget(self.btn_tema)
+        self.btn_voltar_operador = QPushButton("Voltar ao caixa")
+        self.btn_voltar_operador.setObjectName("primario")
+        self.btn_voltar_operador.setVisible(False)
+        self.btn_voltar_operador.clicked.connect(lambda: self.sair_modo_adm())
+        lateral.addWidget(self.btn_voltar_operador)
         self.sessao = tema.texto("", "legenda")
         lateral.addWidget(self.sessao)
         sair = QPushButton("Encerrar sessão")
@@ -1151,7 +1165,60 @@ class JanelaPrincipal(QMainWindow):
         except ErroNegocio as erro:
             self.mensagem.setText(str(erro))
 
+    # ---------------------------------------------------------------- modo ADM por cima do caixa
+    def entrar_modo_adm(self, adm, janela_caixa) -> None:
+        """O ADM entra sem fechar o caixa: o caixa fica parado (turno, venda e gaveta continuam do operador) e o menu
+        passa a ser o do ADM. Volta ao operador pelo botão ou depois de 5 minutos sem mexer."""
+        self.operador_do_caixa = self.ctx.operador
+        self._caixa_em_espera = janela_caixa
+        self.ctx.operador = adm
+        self.ctx.banco.log("adm_entrou_no_caixa", f"{adm.nome} no caixa de {self.operador_do_caixa.nome}", adm.id)
+        janela_caixa.setEnabled(False)
+        self.btn_voltar_operador.setText(f"Voltar ao caixa de {self.operador_do_caixa.nome}")
+        self.btn_voltar_operador.setVisible(True)
+        self.atualizar()
+        if self._vigia_adm is None:
+            self._vigia_adm = _VigiaDeUso(self._timer_adm.start)
+        QApplication.instance().installEventFilter(self._vigia_adm)
+        self._timer_adm.start()
+        self.mostrar_modo_adm()
+
+    def mostrar_modo_adm(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def sair_modo_adm(self, motivo: str = "") -> None:
+        """Fecha as telas abertas pelo ADM, devolve o operador do caixa e traz o caixa de volta."""
+        if self.operador_do_caixa is None:
+            return
+        self._timer_adm.stop()
+        if self._vigia_adm is not None:
+            QApplication.instance().removeEventFilter(self._vigia_adm)
+        caixa = self._caixa_em_espera
+        for chave, janela in list(self.janelas.items()):
+            if janela is not caixa and janela.close():
+                self.janelas.pop(chave, None)
+        adm = self.ctx.operador
+        self.ctx.operador = self.operador_do_caixa
+        self.ctx.banco.log("adm_saiu_do_caixa", f"{adm.nome if adm else 'ADM'} devolveu o caixa a "
+                           f"{self.operador_do_caixa.nome}" + (f" ({motivo})" if motivo else ""),
+                           adm.id if adm else None)
+        self.operador_do_caixa = None
+        self._caixa_em_espera = None
+        self.btn_voltar_operador.setVisible(False)
+        self.atualizar()
+        if caixa is not None:
+            caixa.setEnabled(True)
+            if hasattr(caixa, "recarregar_tudo"):
+                caixa.recarregar_tudo()
+            caixa.show()
+            caixa.raise_()
+            caixa.activateWindow()
+
     def fechar_filhos(self):
+        if self.operador_do_caixa is not None:
+            self.sair_modo_adm(motivo="sessão encerrada")
         for janela in list(self.janelas.values()):
             if not janela.close():
                 return False
@@ -1171,6 +1238,19 @@ class JanelaPrincipal(QMainWindow):
             evento.accept()
         else:
             evento.ignore()
+
+
+class _VigiaDeUso(QObject):
+    """Qualquer tecla ou clique no modo ADM reinicia a contagem dos 5 minutos."""
+
+    def __init__(self, ao_usar):
+        super().__init__()
+        self._ao_usar = ao_usar
+
+    def eventFilter(self, objeto, evento):  # noqa: N802 - nome do Qt
+        if evento.type() in (QEvent.KeyPress, QEvent.MouseButtonPress, QEvent.Wheel):
+            self._ao_usar()
+        return False
 
 
 # Telas que mexem no arquivo do banco, no backup, na nuvem ou na atualização: num caixa adicional ficam desligadas.

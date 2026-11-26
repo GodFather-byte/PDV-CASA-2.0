@@ -158,6 +158,19 @@ class AcessoController:
             return False
         return operador.nivel < self.nivel_modulo(modulo)  # nível 0 sempre fica abaixo de qualquer módulo
 
+    NIVEL_ADM = 4
+
+    def validar_adm(self, senha: str) -> Operador | None:
+        """'Entrar como ADM' no caixa: um operador ativo de nível 4 (ADM) com esta senha. Mesma trava de tentativas."""
+        self._exigir_liberado("adm_caixa")
+        for l in self.banco.todos("SELECT * FROM operadores WHERE ativo = 1 AND nivel >= ?", (self.NIVEL_ADM,)):
+            if seguranca.conferir(senha, l["senha"]):
+                self._limpar_falhas("adm_caixa")
+                return self._operador(l)
+        self.banco.log("adm_caixa_negado", "senha de ADM inválida no caixa")
+        self._registrar_falha("adm_caixa")
+        return None
+
     def validar_supervisor(self, senha: str, modulo: str) -> Operador | None:
         """Procura um operador ativo com nível suficiente cuja senha confere (janela
         'Digite uma Senha Válida' do caixa)."""
