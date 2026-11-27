@@ -75,9 +75,17 @@
   class ErroApi extends Error {
     constructor(status, mensagem) { super(mensagem); this.status = status; }
   }
+  /** Sessão do dono: o painel guarda a sessão num cookie que o JavaScript não lê (desde o painel único). O cabeçalho
+   *  X-PDV-Painel é o que a nuvem exige para aceitar alteração vinda do cookie. Um token antigo no aparelho ainda vale. */
+  function cabecalhosDoDono() {
+    const h = { "X-PDV-Painel": "1" };
+    if (estado.token) h.Authorization = "Bearer " + estado.token;
+    return h;
+  }
+
   async function api(caminho, metodo, corpo) {
-    const opcoes = { method: metodo || "GET", cache: "no-store", headers: {} };
-    if (estado.modo === "dono") opcoes.headers.Authorization = "Bearer " + estado.token;
+    const opcoes = { method: metodo || "GET", cache: "no-store", headers: {}, credentials: "same-origin" };
+    if (estado.modo === "dono") opcoes.headers = cabecalhosDoDono();
     else {
       opcoes.credentials = "same-origin";
       if (opcoes.method !== "GET") opcoes.headers["X-Central-CSRF"] = estado.csrf;
@@ -129,7 +137,7 @@
       } catch (_) { return mostrarEntrada(); }
     } else {
       try { estado.token = localStorage.getItem(CHAVE_TOKEN); } catch (_) { estado.token = null; }
-      if (!estado.token) return mostrarEntrada();
+      // Sem token no aparelho, a sessão vem do cookie do painel: carregar() mostra a entrada se ela não existir.
     }
     await carregar();
   }
@@ -279,7 +287,7 @@
   }
 
   async function gestao(caminho, metodo, corpo) {
-    const opcoes = { method: metodo || "GET", cache: "no-store", headers: { Authorization: "Bearer " + estado.token } };
+    const opcoes = { method: metodo || "GET", cache: "no-store", headers: cabecalhosDoDono(), credentials: "same-origin" };
     if (corpo !== undefined) {
       opcoes.headers["Content-Type"] = "application/json";
       opcoes.body = JSON.stringify(corpo);

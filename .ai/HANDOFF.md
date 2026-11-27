@@ -1,3 +1,11 @@
+# Handoff de 27/11/2026: retaguarda do dono pelo painel (branch `retaguarda-dono-cookie`)
+
+- Defeito: desde o painel único a sessão do dono fica só no cookie `willpdv_painel` (o painel apaga o token do
+  aparelho), mas a retaguarda (`backend/retaguarda_web/app.js`, modo dono) exigia o token do localStorage e mostrava
+  "entre de novo"; só abria pela central. Agora usa o cookie (`credentials: same-origin`) com o cabeçalho
+  `X-PDV-Painel: 1` (exigido para alteração vinda do cookie); token antigo no aparelho ainda vale.
+- Só nuvem. Teste: `tests/test_retaguarda_dono_cookie.py`.
+
 # Handoff de 26/11/2026: lote de 5 melhorias (branch `melhorias-lote`)
 
 1. Login do dono por e-mail (`backend/painel_usuarios.py`): convite pela central (Financeiro > "Acesso do dono por
