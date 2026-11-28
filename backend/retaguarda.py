@@ -278,6 +278,9 @@ def criar(db: Session, chave_loja: str, corpo: dict, autor: str, *, liberar_impo
         linhas = dados.get("linhas")
         if not isinstance(linhas, list) or not 0 < len(linhas) <= LIMITE_LOTE or not all(isinstance(l, dict) for l in linhas):
             raise HTTPException(status_code=422, detail=f"Envie de 1 a {LIMITE_LOTE} produtos por vez.")
+        # Sem a marca, o caixa criaria outro produto quando o código de barras já existe. O padrão é atualizar.
+        if "casar_barras" not in dados:
+            dados["casar_barras"] = True
         modo = dados.get("modo_quantidade", "substituir")
         if modo not in ("substituir", "somar"):
             raise HTTPException(status_code=422, detail="Modo de quantidade inválido: use substituir ou somar.")
@@ -636,7 +639,7 @@ def instalar(app: FastAPI, Loja, autenticar) -> APIRouter:
 def ler_planilha(nome: str, conteudo_b64: str) -> list[dict]:
     """Planilha (CSV ou Excel) enviada pela central -> linhas com as colunas que o caixa importa. Pelas mesmas regras de
     leitura do caixa (títulos reconhecidos: Produto, Preço, Quantidade...)."""
-    from src.controllers.importacao_produtos import ler_tabela_dados
+    from src.controllers.importacao_produtos import ler_tabela_dados, promover_codigo_de_barras
     from src.core.erros import ErroNegocio
     try:
         dados = base64.b64decode(conteudo_b64 or "", validate=True)
@@ -645,7 +648,7 @@ def ler_planilha(nome: str, conteudo_b64: str) -> list[dict]:
     if not dados or len(dados) > LIMITE_PLANILHA_BYTES:
         raise HTTPException(status_code=413, detail="Planilha vazia ou maior que 3 MB.")
     try:
-        tabela = ler_tabela_dados(dados, str(nome or "planilha.csv"))
+        tabela = promover_codigo_de_barras(ler_tabela_dados(dados, str(nome or "planilha.csv")))
     except ErroNegocio as erro:
         raise HTTPException(status_code=422, detail=str(erro)) from None
     return [{c: str(l.get(c) or "") for c in CAMPOS_LOTE} for l in tabela]

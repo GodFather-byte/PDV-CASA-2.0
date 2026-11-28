@@ -3,7 +3,7 @@
 Fluxo: `ler_tabela` lê o arquivo, `analisar` monta a PRÉVIA (o que será criado, atualizado ou recusado, e por quê) sem gravar nada,
 e `importar` grava tudo de uma vez numa única transação: se algo der errado no meio, nada fica pela metade.
 
-Colunas da planilha (a ordem não importa; os cabeçalhos aceitam variações como "Produto", "Bebida", "Valor", "Código"):
+Colunas da planilha (a ordem não importa; os cabeçalhos aceitam variações como "Produto", "Bebida", "Valor", "Venda", "Código"):
   codigo, nome, preco, comissao (R$ por unidade), grupo, unidade, quantidade (estoque inicial), estoque_minimo,
   codigo_barras, atalho, controla_estoque
 Só `nome` e `preco` são obrigatórios. Sem código, os produtos são numerados em sequência (1, 2, 3...), pulando os códigos
@@ -39,8 +39,8 @@ TITULOS = {"codigo": "Código", "nome": "Produto", "preco": "Preço de venda", "
 ALIAS = {
     "codigo": {"codigo", "cod", "cod produto", "codigo produto", "numero", "n"},
     "nome": {"nome", "produto", "bebida", "descricao", "item", "nome produto", "nome do produto"},
-    "preco": {"preco", "valor", "preco venda", "valor venda", "preco de venda", "valor de venda", "preco r", "preco natural",
-              "natural"},
+    "preco": {"preco", "venda", "valor", "preco venda", "valor venda", "preco de venda", "valor de venda", "preco r",
+              "preco natural", "natural"},
     "custo": {"custo", "preco custo", "preco de custo", "valor custo", "custo unitario", "custo medio"},
     "comissao": {"comissao", "comissao r", "comissao reais", "comissao valor", "comissao garota"},
     "comissao_pct": {"comissao pct", "comissao percentual", "comissao porcentagem"},
@@ -257,6 +257,21 @@ def ler_tabela_dados(dados: bytes, nome: str) -> list[dict]:
                 linha[coluna] = valor.strip()
         saida.append(linha)
     return saida
+
+
+def promover_codigo_de_barras(tabela: list[dict]) -> list[dict]:
+    """Coluna Código com 8 a 14 dígitos, sem coluna de barras, é o EAN da planilha do fornecedor.
+
+    Código curto (1, 2, 3...) continua o código interno do caixa. Linha que já tem código de barras não muda.
+    """
+    for linha in tabela:
+        if str(linha.get("codigo_barras") or "").strip():
+            continue
+        bruto = str(linha.get("codigo") or "").strip()
+        if re.fullmatch(r"\d{8,14}", bruto):
+            linha["codigo_barras"] = bruto
+            linha["codigo"] = ""
+    return tabela
 
 
 # ------------------------------------------------------------------------------------------------ prévia
