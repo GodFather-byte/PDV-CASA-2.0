@@ -66,6 +66,24 @@ class TesteLeitura(BaseTeste):
         t = ler_tabela(caminho)
         self.assertEqual([(l["codigo"], l["nome"], l["preco"], l.get("quantidade", "")) for l in t], [("1", "SKOL", "8.5", "24"), ("2", "AGUA", "3,50", "")])
 
+    def test_titulos_sem_acento_venda_qtd_ean_e_categoria(self):
+        texto = "nome,venda,qtd,custo,ean,categoria\nGUARANA,8.50,12,4.25,7891234567895,Bebidas\n"
+        (l,) = ler_tabela(csv_temp(self, texto))
+        self.assertEqual((l["nome"], l["preco"], l["quantidade"], l["custo"], l["codigo_barras"], l["grupo"]),
+                         ("GUARANA", "8.50", "12", "4.25", "7891234567895", "Bebidas"))
+
+    def test_codigo_longo_vira_barras_e_codigo_curto_continua_interno(self):
+        from src.controllers.importacao_produtos import promover_codigo_de_barras
+        texto = "Produto;Venda;Custo;Estoque;Codigo;Categoria\nFANTA;4,00;1,50;10,5;7894900010015;Refrigerantes\n"
+        (l,) = promover_codigo_de_barras(ler_tabela(csv_temp(self, texto)))
+        self.assertEqual(l["codigo_barras"], "7894900010015")
+        self.assertEqual(l["codigo"], "")
+        self.assertEqual((l["preco"], l["custo"], l["quantidade"], l["grupo"]), ("4,00", "1,50", "10,5", "Refrigerantes"))
+        curto = promover_codigo_de_barras([{"codigo": "7", "codigo_barras": ""}])
+        self.assertEqual((curto[0]["codigo"], curto[0]["codigo_barras"]), ("7", ""))
+        ja_tem = promover_codigo_de_barras([{"codigo": "7894900010015", "codigo_barras": "123"}])
+        self.assertEqual(ja_tem[0]["codigo"], "7894900010015")
+
     def test_comissao_com_percentual_no_titulo_e_percentual(self):
         t = ler_tabela(csv_temp(self, "Produto;Preço;Comissão %\nX;10,00;20\n"))
         self.assertEqual(t[0]["comissao_pct"], "20")

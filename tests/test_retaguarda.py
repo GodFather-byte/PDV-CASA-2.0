@@ -76,6 +76,33 @@ class TesteControleDoCaixa(BaseTeste):
         r = self.aplicar(902, "produtos.importar", {"linhas": [{"nome": "X"}] * 201})
         self.assertIn("Lote grande demais", r["detalhe"])
 
+    def test_atualiza_por_barras_ou_nome_e_grava_o_estoque(self):
+        barras = self.novo_produto("COCA COLA", 350, estoque=True, qt=2, cbarra="7894900011517")
+        pelo_nome = self.novo_produto("AGUA MINERAL", 200, estoque=True, qt=1)
+        r = self.aplicar(910, "produtos.importar", {"casar_barras": True, "modo_quantidade": "substituir", "linhas": [
+            {"nome": "Coca Cola Lata", "preco": "4,50", "quantidade": "24", "custo": "2,10",
+             "codigo_barras": "7894900011517", "grupo": "Bebidas"},
+            {"nome": "Agua Mineral", "preco": "3.50", "quantidade": "10,5", "custo": "1.00"},
+            {"nome": "Fanta Lata", "preco": "4,00", "quantidade": "6", "custo": "1,80",
+             "codigo_barras": "7894900010015", "grupo": "Bebidas"},
+        ]})
+        self.assertEqual(r["situacao"], "aplicado", r)
+        coca = self.produto(barras)
+        self.assertEqual((coca["nome"], coca["preco_cent"], coca["qt_atual"], coca["custo_medio_cent"]),
+                         ("COCA COLA LATA", 450, 24, 210))
+        agua = self.produto(pelo_nome)
+        self.assertEqual((agua["preco_cent"], agua["qt_atual"], agua["custo_medio_cent"]), (350, 10.5, 100))
+        self.assertEqual(self.banco.valor("SELECT qt_atual FROM produtos WHERE nome = 'FANTA LATA'"), 6)
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM produtos WHERE cbarra = '7894900011517'"), 1)
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM produtos WHERE nome = 'AGUA MINERAL'"), 1)
+
+    def test_previa_da_planilha_nao_encadeia_append(self):
+        from pathlib import Path
+        texto = (Path(__file__).resolve().parents[1] / "backend" / "retaguarda_web" / "app.js").read_text(encoding="utf-8")
+        self.assertNotIn('.append(el("thead")).firstChild', texto)
+        self.assertNotIn('.append(el("td")).lastChild', texto)
+        self.assertIn("casar_barras: true", texto)
+
     def test_nasce_desligada_e_aparece_nas_configuracoes(self):
         self.assertEqual(CONFIG_PADRAO["retaguarda_nuvem"], "N")
         self.assertIn("retaguarda_nuvem", [c[0] for c in CAMPOS_CONFIG])
@@ -434,6 +461,58 @@ class TesteFornecedor(BaseNuvem):
         self.assertEqual(self.fornecedor.post(base + "/comandos", json=corpo, headers=self.csrf).status_code, 200)
         retaguarda.sincronizar(self.banco, self.ponte, forcar=True)
         self.assertEqual(self.banco.valor("SELECT qt_atual FROM produtos WHERE nome = 'ISQUEIRO BIC'"), 30)
+
+    def test_planilha_aceita_separador_decimal_e_xlsx_e_nao_duplica(self):
+        import base64
+        from src.controllers.importacao_produtos import escrever_xlsx
+        retaguarda.sincronizar(self.banco, self.ponte)
+        base = "/v1/fornecedor/lojas/ADEGA-1/retaguarda"
+        self.banco.executar(
+            "UPDATE produtos SET cbarra = ?, controla_estoque = 1, qt_atual = 3 WHERE id = ?",
+            ("7894900011517", self.skol))
+        self.novo_produto("AGUA MINERAL", preco=200, estoque=True, qt=1)
+        vazio = {"nome": "a.csv", "conteudo": base64.b64encode(b"Produto;Preco\nX;1\n").decode()}
+        self.assertEqual(self.http.post(base + "/planilha", json=vazio).status_code, 401)
+        self.assertEqual(self.fornecedor.post(base + "/planilha", json=vazio).status_code, 403)
+
+        def enviar(nome, bruto):
+            r = self.fornecedor.post(base + "/planilha", headers=self.csrf,
+                                     json={"nome": nome, "conteudo": base64.b64encode(bruto).decode()})
+            self.assertEqual(r.status_code, 200, r.text)
+            return r.json()["linhas"]
+
+        ponto_e_virgula = (
+            "nome;venda;custo;estoque;codigo;categoria\n"
+            "Itaipava Lata;9,00;4,50;40;7894900011517;Cervejas\n"
+            "Agua Mineral;3,50;1,20;15;;Bebidas\n").encode("utf-8")
+        linhas = enviar("lista.csv", ponto_e_virgula)
+        self.assertEqual([(l["nome"], l["preco"], l["quantidade"], l["custo"], l["codigo"], l["codigo_barras"], l["grupo"])
+                          for l in linhas], [
+            ("Itaipava Lata", "9,00", "40", "4,50", "", "7894900011517", "Cervejas"),
+            ("Agua Mineral", "3,50", "15", "1,20", "", "", "Bebidas"),
+        ])
+        virgula = "Produto,Preço,Quantidade,Custo\nFANTA,4.00,6,1.80\n".encode("cp1252")
+        (fanta,) = enviar("virgula.csv", virgula)
+        self.assertEqual((fanta["nome"], fanta["preco"], fanta["quantidade"], fanta["custo"]), ("FANTA", "4.00", "6", "1.80"))
+        xlsx = escrever_xlsx([["Produto", "Preço", "Qtd", "Custo"], ["GUARANA", "5,50", "8", "2,25"]])
+        (guarana,) = enviar("lista.xlsx", xlsx)
+        self.assertEqual((guarana["nome"], guarana["preco"], guarana["quantidade"], guarana["custo"]),
+                         ("GUARANA", "5,50", "8", "2,25"))
+
+        corpo = {"tipo": "produtos.importar", "dados": {"linhas": linhas + [fanta, guarana]}, "resumo": "planilha"}
+        r = self.fornecedor.post(base + "/comandos", json=corpo, headers=self.csrf)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertTrue(r.json()["comando"]["dados"]["casar_barras"])
+        retaguarda.sincronizar(self.banco, self.ponte, forcar=True)
+        itaipava = self.banco.um("SELECT nome, preco_cent, qt_atual, custo_medio_cent FROM produtos WHERE id = ?", (self.skol,))
+        self.assertEqual((itaipava["nome"], itaipava["preco_cent"], itaipava["qt_atual"], itaipava["custo_medio_cent"]),
+                         ("ITAIPAVA LATA", 900, 40, 450))
+        agua = self.banco.um("SELECT preco_cent, qt_atual FROM produtos WHERE nome = 'AGUA MINERAL'")
+        self.assertEqual((agua["preco_cent"], agua["qt_atual"]), (350, 15))
+        self.assertEqual(self.banco.valor("SELECT qt_atual FROM produtos WHERE nome = 'FANTA'"), 6)
+        self.assertEqual(self.banco.valor("SELECT qt_atual FROM produtos WHERE nome = 'GUARANA'"), 8)
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM produtos WHERE cbarra = '7894900011517'"), 1)
+        self.assertEqual(self.banco.valor("SELECT COUNT(*) FROM produtos WHERE nome = 'AGUA MINERAL'"), 1)
 
     def test_servico_avulso_fica_registrado_a_receber_e_pago(self):
         base = "/v1/fornecedor/lojas/ADEGA-1/retaguarda/servicos"

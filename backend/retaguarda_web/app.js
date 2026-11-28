@@ -1329,9 +1329,10 @@
   function telaPlanilha() {
     const raiz = el("section");
     raiz.append(el("h1", "Importar planilha de produtos"));
-    raiz.append(el("p", "Escolha a planilha (Excel ou CSV, com títulos como Produto, Preço, Quantidade). Confira e corrija " +
-      "os preços aqui antes de enviar. O caixa aplica na próxima sincronização, pelas mesmas regras da importação do caixa: " +
-      "produto com o mesmo nome ou código é atualizado, os outros são criados.", "suave"));
+    raiz.append(el("p", "Escolha a planilha (Excel .xlsx ou CSV com ; ou ,). A primeira linha traz os títulos, sem se importar " +
+      "com acento ou maiúscula: Produto, Preço (ou Venda), Custo, Quantidade (ou Estoque), Código de barras (ou EAN) e Categoria. " +
+      "Preço e custo aceitam 3,50 ou 3.50. A quantidade vira o estoque. Se o código de barras ou o nome já existir na loja, " +
+      "o produto é atualizado. Confira os preços aqui antes de enviar; o caixa aplica na próxima sincronização.", "suave"));
     const arquivo = el("input");
     arquivo.type = "file";
     arquivo.accept = ".csv,.xlsx,.xlsm,.txt";
@@ -1368,7 +1369,9 @@
       cab.append(el("th", "#"));
       COLUNAS_LOTE.forEach(([, t]) => cab.append(el("th", t)));
       cab.append(el("th", ""));
-      tabela.append(el("thead")).firstChild.append(cab);
+      const thead = el("thead");
+      thead.append(cab);
+      tabela.append(thead);
       const corpo = el("tbody");
       linhas.forEach((l, i) => {
         if (filtro && l.grupo !== filtro) return;
@@ -1390,7 +1393,9 @@
         const tirar = el("button", "Tirar", "botao pequeno secundario");
         tirar.type = "button";
         tirar.addEventListener("click", () => { linhas.splice(i, 1); desenhar(); });
-        tr.append(el("td")).lastChild.append(tirar);
+        const tdTirar = el("td");
+        tdTirar.append(tirar);
+        tr.append(tdTirar);
         corpo.append(tr);
       });
       tabela.append(corpo);
@@ -1404,7 +1409,8 @@
         try {
           for (let i = 0; i < envio.length; i += lote) {
             const parte = envio.slice(i, i + lote);
-            await api("/comandos", "POST", { tipo: "produtos.importar", dados: { linhas: parte },
+            await api("/comandos", "POST", { tipo: "produtos.importar",
+              dados: { linhas: parte, casar_barras: true, modo_quantidade: "substituir" },
               resumo: "Planilha: " + parte.length + " produtos (" + (i + 1) + " a " + (i + parte.length) + ")" });
           }
           recado(envio.length + " produtos enviados. Acompanhe em Alterações enviadas.");
@@ -1550,7 +1556,9 @@
       const cab = el("tr");
       COLUNAS_LOTE.forEach(([, t]) => cab.append(el("th", t)));
       cab.append(el("th", ""));
-      tabela.append(el("thead")).firstChild.append(cab);
+      const thead = el("thead");
+      thead.append(cab);
+      tabela.append(thead);
       const corpo = el("tbody");
       linhas.forEach((l, i) => {
         const tr = el("tr");
@@ -1563,12 +1571,16 @@
             l[c] = campo.value.trim();
             if (c === "preco") campo.style.outline = comPreco(l) ? "" : "2px solid var(--vermelho)";
           });
-          tr.append(el("td")).lastChild.append(campo);
+          const td = el("td");
+          td.append(campo);
+          tr.append(td);
         });
         const tirar = el("button", "Tirar", "botao pequeno secundario");
         tirar.type = "button";
         tirar.addEventListener("click", () => { linhas.splice(i, 1); desenhar(); });
-        tr.append(el("td")).lastChild.append(tirar);
+        const tdTirar = el("td");
+        tdTirar.append(tirar);
+        tr.append(tdTirar);
         corpo.append(tr);
       });
       tabela.append(corpo);
